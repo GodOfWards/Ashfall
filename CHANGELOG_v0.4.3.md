@@ -7,6 +7,497 @@ owns which behavior.
 
 ---
 
+## v0.4.3 — Wide-view map readability
+
+No handoff file — a direct request to make the side-menu map's Wide view
+legible. Scoped to the MAP sub-block of RENDERING plus the document
+`<style>` block. No mechanics, no world data, no new state fields, no
+save-format change.
+
+**Changed** — RENDERING / MAP, one street name per block
+
+Wide view drew each street as a single continuous `<textPath>` carrying
+`mapRepeatedLabel()`'s three copies of the name spaced by bullets, so a
+street read `1ST ST • 1ST ST • 1ST ST` with the copies falling wherever
+the path put them rather than on anything meaningful.
+
+- `mapRepeatedLabel()` is gone, replaced by `mapBlockLabels(name, chain)`.
+  Every chain in `MAP_STREETS` alternates intersection, mid-block,
+  intersection, so its even indices are the intersections; the function
+  walks them in steps of two and emits one `<text>` per block, centred
+  between the two intersections that bound it. That is exactly one name
+  per block, each one centred on its own block.
+- Each label is rotated onto its block's heading, folded into `(-90, 90]`
+  so vertical streets read bottom-to-top instead of upside down, and
+  offset off the line by `MAP_LABEL_OFFSET` (5 units) so the name sits
+  beside the street rather than on it.
+- `renderMapWide()` no longer emits the `<defs>` block of
+  `mapstreetpath-N` paths, since nothing references them now; it draws
+  every street line first and every label after, so no run is painted
+  over its own names.
+- Labels are `<text transform="translate(...) rotate(...)">` rather than
+  `<textPath>`. The grid is axis-aligned, so a block's heading is always
+  0 or ±90 and the flat transform is enough — no path-following needed.
+
+**Changed** — RENDERING / MAP, player marker
+
+- New `MAP_PLAYER_R_WIDE` (12), used for `#mapPlayer` in
+  `renderMapWide()` only. Wide's viewBox is 1000 units against Close's
+  `MAP_CLOSE_VIEW` of 260, so the shared radius of 5 rendered at roughly
+  4px across and read as another node dot. `renderMapClose()` still
+  emits `r="5"`.
+
+**UI**
+
+- `#sideMenu` width 360px → 460px, with `max-width:92vw` added so the
+  panel still fits a phone-width viewport. Wide's viewBox is fixed, so
+  the whole map scales up with the panel.
+- `.map-street-name` font-size 11px → 15px, letter-spacing 2px → .5px.
+  The looser tracking was there to stretch names along a whole street
+  run; with one name per block the size is what matters and the tracking
+  only costs width.
+
+**Explicitly NOT changed**
+
+- Close view: `renderMapClose()` is untouched — same street paths, node
+  dots, building dots and labels, same `r="5"` player marker.
+- `LOCATIONS`, `MAP_STREETS`, `MAP_SPACING`, `MAP_MARGIN`,
+  `MAP_WIDE_VIEWBOX`, `mapToSvg()` and `mapPathD()` — the grid geometry
+  and every street run are identical, so no node moved.
+- `mapPositionPlayer()`, `mapTargetViewBox()`, `mapUpdateViewBox()` and
+  `renderMap()` — marker tracking and the Close-view viewBox animation
+  are unchanged.
+- Movement, exits, compass wording, world data and the save format.
+  `versionCompat()` truncates to `"0.4"`, so `SAVE_KEY` is unchanged and
+  a v0.4.0–v0.4.2 save still loads with no version warning.
+
+**Validation performed**
+
+Driven in headless Chromium against the real file, Wide view open:
+
+- 112 labels rendered — 16 streets × 7 blocks — one per block, with each
+  of the 16 names appearing exactly 7 times.
+- Widest label (`POPLAR ST`) measures 99.1 units against a block length
+  of 130 (`MAP_SPACING`), and no label exceeds its block, so nothing
+  overflows into a neighbouring block or an intersection.
+- No page or console errors on load, on the Close↔Wide toggle, or while
+  moving.
+- Close view re-checked after the change: player `r="5"`, 11 building
+  dots, and zero `text.map-street-name` nodes, matching v0.4.2.
+- Player marker in Wide: `r="12"`, 10.2px across on screen against ~4px
+  before, and it tracks movement — walking Poplar St west from between
+  1st & 2nd stepped the marker 380 → 315 → 185 → 55 in SVG units, with
+  the viewBox correctly staying fixed at `20 20 1000 1000`.
+- Panel measured at 460px with the map SVG at 423px.
+
+**Notes / assumptions**
+
+- The 460px panel width, 15px type, `MAP_PLAYER_R_WIDE` of 12 and the
+  5-unit `MAP_LABEL_OFFSET` are tuned by eye against the current 130-unit
+  block, with no prior convention behind them — all four are retunable.
+- 15px leaves 31 units of slack on the longest street name. A future
+  street name longer than about 11 characters, or a smaller
+  `MAP_SPACING`, would need the size dropped or the name abbreviated;
+  nothing in the code enforces the fit.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.2"` → `"0.4.3"`
+
+---
+
+## v0.4.2 — Missing Item Category Population
+
+Implements the "Ashfall Handoff — Missing Item Category Population"
+handoff in full. Continuation of the v0.4.0 `SPAWN_POOLS`/`ITEM_REGISTRY`
+work, closing the category gaps a post-v0.4.0 audit found. Content pass
+(WORLD DATA) plus the small RENDERING generalization the new equippable
+bags needed — no new mechanics, no new state fields, no save-format
+change.
+
+**New content** — WORLD DATA, `ITEM_REGISTRY`
+
+36 new entries, 119 → 155. Weights are estimates consistent with existing
+entries for similar real-world items; retunable.
+
+- **Pet supplies** (none existed): `dry_pet_food`, `canned_pet_food`,
+  `pet_leash`, `pet_collar`, `pet_toy`, `cat_litter`, `pet_carrier`.
+- **Baby/child** (2 existed): `diapers`, `baby_formula`, `pacifier`,
+  `childrens_book`, `toy_action_figure`, `baby_blanket`. `baby_formula`
+  deliberately carries no `restores` — it is flavor, not player food.
+- **Self-defense** (police-only items existed): `baseball_bat` and
+  `riot_baton` (`blunt`), `combat_knife` (`blade`), `pepper_spray`,
+  `stun_gun`.
+- **Cleaning supplies**: `dish_soap`, `laundry_detergent`,
+  `rubber_gloves`, `trash_bags`.
+- **Documents/lore**: `dated_newspaper`, `personal_journal`,
+  `unsent_letter`, `utility_bill`, `missing_person_flyer` — generic item
+  types only, per Design decision 2.
+- **Electronics**: `walkie_talkie` (`battery`), `dead_cellphone`,
+  `disposable_camera`.
+- **Money/valuables**: `gift_card`, `checkbook`.
+- **Equippable bags**, `category:"Container"`, following `worn_backpack`
+  exactly: `duffel_bag` (`duffel`, 18 kg), `tote_bag` (`tote`, 8 kg),
+  `purse` (`purse`, 5 kg), `fanny_pack` (`fannypack`, 3 kg).
+
+**New content** — WORLD DATA, `SPAWN_POOLS`
+
+- 5 new pools, 23 → 28: `pet_supplies` (`rollCount:[1,2]`,
+  `emptyChance:0.2`), `baby_items` (`[0,2]`, `0.3`), `self_defense`
+  (`[0,1]`, `0.35`), `cleaning_supplies` (`[1,2]`, `0.15`) and
+  `electronics` (`[0,1]`, `0.3`). Roll counts and empty chances are the
+  handoff's; per-entry weights follow the existing convention (commoner
+  items 5-8, rarer or bulkier ones 1-3) and are flagged retunable in the
+  code comment.
+- 6 existing pools extended: `hygiene` (+ the four cleaning items, at
+  lower weights than its bathroom staples), `valuables` (+ `gift_card`,
+  `checkbook`), `police_gear` (+ `riot_baton`), `office_supplies` and
+  `residential_personal` (+ the electronics), and `documents_lore` (+ the
+  five document types).
+- `spawnPools` added on **20 existing containers**, alongside their
+  current pools rather than replacing them: `pet_supplies` on four
+  residential closets/dressers, `baby_items` on two bedroom containers,
+  `self_defense` on the two nightstands, one Oak dresser and the hardware
+  store's Tool Wall, `cleaning_supplies` on both under-sink cabinets, the
+  superintendent's tool cabinet and closet and the corner store's back
+  room, and `electronics` on the five `office_supplies` containers and
+  both nightstands. Each new pool lands on at least one container that
+  still has its roll pending, so every one of them can actually appear in
+  play rather than only mattering to a future respawn cycle.
+- 4 hand-placed (not pool-rolled) bags, one per building, following the
+  `worn_backpack` precedent: `duffel_bag` in Acorn 2B's closet, `purse`
+  in Acorn 1A's open suitcase, `tote_bag` in the flat above the corner
+  store, `fanny_pack` in the flat above the hardware store. All four
+  containers already carried authored contents and `spawnRolled:true`, so
+  placing a bag there costs no container its spawn roll.
+
+**Changed** — RENDERING and PLAYER STATE, slot generalization
+
+The equip mechanism was already generic (`state[it.slotType]`), but four
+places named `"keychain"`/`"backpack"` by hand, so a new `slotType` would
+have silently had no tab and no Unequip button. Design decision 3 resolved
+to option **(b)**, the fuller generalization, so the next bag type needs
+no RENDERING edit at all:
+
+- New `CONTAINER_SLOTS` and `SLOT_LABELS` (WORLD DATA, beside
+  `itemsFromRegistry`), derived from `ITEM_REGISTRY` rather than listed.
+  `keychain` is named explicitly in both, since it is the one slot that
+  isn't a found item.
+- New optional `slotLabel` registry property for slots whose key doesn't
+  capitalize into a good tab name — `"Fanny Pack"`, `"Duffel Bag"`,
+  `"Tote Bag"`. `worn_backpack` needs none, so its tab still reads
+  "Backpack" exactly as before.
+- `invTabDefs` and the unequip-button condition (`renderInventoryPanel`),
+  `invSlot()` and `invPools()` now all read `CONTAINER_SLOTS` instead of
+  naming slots. Tab order is unchanged for existing saves: Inventory,
+  Keychain, Backpack, then any new bag in registry order.
+- `makeDefaultState()` derives its empty slots from `CONTAINER_SLOTS`
+  instead of the literal `backpack:null`, so a new bag type needs no edit
+  there either.
+- `keychainAllows()` is untouched and still restricts the keychain to
+  `Key` items. That restriction is deliberately not inherited by the new
+  bag slots.
+
+**UI**
+
+- Equipping a duffel bag, purse, fanny pack or tote bag adds an inventory
+  tab named for it, with a working Unequip button, matching the existing
+  Backpack tab's behavior exactly.
+
+**Explicitly out of scope** (per the handoff)
+
+- **Firearms and any combat/ammo mechanics** — Design decision 1,
+  resolved to the recommended default of excluding them entirely. A
+  working firearm needs ammo tracking, reload and a combat system that
+  doesn't exist; inert loot would mislead the player. Deferred to roadmap
+  item 6 (Zombies/Threats) so the item and its mechanics ship together.
+  `stun_gun` and `pepper_spray` are in, being non-firearm deterrents with
+  no ammo model implied.
+- **Deep, personalized lore content** for the new document items —
+  Design decision 2, resolved to the recommended default. The item
+  *types* ship with plain generic names; writing dated, location-specific
+  content for them is roadmap item 13's job and this pass does not
+  fulfill it.
+- Container property tags, the no-respawn flag and fauna (roadmap item
+  15); new buildings to house these categories properly — a pet store,
+  nursery or sporting-goods store (roadmap item 14's remaining half);
+  map expansion, which shipped separately in v0.4.1.
+
+**Validation performed**
+
+Audited with a harness that evaluates the real `<script>` body under a
+DOM stub and drives the assembled game, plus a real-browser check:
+
+- All 36 new items resolve with the exact category and weight the handoff
+  specced, checked entry by entry against a transcription of its tables.
+  `baby_formula` confirmed to carry no `restores`.
+- No firearm- or ammunition-shaped id exists in `ITEM_REGISTRY`.
+- `CONTAINER_SLOTS` covers every `slotType` in the registry; every slot
+  resolves a label; the Backpack tab label and the tab ordering are
+  unchanged from v0.4.1.
+- Equip → stash an item → unequip round-trips for all five equippable
+  bags: the slot populates, `invSlot()` resolves it with the right
+  capacity, its contents appear in `invPools()`, and the stored contents
+  survive being unequipped back into a stowable item.
+- `keychainAllows()` still accepts `Key` and rejects everything else.
+- Every pool is attached to at least one container, and each of the five
+  new pools reaches at least one container whose roll is still pending.
+- 120,000 weighted rolls across all 28 pools — every result resolves to a
+  real registry item with qty ≥ 1, and every entry has a positive weight
+  and `qtyMin <= qtyMax`.
+- All four new bag types confirmed findable in the default world, each in
+  a `spawnRolled` container so no container lost its pool roll. (This
+  check first ran too loosely — it counted the pre-existing
+  `worn_backpack` toward the total and so passed while `fanny_pack` had
+  silently failed to place. Tightened to exclude `worn_backpack` and to
+  assert each of the four bag ids individually, which caught it.)
+- A v0.4.1-shaped save, with none of the new slot keys, still loads and
+  picks up every slot from `makeDefaultState()`.
+- The v0.4.1 world audit re-run unchanged: 218 rooms, 774 exits, exit
+  reciprocity, grid adjacency, compass wording, map coverage and
+  reachability all still pass.
+- Loaded in a real browser: the game boots at v0.4.2 and renders, and
+  with all four bags equipped the panel shows Inventory / Keychain /
+  Duffel Bag / Purse / Fanny Pack / Tote Bag with Unequip on the active
+  slot.
+- Diffed against `ashfall_0_4_1.html`: every removed line is an intended
+  edit (version strings, the registry/pool lines being extended, the 20
+  container lines gaining pools, the 4 gaining a bag, and the slot
+  generalization). No room, container, item or exit was removed.
+
+**Notes / assumptions**
+
+- Per-entry spawn weights for the five new pools, and for the additions
+  to the six existing ones, had no prior convention beyond "commoner
+  higher, rarer lower" — retunable, not designed.
+- **Category mismatch worth a look:** `dish_soap`, `laundry_detergent`,
+  `rubber_gloves` and `trash_bags` are `Misc`, exactly as the handoff
+  specifies, but their closest existing siblings (`bar_soap`, `bleach`,
+  `toilet_paper`) are `Materials`. `Materials` is in `STACKABLE` and
+  `Misc` is not, so as shipped these four do not stack while the older
+  cleaning items do. Implemented as specced rather than silently
+  deviating; it's a one-word change per entry if the stacking behavior is
+  wanted.
+- Which specific containers got which pool is this session's call within
+  the handoff's stated pattern — in particular, pet supplies are on some
+  residential units and not others, and baby items on only two, so not
+  every apartment reads as having had a pet or a baby.
+- `combat_knife`'s `blade` tag is currently decorative: no mechanic reads
+  `blade` yet (`blunt` breaks cars and windows, `cutting` cuts locks,
+  `chopping` fells trees). It is tagged for consistency with
+  `kitchen_knife` and `box_cutter`, not because it does anything new.
+- `baseball_bat` and `riot_baton` carry `blunt`, so they are immediately
+  usable for forcing car doors and breaking windows. That is a real
+  increase in how many tools can do those jobs, and worth a look if
+  forced entry starts feeling too easy.
+- The handoff listed four existing pools to extend; six were extended.
+  `documents_lore` and `residential_personal` are the extra two, both
+  named in the handoff's own per-category text (the document types and
+  "extend `office_supplies`/`residential_personal`" for electronics) but
+  omitted from its summary list.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.1"` → `"0.4.2"`
+
+---
+
+## v0.4.1 — Map Expansion to 8×8 Street Grid
+
+Implements the "Ashfall Handoff — Map Expansion to 8×8 Grid" handoff for
+its street-grid component. Fulfills roadmap Tier 1 item 14 (Expand the
+Map) **in part only** — the building-placement half of that item is
+untouched by this pass and item 14 stays open. Content pass: WORLD DATA
+additions plus the mechanical `MAP` updates the larger grid required. No
+new mechanics, no new state fields, no save-format change.
+
+**Open questions resolved** (the handoff shipped with three unresolved;
+Tom answered all three before this session)
+
+- **Street names/direction.** Cedar, Elm, Mill and Dock confirmed, but all
+  four placed **south** of Maple St rather than Mill/Dock north of Water.
+  The handoff's table put Mill at y=400 and Dock at y=500, north of Water
+  St — which would have put both streets in the river. Water St is the
+  riverfront on every existing node (`fishable:true`, "just a drop to the
+  mud", `riverbank`'s "Climb down to the riverbank"), so the town grows
+  *away* from the water instead: Elm and Cedar continue the residential
+  tree-name ring, Mill and Dock are the industrial and rail-freight edge
+  beyond it. Water St remains the river / north hard limit and no existing
+  description needed rewriting.
+- **Numbered-street asymmetry.** Resolved symmetric the other way round:
+  8th St dropped, 9th St added east, giving 3 streets west of center
+  (6th, 4th, 2nd) and 4 east (3rd, 5th, 7th, 9th).
+- **Pass size/phasing.** Built as a single pass, not split.
+
+**New content** — WORLD DATA, `LOCATIONS` and the new `buildOuterStreets()`
+
+- Street grid grown from 5 numbered × 4 named to **8 × 8**. New numbered
+  streets (x, west→east): 6th `-100`, [4th `0`, 2nd `100`, 1st `200`,
+  3rd `300`, 5th `400`], 7th `500`, 9th `600`. New named streets (y,
+  south→north): Dock `-400`, Mill `-300`, Cedar `-200`, Elm `-100`,
+  [Maple `0`, Poplar `100`, Main `200`, Water `300`]. Every existing
+  coordinate is unchanged — origin stays `maple4th`, and the new grid is
+  what introduces negative x and y.
+- **125 new rooms**, each with a `LOCATIONS` entry at the same fixed
+  100m spacing: 44 intersections (`dock6th` … `water9th`, `building`
+  `"<Named> St & <Numbered> St"`, `floorCap:100`), 40 mid-blocks along the
+  named streets (`mid_<name>_<lo>_<hi>`) and 41 along the numbered streets
+  (`mid_<number>_<a>_<b>`), all `floorCap:20`. Mid-block coordinates are
+  the midpoint of their two endpoints; adjacency is spatial order, not
+  numeric, exactly as in the original grid. Room total 93 → 218.
+- All 125 descriptions hand-written per the Project Guide's tone
+  checklist — one to two sentences, matching the existing mid-block and
+  intersection density rather than building-interior depth. New areas
+  carry their own character: Elm and Cedar are the outer residential
+  ring thinning into fields, Mill is the fenced industrial belt, Dock is
+  the rail-freight edge where the town stops.
+- New nodes ship with empty `containers:[]` — no loot placed in this
+  pass. Eight mid-blocks get incidental `floor` items for texture, each
+  tied to what the description already shows: `mid_cedar_5_7` (firewood,
+  the dumped yard waste), `mid_dock_1_2` (planks, the broken pallet),
+  `mid_dock_2_4` (tow chain), `mid_elm_2_4` (stuffed toy), `mid_main_5_7`
+  (tire iron, the used-car lot), `mid_mill_7_9` (scrap metal),
+  `mid_7th_mp_p` (metal pipe, the collapsed trampoline's leg) and
+  `mid_water_7_9` (firewood, driftwood off the bend).
+- The three new Water St nodes and their three mid-blocks carry
+  `fishable:true`, matching every existing Water St node.
+  `mid_elm_1_3`, `mid_maple_7_9` and `mid_9th_c_e` carry `hasTree:true`,
+  the only three new descriptions that name a tree.
+
+**Changed** — WORLD DATA, `buildStreetsAndOutdoor()`
+
+- The 11 rooms that were the old grid's outer edge gained 26 exits
+  connecting them outward: `maple4th`…`water4th` west toward 6th St,
+  `maple5th`…`water5th` east toward 7th St, and all five Maple St nodes
+  south toward Elm St (`maple4th` and `maple5th` were corners and gained
+  two directions each). Each direction adds the established pair — one
+  exit to the next intersection, one "Step into the block" exit to the
+  new mid-block between them. All are cross-`Location` exits carrying
+  only `{ to, label }`; `exitMinutes()` and `computeDirection()` derive
+  travel time and compass wording from coordinates, as since v0.3.0.
+- Water St gained no new exits north: it is still the river and the
+  town's north hard limit.
+
+**Fixed**
+
+- `poplar2nd` was missing both of its southbound exits. `maple2nd` and
+  `mid_2nd_mp_p` each point north to it, but it had no exit back, so
+  Poplar & 2nd was a one-way trip from the south — a pre-existing v0.4.0
+  content bug, not something this pass introduced (confirmed by running
+  the reciprocity audit below against the unmodified v0.4.0 file). Added
+  `{ to:"maple2nd" }` and `{ to:"mid_2nd_mp_p" }`, matching the
+  intersection pattern every other node follows.
+
+**Function relocation / new function**
+
+- New `buildOuterStreets()` (WORLD DATA), merged in `makeDefaultWorld()`
+  directly after `buildStreetsAndOutdoor()`. The handoff left placement
+  of the 125 rooms to this session; they went in a sibling function
+  rather than into `buildStreetsAndOutdoor()`, which would otherwise have
+  roughly tripled in length. The split is along the obvious seam — the
+  original 5×4 core versus the outer ring added here — and moved no
+  existing line, so it is not roadmap item 9 (a by-town/by-location split
+  of the existing function), which stays open and is now more pressing.
+
+**UI** — RENDERING, `MAP` sub-block
+
+- `MAP_STREETS` rebuilt: 16 chains (8 named + 8 numbered) of 15 nodes
+  each, replacing the previous 9 chains of 9 and 7. The new nodes are
+  inserted at their correct spatial position within each existing chain,
+  not appended.
+- `MAP_MAX_COL` `4` → `6` and `MAP_WIDE_VIEWBOX` `{20,20,610,480}` →
+  `{20,20,1000,1000}`, both scaled from the 5×4 values by the same
+  margin/spacing logic. New `MAP_MIN_COL` (`-1`) and `MAP_MIN_ROW` (`-4`)
+  constants, because the grid now carries negative coordinates:
+  `mapToSvg()` offsets by `MAP_MIN_COL` so column −1 still lands on the
+  left margin. `MAP_MAX_ROW` is deliberately unchanged at `3` — Water St
+  is still the northernmost row, so the river line and every pre-existing
+  node keep their exact old SVG positions.
+- The river path in `renderMapClose()`/`renderMapWide()` now spans
+  `mapToSvg(MAP_MIN_COL, …)` → `mapToSvg(MAP_MAX_COL, …)` instead of
+  starting at column 0, so it runs the full width of the wider grid.
+- `MAP_BUILDINGS` untouched — no buildings were placed by this pass.
+  Wide view shows the larger grid; Close view is structurally unaffected
+  (it already pans per-node) and was spot-checked against the new nodes.
+
+**Documentation**
+
+- `LOCATIONS`' coordinate-convention comment rewritten for the 8×8 grid:
+  the new col/row ranges and street orders, why the four new named
+  streets sit south of Maple, and that the origin did not move.
+- `MAP`'s grid-extents comment updated, including why `MAP_MIN_COL`/
+  `MAP_MIN_ROW` exist and why `MAP_MAX_ROW` didn't change.
+- ARCHITECTURE comment's "Current version" line bumped.
+- Roadmap updated and renamed to `Ashfall_Development_Roadmap_v0.4.1.md`.
+  Item 14 kept open with its scope narrowed to the building-placement
+  half that this pass did not build. Item 9's room count corrected
+  (60 → 185 street/outdoor rooms across two functions) and its "no
+  urgency yet" note revised, since this pass is exactly the growth that
+  note was waiting on. Nothing was removed.
+
+**Explicitly out of scope** (per the handoff)
+
+- Any new buildings in the new blocks, and any new outdoor set-pieces
+  like the Storage Facility or Riverbank. This pass is the street
+  skeleton only; what gets placed out there is a separate planning pass
+  and the remaining half of roadmap item 14.
+- No loot in the new blocks beyond the eight incidental floor items above.
+- Splitting `buildStreetsAndOutdoor()` itself (roadmap item 9).
+- The missing item-category population pass (separate handoff).
+- Container property tags / item respawn (roadmap item 15).
+
+**Validation performed**
+
+Audited with a harness that evaluates the real `<script>` body under a DOM
+stub and inspects the assembled `world`, run against both this file and
+the unmodified v0.4.0 file for comparison:
+
+- 218/218 rooms resolve a `locationId` in `LOCATIONS`; 774 exits, every
+  target resolving to a real room.
+- Every street↔street exit is reciprocal (this is the check that caught
+  the `poplar2nd` bug, and it fails identically on unmodified v0.4.0).
+- Every street exit spans exactly one grid step — 50m to a mid-block or
+  100m to the next intersection — so no exit accidentally skips a node.
+- Every compass word in every cross-`Location` exit label matches the
+  direction `computeDirection()` derives from the coordinates.
+- All 176 expected grid nodes present (64 intersections + 56 + 56
+  mid-blocks) against an independently enumerated 8×8 grid.
+- All 16 `MAP_STREETS` chains are 15 nodes, every id resolving; every
+  grid node appears in some chain; all 176 render inside
+  `MAP_WIDE_VIEWBOX`.
+- Every room reachable from the player's start room by exit-graph search.
+- Wide map rendered to SVG and rasterized — 8×8 grid draws correctly with
+  the river along Water St at the north edge.
+- Diffed against `ashfall_0_4_0.html`: 23 lines removed, all of them the
+  intended `MAP`/comment/version edits. No existing room, container, item
+  or exit was removed or rewritten — every world-data change is an
+  addition.
+
+**Notes / assumptions**
+
+- Street names, the north/south flip, the symmetric numbered-street
+  scheme and the one-pass phasing are Tom's answers to the handoff's
+  three open questions, not this session's picks.
+- Which four new named streets are residential (Elm, Cedar) versus
+  industrial (Mill, Dock), and the specific character given to each — the
+  mill and its yards, the rail spur and loading docks along Dock St — is
+  this session's invention, extrapolated from the existing Riverside
+  Freight warehouse and the "INDUSTRIAL-something" sign already on
+  Maple St's south side. Retunable; nothing mechanical depends on it.
+- The eight incidental floor items, the three `hasTree` nodes and the
+  `fishable` flags on the new Water St nodes are judgment calls within the
+  handoff's "sprinkle a handful for texture" guidance. Item choices are
+  flavor, but `hasTree` feeds `doChopTree` and `fishable` feeds `doFish`,
+  so they are live gameplay affordances and worth re-balancing if the
+  outer grid ends up too generous a firewood/food source.
+- `MAP_MIN_ROW` is defined and documented but not yet read by any code,
+  since `MAP_MAX_ROW` alone still anchors the y axis. It is there as the
+  matching half of `MAP_MIN_COL` so the extents read as a pair.
+- The handoff described the 14 edge rooms as gaining "a new exit" each.
+  Following the file's own convention, each new direction gains a *pair*
+  (next intersection + mid-block), which is why the count here is 26
+  exits across 11 rooms rather than 14.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.0"` → `"0.4.1"`
+
+---
+
 ## v0.4.0 — Container Spawn Pools & Population System
 
 Implements the "Ashfall Handoff — Container Spawn Pools & Population
