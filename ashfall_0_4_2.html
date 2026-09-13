@@ -217,7 +217,7 @@
   //   indexes are temporary and must never be treated as stable identity.
   //   doRestart lives in PERSISTENCE, not SIMULATION, since it performs a
   //   full state reset rather than a time-driven update.
-  // Current version: 0.4.1.
+  // Current version: 0.4.2.
   //
   // WORLD DATA also carries LOCATIONS — real integer (x,y,z) coordinates
   // (meters) for every street/mid-block node and building floor, keyed by
@@ -240,7 +240,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.4.1" };
+  const GAME_CONFIG = { VERSION: "0.4.2" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Ammunition","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -363,6 +363,8 @@
   //     restores      { hunger, thirst } — consumable effect
   //     verb          display/use verb, e.g. "Eat", "Drink"
   //     slotType      equipment/container slot key, e.g. "backpack"
+  //     slotLabel     inventory-tab label for that slot, when capitalizing
+  //                   the slot key isn't good enough (e.g. "Fanny Pack")
   //     capacityKg    capacity of an equippable container item
   //     contents      stored contents when an equipped container is
   //                   unequipped back into a stowable item
@@ -503,7 +505,59 @@
     evidence_bag: { name:"Evidence bag", category:"Misc", unitWeight:0.05 },
     sealed_evidence_box: { name:"Sealed evidence box", category:"Misc", unitWeight:1.5 },
     handcuffs: { name:"Handcuffs", category:"Tool", unitWeight:0.3 },
-    police_badge: { name:"Police badge", category:"Misc", unitWeight:0.05 }
+    police_badge: { name:"Police badge", category:"Misc", unitWeight:0.05 },
+    // New entries below added in v0.4.2 to close the category gaps found by
+    // the post-v0.4.0 audit — see the "Missing Item Category Population"
+    // handoff. Weights are estimates consistent with existing entries for
+    // similar real-world items; retunable.
+    // Pet supplies
+    dry_pet_food: { name:"Bag of dry pet food", category:"Food", unitWeight:1.5 },
+    canned_pet_food: { name:"Can of pet food", category:"Food", unitWeight:0.4 },
+    pet_leash: { name:"Leash", category:"Misc", unitWeight:0.2 },
+    pet_collar: { name:"Pet collar", category:"Misc", unitWeight:0.1 },
+    pet_toy: { name:"Chewed-up pet toy", category:"Misc", unitWeight:0.2 },
+    cat_litter: { name:"Bag of cat litter", category:"Misc", unitWeight:4.0 },
+    pet_carrier: { name:"Pet carrier", category:"Misc", unitWeight:2.0 },
+    // Baby / child items
+    diapers: { name:"Pack of diapers", category:"Misc", unitWeight:0.8 },
+    baby_formula: { name:"Can of baby formula", category:"Food", unitWeight:0.6 },
+    pacifier: { name:"Pacifier", category:"Misc", unitWeight:0.02 },
+    childrens_book: { name:"Children's book", category:"Literature", unitWeight:0.2 },
+    toy_action_figure: { name:"Action figure", category:"Misc", unitWeight:0.1 },
+    baby_blanket: { name:"Baby blanket", category:"Misc", unitWeight:0.3 },
+    // Self-defense (no firearms — see the handoff's Design decision 1)
+    baseball_bat: { name:"Baseball bat", category:"Tool", unitWeight:0.9, tags:["blunt"] },
+    combat_knife: { name:"Combat knife", category:"Tool", unitWeight:0.3, tags:["blade"] },
+    pepper_spray: { name:"Pepper spray", category:"Misc", unitWeight:0.15 },
+    stun_gun: { name:"Stun gun", category:"Tool", unitWeight:0.3 },
+    riot_baton: { name:"Riot baton", category:"Tool", unitWeight:0.7, tags:["blunt"] },
+    // Cleaning supplies
+    dish_soap: { name:"Dish soap", category:"Misc", unitWeight:0.4 },
+    laundry_detergent: { name:"Laundry detergent", category:"Misc", unitWeight:1.5 },
+    rubber_gloves: { name:"Rubber gloves", category:"Misc", unitWeight:0.1 },
+    trash_bags: { name:"Roll of trash bags", category:"Misc", unitWeight:0.3 },
+    // Documents / lore — generic types only; location-specific written
+    // content is roadmap item 13's job, not this pass's.
+    dated_newspaper: { name:"Dated newspaper", category:"Literature", unitWeight:0.1 },
+    personal_journal: { name:"Personal journal", category:"Literature", unitWeight:0.3 },
+    unsent_letter: { name:"Unsent letter", category:"Literature", unitWeight:0.02 },
+    utility_bill: { name:"Utility bill", category:"Literature", unitWeight:0.02 },
+    missing_person_flyer: { name:"Missing person flyer", category:"Literature", unitWeight:0.02 },
+    // Electronics
+    walkie_talkie: { name:"Walkie-talkie", category:"Electronics", unitWeight:0.3, tags:["battery"] },
+    dead_cellphone: { name:"Dead cellphone", category:"Electronics", unitWeight:0.15 },
+    disposable_camera: { name:"Disposable camera", category:"Electronics", unitWeight:0.2 },
+    // Money / valuables
+    gift_card: { name:"Now-useless gift card", category:"Misc", unitWeight:0.01 },
+    checkbook: { name:"Checkbook", category:"Misc", unitWeight:0.1 },
+    // Equippable bags — same shape as worn_backpack: a found item whose
+    // slotType/capacityKg make it an equippable container. `slotLabel` is
+    // what the inventory tab reads (see SLOT_LABELS below); omit it and the
+    // slot key is capitalized instead, which is why worn_backpack needs none.
+    duffel_bag: { name:"Duffel bag", category:"Container", unitWeight:0.8, slotType:"duffel", slotLabel:"Duffel Bag", capacityKg:18 },
+    purse: { name:"Purse", category:"Container", unitWeight:0.4, slotType:"purse", capacityKg:5 },
+    fanny_pack: { name:"Fanny pack", category:"Container", unitWeight:0.2, slotType:"fannypack", slotLabel:"Fanny Pack", capacityKg:3 },
+    tote_bag: { name:"Tote bag", category:"Container", unitWeight:0.3, slotType:"tote", slotLabel:"Tote Bag", capacityKg:8 }
   };
   // itemFromRegistry/itemsFromRegistry expand a { id, qty, overrides? }
   // placement reference into a full runtime item object, deep-cloned from
@@ -523,6 +577,28 @@
   function itemsFromRegistry(refs){
     return refs.map(itemFromRegistry);
   }
+
+  // CONTAINER_SLOTS / SLOT_LABELS (v0.4.2): the equipment slots the player
+  // can carry things in, derived from ITEM_REGISTRY rather than listed by
+  // hand, so adding an equippable bag is a registry edit and nothing else —
+  // PLAYER STATE, the inventory pools and RENDERING all read these instead
+  // of naming slots individually (they used to hardcode "keychain"/
+  // "backpack"). `keychain` is named explicitly because it is the one slot
+  // that isn't a found item: makeDefaultState() ships it populated, and
+  // keychainAllows() restricts it to Key items. That restriction is specific
+  // to the keychain and is deliberately not inherited by any other slot.
+  const CONTAINER_SLOTS = ["keychain"].concat(
+    Object.values(ITEM_REGISTRY).filter(d => d.slotType).map(d => d.slotType)
+      .filter((s, i, all) => all.indexOf(s) === i));
+  const SLOT_LABELS = (function(){
+    const out = { keychain:"Keychain" };
+    Object.values(ITEM_REGISTRY).forEach(d=>{
+      if(d.slotType && !out[d.slotType]) {
+        out[d.slotType] = d.slotLabel || d.slotType.charAt(0).toUpperCase() + d.slotType.slice(1);
+      }
+    });
+    return out;
+  })();
 
   // SPAWN_POOLS (v0.4.0): weighted-RNG loot tables, sibling registry to
   // ITEM_REGISTRY. A container opts in via its `spawnPools` field (see
@@ -572,7 +648,11 @@
       { itemId:"toothpaste", weight:6, qtyMin:1, qtyMax:1 },
       { itemId:"shampoo", weight:5, qtyMin:1, qtyMax:1 },
       { itemId:"bleach", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"hand_sanitizer", weight:4, qtyMin:1, qtyMax:1 } ]},
+      { itemId:"hand_sanitizer", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"rubber_gloves", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"trash_bags", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"dish_soap", weight:3, qtyMin:1, qtyMax:1 },
+      { itemId:"laundry_detergent", weight:3, qtyMin:1, qtyMax:1 } ]},
     medical_otc: { rollCount:[1,2], emptyChance:0.2, entries:[
       { itemId:"bandages", weight:8, qtyMin:1, qtyMax:3 },
       { itemId:"painkillers", weight:6, qtyMin:1, qtyMax:1 },
@@ -593,6 +673,8 @@
       { itemId:"spare_batteries", weight:6, qtyMin:1, qtyMax:2 },
       { itemId:"loose_change", weight:6, qtyMin:1, qtyMax:1 },
       { itemId:"wristwatch", weight:3, qtyMin:1, qtyMax:1 },
+      { itemId:"dead_cellphone", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"disposable_camera", weight:3, qtyMin:1, qtyMax:1 },
       { itemId:"jewelry_piece", weight:2, qtyMin:1, qtyMax:1 } ]},
     clothing: { rollCount:[1,2], emptyChance:0.15, entries:[
       { itemId:"folded_clothes", weight:8, qtyMin:1, qtyMax:2 },
@@ -608,6 +690,11 @@
       { itemId:"photo_album", weight:4, qtyMin:1, qtyMax:1 },
       { itemId:"registration_papers", weight:3, qtyMin:1, qtyMax:1 },
       { itemId:"owners_manual", weight:3, qtyMin:1, qtyMax:1 },
+      { itemId:"dated_newspaper", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"utility_bill", weight:5, qtyMin:1, qtyMax:2 },
+      { itemId:"unsent_letter", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"personal_journal", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"missing_person_flyer", weight:3, qtyMin:1, qtyMax:1 },
       { itemId:"building_ledger", weight:2, qtyMin:1, qtyMax:1 } ]},
     recreation: { rollCount:[0,2], emptyChance:0.25, entries:[
       { itemId:"board_games", weight:6, qtyMin:1, qtyMax:1 },
@@ -636,6 +723,9 @@
       { itemId:"registration_papers", weight:4, qtyMin:1, qtyMax:1 },
       { itemId:"reading_lamp", weight:4, qtyMin:1, qtyMax:1 },
       { itemId:"owners_manual", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"dead_cellphone", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"disposable_camera", weight:3, qtyMin:1, qtyMax:1 },
+      { itemId:"walkie_talkie", weight:2, qtyMin:1, qtyMax:1 },
       { itemId:"portable_radio", weight:2, qtyMin:1, qtyMax:1 } ]},
     retail_stock_food: { rollCount:[1,3], emptyChance:0.1, entries:[
       { itemId:"bottled_water", weight:8, qtyMin:1, qtyMax:3 },
@@ -672,13 +762,16 @@
       { itemId:"crumpled_cash", weight:6, qtyMin:1, qtyMax:1 },
       { itemId:"jewelry_piece", weight:4, qtyMin:1, qtyMax:1 },
       { itemId:"cash_bundle", weight:3, qtyMin:1, qtyMax:1 },
-      { itemId:"wristwatch", weight:3, qtyMin:1, qtyMax:1 } ]},
+      { itemId:"wristwatch", weight:3, qtyMin:1, qtyMax:1 },
+      { itemId:"gift_card", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"checkbook", weight:4, qtyMin:1, qtyMax:1 } ]},
     police_evidence: { rollCount:[0,1], emptyChance:0.4, entries:[
       { itemId:"evidence_bag", weight:6, qtyMin:1, qtyMax:1 },
       { itemId:"sealed_evidence_box", weight:3, qtyMin:1, qtyMax:1 } ]},
     police_gear: { rollCount:[1,2], emptyChance:0.2, entries:[
       { itemId:"police_uniform", weight:5, qtyMin:1, qtyMax:1 },
       { itemId:"handcuffs", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"riot_baton", weight:4, qtyMin:1, qtyMax:1 },
       { itemId:"police_badge", weight:2, qtyMin:1, qtyMax:1 } ]},
     warehouse_goods: { rollCount:[1,2], emptyChance:0.2, entries:[
       { itemId:"scrap_metal", weight:6, qtyMin:1, qtyMax:2 },
@@ -695,7 +788,40 @@
       { itemId:"firewood", weight:8, qtyMin:1, qtyMax:3 },
       { itemId:"box_of_matches", weight:6, qtyMin:1, qtyMax:1 },
       { itemId:"lighter", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"campfire_kit", weight:2, qtyMin:1, qtyMax:1 } ]}
+      { itemId:"campfire_kit", weight:2, qtyMin:1, qtyMax:1 } ]},
+    // Pools added in v0.4.2 for the categories the post-v0.4.0 audit found
+    // uncovered. rollCount/emptyChance are the handoff's; per-entry weights
+    // follow the existing convention (commoner items 5-8, rarer or bulkier
+    // ones 1-3) and are retunable.
+    pet_supplies: { rollCount:[1,2], emptyChance:0.2, entries:[
+      { itemId:"dry_pet_food", weight:7, qtyMin:1, qtyMax:1 },
+      { itemId:"canned_pet_food", weight:7, qtyMin:1, qtyMax:3 },
+      { itemId:"pet_leash", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"pet_collar", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"pet_toy", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"cat_litter", weight:2, qtyMin:1, qtyMax:1 },
+      { itemId:"pet_carrier", weight:2, qtyMin:1, qtyMax:1 } ]},
+    baby_items: { rollCount:[0,2], emptyChance:0.3, entries:[
+      { itemId:"diapers", weight:7, qtyMin:1, qtyMax:1 },
+      { itemId:"baby_formula", weight:6, qtyMin:1, qtyMax:2 },
+      { itemId:"pacifier", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"childrens_book", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"toy_action_figure", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"baby_blanket", weight:5, qtyMin:1, qtyMax:1 } ]},
+    self_defense: { rollCount:[0,1], emptyChance:0.35, entries:[
+      { itemId:"pepper_spray", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"baseball_bat", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"combat_knife", weight:3, qtyMin:1, qtyMax:1 },
+      { itemId:"stun_gun", weight:3, qtyMin:1, qtyMax:1 } ]},
+    cleaning_supplies: { rollCount:[1,2], emptyChance:0.15, entries:[
+      { itemId:"dish_soap", weight:7, qtyMin:1, qtyMax:1 },
+      { itemId:"trash_bags", weight:7, qtyMin:1, qtyMax:1 },
+      { itemId:"rubber_gloves", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"laundry_detergent", weight:5, qtyMin:1, qtyMax:1 } ]},
+    electronics: { rollCount:[0,1], emptyChance:0.3, entries:[
+      { itemId:"dead_cellphone", weight:7, qtyMin:1, qtyMax:1 },
+      { itemId:"disposable_camera", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"walkie_talkie", weight:3, qtyMin:1, qtyMax:1 } ]}
   };
 
   // LOCATIONS: real integer (x,y,z) coordinates in meters for every
@@ -997,7 +1123,7 @@
         { id:"medcab", name:"Medicine cabinet", capacityKg:5, spawnPools:["medical_otc","hygiene"], spawnRolled:true, items:itemsFromRegistry([
           { id:"bandages", qty:4 },
           { id:"painkillers", qty:1 } ])},
-        { id:"undersink", name:"Under-sink cabinet", capacityKg:10, spawnPools:["hygiene"], spawnRolled:true, items:itemsFromRegistry([
+        { id:"undersink", name:"Under-sink cabinet", capacityKg:10, spawnPools:["hygiene","cleaning_supplies"], spawnRolled:true, items:itemsFromRegistry([
           { id:"toilet_paper", qty:3 },
           { id:"bleach", qty:1 } ])}
       ],
@@ -1015,7 +1141,7 @@
           { id:"winter_jacket", qty:1 },
           { id:"sturdy_boots", qty:1 },
           { id:"worn_backpack", qty:1 } ])},
-        { id:"nightstand", name:"Nightstand", capacityKg:5, spawnPools:["residential_personal","documents_lore"], spawnRolled:true, items:itemsFromRegistry([
+        { id:"nightstand", name:"Nightstand", capacityKg:5, spawnPools:["residential_personal","documents_lore","self_defense","electronics"], spawnRolled:true, items:itemsFromRegistry([
           { id:"flashlight", qty:1 },
           { id:"spare_batteries", qty:2 },
           { id:"wristwatch", qty:1 } ])},
@@ -1092,7 +1218,7 @@
         { id:"medcab", name:"Medicine cabinet", capacityKg:5, spawnPools:["medical_otc","hygiene"], spawnRolled:true, items:itemsFromRegistry([
           { id:"bandages", qty:2 },
           { id:"aspirin", qty:1 } ])},
-        { id:"undersink", name:"Under-sink cabinet", capacityKg:10, spawnPools:["hygiene"], items:[] }
+        { id:"undersink", name:"Under-sink cabinet", capacityKg:10, spawnPools:["hygiene","cleaning_supplies"], items:[] }
       ],
       exits:[
         { to:"twobee", label:"Go to the living room", distanceM:5 },
@@ -1103,13 +1229,14 @@
       desc:"The bed's made, unlike yours. Whoever lived here kept things tidy, until they didn't.",
       sleepSpot:"bed", cannotHaveFire:true, floorCap:60, floor:[],
       containers:[
-        { id:"closet", name:"Closet", capacityKg:25, spawnPools:["clothing"], spawnRolled:true, items:itemsFromRegistry([
+        { id:"closet", name:"Closet", capacityKg:25, spawnPools:["clothing","pet_supplies"], spawnRolled:true, items:itemsFromRegistry([
           { id:"winter_jacket", qty:1 },
-          { id:"work_gloves", qty:1 } ])},
-        { id:"nightstand", name:"Nightstand", capacityKg:5, spawnPools:["residential_personal","documents_lore"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"work_gloves", qty:1 },
+          { id:"duffel_bag", qty:1 } ])},
+        { id:"nightstand", name:"Nightstand", capacityKg:5, spawnPools:["residential_personal","documents_lore","self_defense","electronics"], spawnRolled:true, items:itemsFromRegistry([
           { id:"loose_change", qty:1 },
           { id:"handwritten_note", qty:1 } ])},
-        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal"], items:[] }
+        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal","pet_supplies"], items:[] }
       ],
       exits:[
         { to:"twobee", label:"Go to the living room", distanceM:5 },
@@ -1201,9 +1328,10 @@
       desc:"A suitcase lies open and half-emptied on the bed, packing abandoned halfway through.",
       sleepSpot:"bed", cannotHaveFire:true, floorCap:60, floor:[],
       containers:[
-        { id:"suitcase", name:"Open Suitcase", capacityKg:12, spawnPools:["clothing","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
+        { id:"suitcase", name:"Open Suitcase", capacityKg:12, spawnPools:["clothing","residential_personal","baby_items"], spawnRolled:true, items:itemsFromRegistry([
           { id:"folded_clothes", qty:2 },
-          { id:"winter_jacket", qty:1 } ])},
+          { id:"winter_jacket", qty:1 },
+          { id:"purse", qty:1 } ])},
         { id:"dresser1a", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
           { id:"crumpled_cash", qty:1 },
           { id:"flashlight", qty:1 } ])}
@@ -1232,15 +1360,15 @@
         { id:"stove", name:"Stove", capacityKg:8, spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
           { id:"dented_saucepan", qty:1 }
         ])},
-        { id:"toolcabinet", name:"Tool Cabinet", capacityKg:25, spawnPools:["tools_general","tools_workshop"], spawnRolled:true, items:itemsFromRegistry([
+        { id:"toolcabinet", name:"Tool Cabinet", capacityKg:25, spawnPools:["tools_general","tools_workshop","cleaning_supplies"], spawnRolled:true, items:itemsFromRegistry([
           { id:"crowbar", qty:1 },
           { id:"duct_tape", qty:2 },
           { id:"wrench", qty:1 } ])},
-        { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore"], spawnRolled:true, items:itemsFromRegistry([
+        { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore","electronics"], spawnRolled:true, items:itemsFromRegistry([
           { id:"master_key", qty:1 },
           { id:"building_ledger", qty:1 },
           { id:"portable_radio", qty:1 } ])},
-        { id:"closet", name:"Closet", capacityKg:25, spawnPools:["clothing"], items:[] }
+        { id:"closet", name:"Closet", capacityKg:25, spawnPools:["clothing","cleaning_supplies"], items:[] }
       ],
       searched:false, searchLabel:"Search the unit", searchMinutes:20,
       exits:[ { to:"hallway1", label:"Leave through the front door", distanceM:6, doorId:"1b" } ]
@@ -1396,7 +1524,7 @@
           { id:"bottled_water", qty:5 } ])},
         { id:"register", name:"Register Counter", capacityKg:5, spawnPools:["valuables","retail_stock_general"], spawnRolled:true, items:itemsFromRegistry([
           { id:"loose_change", qty:1 } ])},
-        { id:"storage", name:"Storage Room", capacityKg:40, spawnPools:["retail_stock_food","retail_stock_general"], spawnRolled:true, items:itemsFromRegistry([
+        { id:"storage", name:"Storage Room", capacityKg:40, spawnPools:["retail_stock_food","retail_stock_general","cleaning_supplies"], spawnRolled:true, items:itemsFromRegistry([
           { id:"canned_beans", qty:4 },
           { id:"box_cutter", qty:1 },
           { id:"bandages", qty:3 } ])}
@@ -1412,7 +1540,8 @@
       containers:[
         { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
           { id:"old_photographs", qty:1 },
-          { id:"reading_lamp", qty:1 } ])}
+          { id:"reading_lamp", qty:1 },
+          { id:"tote_bag", qty:1 } ])}
       ],
       exits:[ { to:"cornerstore", label:"Go downstairs", distanceM:5 } ]
     },
@@ -1589,7 +1718,7 @@
       desc:"Tool racks along one wall, bins of hardware along the other. Better stocked than you expected.",
       cannotHaveFire:true, floorCap:60, floor:[],
       containers:[
-        { id:"toolwall", name:"Tool Wall", capacityKg:30, spawnPools:["hardware_store","tools_general"], spawnRolled:true, items:itemsFromRegistry([
+        { id:"toolwall", name:"Tool Wall", capacityKg:30, spawnPools:["hardware_store","tools_general","self_defense"], spawnRolled:true, items:itemsFromRegistry([
           { id:"bolt_cutters", qty:1 },
           { id:"crowbar", qty:1 },
           { id:"hand_axe", qty:1 },
@@ -1612,7 +1741,9 @@
       desc:"A modest apartment over the shop, plaster cracked from settling.",
       cannotHaveFire:true, floorCap:40, floor:[],
       containers:[
-        { id:"shelf", name:"Shelf", capacityKg:10, spawnPools:["recreation","residential_personal"], spawnRolled:true, items:itemsFromRegistry([ { id:"work_boots", qty:1 } ])}
+        { id:"shelf", name:"Shelf", capacityKg:10, spawnPools:["recreation","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"work_boots", qty:1 },
+          { id:"fanny_pack", qty:1 } ])}
       ],
       exits:[ { to:"hardware", label:"Go downstairs", distanceM:5 } ]
     },
@@ -3025,7 +3156,7 @@
       desc:"Same layout as yours, roughly — smaller, though, and a half-packed bag still sits by the door.",
       sleepSpot:"couch", cannotHaveFire:true, floorCap:50, floor:[],
       containers:[
-        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal"], items:[] },
+        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal","baby_items"], items:[] },
         { id:"kitchenette", name:"Kitchenette Shelf", capacityKg:10, spawnPools:["kitchen_nonperishable","kitchen_tools"], items:[] }
       ],
       exits:[ { to:"oak_hallway1", label:"Leave the apartment", distanceM:6 } ]
@@ -3034,7 +3165,7 @@
       desc:"The blinds are drawn in here, and a calendar on the wall is still turned to two months back.",
       sleepSpot:"bed", cannotHaveFire:true, floorCap:50, floor:[],
       containers:[
-        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal"], items:[] },
+        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal","pet_supplies"], items:[] },
         { id:"kitchenette", name:"Kitchenette Cabinet", capacityKg:10, spawnPools:["kitchen_nonperishable","kitchen_tools"], items:[] }
       ],
       exits:[ { to:"oak_hallway1", label:"Leave the apartment", distanceM:6 } ]
@@ -3043,7 +3174,7 @@
       desc:"A single room upstairs, tidy despite everything — someone made the bed before they left.",
       sleepSpot:"bed", cannotHaveFire:true, floorCap:50, floor:[],
       containers:[
-        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal"], items:[] },
+        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal","self_defense"], items:[] },
         { id:"kitchenette", name:"Kitchenette Shelf", capacityKg:10, spawnPools:["kitchen_nonperishable","kitchen_tools"], items:[] }
       ],
       exits:[ { to:"oak_hallway2", label:"Leave the apartment", distanceM:6 } ]
@@ -3052,7 +3183,7 @@
       desc:"Boxes still stacked by the window, like a move that never finished.",
       sleepSpot:"mattress", cannotHaveFire:true, floorCap:50, floor:[],
       containers:[
-        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal"], items:[] },
+        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal","pet_supplies"], items:[] },
         { id:"kitchenette", name:"Kitchenette Cabinet", capacityKg:10, spawnPools:["kitchen_nonperishable","kitchen_tools"], items:[] }
       ],
       exits:[ { to:"oak_hallway2", label:"Leave the apartment", distanceM:6 } ]
@@ -3077,8 +3208,8 @@
       desc:"A cramped office off the main bay — a desk buried in paperwork, a filing cabinet in the corner.",
       cannotHaveFire:true, floorCap:40, floor:[],
       containers:[
-        { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore"], items:[] },
-        { id:"filingcabinet", name:"Filing Cabinet", capacityKg:20, spawnPools:["office_supplies","documents_lore"], items:[] }
+        { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore","electronics"], items:[] },
+        { id:"filingcabinet", name:"Filing Cabinet", capacityKg:20, spawnPools:["office_supplies","documents_lore","electronics"], items:[] }
       ],
       exits:[ { to:"auto_shop", label:"Go back to the main bay", distanceM:5 } ]
     }
@@ -3091,7 +3222,7 @@
       desc:"A front desk, a bulletin board thick with old flyers, a waiting-area bench bolted to the floor.",
       cannotHaveFire:true, floorCap:60, floor:[],
       containers:[
-        { id:"frontdesk", name:"Front Desk", capacityKg:15, spawnPools:["office_supplies","police_gear"], items:[] },
+        { id:"frontdesk", name:"Front Desk", capacityKg:15, spawnPools:["office_supplies","police_gear","electronics"], items:[] },
         { id:"lockerroom", name:"Locker Room", capacityKg:25, spawnPools:["police_gear","clothing"], items:[] }
       ],
       exits:[
@@ -3126,7 +3257,7 @@
       desc:"A small office off the warehouse floor — a desk, and a squat safe in the corner, door shut.",
       cannotHaveFire:true, floorCap:40, floor:[],
       containers:[
-        { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore"], items:[] },
+        { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore","electronics"], items:[] },
         { id:"safe", name:"Safe", capacityKg:20, spawnPools:["valuables","documents_lore"], items:[] }
       ],
       exits:[ { to:"industrial_floor", label:"Go back to the warehouse floor", distanceM:5 } ]
@@ -3195,7 +3326,7 @@
   // PLAYER STATE
   // ==================================================
   function makeDefaultState(){
-    return {
+    const s = {
       currentRoom:"living", gait:"walk", invTab:"inventory", worldTab:"floor",
       totalMinutes:0, collapseCount:0, illnessMinutesLeft:0,
       // lastExertionMinute/lastWakeMinute start far in the past so recovery
@@ -3204,9 +3335,14 @@
       vitals:{ hunger:75, thirst:75, energy:85, health:100, stamina:100, fatigue:0 },
       inventory:{ name:"Inventory", unitWeight:0, capacityKg:3, items:[] },
       keychain:{ name:"Keychain", unitWeight:0.05, capacityKg:null, items:itemsFromRegistry([
-        { id:"acorn_apt_2a_key", qty:1 } ])},
-      backpack:null
+        { id:"acorn_apt_2a_key", qty:1 } ])}
     };
+    // Every equippable container slot starts empty. Derived from
+    // CONTAINER_SLOTS (v0.4.2) so a new bag type needs only its ITEM_REGISTRY
+    // entry — this used to be a literal `backpack:null`. Keychain is skipped
+    // because it's set above: it's the one slot the player starts carrying.
+    CONTAINER_SLOTS.forEach(slot=>{ if(!(slot in s)) s[slot] = null; });
+    return s;
   }
   let state = makeDefaultState();
   let gameOver = false; // UI-only: never saved — a loaded save always resumes alive
@@ -3323,7 +3459,8 @@
     list.push(copy);
   }
   function invPools(){
-    return [state.inventory.items, state.keychain ? state.keychain.items : [], state.backpack ? state.backpack.items : []];
+    return [state.inventory.items].concat(
+      CONTAINER_SLOTS.map(slot => state[slot] ? state[slot].items : []));
   }
   function countInPools(itemId){
     return invPools().reduce((sum,list)=> sum + list.filter(it=>it.itemId===itemId).reduce((s,it)=>s+it.qty,0), 0);
@@ -3394,9 +3531,7 @@
   }
   function invSlot(tab){
     if(tab === "inventory") return state.inventory;
-    if(tab === "keychain") return state.keychain;
-    if(tab === "backpack") return state.backpack;
-    return null;
+    return CONTAINER_SLOTS.indexOf(tab) >= 0 ? state[tab] : null;
   }
   function worldSlot(room, tab){
     if(tab === "floor") return { items:room.floor, capacityKg:room.floorCap };
@@ -4680,9 +4815,14 @@
   function renderInventoryPanel(){
     const invTabsEl = document.getElementById("invTabs");
     invTabsEl.innerHTML = "";
+    // One tab per populated container slot, in CONTAINER_SLOTS order
+    // (keychain, then ITEM_REGISTRY order) — generalized in v0.4.2 from the
+    // previous hardcoded keychain/backpack pair so a new equippable bag shows
+    // up here with no RENDERING edit at all.
     const invTabDefs = [["inventory","Inventory"]];
-    if(state.keychain) invTabDefs.push(["keychain","Keychain"]);
-    if(state.backpack) invTabDefs.push(["backpack","Backpack"]);
+    CONTAINER_SLOTS.forEach(slot=>{
+      if(state[slot]) invTabDefs.push([slot, SLOT_LABELS[slot]]);
+    });
     if(state.invTab !== "inventory" && !state[state.invTab]) state.invTab = "inventory";
     invTabDefs.forEach(([key,label])=>{
       const btn = document.createElement("button");
@@ -4695,7 +4835,7 @@
     document.getElementById("invWeight").textContent =
       totalWeight(currentInv.items).toFixed(2) + (currentInv.capacityKg ? " / " + currentInv.capacityKg + " kg" : " kg");
     const unequipBtn = document.getElementById("unequipBtn");
-    if(state.invTab === "keychain" || state.invTab === "backpack"){
+    if(CONTAINER_SLOTS.indexOf(state.invTab) >= 0){
       unequipBtn.style.display = "";
       unequipBtn.onclick = ()=> doUnequip(state.invTab);
     } else { unequipBtn.style.display = "none"; }

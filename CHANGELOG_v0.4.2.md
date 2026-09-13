@@ -7,6 +7,200 @@ owns which behavior.
 
 ---
 
+## v0.4.2 — Missing Item Category Population
+
+Implements the "Ashfall Handoff — Missing Item Category Population"
+handoff in full. Continuation of the v0.4.0 `SPAWN_POOLS`/`ITEM_REGISTRY`
+work, closing the category gaps a post-v0.4.0 audit found. Content pass
+(WORLD DATA) plus the small RENDERING generalization the new equippable
+bags needed — no new mechanics, no new state fields, no save-format
+change.
+
+**New content** — WORLD DATA, `ITEM_REGISTRY`
+
+36 new entries, 119 → 155. Weights are estimates consistent with existing
+entries for similar real-world items; retunable.
+
+- **Pet supplies** (none existed): `dry_pet_food`, `canned_pet_food`,
+  `pet_leash`, `pet_collar`, `pet_toy`, `cat_litter`, `pet_carrier`.
+- **Baby/child** (2 existed): `diapers`, `baby_formula`, `pacifier`,
+  `childrens_book`, `toy_action_figure`, `baby_blanket`. `baby_formula`
+  deliberately carries no `restores` — it is flavor, not player food.
+- **Self-defense** (police-only items existed): `baseball_bat` and
+  `riot_baton` (`blunt`), `combat_knife` (`blade`), `pepper_spray`,
+  `stun_gun`.
+- **Cleaning supplies**: `dish_soap`, `laundry_detergent`,
+  `rubber_gloves`, `trash_bags`.
+- **Documents/lore**: `dated_newspaper`, `personal_journal`,
+  `unsent_letter`, `utility_bill`, `missing_person_flyer` — generic item
+  types only, per Design decision 2.
+- **Electronics**: `walkie_talkie` (`battery`), `dead_cellphone`,
+  `disposable_camera`.
+- **Money/valuables**: `gift_card`, `checkbook`.
+- **Equippable bags**, `category:"Container"`, following `worn_backpack`
+  exactly: `duffel_bag` (`duffel`, 18 kg), `tote_bag` (`tote`, 8 kg),
+  `purse` (`purse`, 5 kg), `fanny_pack` (`fannypack`, 3 kg).
+
+**New content** — WORLD DATA, `SPAWN_POOLS`
+
+- 5 new pools, 23 → 28: `pet_supplies` (`rollCount:[1,2]`,
+  `emptyChance:0.2`), `baby_items` (`[0,2]`, `0.3`), `self_defense`
+  (`[0,1]`, `0.35`), `cleaning_supplies` (`[1,2]`, `0.15`) and
+  `electronics` (`[0,1]`, `0.3`). Roll counts and empty chances are the
+  handoff's; per-entry weights follow the existing convention (commoner
+  items 5-8, rarer or bulkier ones 1-3) and are flagged retunable in the
+  code comment.
+- 6 existing pools extended: `hygiene` (+ the four cleaning items, at
+  lower weights than its bathroom staples), `valuables` (+ `gift_card`,
+  `checkbook`), `police_gear` (+ `riot_baton`), `office_supplies` and
+  `residential_personal` (+ the electronics), and `documents_lore` (+ the
+  five document types).
+- `spawnPools` added on **20 existing containers**, alongside their
+  current pools rather than replacing them: `pet_supplies` on four
+  residential closets/dressers, `baby_items` on two bedroom containers,
+  `self_defense` on the two nightstands, one Oak dresser and the hardware
+  store's Tool Wall, `cleaning_supplies` on both under-sink cabinets, the
+  superintendent's tool cabinet and closet and the corner store's back
+  room, and `electronics` on the five `office_supplies` containers and
+  both nightstands. Each new pool lands on at least one container that
+  still has its roll pending, so every one of them can actually appear in
+  play rather than only mattering to a future respawn cycle.
+- 4 hand-placed (not pool-rolled) bags, one per building, following the
+  `worn_backpack` precedent: `duffel_bag` in Acorn 2B's closet, `purse`
+  in Acorn 1A's open suitcase, `tote_bag` in the flat above the corner
+  store, `fanny_pack` in the flat above the hardware store. All four
+  containers already carried authored contents and `spawnRolled:true`, so
+  placing a bag there costs no container its spawn roll.
+
+**Changed** — RENDERING and PLAYER STATE, slot generalization
+
+The equip mechanism was already generic (`state[it.slotType]`), but four
+places named `"keychain"`/`"backpack"` by hand, so a new `slotType` would
+have silently had no tab and no Unequip button. Design decision 3 resolved
+to option **(b)**, the fuller generalization, so the next bag type needs
+no RENDERING edit at all:
+
+- New `CONTAINER_SLOTS` and `SLOT_LABELS` (WORLD DATA, beside
+  `itemsFromRegistry`), derived from `ITEM_REGISTRY` rather than listed.
+  `keychain` is named explicitly in both, since it is the one slot that
+  isn't a found item.
+- New optional `slotLabel` registry property for slots whose key doesn't
+  capitalize into a good tab name — `"Fanny Pack"`, `"Duffel Bag"`,
+  `"Tote Bag"`. `worn_backpack` needs none, so its tab still reads
+  "Backpack" exactly as before.
+- `invTabDefs` and the unequip-button condition (`renderInventoryPanel`),
+  `invSlot()` and `invPools()` now all read `CONTAINER_SLOTS` instead of
+  naming slots. Tab order is unchanged for existing saves: Inventory,
+  Keychain, Backpack, then any new bag in registry order.
+- `makeDefaultState()` derives its empty slots from `CONTAINER_SLOTS`
+  instead of the literal `backpack:null`, so a new bag type needs no edit
+  there either.
+- `keychainAllows()` is untouched and still restricts the keychain to
+  `Key` items. That restriction is deliberately not inherited by the new
+  bag slots.
+
+**UI**
+
+- Equipping a duffel bag, purse, fanny pack or tote bag adds an inventory
+  tab named for it, with a working Unequip button, matching the existing
+  Backpack tab's behavior exactly.
+
+**Explicitly out of scope** (per the handoff)
+
+- **Firearms and any combat/ammo mechanics** — Design decision 1,
+  resolved to the recommended default of excluding them entirely. A
+  working firearm needs ammo tracking, reload and a combat system that
+  doesn't exist; inert loot would mislead the player. Deferred to roadmap
+  item 6 (Zombies/Threats) so the item and its mechanics ship together.
+  `stun_gun` and `pepper_spray` are in, being non-firearm deterrents with
+  no ammo model implied.
+- **Deep, personalized lore content** for the new document items —
+  Design decision 2, resolved to the recommended default. The item
+  *types* ship with plain generic names; writing dated, location-specific
+  content for them is roadmap item 13's job and this pass does not
+  fulfill it.
+- Container property tags, the no-respawn flag and fauna (roadmap item
+  15); new buildings to house these categories properly — a pet store,
+  nursery or sporting-goods store (roadmap item 14's remaining half);
+  map expansion, which shipped separately in v0.4.1.
+
+**Validation performed**
+
+Audited with a harness that evaluates the real `<script>` body under a
+DOM stub and drives the assembled game, plus a real-browser check:
+
+- All 36 new items resolve with the exact category and weight the handoff
+  specced, checked entry by entry against a transcription of its tables.
+  `baby_formula` confirmed to carry no `restores`.
+- No firearm- or ammunition-shaped id exists in `ITEM_REGISTRY`.
+- `CONTAINER_SLOTS` covers every `slotType` in the registry; every slot
+  resolves a label; the Backpack tab label and the tab ordering are
+  unchanged from v0.4.1.
+- Equip → stash an item → unequip round-trips for all five equippable
+  bags: the slot populates, `invSlot()` resolves it with the right
+  capacity, its contents appear in `invPools()`, and the stored contents
+  survive being unequipped back into a stowable item.
+- `keychainAllows()` still accepts `Key` and rejects everything else.
+- Every pool is attached to at least one container, and each of the five
+  new pools reaches at least one container whose roll is still pending.
+- 120,000 weighted rolls across all 28 pools — every result resolves to a
+  real registry item with qty ≥ 1, and every entry has a positive weight
+  and `qtyMin <= qtyMax`.
+- All four new bag types confirmed findable in the default world, each in
+  a `spawnRolled` container so no container lost its pool roll. (This
+  check first ran too loosely — it counted the pre-existing
+  `worn_backpack` toward the total and so passed while `fanny_pack` had
+  silently failed to place. Tightened to exclude `worn_backpack` and to
+  assert each of the four bag ids individually, which caught it.)
+- A v0.4.1-shaped save, with none of the new slot keys, still loads and
+  picks up every slot from `makeDefaultState()`.
+- The v0.4.1 world audit re-run unchanged: 218 rooms, 774 exits, exit
+  reciprocity, grid adjacency, compass wording, map coverage and
+  reachability all still pass.
+- Loaded in a real browser: the game boots at v0.4.2 and renders, and
+  with all four bags equipped the panel shows Inventory / Keychain /
+  Duffel Bag / Purse / Fanny Pack / Tote Bag with Unequip on the active
+  slot.
+- Diffed against `ashfall_0_4_1.html`: every removed line is an intended
+  edit (version strings, the registry/pool lines being extended, the 20
+  container lines gaining pools, the 4 gaining a bag, and the slot
+  generalization). No room, container, item or exit was removed.
+
+**Notes / assumptions**
+
+- Per-entry spawn weights for the five new pools, and for the additions
+  to the six existing ones, had no prior convention beyond "commoner
+  higher, rarer lower" — retunable, not designed.
+- **Category mismatch worth a look:** `dish_soap`, `laundry_detergent`,
+  `rubber_gloves` and `trash_bags` are `Misc`, exactly as the handoff
+  specifies, but their closest existing siblings (`bar_soap`, `bleach`,
+  `toilet_paper`) are `Materials`. `Materials` is in `STACKABLE` and
+  `Misc` is not, so as shipped these four do not stack while the older
+  cleaning items do. Implemented as specced rather than silently
+  deviating; it's a one-word change per entry if the stacking behavior is
+  wanted.
+- Which specific containers got which pool is this session's call within
+  the handoff's stated pattern — in particular, pet supplies are on some
+  residential units and not others, and baby items on only two, so not
+  every apartment reads as having had a pet or a baby.
+- `combat_knife`'s `blade` tag is currently decorative: no mechanic reads
+  `blade` yet (`blunt` breaks cars and windows, `cutting` cuts locks,
+  `chopping` fells trees). It is tagged for consistency with
+  `kitchen_knife` and `box_cutter`, not because it does anything new.
+- `baseball_bat` and `riot_baton` carry `blunt`, so they are immediately
+  usable for forcing car doors and breaking windows. That is a real
+  increase in how many tools can do those jobs, and worth a look if
+  forced entry starts feeling too easy.
+- The handoff listed four existing pools to extend; six were extended.
+  `documents_lore` and `residential_personal` are the extra two, both
+  named in the handoff's own per-category text (the document types and
+  "extend `office_supplies`/`residential_personal`" for electronics) but
+  omitted from its summary list.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.1"` → `"0.4.2"`
+
+---
+
 ## v0.4.1 — Map Expansion to 8×8 Street Grid
 
 Implements the "Ashfall Handoff — Map Expansion to 8×8 Grid" handoff for

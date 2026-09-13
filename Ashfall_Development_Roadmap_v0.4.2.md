@@ -3,7 +3,7 @@
 ## Purpose
 
 This document is the current development roadmap for Ashfall. It has been
-audited against the game code (v0.4.1) and `CHANGELOG.md` — every item
+audited against the game code (v0.4.2) and `CHANGELOG.md` — every item
 below was confirmed as not-yet-implemented at time of writing. When an
 item is completed, move it out of this file and into a changelog entry
 instead of leaving it here marked "done."
@@ -31,6 +31,15 @@ streets to 8 × 8 (125 new rooms). Item 14 is **not** closed: that pass
 deliberately placed no buildings in the new blocks, so the item remains
 open below with its scope narrowed to exactly that remaining half. Item 9
 is also still open, and more pressing than it was — see its note.
+
+A post-v0.4.0 audit against the world-content brainstorm found whole item
+categories with no `ITEM_REGISTRY` coverage, and produced "Ashfall Handoff
+— Missing Item Category Population.md." That **shipped in v0.4.2** — see
+`CHANGELOG_v0.4.2.md` — adding 36 items across pet supplies, baby/child,
+self-defense, cleaning, documents, electronics, valuables and equippable
+bags, plus 5 new spawn pools. It was never a numbered item here and needs
+none now that it has shipped, but it deliberately deferred two things into
+items 6 and 13 — noted under each.
 
 The backlog is organized into tiers based primarily on **urgency,
 dependencies, and implementation convenience**, rather than treating every
@@ -180,6 +189,16 @@ items (e.g. newspapers, notes) that flesh out the world's backstory.
   content that reveals pieces of what happened without a single
   description trying to explain the whole collapse.
 
+### Inherited from v0.4.2
+The v0.4.2 population pass added the lore-item *types* this item was
+waiting on — `dated_newspaper`, `personal_journal`, `unsent_letter`,
+`utility_bill` and `missing_person_flyer` — as generic registry entries
+with plain names and no written content, explicitly leaving the deeper
+pass to this item. So the "new lore-item type(s)" bullet above is
+partially satisfied: the shells exist and spawn via `documents_lore`.
+What remains is the writing — dated, located, personalized content tied
+to specific residents and places, and whatever schema that needs.
+
 ### Note
 Purely content — no new mechanics implied unless a lore-item type needs
 new schema (e.g. a "readable text" field), which would be a small
@@ -208,6 +227,11 @@ other half.
   agricultural, impound/vehicle storage, etc.) to draw from.
 - New outdoor set-pieces of the Storage Facility / Riverbank kind in the
   new blocks; none were added in v0.4.1.
+- Building types the v0.4.2 item pass wanted and had to work around: a
+  pet store, a nursery/baby-goods store and a sporting-goods store. That
+  pass fitted its new categories into existing residential containers
+  instead of waiting on them, so these are a "would be better housed"
+  list, not a blocker.
 - Loot for the new blocks. The v0.4.1 nodes all ship `containers:[]`, so
   any building placed out there needs its containers tagged with
   `spawnPools` per the v0.4.0 population system.
@@ -355,6 +379,17 @@ enemy-placement feature.
 
 It needs to connect to the existing gameplay systems so that the player's
 actions have consequences within the environment.
+
+### Deferred into this item (v0.4.2)
+**Firearms.** The v0.4.2 item-population pass deliberately added no
+firearms or ammunition, on the reasoning that a working gun implies ammo
+tracking, reload and a combat system that only this item can provide, and
+that shipping one as inert loot would mislead a player who found it. When
+this system is built, firearms and their mechanics should ship together as
+part of it. Non-firearm deterrents (`pepper_spray`, `stun_gun`,
+`baseball_bat`, `combat_knife`, `riot_baton`) already exist as of v0.4.2
+and are currently inert in the same way — they carry `blunt`/`blade` tags
+but have no target to use them on until this system exists.
 
 ### Priority rationale
 This is a major standalone project and therefore belongs in Tier 3
