@@ -3,17 +3,17 @@
 ## Purpose
 
 This document is the third leg of the handoff set, alongside
-`CHANGELOG.md` (what has changed) and the development roadmap (what's
+`CHANGELOG.md` (what has changed) and the GitHub issue backlog (what's
 next). Where those two are about *state*, this one is about *judgment* —
 the tone, spirit, and conventions that should hold steady across every
 future content pass, mechanics pass, and AI-assisted session, even as
 individual features come and go. It's also the one document that
-describes how a session, `CHANGELOG.md`, the roadmap, and
+describes how a session, `CHANGELOG.md`, the backlog, and
 `Ashfall_Handoff_Guide.md` all fit together (see Part 3, Workflow) — the
 other guides link back here rather than each explaining it themselves.
 
 Read this once per new session, before making changes. It changes rarely;
-the changelog and roadmap change constantly.
+the changelog and the backlog change constantly.
 
 ---
 
@@ -105,10 +105,10 @@ existing systems.
 - Item *definitions* are ID-based: `ITEM_REGISTRY` plus
   `itemFromRegistry()` / `itemsFromRegistry()` are the single source of
   truth for item properties, used throughout `makeDefaultWorld()`. The
-  one remaining gap is tracked as a roadmap Tier 0 cleanup item (a
-  handful of `giveItem()` call sites that still construct a literal item
-  object at runtime instead of resolving through the registry) — check
-  the current roadmap for its status rather than assuming it's done.
+  one remaining gap is tracked as a `tier-0` cleanup issue (a handful of
+  `giveItem()` call sites that still construct a literal item object at
+  runtime instead of resolving through the registry) — check whether that
+  issue is still open rather than assuming it's done.
 - Mechanics check **tags** (`blunt`, `fishing`, `fire-starter`, etc.), not
   item names. A new item that should behave like an existing one gets the
   same tag, not a special-cased name check.
@@ -137,20 +137,21 @@ a coordinate scheme, a pick between two options a handoff left open),
 say so explicitly and mark it as retunable. Don't let an arbitrary first
 guess read as an authoritative design decision.
 
-### Tracker file naming
+### File layout
 
-Both running trackers — the changelog and the roadmap — are named for
-the version current as of their last edit, so either filename alone
-tells you how current it is:
+Filenames are stable and carry no version. Git tags mark releases, and
+`git log` says how current any file is — a version baked into a filename
+just guarantees that every document referencing it goes stale on the next
+bump.
 
-- Changelog: `CHANGELOG_vX.Y.Z.md`. See `CHANGELOG_GUIDE.md`'s "Where it
-  goes" section for the full rule.
-- Roadmap: `Ashfall_Development_Roadmap_vX.Y.Z.md`, where `X.Y.Z` is the
-  version last shipped (i.e. the version the roadmap was last audited
-  against, per its own Purpose section) — not a target/future version.
-- Both are single cumulative files, renamed on each update — never a new
-  per-version file holding only that update's content. Delete/replace
-  the old versioned filename in the same session that renames it.
+- `ashfall.html` — the game.
+- `CHANGELOG.md` — one cumulative file, newest entry on top. See
+  `CHANGELOG_GUIDE.md`.
+- `handoffs/<feature-name>.md` — one file per handoff, kept after it
+  ships. Its commit date says when it was written; nothing needs deleting.
+- The backlog is GitHub Issues, not a file. Tier is a label
+  (`tier-0`…`tier-3`).
+- Every shipped version is tagged `vX.Y.Z` on the merge commit.
 
 ### Handoff hygiene
 
@@ -160,17 +161,13 @@ tells you how current it is:
   handoff file per `Ashfall_Handoff_Guide.md`, including its rule that
   genuinely open design questions (as opposed to narrow implementation
   choices) get resolved with Tom before the handoff is considered ready.
-- The roadmap must never claim an item is still pending once a handoff
-  already covers it or the changelog shows it shipped — check it against
-  the current code and changelog before adding to it or relying on it,
-  and strip anything already done or contradicted. This check happens
-  whenever the roadmap is touched — a planning session using it as an
-  input, or a coding session opening it to add deferred items at
-  wrap-time — not as a step any session performs solely to remove what
-  it just shipped.
-- Before starting a change, name which roadmap item and which
-  ARCHITECTURE section it belongs to. If it doesn't map cleanly to
-  either, that's worth resolving before writing code, not after.
+- An issue is closed by the pull request that fulfils it (`Closes #NN`),
+  never by hand and never by a session tidying up after itself. If an
+  issue's scope has been partly overtaken by shipped work, edit it down to
+  what's actually left rather than leaving a stale claim standing.
+- Before starting a change, name which issue and which ARCHITECTURE
+  section it belongs to. If it maps to no open issue, file one before
+  writing code.
 
 ---
 

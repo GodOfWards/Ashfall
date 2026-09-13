@@ -9,18 +9,10 @@ enough to serve that purpose.
 
 ## Where it goes
 
-- One running, cumulative file — not a new per-version file containing
-  only that version's entry. Its history goes back to the start of the
-  project regardless of filename.
-- **Filename encodes the current (latest) version**:
-  `CHANGELOG_vX.Y.Z.md`, where `X.Y.Z` matches the version the entry you
-  just wrote bumps *to* (e.g. `CHANGELOG_v0.2.5.md`). Every version bump
-  renames the file to match — delete/replace the old versioned filename
-  in the same session rather than leaving both around. This is the same
-  pattern the roadmap follows (see the Project Guide's Development
-  Practices section) — both trackers are named for the version current
-  as of last edit, so either file's name alone tells you how current it
-  is.
+- One running, cumulative file, `CHANGELOG.md`. Never a per-version file
+  holding only that version's entry, and never renamed — the filename
+  carries no version (see the Project Guide's "File layout"). Its history
+  goes back to the start of the project.
 - New entries go at the **top**, directly under the file's intro line,
   above the most recent existing entry (reverse-chronological).
 - Each entry is separated from the next by a `---` rule.
@@ -36,10 +28,10 @@ enough to serve that purpose.
   Fatigue System", "Structural reorganization pass", "Fix take-1
   disappearing bug". If the pass is single-purpose, the title can just
   name the fix.
-- If the entry implements a handoff file, say so and name it (e.g.
-  "Implements roadmap Tier 1, item 3 in full, per the `Ashfall
-  vX.Y.Z.md` handoff") — this links the record of what shipped back to
-  the spec that produced it.
+- If the entry implements a handoff, say so and name it by path (e.g.
+  "Implements #3 in full, per `handoffs/lockpicking.md`") — this links
+  the record of what shipped back to the spec that produced it and to the
+  issue it closed.
 
 ## Required closing line
 
@@ -78,12 +70,10 @@ when to use them:
   with a one-line rationale tied to the ARCHITECTURE comment's section
   definitions (why the new location is the correct owner).
 - **Documentation** — changes to the ARCHITECTURE comment or inline
-  schema comments themselves. Also use this section to record the
-  roadmap update that closes out this same coding session (see the
-  Project Guide's Workflow section) — if the audit behind that update
-  finds items the roadmap still listed as pending that were already
-  implemented, or a new gap the pass surfaced, say what was added,
-  removed, or renumbered and why (see v0.2.5 as the model).
+  schema comments themselves. Also use this section to name any issues
+  this pass filed for deferred or newly-surfaced work (see the Project
+  Guide's Workflow section), with a line stating nothing was deferred if
+  that's the case.
 - **Explicitly out of scope** — for a pass built from a handoff file,
   restate what the handoff deliberately deferred, so a reader doesn't
   have to open the handoff to know what *isn't* here.
@@ -92,9 +82,10 @@ when to use them:
   reader would worry about: balance constants, save format, rendering
   logic, function bodies, content.
 - **Validation performed** — required for any pass claiming "no behavior
-  change." State what was actually checked (syntax check, diff against
-  the prior version's HTML, section-header audit), not just that it was
-  "tested."
+  change." State what was actually checked and cite the diff:
+  `git diff vX.Y.Z..HEAD -- ashfall.html` is the proof, alongside a
+  syntax check and a section-header audit. "Tested" on its own is not a
+  validation record.
 - **Notes / assumptions** — call out any judgment call made where no prior
   convention existed (e.g. picking a threshold value, choosing between
   two options a handoff left open), so it's flagged as retunable rather
@@ -107,12 +98,9 @@ then whatever sections actually apply.
 ## What to name things
 
 - Reference the script's own vocabulary: the ARCHITECTURE comment's
-  top-level section names, plus any named sub-block a section contains
-  (e.g. STAMINA/FATIGUE inside SURVIVAL/TIME SIMULATION, MAP inside
-  RENDERING) — name the sub-block too when the change is scoped to one.
-  The ARCHITECTURE comment in the script is the source of truth for the
-  current list; don't copy a section list into this guide, since it will
-  drift as sub-blocks are added.
+  section names, and the named sub-block too when a change is scoped to
+  one. That comment is the source of truth for the current list — see the
+  Project Guide's Development Practices, which is where the rule lives.
 - Use real function/constant names in backticks. Never describe a change
   only in vague terms like "updated the logic."
 - State explicitly which section(s) were touched. This is the single most
