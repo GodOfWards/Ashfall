@@ -53,9 +53,15 @@ when to use them:
 - **New** — new mechanics, systems, vitals, content types. Describe rules,
   not implementation details, unless the rule *is* the implementation
   (e.g. exact recovery formulas).
+- **New content** — rooms, items, containers, exits, descriptions: WORLD
+  DATA additions only. Kept separate from **New** on purpose, so the
+  content-vs-mechanics split the Project Guide requires is visible at a
+  glance in the changelog rather than inferred from the bullets.
 - **Fixed** — bug fixes. State the root cause, not just the symptom, and
   name the fix mechanism (e.g. "stripping `_uid` whenever `addToList()`
   creates a new stack entry").
+- **Removed** — deleted content, fields, functions, or constants. Say what
+  is gone and what, if anything, replaced it.
 - **Hardened** — defensive changes that don't alter intended behavior
   (safe lookups, input validation, atomicity guarantees).
 - **Changed / Reworked** — use a section per reworked subsystem if a
@@ -86,6 +92,14 @@ when to use them:
   `git diff vX.Y.Z..HEAD -- ashfall.html` is the proof, alongside a
   syntax check and a section-header audit. "Tested" on its own is not a
   validation record.
+- **Sections touched** — the ARCHITECTURE sections this pass implicates,
+  named per the script's own vocabulary. The single most useful line for
+  scoping a future request against this entry.
+- **Open questions / decisions resolved** — for a pass built from a
+  handoff: what the handoff left open and what this session decided.
+  Use this rather than burying resolutions in Notes / assumptions when
+  there is more than one, or when the choice changed player-facing
+  behavior.
 - **Notes / assumptions** — call out any judgment call made where no prior
   convention existed (e.g. picking a threshold value, choosing between
   two options a handoff left open), so it's flagged as retunable rather
@@ -94,6 +108,24 @@ when to use them:
 If an entry doesn't fit any of these cleanly, prefer a **Summary**
 paragraph up top explaining intent, the way the v0.2.2 reorg entry does,
 then whatever sections actually apply.
+
+### Use the documented label, not a variant
+
+Pick the name from the list above rather than inventing a near-synonym —
+the list is what makes entries scannable across versions. Variants that
+have appeared and should not be used again: `Explicitly NOT in this pass`
+(use **Explicitly NOT changed**), `Function relocation / new function`
+(use **Function relocation**), `Organization` (use **Organization /
+Structural**), `Content` and `Content review adjustments` (use **New
+content** or **Changed**), `Design decision resolved` (use **Open
+questions / decisions resolved**).
+
+Per-subsystem subheadings *inside* a **Changed / Reworked** block are a
+different thing and stay free-form — "Stamina recovery", "Exertion
+costs", "Rest (reworked)" are all correct, one per subsystem.
+
+Older entries keep whatever labels they shipped with. They are the record
+of what happened; don't rewrite them to match this list.
 
 ## What to name things
 
