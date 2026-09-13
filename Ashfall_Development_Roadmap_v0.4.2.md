@@ -1,5 +1,12 @@
 # Ashfall — Development Roadmap
 
+> **Superseded — migration pending.** The backlog now lives in GitHub
+> Issues, labelled `tier-0` through `tier-3` (see the Project Guide's
+> "File layout" and Workflow sections). This file is kept only until its
+> open items have been filed as issues; nothing should be added to it.
+> Its version-stamped filename is also obsolete — filenames no longer
+> carry versions.
+
 ## Purpose
 
 This document is the current development roadmap for Ashfall. It has been

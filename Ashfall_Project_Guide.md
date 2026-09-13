@@ -3,17 +3,17 @@
 ## Purpose
 
 This document is the third leg of the handoff set, alongside
-`CHANGELOG.md` (what has changed) and the development roadmap (what's
+`CHANGELOG.md` (what has changed) and the GitHub issue backlog (what's
 next). Where those two are about *state*, this one is about *judgment* —
 the tone, spirit, and conventions that should hold steady across every
 future content pass, mechanics pass, and AI-assisted session, even as
 individual features come and go. It's also the one document that
-describes how a session, `CHANGELOG.md`, the roadmap, and
+describes how a session, `CHANGELOG.md`, the backlog, and
 `Ashfall_Handoff_Guide.md` all fit together (see Part 3, Workflow) — the
 other guides link back here rather than each explaining it themselves.
 
 Read this once per new session, before making changes. It changes rarely;
-the changelog and roadmap change constantly.
+the changelog and the backlog change constantly.
 
 ---
 
@@ -105,10 +105,10 @@ existing systems.
 - Item *definitions* are ID-based: `ITEM_REGISTRY` plus
   `itemFromRegistry()` / `itemsFromRegistry()` are the single source of
   truth for item properties, used throughout `makeDefaultWorld()`. The
-  one remaining gap is tracked as a roadmap Tier 0 cleanup item (a
-  handful of `giveItem()` call sites that still construct a literal item
-  object at runtime instead of resolving through the registry) — check
-  the current roadmap for its status rather than assuming it's done.
+  one remaining gap is tracked as a `tier-0` cleanup issue (a handful of
+  `giveItem()` call sites that still construct a literal item object at
+  runtime instead of resolving through the registry) — check whether that
+  issue is still open rather than assuming it's done.
 - Mechanics check **tags** (`blunt`, `fishing`, `fire-starter`, etc.), not
   item names. A new item that should behave like an existing one gets the
   same tag, not a special-cased name check.
@@ -137,20 +137,21 @@ a coordinate scheme, a pick between two options a handoff left open),
 say so explicitly and mark it as retunable. Don't let an arbitrary first
 guess read as an authoritative design decision.
 
-### Tracker file naming
+### File layout
 
-Both running trackers — the changelog and the roadmap — are named for
-the version current as of their last edit, so either filename alone
-tells you how current it is:
+Filenames are stable and carry no version. Git tags mark releases, and
+`git log` says how current any file is — a version baked into a filename
+just guarantees that every document referencing it goes stale on the next
+bump.
 
-- Changelog: `CHANGELOG_vX.Y.Z.md`. See `CHANGELOG_GUIDE.md`'s "Where it
-  goes" section for the full rule.
-- Roadmap: `Ashfall_Development_Roadmap_vX.Y.Z.md`, where `X.Y.Z` is the
-  version last shipped (i.e. the version the roadmap was last audited
-  against, per its own Purpose section) — not a target/future version.
-- Both are single cumulative files, renamed on each update — never a new
-  per-version file holding only that update's content. Delete/replace
-  the old versioned filename in the same session that renames it.
+- `ashfall.html` — the game.
+- `CHANGELOG.md` — one cumulative file, newest entry on top. See
+  `CHANGELOG_GUIDE.md`.
+- `handoffs/<feature-name>.md` — one file per handoff, kept after it
+  ships. Its commit date says when it was written; nothing needs deleting.
+- The backlog is GitHub Issues, not a file. Tier is a label
+  (`tier-0`…`tier-3`).
+- Every shipped version is tagged `vX.Y.Z` on the merge commit.
 
 ### Handoff hygiene
 
@@ -160,17 +161,13 @@ tells you how current it is:
   handoff file per `Ashfall_Handoff_Guide.md`, including its rule that
   genuinely open design questions (as opposed to narrow implementation
   choices) get resolved with Tom before the handoff is considered ready.
-- The roadmap must never claim an item is still pending once a handoff
-  already covers it or the changelog shows it shipped — check it against
-  the current code and changelog before adding to it or relying on it,
-  and strip anything already done or contradicted. This check happens
-  whenever the roadmap is touched — a planning session using it as an
-  input, or a coding session opening it to add deferred items at
-  wrap-time — not as a step any session performs solely to remove what
-  it just shipped.
-- Before starting a change, name which roadmap item and which
-  ARCHITECTURE section it belongs to. If it doesn't map cleanly to
-  either, that's worth resolving before writing code, not after.
+- An issue is closed by the pull request that fulfils it (`Closes #NN`),
+  never by hand and never by a session tidying up after itself. If an
+  issue's scope has been partly overtaken by shipped work, edit it down to
+  what's actually left rather than leaving a stale claim standing.
+- Before starting a change, name which issue and which ARCHITECTURE
+  section it belongs to. If it maps to no open issue, file one before
+  writing code.
 
 ---
 
@@ -180,73 +177,113 @@ Every version moves through two session types, in order. Each has fixed
 inputs and outputs — a session shouldn't skip an input or improvise an
 output not listed here.
 
+Both session types run against the repository, not against attached
+files. "Input" below means *read this before starting*, not *paste this
+into the conversation* — the session has the repo and can open anything
+in it. What hasn't changed is the obligation: a claim about what the code
+already does gets checked against the file, never recalled from memory.
+
 ### 1. Planning session
 
-**Inputs:**
+**Inputs — read before starting:**
 - This Project Guide.
-- The current roadmap (`Ashfall_Development_Roadmap_vX.Y.Z.md` — see
-  Part 2's "Tracker file naming").
-- The current changelog (`CHANGELOG_vX.Y.Z.md` — see Part 2's "Tracker
-  file naming").
-- The **current-version HTML**, in full — not just for the coding
-  session. Planning claims about "what already exists" (schema fields,
-  world-data shape, whether a system exists yet) must be verified against
-  the real file, per Part 2's "proven, not asserted" rule. This is what
-  the "Relevant existing state" section of a handoff depends on, and
-  it's what caught the roadmap drift reconciled in v0.2.5.
+- `ashfall.html` at `main`, in full. Planning claims about "what already
+  exists" (schema fields, world-data shape, whether a system exists yet)
+  must be verified against the real file, per Part 2's "proven, not
+  asserted" rule. This is what the "Relevant existing state" section of a
+  handoff depends on, and it's what caught the roadmap drift reconciled
+  in v0.2.5.
+- The open issues for the area under discussion — the backlog lives in
+  GitHub Issues, labelled `tier-0` through `tier-3`. If the tracker is
+  unreachable, say so and carry on: planning works without it, and
+  anything this session finds gets filed once it's back.
+- The most recent `CHANGELOG.md` entries — the last few versions, not the
+  whole file.
 
-**Purpose:** discuss and design a feature or system — scope, rules,
-open questions, tradeoffs.
+**Purpose:** discuss and design a feature or system — scope, rules, open
+questions, tradeoffs.
 
-**Output:** nothing, for most of the session. A handoff file is produced
-**only** at the point the session concludes and is genuinely ready to
-become code, per `Ashfall_Handoff_Guide.md`. A planning session that
-doesn't reach that point produces no artifact — better to leave it
-unresolved than to force out a premature handoff.
+**Outputs — two, on different schedules:**
+
+**Issues, filed as they surface.** A planning session about one feature
+routinely turns up other work: related cleanups, bugs, scope that belongs
+later. File each as an issue the moment it comes up, while the reasoning
+is still fresh, labelled by tier. Don't hold them for the wrap — they're
+independent of whether this session reaches a handoff, and a session that
+ends inconclusively should still leave them behind.
+
+**A handoff file, only at the wrap.** Produced *only* at the point the
+session concludes and is genuinely ready to become code, per
+`Ashfall_Handoff_Guide.md`. A planning session that doesn't reach that
+point produces no handoff — better to leave the thread unresolved than to
+force out a premature spec.
+
+The handoff carries only what was decided. Not the discussion that got
+there, not questions already answered during the session, not the items
+that became issues. That distillation is the whole reason the handoff
+exists: the coding session should never have to read around anything to
+find the instruction.
+
+Commit the handoff to `main` at the wrap, as `handoffs/<feature-name>.md`.
+Committing it before any implementation exists is what lets `git log` show
+the spec predated the code — "proven, not asserted" applied to the process
+itself. It also means the coding session has it already; nothing needs
+handing over.
 
 ### 2. Coding session
 
-**Inputs, upfront:**
-- The **current-version HTML**, in full — implementation happens
-  directly against this file, and the changelog's Validation Performed
-  section requires diffing against it.
-- The **handoff file** produced by the planning session that specced this
-  work. The handoff is used for exactly this — it is not referenced
-  again once implementation starts, and it is not a living document.
+**Inputs — read before starting:**
+- `ashfall.html` — implementation happens directly against this file.
+- The **handoff file** in `handoffs/` that specs this work. The handoff is
+  used for exactly this — it is not referenced again once implementation
+  starts, and it is not a living document.
 
-Nothing else is needed to start. The changelog and, conditionally, the
-roadmap are requested only once the session is wrapping up — see Output
-below — implementation itself never needs either.
+Nothing else. Not the changelog, not the issue backlog — implementation
+never needs either, and the changelog is long enough that reading it up
+front costs real context for no return. Both come into play at wrap-time,
+below.
 
 **Purpose:** implement exactly what the handoff specifies, resolving any
 "Design decisions to make during implementation" it left open.
 
-**Output, every session — requested at wrap-time (implementation complete
-and validated), not before:**
-- The updated HTML, with `GAME_CONFIG.VERSION` bumped.
-- Request the current changelog (versioned filename — see Part 2's
-  "Tracker file naming") and prepend a new entry per `CHANGELOG_GUIDE.md`
-  (including renaming the file to the just-bumped version), referencing
-  the handoff by filename and recording any deferred decisions it
-  resolved. This step always happens.
-- Request the current roadmap **only if** this session is leaving
-  something deferred, postponed, or left open for later — cut scope, a
-  follow-up the pass surfaced but didn't build, anything that now
-  belongs in the backlog and didn't before. Add those items and rename
-  the file to the version just shipped (per Part 2's "Tracker file
-  naming"). Do **not** request the roadmap just to remove the item this
-  session shipped — the roadmap not listing an already-shipped item is
-  enforced by the audit-before-use rule (Part 2's Handoff hygiene), not
-  by this session deleting it. Note in the changelog's Documentation
-  section either way, including a line stating nothing was deferred if
-  that's the case.
+Work on a branch. Never commit directly to `main`.
+
+**Output — one pull request**, opened once implementation is complete and
+validated:
+
+- **The updated `ashfall.html`**, with `GAME_CONFIG.VERSION` bumped per
+  the tier mapping in `Ashfall_Handoff_Guide.md` Part 1.
+- **A new `CHANGELOG.md` entry**, prepended per `CHANGELOG_GUIDE.md`,
+  naming the handoff file and recording any decisions it left open that
+  this session resolved. Every session, no exceptions.
+- **A PR description** that states the pass's intent and closes the issue
+  this work fulfils: `Closes #NN`. That one line is the traceability
+  chain — issue → PR → commits → changelog entry → handoff file — with no
+  hand-maintained cross-reference anywhere in it to drift.
+- **New issues for anything deferred**: cut scope, a follow-up this pass
+  surfaced but didn't build, anything that now belongs in the backlog and
+  didn't before. File them, and reference them in the PR.
+
+Do **not** file an issue to record what this session *shipped*, and don't
+close the fulfilled issue by hand — `Closes #NN` does it on merge.
+
+Merging the PR is what ships the version. Tag the merge commit `vX.Y.Z`.
+
+### Validation
+
+A "no behavior change" claim is now checkable rather than assertable:
+`git diff vX.Y.Z..HEAD` shows exactly what moved. The changelog's
+**Validation performed** and **Explicitly NOT changed** sections should
+cite that diff rather than stand in for one — the point of both sections
+was always to prove the claim, and there's finally a tool that can.
 
 ### Using this at the start of a session
 
 1. Identify which of the two session types this is.
-2. Attach exactly that session type's inputs above.
-3. State the specific change or system being worked on.
+2. Read that session type's inputs. Don't assume any of it from memory.
+3. State the specific change being worked on, and which issue it belongs
+   to. If it maps to no open issue, file one before starting.
 4. Let the Project Guide govern *how* it's written (tone, structure,
-   identity/data conventions), the roadmap govern *what*, the handoff
-   guide govern *how a plan becomes an implementable spec*, and the
-   changelog guide govern *how the result gets recorded*.
+   identity/data conventions), the issue backlog govern *what*, the
+   handoff guide govern *how a plan becomes an implementable spec*, and
+   the changelog guide govern *how the result gets recorded*.

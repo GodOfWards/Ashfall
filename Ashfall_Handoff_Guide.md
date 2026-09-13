@@ -36,7 +36,7 @@ reorg/documentation-only passes, wording/UX fixes, and content or
 rendering additions (new rooms, items, descriptions, new views onto
 existing state) that don't require new save fields.
 
-Maps to roadmap **Tier 0** and **Tier 1** work by default.
+Maps to **`tier-0`** and **`tier-1`** issues by default.
 
 Technical anchor: `versionCompat()` derives the save key from
 `MAJOR.MINOR` only, so a PATCH bump keeps the same `SAVE_KEY` — existing
@@ -48,7 +48,7 @@ step.
 For new mechanics or systems, especially ones introducing new persistent
 state (new vitals, new state fields, new gameplay systems).
 
-Maps to roadmap **Tier 2** and **Tier 3** work by default.
+Maps to **`tier-2`** and **`tier-3`** issues by default.
 
 Technical anchor: a MINOR bump changes `SAVE_KEY`. Existing browser saves
 won't auto-load under the new key — still recoverable via Export/Import,
@@ -62,7 +62,7 @@ this — that's fine, this is the clean rule from here on.
 ### MAJOR (the first number)
 
 Reserved for a deliberate exit from the `0.x` prototype phase — e.g. once
-the core Tier 2/3 systems are all in place and the game represents a
+the core `tier-2`/`tier-3` systems are all in place and the game is a
 complete loop. Not automatic from any single feature; call it out
 explicitly if a handoff genuinely thinks it applies.
 
@@ -95,15 +95,19 @@ state, and MINOR, under another). In that case:
 Every handoff file is named:
 
 ```
-Ashfall Handoff — <Feature / System Name>.md
+handoffs/<feature-name>.md
 ```
 
 Feature name, not version — the handoff doesn't lock a target version
-(see Part 1), so it can't be named by one. Traceability between a
-handoff and the code it produced instead runs through the changelog: the
-resulting changelog entry names the handoff file explicitly (per
-`CHANGELOG_GUIDE.md`), so either document can be found from the other
-regardless of which version the work actually shipped as.
+(see Part 1), so it can't be named by one. Traceability runs through
+GitHub: the handoff names its issue, the pull request implementing it
+says `Closes #NN`, and the changelog entry names the handoff path. Issue
+→ PR → commits → changelog entry → handoff is then walkable in either
+direction without a hand-maintained cross-reference anywhere in it.
+
+The handoff is committed to `main` when the planning session wraps, and
+kept after it ships. Its commit date is the record that the spec predated
+the code; there's no delete-when-consumed step.
 
 ---
 
@@ -119,22 +123,21 @@ unresolved design question.
 ```markdown
 # Ashfall Handoff — <Feature / System Name>
 
-Current shipped version: vX.X.X
+Current shipped version: vX.Y.Z
 Implied version-change type: PATCH | MINOR (mark "tentative" if the tier
   depends on a decision below — see Part 1)
-Roadmap item: Tier N, item M — <name>
+Issue: #NN — <name>
 
 ## What this is
 One or two sentences: the feature/system this handoff specs out, and why
-it's being built now (roadmap item it fulfills, or the problem it
-solves). Quote the roadmap item's scope/design-principle wording
-verbatim if it's short enough — it's the anchor for everything else in
-the doc.
+it's being built now (the issue it fulfils, or the problem it solves).
+Quote the issue's scope/design-principle wording verbatim if it's short
+enough — it's the anchor for everything else in the doc.
 
 ## Relevant existing state
 What the code already has that this feature builds on or must account
-for — verified against the current WORLD DATA / PLAYER STATE in the
-attached HTML, not assumed from memory. This is what lets "Design
+for — verified by reading the current WORLD DATA / PLAYER STATE in
+`ashfall.html`, not assumed from memory. This is what lets "Design
 decisions" below reason about real constraints instead of guessed ones.
 
 ## Rules / mechanics
@@ -162,16 +165,16 @@ and the other doesn't), say so explicitly and cross-reference Part 1.
   SCHEMA).
 - New or changed **room/container/exit** schema fields (WORLD DATA), if
   applicable.
-- Anything relevant to the roadmap's Item Registry direction, if this
-  handoff touches item definitions.
+- Anything relevant to the Item Registry direction (see the `tier-0`
+  issues), if this handoff touches item definitions.
 
 ## In scope
 What this pass covers, concretely enough to check off against.
 
 ## Explicitly out of scope
 Anything discussed and deliberately deferred, so the coding session
-doesn't accidentally over-build. Include adjacent roadmap items that
-might look related but aren't a prerequisite or aren't being touched.
+doesn't accidentally over-build. Name adjacent open issues that might
+look related but aren't a prerequisite or aren't being touched.
 This section matters as much as what's in scope.
 
 ## Sections touched
@@ -184,15 +187,13 @@ it can skip everything else.
 What the player sees or interacts with as a result — new buttons, panel
 changes, new status displays, wording. Skip if none.
 
-## Dependencies / roadmap linkage
-Which roadmap item(s) this fulfills or unblocks. Flag explicitly if
+## Dependencies / issue linkage
+Which issue(s) this fulfils or unblocks, by number. Flag explicitly if
 implementing this pass is expected to leave anything deferred, postponed,
-or open for later that should become a new roadmap item — that's the
-only reason the coding session's wrap-up touches the roadmap at all (see
-the Project Guide's Workflow section). The item this handoff itself
-fulfills needs no removal instructions here: the roadmap not listing an
-already-shipped item is enforced by the audit-before-use rule, not by an
-explicit deletion step.
+or open for later — the coding session files those as new issues at
+wrap-time (see the Project Guide's Workflow section). The issue this
+handoff fulfils needs no closing instructions here: the pull request's
+`Closes #NN` does it on merge.
 
 ## Open questions for Tom
 Only for things that genuinely need Tom's input and weren't resolved
@@ -203,9 +204,10 @@ build from as-is; flag that plainly rather than letting the coding
 session guess.
 
 ## After implementation
-Reminder for the coding session: write the `CHANGELOG.md` entry per
-`CHANGELOG_GUIDE.md`, referencing this handoff by filename, and record
-any "Design decisions" or "Open questions" resolutions in it.
+Reminder for the coding session: open a pull request carrying the version
+bump and a new `CHANGELOG.md` entry per `CHANGELOG_GUIDE.md`, referencing
+this handoff by path, recording any "Design decisions" or "Open questions"
+resolutions in it, and closing this handoff's issue with `Closes #NN`.
 ```
 
 ---
@@ -218,13 +220,14 @@ any "Design decisions" or "Open questions" resolutions in it.
    — that's expected, not a gap. An unresolved design/scope question is
    different: put it under "Open questions for Tom" and treat the
    handoff as not-yet-final until it's answered.
-2. Pick the target version using Part 1's tier mapping, marking it
-   tentative if it depends on a deferred decision.
+2. State the version-change *type* using Part 1's tier mapping — `PATCH`
+   or `MINOR`, marked tentative if it depends on a deferred decision.
+   Don't pick an `X.Y.Z`; the coding session computes that from whatever
+   is current when it runs (see Part 1).
 3. Fill out the template in Part 3, omitting sections that don't apply.
-4. Save it as `Ashfall vX.X.X.md`, using the target version.
-5. Hand the file to the coding session alongside the current-version
-   HTML only — per the Project Guide's Workflow section, that's all a
-   coding session needs to start. The changelog (always) and the roadmap
-   (only if the session ends up deferring something) are requested later,
-   when the coding session wraps up — no need to attach either now, or
-   the planning conversation.
+4. Save it as `handoffs/<feature-name>.md` and commit it to `main`.
+5. That's the whole handover. A coding session reads the handoff and
+   `ashfall.html` and needs nothing else to start — per the Project
+   Guide's Workflow section, the changelog and the backlog come into play
+   only at wrap-time. The planning conversation itself is never carried
+   forward; if something in it mattered, it belongs in the handoff.
