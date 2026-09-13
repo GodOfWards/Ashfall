@@ -217,7 +217,7 @@
   //   indexes are temporary and must never be treated as stable identity.
   //   doRestart lives in PERSISTENCE, not SIMULATION, since it performs a
   //   full state reset rather than a time-driven update.
-  // Current version: 0.4.2.
+  // Current version: 0.4.3.
   //
   // WORLD DATA also carries LOCATIONS — real integer (x,y,z) coordinates
   // (meters) for every street/mid-block node and building floor, keyed by
@@ -240,7 +240,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.4.2" };
+  const GAME_CONFIG = { VERSION: "0.4.3" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Ammunition","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);

@@ -7,6 +7,103 @@ owns which behavior.
 
 ---
 
+## v0.4.3 — Wide-view map readability
+
+No handoff file — a direct request to make the side-menu map's Wide view
+legible. Scoped to the MAP sub-block of RENDERING plus the document
+`<style>` block. No mechanics, no world data, no new state fields, no
+save-format change.
+
+**Changed** — RENDERING / MAP, one street name per block
+
+Wide view drew each street as a single continuous `<textPath>` carrying
+`mapRepeatedLabel()`'s three copies of the name spaced by bullets, so a
+street read `1ST ST • 1ST ST • 1ST ST` with the copies falling wherever
+the path put them rather than on anything meaningful.
+
+- `mapRepeatedLabel()` is gone, replaced by `mapBlockLabels(name, chain)`.
+  Every chain in `MAP_STREETS` alternates intersection, mid-block,
+  intersection, so its even indices are the intersections; the function
+  walks them in steps of two and emits one `<text>` per block, centred
+  between the two intersections that bound it. That is exactly one name
+  per block, each one centred on its own block.
+- Each label is rotated onto its block's heading, folded into `(-90, 90]`
+  so vertical streets read bottom-to-top instead of upside down, and
+  offset off the line by `MAP_LABEL_OFFSET` (5 units) so the name sits
+  beside the street rather than on it.
+- `renderMapWide()` no longer emits the `<defs>` block of
+  `mapstreetpath-N` paths, since nothing references them now; it draws
+  every street line first and every label after, so no run is painted
+  over its own names.
+- Labels are `<text transform="translate(...) rotate(...)">` rather than
+  `<textPath>`. The grid is axis-aligned, so a block's heading is always
+  0 or ±90 and the flat transform is enough — no path-following needed.
+
+**Changed** — RENDERING / MAP, player marker
+
+- New `MAP_PLAYER_R_WIDE` (12), used for `#mapPlayer` in
+  `renderMapWide()` only. Wide's viewBox is 1000 units against Close's
+  `MAP_CLOSE_VIEW` of 260, so the shared radius of 5 rendered at roughly
+  4px across and read as another node dot. `renderMapClose()` still
+  emits `r="5"`.
+
+**UI**
+
+- `#sideMenu` width 360px → 460px, with `max-width:92vw` added so the
+  panel still fits a phone-width viewport. Wide's viewBox is fixed, so
+  the whole map scales up with the panel.
+- `.map-street-name` font-size 11px → 15px, letter-spacing 2px → .5px.
+  The looser tracking was there to stretch names along a whole street
+  run; with one name per block the size is what matters and the tracking
+  only costs width.
+
+**Explicitly NOT changed**
+
+- Close view: `renderMapClose()` is untouched — same street paths, node
+  dots, building dots and labels, same `r="5"` player marker.
+- `LOCATIONS`, `MAP_STREETS`, `MAP_SPACING`, `MAP_MARGIN`,
+  `MAP_WIDE_VIEWBOX`, `mapToSvg()` and `mapPathD()` — the grid geometry
+  and every street run are identical, so no node moved.
+- `mapPositionPlayer()`, `mapTargetViewBox()`, `mapUpdateViewBox()` and
+  `renderMap()` — marker tracking and the Close-view viewBox animation
+  are unchanged.
+- Movement, exits, compass wording, world data and the save format.
+  `versionCompat()` truncates to `"0.4"`, so `SAVE_KEY` is unchanged and
+  a v0.4.0–v0.4.2 save still loads with no version warning.
+
+**Validation performed**
+
+Driven in headless Chromium against the real file, Wide view open:
+
+- 112 labels rendered — 16 streets × 7 blocks — one per block, with each
+  of the 16 names appearing exactly 7 times.
+- Widest label (`POPLAR ST`) measures 99.1 units against a block length
+  of 130 (`MAP_SPACING`), and no label exceeds its block, so nothing
+  overflows into a neighbouring block or an intersection.
+- No page or console errors on load, on the Close↔Wide toggle, or while
+  moving.
+- Close view re-checked after the change: player `r="5"`, 11 building
+  dots, and zero `text.map-street-name` nodes, matching v0.4.2.
+- Player marker in Wide: `r="12"`, 10.2px across on screen against ~4px
+  before, and it tracks movement — walking Poplar St west from between
+  1st & 2nd stepped the marker 380 → 315 → 185 → 55 in SVG units, with
+  the viewBox correctly staying fixed at `20 20 1000 1000`.
+- Panel measured at 460px with the map SVG at 423px.
+
+**Notes / assumptions**
+
+- The 460px panel width, 15px type, `MAP_PLAYER_R_WIDE` of 12 and the
+  5-unit `MAP_LABEL_OFFSET` are tuned by eye against the current 130-unit
+  block, with no prior convention behind them — all four are retunable.
+- 15px leaves 31 units of slack on the longest street name. A future
+  street name longer than about 11 characters, or a smaller
+  `MAP_SPACING`, would need the size dropped or the name abbreviated;
+  nothing in the code enforces the fit.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.2"` → `"0.4.3"`
+
+---
+
 ## v0.4.2 — Missing Item Category Population
 
 Implements the "Ashfall Handoff — Missing Item Category Population"
