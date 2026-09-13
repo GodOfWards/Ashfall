@@ -1,0 +1,65 @@
+name: Version and changelog
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Version bump and changelog entry must agree
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        # No pipefail: the extraction pipelines below use early-exiting
+        # readers (grep -m1), which SIGPIPE the upstream command. Every
+        # extracted value is checked for emptiness explicitly instead.
+        run: |
+          set -eu
+
+          # Only game changes are gated. Docs-only PRs are none of this check's business.
+          if ! git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -qx 'ashfall.html'; then
+            echo "ashfall.html unchanged — nothing to check."
+            exit 0
+          fi
+
+          read_version() {  # $1 = git ref
+            git show "$1:ashfall.html" | grep -m1 -o 'VERSION: *"[0-9][0-9.]*"' | tr -d '"' | sed 's/VERSION: *//'
+          }
+
+          BASE_VERSION="$(read_version "$BASE_SHA")"
+          HEAD_VERSION="$(read_version "$HEAD_SHA")"
+
+          if [ -z "$HEAD_VERSION" ]; then
+            echo "::error::Could not read GAME_CONFIG.VERSION from ashfall.html."
+            exit 1
+          fi
+          echo "base=$BASE_VERSION head=$HEAD_VERSION"
+
+          if [ "$BASE_VERSION" = "$HEAD_VERSION" ]; then
+            echo "::error::ashfall.html changed but GAME_CONFIG.VERSION is still $HEAD_VERSION. Every game change ships a version bump — see the wrap-time checklist in CLAUDE.md."
+            exit 1
+          fi
+
+          TOP_LINE="$(grep -m1 '^## v' CHANGELOG.md)"
+          TOP_ENTRY="${TOP_LINE#\#\# v}"
+          TOP_ENTRY="${TOP_ENTRY%% *}"
+          if [ "$TOP_ENTRY" != "$HEAD_VERSION" ]; then
+            echo "::error::GAME_CONFIG.VERSION is $HEAD_VERSION but the newest CHANGELOG.md entry is v$TOP_ENTRY. Prepend an entry for v$HEAD_VERSION per docs/CHANGELOG_GUIDE.md."
+            exit 1
+          fi
+
+          # The guide requires every entry to close with the version-transition line.
+          ENTRY="$(awk '/^## v/{n++} n==1' CHANGELOG.md)"
+          if [[ ! "$ENTRY" =~ \*\*Version\*\*.*"$BASE_VERSION".*"$HEAD_VERSION" ]]; then
+            echo "::error::The v$HEAD_VERSION entry is missing its closing line: **Version**: \`GAME_CONFIG.VERSION\` \`\"$BASE_VERSION\"\` -> \`\"$HEAD_VERSION\"\`"
+            exit 1
+          fi
+
+          echo "OK — v$HEAD_VERSION bumped, changelog entry present and closed correctly."
+        shell: bash
