@@ -1,0 +1,3477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ashfall Prototype</title>
+<style>
+  :root{
+    --bg:#111315; --panel:#1b1e22; --panel-2:#20242a; --line:#33383f;
+    --ink:#e5e5e0; --ink-dim:#9a9fa6; --ink-faint:#666b72;
+    --accent:#3b82f6; --accent-dim:#25508f; --warn:#d97b3f; --danger:#b3503f; --good:#7a9463;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; min-height:100vh; background:var(--bg); color:var(--ink);
+    font-family:Georgia,'Times New Roman',serif; display:flex; flex-direction:column; }
+  header{ display:flex; align-items:center; gap:14px; padding:12px 24px; border-bottom:1px solid var(--line); font-family:system-ui,sans-serif; }
+  header h1{ font-size:15px; margin:0; letter-spacing:.04em; }
+  #menuToggle{ background:var(--panel-2); border:1px solid var(--line); color:var(--ink); font-size:13px; padding:7px 11px; border-radius:3px; cursor:pointer; }
+  #menuToggle:hover{ border-color:var(--accent-dim); }
+  #menuBackdrop{ position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:15; display:none; }
+  #menuBackdrop.show{ display:block; }
+  #sideMenu{ position:fixed; top:0; left:0; height:100%; width:360px; background:var(--panel);
+    border-right:1px solid var(--line); transform:translateX(-100%); transition:transform .22s ease;
+    z-index:20; padding:20px 18px; display:flex; flex-direction:column; gap:16px; font-family:system-ui,sans-serif; overflow-y:auto; }
+  #sideMenu.open{ transform:translateX(0); }
+  #sideMenu h2{ font-size:14px; margin:0; display:flex; justify-content:space-between; align-items:center; }
+  #closeMenu{ background:none; border:none; color:var(--ink-dim); font-size:16px; cursor:pointer; }
+  .menu-section h3{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-faint); margin:0 0 8px; }
+  .menu-actions{ display:flex; flex-direction:column; gap:6px; }
+  .menu-actions button{ background:var(--panel-2); border:1px solid var(--line); color:var(--ink);
+    font-size:13px; padding:8px 10px; border-radius:3px; cursor:pointer; text-align:left; }
+  .menu-actions button:hover{ border-color:var(--accent-dim); }
+  .menu-placeholder{ font-size:12px; color:var(--ink-faint); font-style:italic; }
+  #statsBox{ font-size:13px; color:var(--ink-dim); line-height:1.9; }
+  .map-heading{ display:flex; justify-content:space-between; align-items:center; }
+  #mapZoomToggle{ display:flex; gap:5px; }
+  #mapZoomToggle button{ font-family:system-ui,sans-serif; font-size:10.5px; background:var(--panel-2);
+    border:1px solid var(--line); color:var(--ink-dim); padding:4px 9px; border-radius:3px; cursor:pointer; }
+  #mapZoomToggle button.active{ border-color:var(--accent); color:var(--accent); }
+  #mapSvg{ width:100%; height:auto; display:block; background:var(--panel-2); border-radius:3px; margin-top:8px; }
+  .map-street{ stroke:var(--line); stroke-width:3; fill:none; }
+  .map-street-thin{ stroke:var(--line); stroke-width:1.5; opacity:.6; fill:none; }
+  .map-node-dot{ fill:var(--ink-faint); }
+  .map-street-name{ fill:var(--ink-dim); font-size:11px; font-family:system-ui,sans-serif; letter-spacing:2px; font-weight:600; }
+  .map-bldg-dot{ fill:var(--panel-2); stroke:var(--accent-dim); stroke-width:1.5; }
+  .map-bldg-label{ fill:var(--ink); font-size:10px; font-weight:600; font-family:system-ui,sans-serif; }
+  .map-river{ fill:none; stroke:#2a4a5c; stroke-width:10; stroke-linecap:round; opacity:.5; }
+  #mapPlayer{ fill:var(--accent); }
+  #locBar{ padding:10px 24px; border-bottom:1px solid var(--line); font-family:system-ui,sans-serif;
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; }
+  #locLabel{ font-size:14px; color:var(--accent); }
+  #rightBar{ display:flex; gap:16px; align-items:center; }
+  #clockLabel{ font-size:12px; color:var(--ink-dim); }
+  #gaitBar{ display:flex; gap:6px; align-items:center; }
+  #gaitBar span{ font-size:11px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.06em; }
+  #gaitBar button{ font-family:system-ui,sans-serif; font-size:12px; background:var(--panel-2);
+    border:1px solid var(--line); color:var(--ink-dim); padding:5px 9px; border-radius:3px; cursor:pointer; }
+  #gaitBar button.active{ border-color:var(--accent); color:var(--accent); }
+  #gaitBar button:disabled{ opacity:.4; cursor:not-allowed; }
+  main{ flex:1; display:grid; grid-template-columns:1fr 320px; }
+  #left{ padding:18px 26px; border-right:1px solid var(--line); display:flex; flex-direction:column; gap:14px; }
+  #roomDesc{ color:var(--ink-dim); line-height:1.6; margin:0; font-size:15px; }
+  #log{ display:flex; flex-direction:column; gap:5px; max-height:110px; overflow-y:auto; }
+  #log p{ margin:0; font-size:13.5px; line-height:1.5; color:var(--ink-dim); }
+  #log p.fresh{ color:var(--ink); }
+  #log p.sys{ font-style:italic; color:var(--accent); font-family:system-ui,sans-serif; font-size:12px; }
+  #log p.warn{ color:var(--warn); font-family:system-ui,sans-serif; font-size:12px; }
+  #log p.good{ color:var(--good); font-family:system-ui,sans-serif; font-size:12px; }
+  .actions-group h2{ font-family:system-ui,sans-serif; font-size:11px; text-transform:uppercase;
+    letter-spacing:.08em; color:var(--ink-faint); margin:0 0 8px; }
+  .actions{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+  button.action{ font-family:system-ui,sans-serif; font-size:13.5px; background:var(--panel-2);
+    border:1px solid var(--line); color:var(--ink); padding:8px 13px; border-radius:3px; cursor:pointer; }
+  button.action:hover{ border-color:var(--accent-dim); background:#232a33; }
+  button.action .cost{ color:var(--ink-faint); font-size:12px; margin-left:4px; }
+  button.action.locked{ border-color:var(--danger); color:var(--danger); }
+  button.action.blocked{ border-color:var(--danger); color:var(--danger); opacity:.45; cursor:not-allowed; }
+  .itemname{ cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px; }
+  .detailBox{ font-size:12.5px; color:var(--ink-dim); margin-bottom:10px; line-height:1.7; }
+  .detailBox b{ color:var(--ink); }
+  #sidebar{ padding:16px 18px; display:flex; flex-direction:column; gap:16px; font-family:system-ui,sans-serif; overflow-y:auto; }
+  .panel{ background:var(--panel); border:1px solid var(--line); border-radius:4px; padding:11px 13px; }
+  .tabs{ display:flex; gap:5px; margin-bottom:9px; flex-wrap:wrap; }
+  .tabs button{ font-size:11.5px; background:var(--panel-2); border:1px solid var(--line); color:var(--ink-dim);
+    padding:5px 9px; border-radius:3px; cursor:pointer; }
+  .tabs button.active{ border-color:var(--accent); color:var(--accent); }
+  .panel h2{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-faint);
+    margin:0 0 8px; display:flex; justify-content:space-between; align-items:center; }
+  .panel h2 .sub{ color:var(--ink-dim); text-transform:none; letter-spacing:0; font-size:11px; display:flex; align-items:center; gap:6px; }
+  ul.itemlist{ list-style:none; margin:0; padding:0; }
+  ul.itemlist li{ display:flex; justify-content:space-between; align-items:center; gap:6px;
+    padding:6px 0; border-bottom:1px solid rgba(51,56,63,.6); font-size:12.5px; }
+  ul.itemlist li:last-child{ border-bottom:none; }
+  ul.itemlist .meta{ color:var(--ink-dim); flex:1; }
+  ul.itemlist .meta b{ color:var(--ink); font-weight:600; }
+  ul.itemlist .cat{ color:var(--ink-faint); font-size:10.5px; }
+  ul.itemlist .empty{ color:var(--ink-faint); font-style:italic; }
+  .btnrow{ display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; }
+  button.mini{ background:#262a30; border:1px solid var(--line); color:var(--ink); font-size:11px;
+    padding:4px 7px; border-radius:3px; cursor:pointer; white-space:nowrap; }
+  button.mini:hover{ border-color:var(--accent-dim); }
+  button.mini.equip{ border-color:var(--good); color:var(--good); }
+  button.mini.step{ padding:4px 6px; }
+  button.mini.blocked{ border-color:var(--danger); color:var(--danger); opacity:.45; cursor:not-allowed; }
+</style>
+</head>
+<body>
+<header>
+  <button id="menuToggle">☰ Menu</button>
+  <h1 id="pageTitle">ASHFALL</h1>
+</header>
+<div id="menuBackdrop"></div>
+<aside id="sideMenu">
+  <h2>Menu <button id="closeMenu">✕</button></h2>
+  <div class="menu-section">
+    <h3>Save / Load</h3>
+    <div class="menu-actions">
+      <button id="saveLocalBtn">Save to this browser</button>
+      <button id="loadLocalBtn">Load from this browser</button>
+      <button id="exportBtn">Export save file</button>
+      <button id="importBtn">Import save file</button>
+      <input type="file" id="importInput" accept="application/json" style="display:none;">
+      <button id="restartMenuBtn">Restart game</button>
+    </div>
+  </div>
+  <div class="menu-section"><h3>Stats</h3><div id="statsBox"></div></div>
+  <div class="menu-section">
+    <h3 class="map-heading">Map <div id="mapZoomToggle">
+      <button data-zoom="close" class="active">Close</button>
+      <button data-zoom="wide">Wide</button>
+    </div></h3>
+    <svg id="mapSvg" viewBox="0 0 260 260" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+</aside>
+<div id="locBar">
+  <div id="locLabel"></div>
+  <div id="rightBar">
+    <span id="clockLabel"></span>
+    <div id="gaitBar">
+      <span>Pace</span>
+      <button data-gait="sneak">Sneak</button>
+      <button data-gait="walk" class="active">Walk</button>
+      <button data-gait="fast">Jog</button>
+    </div>
+  </div>
+</div>
+<main>
+  <div id="left">
+    <p id="roomDesc"></p>
+    <div id="log"></div>
+    <div class="actions-group"><h2>Move</h2><div class="actions" id="moveActions"></div></div>
+    <div class="actions-group" id="hereGroup" style="display:none;"><h2>Here</h2><div class="actions" id="hereActions"></div></div>
+  </div>
+  <div id="sidebar">
+    <div class="panel">
+      <h2>Inventory <span class="sub"><span id="invWeight"></span><button id="unequipBtn" class="mini" style="display:none;">Unequip</button></span></h2>
+      <div class="tabs" id="invTabs"></div>
+      <ul class="itemlist" id="invList"></ul>
+    </div>
+    <div class="panel">
+      <h2>Here <span class="sub" id="worldWeight"></span></h2>
+      <div class="tabs" id="worldTabs"></div>
+      <ul class="itemlist" id="worldList"></ul>
+    </div>
+    <div class="panel">
+      <h2>Craft <button id="craftBackBtn" class="mini" style="display:none;">&larr; Back</button></h2>
+      <div id="craftBody"></div>
+    </div>
+  </div>
+</main>
+<script>
+(function(){
+  "use strict";
+  // ==================================================
+  // ARCHITECTURE
+  // ==================================================
+  // Ashfall is data-driven. Content (rooms/items) and mechanics (rules that
+  // act on that content) are kept apart on purpose so future passes can
+  // touch one without reading the other.
+  //
+  //   WORLD DATA   defines rooms, room properties, containers, items,
+  //                exits, doors/windows, and environmental interactions.
+  //   PLAYER STATE defines player position, inventory, equipment, vitals,
+  //                time, and progression.
+  //   UTILITIES    provide small reusable operations (formatting, lookup).
+  //   SIMULATION   owns time-dependent consequences (decay, fire burn-down,
+  //                collapse from exhaustion, game-over checks). STAMINA/FATIGUE
+  //                is a sub-section living inside SURVIVAL/TIME SIMULATION, not
+  //                a separate top-level section.
+  //   ACTIONS      perform gameplay operations (move, take, craft, etc.)
+  //                and are grouped by the system they belong to:
+  //                INVENTORY/ITEM SYSTEM, WORLD INTERACTION, CRAFTING,
+  //                FIRE/COOKING.
+  //   PERSISTENCE  serializes/restores game state.
+  //   UI/RENDERING displays current state; it should never contain rules.
+  //
+  // IMPORTANT RULE: content additions should normally modify WORLD DATA
+  // only. Mechanics additions should touch ACTIONS/SIMULATION only when a
+  // genuinely new mechanic is required. Do not duplicate mechanics inside
+  // world/item definitions — prefer tags/capabilities (see ITEM DATA SCHEMA
+  // below) over hard-coded name checks like `it.name === "Something"`.
+  //
+  // CONTENT vs MECHANICS, for future passes (including AI-driven ones):
+  //   CONTENT PASS (new rooms/items/containers/exits/doors/descriptions):
+  //     modify makeDefaultWorld(), item definitions, room definitions,
+  //     containers, exits, doors/windows, descriptions. Do not touch
+  //     movement/inventory/simulation code unless the content genuinely
+  //     introduces a new mechanic.
+  //   MECHANICS PASS: modify the smallest relevant function/section —
+  //     survival/time -> advanceTime()/runAwakeStep()/recoveryStep(); inventory transfer ->
+  //     the INVENTORY/ITEM SYSTEM section (doTake/doStore/getItemAt/etc.);
+  //     tools -> hasTool()/tags; fire -> FIRE/COOKING; crafting ->
+  //     CRAFTING; persistence -> PERSISTENCE. UI changes are separate from
+  //     both — see RENDERING.
+  //   Do not read the entire file unless the requested feature requires a
+  //   mechanics change. _uid is the stable identity of an item; array
+  //   indexes are temporary and must never be treated as stable identity.
+  //   doRestart lives in PERSISTENCE, not SIMULATION, since it performs a
+  //   full state reset rather than a time-driven update.
+  // Current version: 0.4.0.
+  //
+  // WORLD DATA also carries LOCATIONS — real integer (x,y,z) coordinates
+  // (meters) for every street/mid-block node and building floor, keyed by
+  // `locationId` on every room. As of v0.3.0, LOCATIONS is read by both MAP
+  // rendering and movement: exitMinutes()/locationDistance() compute
+  // cross-Location travel distance, and applyComputedDirections() (run once
+  // at world-build time) derives compass words for cross-Location exit
+  // labels via computeDirection(). See the LOCATIONS comment below for the
+  // coordinate convention.
+  //
+  // Item identity: every item that can appear in a UI detail view gets a
+  // stable `_uid` (see ensureUid/findItemByUid below). Array indexes are
+  // NOT stable identity — a list can be mutated (splice/merge) between the
+  // moment a UI element is built and the moment its handler runs. Any code
+  // that resolves "the item the user clicked on" must do so by _uid, not
+  // by a previously-captured index. Indexes are fine only as a short-lived
+  // lookup within a single already-validated operation.
+  // ==================================================
+
+  // ==================================================
+  // CONFIG / CONSTANTS
+  // ==================================================
+  const GAME_CONFIG = { VERSION: "0.4.0" };
+  function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
+  const STACKABLE = new Set(["Food","Medical","Ammunition","Materials"]);
+  const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
+  const MIN_MOVE_MIN = 1;
+  const GAITS = { sneak:{speed:0.6}, walk:{speed:1.2}, fast:{speed:2.0} };
+  // Energy baseline changed in v0.2.1 to 100 -> 0 over 24 game hours (was
+  // 100/960, ~16h) per the Stamina & Fatigue handoff (sec. 14). Hunger/thirst
+  // rates are unchanged.
+  const DECAY = { hunger:100/4320, thirst:100/1440, energy:100/1440 };
+  const CAMPFIRE_KIT_COST = 3;
+  // ==================================================
+  // STAMINA / FATIGUE SYSTEM CONSTANTS (v0.2.1)
+  // ==================================================
+  // See "Ashfall v0.2.1 — Stamina & Fatigue System" handoff for full rules.
+  // Tasks declare Exertion; this system alone decides how Exertion affects
+  // Stamina/Fatigue (sec. 3). Do not duplicate this logic inside tasks.
+  const STAMINA_RECOVERY_DELAY_MIN = 1;    // game minutes of non-exertion before recovery starts
+  const BASELINE_STAMINA_RATE = 1;         // Stamina/minute, awake baseline
+  const REST_STAMINA_RATE = 0.5;           // Stamina/minute during Rest
+  const FATIGUE_RECOVERY_RATE = 0.5;       // Fatigue/minute
+  const REST_DURATION_MIN = 60;
+  const SLEEP_ENERGY_RATE = 10/60;         // Energy/minute (10/hour)
+  const SLEEP_COOLDOWN_MIN = 8*60;         // must stay awake 8 game hours after waking
+  // No "low hunger/thirst" threshold existed in v0.1.3 to inherit (sec. 24
+  // asks us to follow existing convention if one is defined) — 30 is a
+  // reasonable initial balance value and lives here as a single knob.
+  const LOW_HUNGER_THRESHOLD = 30;
+  const LOW_THIRST_THRESHOLD = 30;
+  const JOG_EXERTION_PER_MIN = 0.5;
+  const CHOP_TREE_EXERTION = 30;
+  const FISH_EXERTION = 8;
+  const RECIPES = [
+    { id:"bandage", label:"Craft a bandage",
+      inputs:[ {id:"cloth",qty:2}, {id:"duct_tape",qty:1} ], minutes:5,
+      output:{ id:"bandage" } },
+    { id:"campfire_kit", label:"Craft a campfire kit",
+      inputs:[ {id:"firewood",qty:CAMPFIRE_KIT_COST} ], minutes:15,
+      output:{ id:"campfire_kit" } }
+  ];
+  const HEAT_RECIPES = [
+    { id:"cook_fish", input:"raw_fish",
+      output:{ id:"cooked_fish" },
+      minutes:15 }
+  ];
+  function clamp(v){ return Math.max(0, Math.min(100, v)); }
+
+  // ==================================================
+  // WORLD DATA
+  // ==================================================
+  // ROOM SCHEMA (one entry per key in the object returned by
+  // makeDefaultWorld()):
+  //   id            (the object key itself) room identifier
+  //   building      display grouping, e.g. "Acorn Apartments"
+  //   area          floor/apartment/street grouping, e.g. "2A"
+  //   room          room type/name, e.g. "Kitchen"
+  //   desc          description shown to the player
+  //   floor         array of loose item objects (see ITEM DATA SCHEMA)
+  //   floorCap      maximum loose-item capacity in kg
+  //   containers    array of container objects (see CONTAINER SCHEMA)
+  //   carContainers optional array of vehicle container objects
+  //   exits         array of movement definitions (see EXIT SCHEMA)
+  //   locationId    key into LOCATIONS (see below) — real (x,y,z) position.
+  //                 Street/mid-block rooms use their own room id as their
+  //                 locationId; every room on one building floor shares
+  //                 that floor's locationId. Required on every room.
+  // Optional environmental properties:
+  //   sleepSpot      e.g. "couch"/"bed" — enables the Sleep action
+  //   hasStove       room has a working stove (heat source, no fire needed)
+  //   cannotHaveFire room may not host a campfire
+  //   fishable       room supports the Go Fishing action
+  //   hasTree        room has a choppable tree
+  //   searched       whether the room's hidden search has been performed
+  //   searchLabel    action label shown before searching
+  //   searchMinutes  time cost of searching
+  //   carLocked      whether a vehicle in the room is locked
+  //   heatActive     a fire/stove is currently burning here
+  //   fireMinutesLeft remaining fuel minutes for an active fire
+  //   campfireBuilt  a campfire structure has been assembled here
+  //
+  // CONTAINER SCHEMA:
+  //   { id, name, capacityKg, items: [] }
+  //   Optional: locked, breakTag (tag required to force it open)
+  //   Optional (v0.4.0, spawn pools — see SPAWN_POOLS below):
+  //     spawnPools       string[] of SPAWN_POOLS ids this container draws
+  //                      from. Absence means the container is never
+  //                      touched by the spawn system (purely hand-authored).
+  //     spawnRolled      whether the initial roll has happened. Set true
+  //                      at authoring time on any container that already
+  //                      ships with hand-placed contents, so
+  //                      doOpenContainer() never overwrites them.
+  //     lastRolledMinute state.totalMinutes at the last roll. Not consumed
+  //                      by any mechanic yet — reserved for a future
+  //                      respawn cycle (roadmap item 15).
+  //
+  // EXIT SCHEMA (one of):
+  //   Same-Location:  { to, label, distanceM } — distanceM is hand-authored.
+  //   Cross-Location: { to, label } — no distanceM/block/blockHalf; travel
+  //                   time is computed from the two rooms' LOCATIONS entries
+  //                   by exitMinutes()/locationDistance() (see WORLD
+  //                   INTERACTION). Compass words inside `label`, if any,
+  //                   are substituted at build time by computeDirection()
+  //                   from the same LOCATIONS data — see v0.3.0 changelog.
+  //   Optional (either kind): doorId (exit is gated by a door in `doors`)
+  //
+  // ITEM DATA SCHEMA:
+  //   Shared item properties (name, category, unitWeight, tags, etc.) are
+  //   defined ONCE per item in ITEM_REGISTRY below, keyed by a stable id.
+  //   Rooms/containers place instances by reference — { id, qty } — via
+  //   itemsFromRegistry(), never by repeating the full item definition.
+  //   `overrides` on a placement ref is for genuine per-instance state only
+  //   (e.g. a specific unit's current durability), never for properties
+  //   that should be shared — those belong in the registry entry itself,
+  //   so an item's definition is never duplicated across placements.
+  //   Basic item: { name, category, qty, unitWeight }
+  //   Optional properties:
+  //     tags          capability tags used by mechanics instead of name
+  //                   checks — current tags: blunt, blade, prying, cutting,
+  //                   chopping, fishing, tackle, heat, fire-starter, battery
+  //     durability    { current, max, mode } — mode is "uses" or "time"
+  //     restores      { hunger, thirst } — consumable effect
+  //     verb          display/use verb, e.g. "Eat", "Drink"
+  //     slotType      equipment/container slot key, e.g. "backpack"
+  //     capacityKg    capacity of an equippable container item
+  //     contents      stored contents when an equipped container is
+  //                   unequipped back into a stowable item
+  //     on            powered-equipment on/off state
+  //     hasBatteries  powered-equipment battery-installed state
+  //     drainRate     durability loss per minute while `on`
+  //     illnessChance % chance consuming this item causes illness
+  //     masterKey     key unlocks every door in `building`
+  //     building      building association for a masterKey
+  //     doorId        specific door a (non-master) key unlocks
+  //     isWatch       grants access to the clock display
+  //   Prefer data/capabilities (tags, `use` strings) over hard-coded item
+  //   names in mechanics code; the existing tag system is the primary
+  //   mechanism for tool checks (see hasTool()).
+  // ==================================================
+
+  // ITEM_REGISTRY: single source of truth for every item's shared
+  // properties, keyed by stable id. Populated by content passes; never
+  // referenced by mechanics code via name checks (use tags — see above).
+  const ITEM_REGISTRY = {
+    tv_remote: { name:"TV remote", category:"Electronics", unitWeight:0.2 },
+    paperback_novel: { name:"Paperback novel", category:"Literature", unitWeight:0.3 },
+    box_of_matches: { name:"Box of matches", category:"Materials", unitWeight:0.05, tags:["fire-starter"], durability:{ current:50, max:50, mode:"uses" } },
+    photo_album: { name:"Photo album", category:"Literature", unitWeight:0.4 },
+    pot_of_spoiled_stew: { name:"Pot of spoiled stew", category:"Misc", unitWeight:1.2 },
+    canned_soup: { name:"Canned soup", category:"Food", unitWeight:0.4, restores:{hunger:25,thirst:5}, verb:"Eat" },
+    pasta: { name:"Pasta", category:"Food", unitWeight:0.5, restores:{hunger:30}, verb:"Eat" },
+    frying_pan: { name:"Frying pan", category:"Tool", unitWeight:0.9, tags:["blunt"] },
+    kitchen_knife: { name:"Kitchen knife", category:"Tool", unitWeight:0.15, tags:["blade"] },
+    can_opener: { name:"Can opener", category:"Tool", unitWeight:0.1, tags:["can-opening"] },
+    rotten_leftovers: { name:"Rotten leftovers", category:"Misc", unitWeight:0.8 },
+    bottled_water: { name:"Bottled water", category:"Food", unitWeight:0.5, restores:{thirst:30}, verb:"Drink" },
+    granola_bars: { name:"Granola bars", category:"Food", unitWeight:0.1, restores:{hunger:15}, verb:"Eat" },
+    bandages: { name:"Bandages", category:"Medical", unitWeight:0.05 },
+    painkillers: { name:"Painkillers", category:"Medical", unitWeight:0.1 },
+    toilet_paper: { name:"Toilet paper", category:"Materials", unitWeight:0.2 },
+    bleach: { name:"Bleach", category:"Materials", unitWeight:1.0 },
+    dirty_laundry: { name:"Dirty laundry", category:"Misc", unitWeight:0.5 },
+    winter_jacket: { name:"Winter jacket", category:"Clothing", unitWeight:1.2 },
+    sturdy_boots: { name:"Sturdy boots", category:"Clothing", unitWeight:1.0 },
+    worn_backpack: { name:"Worn backpack", category:"Container", unitWeight:0.6, slotType:"backpack", capacityKg:12 },
+    flashlight: { name:"Flashlight", category:"Electronics", unitWeight:0.2, on:false, hasBatteries:true, durability:{ current:100, max:100, mode:"time" }, drainRate:100/480 },
+    spare_batteries: { name:"Spare batteries", category:"Materials", unitWeight:0.05, tags:["battery"] },
+    wristwatch: { name:"Wristwatch", category:"Electronics", unitWeight:0.05, isWatch:true },
+    folded_clothes: { name:"Folded clothes", category:"Clothing", unitWeight:1.0 },
+    crumpled_cash: { name:"Crumpled cash", category:"Misc", unitWeight:0.01 },
+    cloth: { name:"Cloth", category:"Materials", unitWeight:0.1 },
+    dead_potted_plant: { name:"Dead potted plant", category:"Misc", unitWeight:2.0 },
+    duct_tape: { name:"Duct tape", category:"Materials", unitWeight:0.3 },
+    length_of_rope: { name:"Length of rope", category:"Materials", unitWeight:1.5 },
+    canned_beans: { name:"Canned beans", category:"Food", unitWeight:0.4, restores:{hunger:22}, verb:"Eat" },
+    board_games: { name:"Board games", category:"Misc", unitWeight:1.0 },
+    burnt_saucepan: { name:"Burnt saucepan", category:"Misc", unitWeight:0.6 },
+    canned_corn: { name:"Canned corn", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat" },
+    aspirin: { name:"Aspirin", category:"Medical", unitWeight:0.05 },
+    work_gloves: { name:"Work gloves", category:"Clothing", unitWeight:0.2 },
+    handwritten_note: { name:"Handwritten note", category:"Literature", unitWeight:0.02 },
+    rope: { name:"Rope", category:"Materials", unitWeight:1.5 },
+    empty_soda_can: { name:"Empty soda can", category:"Misc", unitWeight:0.1 },
+    stuffed_toy: { name:"Stuffed toy", category:"Misc", unitWeight:0.2 },
+    kids_plastic_bowl: { name:"Kids' plastic bowl", category:"Misc", unitWeight:0.1 },
+    childrens_medicine: { name:"Children's medicine", category:"Medical", unitWeight:0.05 },
+    firewood: { name:"Firewood", category:"Materials", unitWeight:0.8 },
+    nails: { name:"Nails", category:"Materials", unitWeight:1.0 },
+    scrap_metal: { name:"Scrap metal", category:"Materials", unitWeight:0.5 },
+    metal_pipe: { name:"Metal pipe", category:"Tool", unitWeight:1.3, tags:["blunt"] },
+    dented_saucepan: { name:"Dented saucepan", category:"Tool", unitWeight:0.7 },
+    crowbar: { name:"Crowbar", category:"Tool", unitWeight:2.5, tags:["blunt","prying"] },
+    wrench: { name:"Wrench", category:"Tool", unitWeight:0.8, tags:["blunt"] },
+    master_key: { name:"Master key", category:"Key", unitWeight:0.03, masterKey:true, building:"acorn" },
+    building_ledger: { name:"Building ledger", category:"Literature", unitWeight:0.5 },
+    portable_radio: { name:"Portable radio", category:"Electronics", unitWeight:0.4, on:false, hasBatteries:true, durability:{ current:100, max:100, mode:"time" }, drainRate:100/2880 },
+    tow_chain: { name:"Tow chain", category:"Materials", unitWeight:2.0 },
+    owners_manual: { name:"Owner's manual", category:"Literature", unitWeight:0.2 },
+    potato_chips: { name:"Potato chips", category:"Food", unitWeight:0.15, restores:{hunger:10}, verb:"Eat" },
+    loose_change: { name:"Loose change", category:"Misc", unitWeight:0.3 },
+    box_cutter: { name:"Box cutter", category:"Tool", unitWeight:0.1, tags:["blade"] },
+    old_photographs: { name:"Old photographs", category:"Misc", unitWeight:0.1 },
+    reading_lamp: { name:"Reading lamp", category:"Electronics", unitWeight:0.8 },
+    prescription_bottles: { name:"Prescription bottles", category:"Medical", unitWeight:0.05 },
+    strong_painkillers: { name:"Strong painkillers", category:"Medical", unitWeight:0.1 },
+    vitamins: { name:"Vitamins", category:"Medical", unitWeight:0.15 },
+    rubbing_alcohol: { name:"Rubbing alcohol", category:"Materials", unitWeight:0.3 },
+    gauze_rolls: { name:"Gauze rolls", category:"Medical", unitWeight:0.05 },
+    camping_tent: { name:"Camping tent", category:"Materials", unitWeight:3.0 },
+    sleeping_bag: { name:"Sleeping bag", category:"Clothing", unitWeight:1.5 },
+    old_furniture: { name:"Old furniture", category:"Misc", unitWeight:5.0 },
+    fishing_rod: { name:"Fishing rod", category:"Tool", unitWeight:0.8, tags:["fishing"] },
+    tackle_box: { name:"Tackle box", category:"Materials", unitWeight:1.2, tags:["tackle"] },
+    bolt_cutters: { name:"Bolt cutters", category:"Tool", unitWeight:1.2, tags:["cutting"] },
+    hand_axe: { name:"Hand axe", category:"Tool", unitWeight:1.4, tags:["blunt","blade","chopping"] },
+    plank: { name:"Plank", category:"Materials", unitWeight:1.5 },
+    propane_torch: { name:"Propane torch", category:"Tool", unitWeight:0.9, tags:["heat"] },
+    work_boots: { name:"Work boots", category:"Clothing", unitWeight:1.1 },
+    tire_iron: { name:"Tire iron", category:"Tool", unitWeight:1.0, tags:["blunt"] },
+    registration_papers: { name:"Registration papers", category:"Misc", unitWeight:0.02 },
+    thermos: { name:"Thermos", category:"Misc", unitWeight:0.4 },
+    acorn_apt_2a_key: { name:"Acorn Apt, 2A", category:"Key", unitWeight:0.03, doorId:"2a" },
+    bandage: { name:"Bandage", category:"Medical", unitWeight:0.05 },
+    campfire_kit: { name:"Campfire Kit", category:"Materials", unitWeight:2.4 },
+    cooked_fish: { name:"Cooked fish", category:"Food", unitWeight:0.35, restores:{hunger:35}, verb:"Eat" },
+    raw_fish: { name:"Raw fish", category:"Food", unitWeight:0.3, restores:{hunger:10}, verb:"Eat", illnessChance:35 },
+    // New entries below added in v0.4.0 for SPAWN_POOLS coverage — see the
+    // "Container Spawn Pools & Population System" handoff, Appendix B.
+    canned_tuna: { name:"Canned tuna", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat" },
+    cereal_box: { name:"Box of cereal", category:"Food", unitWeight:0.5, restores:{hunger:15}, verb:"Eat" },
+    crackers: { name:"Crackers", category:"Food", unitWeight:0.2, restores:{hunger:8}, verb:"Eat" },
+    peanut_butter: { name:"Peanut butter", category:"Food", unitWeight:0.5, restores:{hunger:20}, verb:"Eat" },
+    candy_bar: { name:"Candy bar", category:"Food", unitWeight:0.05, restores:{hunger:5}, verb:"Eat" },
+    rice_bag: { name:"Bag of rice", category:"Food", unitWeight:1.0 },
+    coffee_grounds: { name:"Coffee grounds", category:"Food", unitWeight:0.3 },
+    spoiled_milk: { name:"Spoiled milk", category:"Food", unitWeight:1.0 },
+    moldy_bread: { name:"Moldy bread", category:"Food", unitWeight:0.4 },
+    rotten_produce: { name:"Rotten produce", category:"Food", unitWeight:0.5 },
+    bar_soap: { name:"Bar of soap", category:"Materials", unitWeight:0.1 },
+    toothpaste: { name:"Toothpaste", category:"Materials", unitWeight:0.1 },
+    shampoo: { name:"Shampoo", category:"Materials", unitWeight:0.3 },
+    hand_sanitizer: { name:"Hand sanitizer", category:"Materials", unitWeight:0.15 },
+    cold_medicine: { name:"Cold medicine", category:"Medical", unitWeight:0.1 },
+    antiseptic_wipes: { name:"Antiseptic wipes", category:"Medical", unitWeight:0.05 },
+    antibiotics: { name:"Antibiotics", category:"Medical", unitWeight:0.05 },
+    cough_syrup: { name:"Cough syrup", category:"Medical", unitWeight:0.3 },
+    t_shirt: { name:"T-shirt", category:"Clothing", unitWeight:0.2 },
+    jeans: { name:"Jeans", category:"Clothing", unitWeight:0.6 },
+    police_uniform: { name:"Police uniform", category:"Clothing", unitWeight:1.0 },
+    jewelry_piece: { name:"Piece of jewelry", category:"Misc", unitWeight:0.02 },
+    cash_bundle: { name:"Bundle of cash", category:"Misc", unitWeight:0.05 },
+    playing_cards: { name:"Deck of playing cards", category:"Misc", unitWeight:0.1 },
+    comic_book: { name:"Comic book", category:"Literature", unitWeight:0.1 },
+    spare_parts_box: { name:"Box of spare parts", category:"Materials", unitWeight:1.5 },
+    motor_oil: { name:"Motor oil", category:"Materials", unitWeight:0.9 },
+    spare_machine_parts: { name:"Spare machine parts", category:"Materials", unitWeight:1.5 },
+    paint_can: { name:"Can of paint", category:"Materials", unitWeight:1.5 },
+    chewing_gum: { name:"Pack of chewing gum", category:"Misc", unitWeight:0.02 },
+    lighter: { name:"Lighter", category:"Materials", unitWeight:0.05, tags:["fire-starter"], durability:{ current:80, max:80, mode:"uses" } },
+    compass: { name:"Compass", category:"Tool", unitWeight:0.1 },
+    water_purification_tablets: { name:"Water purification tablets", category:"Materials", unitWeight:0.05 },
+    evidence_bag: { name:"Evidence bag", category:"Misc", unitWeight:0.05 },
+    sealed_evidence_box: { name:"Sealed evidence box", category:"Misc", unitWeight:1.5 },
+    handcuffs: { name:"Handcuffs", category:"Tool", unitWeight:0.3 },
+    police_badge: { name:"Police badge", category:"Misc", unitWeight:0.05 }
+  };
+  // itemFromRegistry/itemsFromRegistry expand a { id, qty, overrides? }
+  // placement reference into a full runtime item object, deep-cloned from
+  // ITEM_REGISTRY so no two placements ever share mutable state (tags
+  // arrays, durability objects). `overrides` is for genuine per-instance
+  // state only (e.g. a specific unit's current durability) — shared
+  // properties belong in the registry, never repeated at the call site.
+  function itemFromRegistry(ref){
+    const def = ITEM_REGISTRY[ref.id];
+    if(!def) throw new Error("Unknown item id: " + ref.id);
+    const item = JSON.parse(JSON.stringify(def));
+    item.itemId = ref.id;
+    item.qty = ref.qty;
+    if(ref.overrides) Object.assign(item, JSON.parse(JSON.stringify(ref.overrides)));
+    return item;
+  }
+  function itemsFromRegistry(refs){
+    return refs.map(itemFromRegistry);
+  }
+
+  // SPAWN_POOLS (v0.4.0): weighted-RNG loot tables, sibling registry to
+  // ITEM_REGISTRY. A container opts in via its `spawnPools` field (see
+  // CONTAINER SCHEMA above); doOpenContainer() (WORLD INTERACTION) rolls
+  // each pool independently the first time such a container is opened.
+  //   entries    [{ itemId, weight, qtyMin, qtyMax }] — `weight` picks
+  //              which entries are selected (plain relative integer, no
+  //              sum constraint); `qtyMin`/`qtyMax` decides how many of
+  //              that item spawn once picked.
+  //   rollCount  [min,max] — how many entries get picked per roll.
+  //   emptyChance  0-1 chance the whole roll produces nothing, independent
+  //                of rollCount.
+  // See "Ashfall Handoff — Container Spawn Pools & Population System" for
+  // the full design and the per-container assignment table.
+  const SPAWN_POOLS = {
+    kitchen_perishable: { rollCount:[0,1], emptyChance:0.3, entries:[
+      { itemId:"rotten_leftovers", weight:8, qtyMin:1, qtyMax:1 },
+      { itemId:"spoiled_milk", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"moldy_bread", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"rotten_produce", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"pot_of_spoiled_stew", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"raw_fish", weight:1, qtyMin:1, qtyMax:1 },
+      { itemId:"cooked_fish", weight:1, qtyMin:1, qtyMax:1 } ]},
+    kitchen_nonperishable: { rollCount:[1,3], emptyChance:0.1, entries:[
+      { itemId:"canned_soup", weight:8, qtyMin:1, qtyMax:2 },
+      { itemId:"bottled_water", weight:8, qtyMin:1, qtyMax:3 },
+      { itemId:"canned_beans", weight:7, qtyMin:1, qtyMax:2 },
+      { itemId:"canned_corn", weight:7, qtyMin:1, qtyMax:2 },
+      { itemId:"canned_tuna", weight:6, qtyMin:1, qtyMax:2 },
+      { itemId:"crackers", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"pasta", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"granola_bars", weight:6, qtyMin:1, qtyMax:3 },
+      { itemId:"potato_chips", weight:5, qtyMin:1, qtyMax:2 },
+      { itemId:"rice_bag", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"cereal_box", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"peanut_butter", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"coffee_grounds", weight:4, qtyMin:1, qtyMax:1 } ]},
+    kitchen_tools: { rollCount:[0,2], emptyChance:0.25, entries:[
+      { itemId:"can_opener", weight:7, qtyMin:1, qtyMax:1 },
+      { itemId:"frying_pan", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"kitchen_knife", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"dented_saucepan", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"burnt_saucepan", weight:3, qtyMin:1, qtyMax:1 } ]},
+    hygiene: { rollCount:[1,2], emptyChance:0.15, entries:[
+      { itemId:"toilet_paper", weight:8, qtyMin:1, qtyMax:2 },
+      { itemId:"bar_soap", weight:7, qtyMin:1, qtyMax:1 },
+      { itemId:"toothpaste", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"shampoo", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"bleach", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"hand_sanitizer", weight:4, qtyMin:1, qtyMax:1 } ]},
+    medical_otc: { rollCount:[1,2], emptyChance:0.2, entries:[
+      { itemId:"bandages", weight:8, qtyMin:1, qtyMax:3 },
+      { itemId:"painkillers", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"aspirin", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"cold_medicine", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"antiseptic_wipes", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"gauze_rolls", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"childrens_medicine", weight:2, qtyMin:1, qtyMax:1 } ]},
+    medical_pharmacy: { rollCount:[1,2], emptyChance:0.15, entries:[
+      { itemId:"prescription_bottles", weight:7, qtyMin:1, qtyMax:1 },
+      { itemId:"strong_painkillers", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"antibiotics", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"vitamins", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"cough_syrup", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"rubbing_alcohol", weight:5, qtyMin:1, qtyMax:1 } ]},
+    residential_personal: { rollCount:[1,2], emptyChance:0.2, entries:[
+      { itemId:"crumpled_cash", weight:7, qtyMin:1, qtyMax:1 },
+      { itemId:"spare_batteries", weight:6, qtyMin:1, qtyMax:2 },
+      { itemId:"loose_change", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"wristwatch", weight:3, qtyMin:1, qtyMax:1 },
+      { itemId:"jewelry_piece", weight:2, qtyMin:1, qtyMax:1 } ]},
+    clothing: { rollCount:[1,2], emptyChance:0.15, entries:[
+      { itemId:"folded_clothes", weight:8, qtyMin:1, qtyMax:2 },
+      { itemId:"t_shirt", weight:7, qtyMin:1, qtyMax:1 },
+      { itemId:"jeans", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"work_gloves", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"winter_jacket", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"sturdy_boots", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"work_boots", weight:4, qtyMin:1, qtyMax:1 } ]},
+    documents_lore: { rollCount:[0,2], emptyChance:0.3, entries:[
+      { itemId:"handwritten_note", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"old_photographs", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"photo_album", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"registration_papers", weight:3, qtyMin:1, qtyMax:1 },
+      { itemId:"owners_manual", weight:3, qtyMin:1, qtyMax:1 },
+      { itemId:"building_ledger", weight:2, qtyMin:1, qtyMax:1 } ]},
+    recreation: { rollCount:[0,2], emptyChance:0.25, entries:[
+      { itemId:"board_games", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"paperback_novel", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"playing_cards", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"comic_book", weight:4, qtyMin:1, qtyMax:1 } ]},
+    tools_general: { rollCount:[1,2], emptyChance:0.15, entries:[
+      { itemId:"duct_tape", weight:8, qtyMin:1, qtyMax:1 },
+      { itemId:"nails", weight:6, qtyMin:1, qtyMax:3 },
+      { itemId:"rope", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"length_of_rope", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"wrench", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"crowbar", weight:2, qtyMin:1, qtyMax:1 } ]},
+    tools_workshop: { rollCount:[1,2], emptyChance:0.2, entries:[
+      { itemId:"wrench", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"metal_pipe", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"box_cutter", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"spare_parts_box", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"motor_oil", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"tire_iron", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"bolt_cutters", weight:2, qtyMin:1, qtyMax:1 },
+      { itemId:"hand_axe", weight:2, qtyMin:1, qtyMax:1 },
+      { itemId:"propane_torch", weight:1, qtyMin:1, qtyMax:1 } ]},
+    office_supplies: { rollCount:[0,2], emptyChance:0.25, entries:[
+      { itemId:"building_ledger", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"registration_papers", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"reading_lamp", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"owners_manual", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"portable_radio", weight:2, qtyMin:1, qtyMax:1 } ]},
+    retail_stock_food: { rollCount:[1,3], emptyChance:0.1, entries:[
+      { itemId:"bottled_water", weight:8, qtyMin:1, qtyMax:3 },
+      { itemId:"candy_bar", weight:7, qtyMin:1, qtyMax:2 },
+      { itemId:"potato_chips", weight:7, qtyMin:1, qtyMax:2 },
+      { itemId:"canned_corn", weight:6, qtyMin:1, qtyMax:2 },
+      { itemId:"canned_soup", weight:6, qtyMin:1, qtyMax:2 },
+      { itemId:"granola_bars", weight:6, qtyMin:1, qtyMax:2 },
+      { itemId:"chewing_gum", weight:6, qtyMin:1, qtyMax:1 } ]},
+    retail_stock_general: { rollCount:[1,2], emptyChance:0.15, entries:[
+      { itemId:"candy_bar", weight:7, qtyMin:1, qtyMax:1 },
+      { itemId:"chewing_gum", weight:7, qtyMin:1, qtyMax:1 },
+      { itemId:"loose_change", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"lighter", weight:4, qtyMin:1, qtyMax:1 } ]},
+    hardware_store: { rollCount:[1,3], emptyChance:0.1, entries:[
+      { itemId:"nails", weight:8, qtyMin:1, qtyMax:3 },
+      { itemId:"duct_tape", weight:8, qtyMin:1, qtyMax:2 },
+      { itemId:"rope", weight:7, qtyMin:1, qtyMax:1 },
+      { itemId:"plank", weight:6, qtyMin:1, qtyMax:2 },
+      { itemId:"paint_can", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"wrench", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"crowbar", weight:3, qtyMin:1, qtyMax:1 },
+      { itemId:"bolt_cutters", weight:2, qtyMin:1, qtyMax:1 },
+      { itemId:"hand_axe", weight:2, qtyMin:1, qtyMax:1 },
+      { itemId:"propane_torch", weight:2, qtyMin:1, qtyMax:1 } ]},
+    outdoor_camping: { rollCount:[1,2], emptyChance:0.2, entries:[
+      { itemId:"sleeping_bag", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"tackle_box", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"water_purification_tablets", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"camping_tent", weight:3, qtyMin:1, qtyMax:1 },
+      { itemId:"fishing_rod", weight:3, qtyMin:1, qtyMax:1 },
+      { itemId:"compass", weight:3, qtyMin:1, qtyMax:1 } ]},
+    valuables: { rollCount:[0,1], emptyChance:0.35, entries:[
+      { itemId:"crumpled_cash", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"jewelry_piece", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"cash_bundle", weight:3, qtyMin:1, qtyMax:1 },
+      { itemId:"wristwatch", weight:3, qtyMin:1, qtyMax:1 } ]},
+    police_evidence: { rollCount:[0,1], emptyChance:0.4, entries:[
+      { itemId:"evidence_bag", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"sealed_evidence_box", weight:3, qtyMin:1, qtyMax:1 } ]},
+    police_gear: { rollCount:[1,2], emptyChance:0.2, entries:[
+      { itemId:"police_uniform", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"handcuffs", weight:4, qtyMin:1, qtyMax:1 },
+      { itemId:"police_badge", weight:2, qtyMin:1, qtyMax:1 } ]},
+    warehouse_goods: { rollCount:[1,2], emptyChance:0.2, entries:[
+      { itemId:"scrap_metal", weight:6, qtyMin:1, qtyMax:2 },
+      { itemId:"metal_pipe", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"plank", weight:6, qtyMin:1, qtyMax:2 },
+      { itemId:"spare_machine_parts", weight:5, qtyMin:1, qtyMax:1 } ]},
+    trash: { rollCount:[0,2], emptyChance:0.4, entries:[
+      { itemId:"empty_soda_can", weight:7, qtyMin:1, qtyMax:1 },
+      { itemId:"scrap_metal", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"metal_pipe", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"rotten_leftovers", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"dead_potted_plant", weight:3, qtyMin:1, qtyMax:1 } ]},
+    fuel_fire: { rollCount:[1,2], emptyChance:0.15, entries:[
+      { itemId:"firewood", weight:8, qtyMin:1, qtyMax:3 },
+      { itemId:"box_of_matches", weight:6, qtyMin:1, qtyMax:1 },
+      { itemId:"lighter", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"campfire_kit", weight:2, qtyMin:1, qtyMax:1 } ]}
+  };
+
+  // LOCATIONS: real integer (x,y,z) coordinates in meters for every
+  // street/mid-block node and building floor (replaces MAP_NODES /
+  // MAP_ANCHORS as of v0.2.9 — see "Ashfall v0.2.9.md" handoff). Origin
+  // (0,0,0) = maple4th (town SW corner), street level. +X = east, +Y =
+  // north, +Z = up. Block size 100m; floor height 3m (no basements/roofs
+  // yet — this is the convention for when they're added). Every room
+  // carries a `locationId` key into this table (see ROOM SCHEMA above).
+  //   Street/mid-block Locations: id = the room id itself, z:0, (x,y) =
+  //   the former MAP_NODES {col,row} * 100 (same grid, just scaled to
+  //   real meters). Grid: col 0..4 = 4th, 2nd, 1st(center), 3rd, 5th St
+  //   (west->east). row 0..3 = Maple, Poplar, Main, Water St (south->
+  //   north; Water is the river / north hard limit).
+  //   Building-floor Locations: one per floor, shared by every room on
+  //   that floor. (x,y) = the building's former MAP_ANCHORS node. Two
+  //   buildings sharing an anchor (Pharmacy/Hardware Store) correctly
+  //   share the same real (x,y) — MAP_BUILDINGS' dx/dy label-offset
+  //   (below) is what keeps their map markers visually distinct.
+  //   Z is laid down for every Location but not consumed by anything yet
+  //   (the map is top-down) — future systems can rely on it without a
+  //   retrofit.
+  const LOCATIONS = {
+    maple4th:       { x:0, y:0, z:0 },
+    maple2nd:       { x:100, y:0, z:0 },
+    maple1st:       { x:200, y:0, z:0 },
+    maple3rd:       { x:300, y:0, z:0 },
+    maple5th:       { x:400, y:0, z:0 },
+    poplar4th:      { x:0, y:100, z:0 },
+    poplar2nd:      { x:100, y:100, z:0 },
+    outside:        { x:200, y:100, z:0 },
+    poplar3rd:      { x:300, y:100, z:0 },
+    poplar5th:      { x:400, y:100, z:0 },
+    main4th:        { x:0, y:200, z:0 },
+    main2nd:        { x:100, y:200, z:0 },
+    main1st:        { x:200, y:200, z:0 },
+    main3rd:        { x:300, y:200, z:0 },
+    main5th:        { x:400, y:200, z:0 },
+    water4th:       { x:0, y:300, z:0 },
+    water2nd:       { x:100, y:300, z:0 },
+    water1st:       { x:200, y:300, z:0 },
+    water3rd:       { x:300, y:300, z:0 },
+    water5th:       { x:400, y:300, z:0 },
+    mid_maple_2_4:  { x:50, y:0, z:0 },
+    mid_maple_1_2:  { x:150, y:0, z:0 },
+    mid_maple_1_3:  { x:250, y:0, z:0 },
+    mid_maple_3_5:  { x:350, y:0, z:0 },
+    mid_poplar_2_4: { x:50, y:100, z:0 },
+    mid_poplar_1_2: { x:150, y:100, z:0 },
+    mid_poplar_1_3: { x:250, y:100, z:0 },
+    mid_poplar_3_5: { x:350, y:100, z:0 },
+    mid_main_2_4:   { x:50, y:200, z:0 },
+    mid_main_1_2:   { x:150, y:200, z:0 },
+    mid_main_1_3:   { x:250, y:200, z:0 },
+    mid_main_3_5:   { x:350, y:200, z:0 },
+    mid_water_2_4:  { x:50, y:300, z:0 },
+    mid_water_1_2:  { x:150, y:300, z:0 },
+    mid_water_1_3:  { x:250, y:300, z:0 },
+    mid_water_3_5:  { x:350, y:300, z:0 },
+    mid_4th_mp_p:   { x:0, y:50, z:0 },
+    mid_4th_p_m:    { x:0, y:150, z:0 },
+    mid_4th_m_w:    { x:0, y:250, z:0 },
+    mid_2nd_mp_p:   { x:100, y:50, z:0 },
+    mid_2nd_p_m:    { x:100, y:150, z:0 },
+    mid_2nd_m_w:    { x:100, y:250, z:0 },
+    mid_1st_mp_p:   { x:200, y:50, z:0 },
+    mid_1st_o_m:    { x:200, y:150, z:0 },
+    mid_1st_m_w:    { x:200, y:250, z:0 },
+    mid_3rd_mp_p:   { x:300, y:50, z:0 },
+    mid_3rd_p_m:    { x:300, y:150, z:0 },
+    mid_3rd_m_w:    { x:300, y:250, z:0 },
+    mid_5th_mp_p:   { x:400, y:50, z:0 },
+    mid_5th_p_m:    { x:400, y:150, z:0 },
+    mid_5th_m_w:    { x:400, y:250, z:0 },
+
+    // Building floors — (x,y) per building's anchor node, per the
+    // "Building -> Location membership" table in "Ashfall v0.2.9.md".
+    acorn_f0:       { x:150, y:100, z:0 },
+    acorn_f1:       { x:150, y:100, z:3 },
+    cornerstore_f0: { x:100, y:200, z:0 },
+    cornerstore_f1: { x:100, y:200, z:3 },
+    pharmacy_f0:    { x:250, y:200, z:0 },
+    pharmacy_f1:    { x:250, y:200, z:3 },
+    hardware_f0:    { x:250, y:200, z:0 },
+    hardware_f1:    { x:250, y:200, z:3 },
+    storage_f0:     { x:100, y:300, z:0 },
+    riverbank_f0:   { x:200, y:300, z:0 },
+    oak_f0:         { x:50, y:100, z:0 },
+    oak_f1:         { x:50, y:100, z:3 },
+    auto_shop_f0:   { x:350, y:200, z:0 },
+    police_f0:      { x:300, y:0, z:0 },
+    industrial_f0:  { x:100, y:0, z:0 }
+  };
+
+  function makeDefaultDoors(){
+    return {
+      "2a": { locked:false, sides:["hallway2","living"], building:"acorn" },
+      "2b": { locked:true, sides:["hallway2","twobee"], building:"acorn" },
+      "1a": { locked:true, sides:["hallway1","onea"], building:"acorn" },
+      "1b": { locked:true, sides:["hallway1","onebee"], building:"acorn" }
+    };
+  }
+  let doors = makeDefaultDoors();
+  const DOOR_LABELS = { "2a":"2A", "2b":"2B", "1a":"1A", "1b":"1B" };
+  function makeDefaultWindows(){
+    return {
+      "2a-transom": { state:"closed", rooms:["hallway2","living"], breakTag:"blunt", label:"transom window" },
+      "1b-alley":   { state:"closed", rooms:["alley","onebee"],   breakTag:"blunt", label:"window" }
+    };
+  }
+  let windows = makeDefaultWindows();
+
+  function buildAcornApartments(){
+    return {
+    living: { locationId:"acorn_f1", building:"Acorn Apartments", area:"2A", room:"Living Room",
+      desc:"A worn couch faces a dead television. Sunlight through the blinds shows how much dust has settled since anyone last cleaned.",
+      sleepSpot:"couch", cannotHaveFire:true, floorCap:80,
+      floor:[],
+      containers:[
+        { id:"tvstand", name:"TV Stand", capacityKg:10, spawnPools:["recreation","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"tv_remote", qty:1 },
+          { id:"paperback_novel", qty:1 } ])},
+        { id:"bookshelf", name:"Bookshelf", capacityKg:20, spawnPools:["recreation","documents_lore"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"box_of_matches", qty:1 },
+          { id:"photo_album", qty:1 } ])}
+      ],
+      exits:[
+        { to:"kitchen", label:"Go to the kitchen", distanceM:4 },
+        { to:"bedroom", label:"Go to the bedroom", distanceM:5 },
+        { to:"bathroom", label:"Go to the bathroom", distanceM:5 },
+        { to:"balcony", label:"Go to the balcony", distanceM:3 },
+        { to:"hallway2", label:"Leave the apartment", distanceM:6 } ]
+    },
+    kitchen: { locationId:"acorn_f1", building:"Acorn Apartments", area:"2A", room:"Kitchen",
+      desc:"Grease and old coffee grounds. The fridge hums no more, and something inside it has clearly given up. The gas stove still works — no power needed to light it.",
+      hasStove:true, cannotHaveFire:true, floorCap:50, floor:[],
+      containers:[
+        { id:"stove", name:"Stove", capacityKg:8, spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"pot_of_spoiled_stew", qty:1 }
+        ])},
+        { id:"cabinets", name:"Cabinets", capacityKg:15, spawnPools:["kitchen_nonperishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"canned_soup", qty:3 },
+          { id:"pasta", qty:2 },
+          { id:"frying_pan", qty:1 } ])},
+        { id:"drawers", name:"Kitchen drawers", capacityKg:10, spawnPools:["kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"kitchen_knife", qty:1 },
+          { id:"can_opener", qty:1 } ])},
+        { id:"fridge", name:"Fridge", capacityKg:30, spawnPools:["kitchen_perishable"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"rotten_leftovers", qty:1 } ])},
+        { id:"pantry", name:"Pantry", capacityKg:20, spawnPools:["kitchen_nonperishable"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"bottled_water", qty:4 },
+          { id:"granola_bars", qty:3 } ])}
+      ],
+      exits:[
+        { to:"living", label:"Go to the living room", distanceM:4 },
+        { to:"hallway2", label:"Leave the apartment", distanceM:8 } ]
+    },
+    bathroom: { locationId:"acorn_f1", building:"Acorn Apartments", area:"2A", room:"Bathroom",
+      desc:"A cracked mirror over the sink. The water hasn't run in days, but the cabinet's still worth a look.",
+      cannotHaveFire:true, floorCap:30, floor:[],
+      containers:[
+        { id:"medcab", name:"Medicine cabinet", capacityKg:5, spawnPools:["medical_otc","hygiene"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"bandages", qty:4 },
+          { id:"painkillers", qty:1 } ])},
+        { id:"undersink", name:"Under-sink cabinet", capacityKg:10, spawnPools:["hygiene"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"toilet_paper", qty:3 },
+          { id:"bleach", qty:1 } ])}
+      ],
+      exits:[
+        { to:"living", label:"Go to the living room", distanceM:5 },
+        { to:"bedroom", label:"Go to the bedroom", distanceM:3 },
+        { to:"hallway2", label:"Leave the apartment", distanceM:7 } ]
+    },
+    bedroom: { locationId:"acorn_f1", building:"Acorn Apartments", area:"2A", room:"Bedroom",
+      desc:"The bed's still unmade from whatever morning this all started. A closet stands half open.",
+      sleepSpot:"bed", cannotHaveFire:true, floorCap:60,
+      floor:itemsFromRegistry([ { id:"dirty_laundry", qty:1 } ]),
+      containers:[
+        { id:"closet", name:"Closet", capacityKg:25, spawnPools:["clothing"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"winter_jacket", qty:1 },
+          { id:"sturdy_boots", qty:1 },
+          { id:"worn_backpack", qty:1 } ])},
+        { id:"nightstand", name:"Nightstand", capacityKg:5, spawnPools:["residential_personal","documents_lore"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"flashlight", qty:1 },
+          { id:"spare_batteries", qty:2 },
+          { id:"wristwatch", qty:1 } ])},
+        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"folded_clothes", qty:1 },
+          { id:"crumpled_cash", qty:1 },
+          { id:"cloth", qty:3 } ])}
+      ],
+      exits:[
+        { to:"living", label:"Go to the living room", distanceM:5 },
+        { to:"bathroom", label:"Go to the bathroom", distanceM:3 },
+        { to:"hallway2", label:"Leave the apartment", distanceM:7 } ]
+    },
+    balcony: { locationId:"acorn_f1", building:"Acorn Apartments", area:"2A", room:"Balcony",
+      desc:"A narrow concrete ledge overlooking the street below. A dead plant sits in the corner, and a rusted fire escape ladder leads down.",
+      cannotHaveFire:true, floorCap:40, floor:itemsFromRegistry([ { id:"dead_potted_plant", qty:1 } ]),
+      containers:[
+        { id:"storagebin", name:"Storage bin", capacityKg:15, spawnPools:["fuel_fire","tools_general"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"duct_tape", qty:1 },
+          { id:"length_of_rope", qty:1 } ])}
+      ],
+      exits:[
+        { to:"living", label:"Go to the living room", distanceM:3 },
+        { to:"alley", label:"Climb down the fire escape", distanceM:8 } ]
+    },
+    hallway2: { locationId:"acorn_f1", building:"Acorn Apartments", area:"2nd Floor", room:"Hallway",
+      desc:"A dim corridor lit by one flickering bulb. Your door is one of two here, with a small transom window set beside it.",
+      cannotHaveFire:true, floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"living", label:"Enter apartment 2A", distanceM:6, doorId:"2a" },
+        { to:"twobee", label:"Enter 2B", distanceM:6, doorId:"2b" },
+        { to:"stairs2", label:"Go to the stairwell", distanceM:10 } ]
+    },
+    twobee: { locationId:"acorn_f1", building:"Acorn Apartments", area:"2B", room:"Living Room",
+      desc:"Your neighbor's place. A bag sits half-packed by the door, like they meant to come back for it.",
+      cannotHaveFire:true, floorCap:80, floor:[],
+      containers:[
+        { id:"packedbag", name:"Half-packed Bag", capacityKg:10, spawnPools:["clothing","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"canned_beans", qty:2 },
+          { id:"folded_clothes", qty:1 } ])},
+        { id:"shelf", name:"Shelf", capacityKg:15, spawnPools:["recreation","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"board_games", qty:1 },
+          { id:"crumpled_cash", qty:1 } ])}
+      ],
+      exits:[
+        { to:"twobee_kitchen", label:"Go to the kitchen", distanceM:4 },
+        { to:"twobee_bathroom", label:"Go to the bathroom", distanceM:5 },
+        { to:"twobee_bedroom", label:"Go to the bedroom", distanceM:5 },
+        { to:"twobee_balcony", label:"Go to the balcony", distanceM:3 },
+        { to:"hallway2", label:"Leave 2B", distanceM:6, doorId:"2b" } ]
+    },
+    twobee_kitchen: { locationId:"acorn_f1", building:"Acorn Apartments", area:"2B", room:"Kitchen",
+      desc:"Same layout as yours, messier. Dishes still sit in the sink.",
+      hasStove:true, cannotHaveFire:true, floorCap:50, floor:[],
+      containers:[
+        { id:"stove", name:"Stove", capacityKg:8, spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"burnt_saucepan", qty:1 } ])},
+        { id:"cabinets", name:"Cabinets", capacityKg:15, spawnPools:["kitchen_nonperishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"canned_corn", qty:2 },
+          { id:"pasta", qty:1 } ])},
+        { id:"drawers", name:"Kitchen drawers", capacityKg:10, spawnPools:["kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"kitchen_knife", qty:1 } ])},
+        { id:"fridge", name:"Fridge", capacityKg:30, spawnPools:["kitchen_perishable"], items:[] },
+        { id:"pantry", name:"Pantry", capacityKg:20, spawnPools:["kitchen_nonperishable"], items:[] }
+      ],
+      exits:[
+        { to:"twobee", label:"Go to the living room", distanceM:4 },
+        { to:"hallway2", label:"Leave 2B", distanceM:8, doorId:"2b" } ]
+    },
+    twobee_bathroom: { locationId:"acorn_f1", building:"Acorn Apartments", area:"2B", room:"Bathroom",
+      desc:"Same cracked-tile bathroom as yours, one floor mirrored.",
+      cannotHaveFire:true, floorCap:30, floor:[],
+      containers:[
+        { id:"medcab", name:"Medicine cabinet", capacityKg:5, spawnPools:["medical_otc","hygiene"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"bandages", qty:2 },
+          { id:"aspirin", qty:1 } ])},
+        { id:"undersink", name:"Under-sink cabinet", capacityKg:10, spawnPools:["hygiene"], items:[] }
+      ],
+      exits:[
+        { to:"twobee", label:"Go to the living room", distanceM:5 },
+        { to:"twobee_bedroom", label:"Go to the bedroom", distanceM:3 },
+        { to:"hallway2", label:"Leave 2B", distanceM:7, doorId:"2b" } ]
+    },
+    twobee_bedroom: { locationId:"acorn_f1", building:"Acorn Apartments", area:"2B", room:"Bedroom",
+      desc:"The bed's made, unlike yours. Whoever lived here kept things tidy, until they didn't.",
+      sleepSpot:"bed", cannotHaveFire:true, floorCap:60, floor:[],
+      containers:[
+        { id:"closet", name:"Closet", capacityKg:25, spawnPools:["clothing"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"winter_jacket", qty:1 },
+          { id:"work_gloves", qty:1 } ])},
+        { id:"nightstand", name:"Nightstand", capacityKg:5, spawnPools:["residential_personal","documents_lore"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"loose_change", qty:1 },
+          { id:"handwritten_note", qty:1 } ])},
+        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal"], items:[] }
+      ],
+      exits:[
+        { to:"twobee", label:"Go to the living room", distanceM:5 },
+        { to:"twobee_bathroom", label:"Go to the bathroom", distanceM:3 },
+        { to:"hallway2", label:"Leave 2B", distanceM:7, doorId:"2b" } ]
+    },
+    twobee_balcony: { locationId:"acorn_f1", building:"Acorn Apartments", area:"2B", room:"Balcony",
+      desc:"A narrow balcony, mirroring yours. No fire escape here — just a view of the street.",
+      cannotHaveFire:true, floorCap:40, floor:[],
+      containers:[
+        { id:"storagebin", name:"Storage bin", capacityKg:15, spawnPools:["fuel_fire","tools_general"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"rope", qty:1 },
+          { id:"duct_tape", qty:1 } ])}
+      ],
+      exits:[ { to:"twobee", label:"Go to the living room", distanceM:3 } ]
+    },
+    stairs2: { locationId:"acorn_f1", building:"Acorn Apartments", area:"2nd Floor", room:"Stairs",
+      desc:"A concrete stairwell, cool and echoing. It goes down at least one more floor.",
+      cannotHaveFire:true, floorCap:50, floor:[], containers:[],
+      exits:[
+        { to:"hallway2", label:"Go back to the hallway", distanceM:10 },
+        { to:"stairs1", label:"Head downstairs", distanceM:15 } ]
+    },
+    stairs1: { locationId:"acorn_f0", building:"Acorn Apartments", area:"1st Floor", room:"Stairs",
+      desc:"Ground level. The stairwell door out to the hallway is propped open.",
+      cannotHaveFire:true, floorCap:50, floor:[], containers:[],
+      exits:[
+        { to:"stairs2", label:"Head upstairs", distanceM:15 },
+        { to:"hallway1", label:"Go to the hallway", distanceM:10 } ]
+    },
+    hallway1: { locationId:"acorn_f0", building:"Acorn Apartments", area:"1st Floor", room:"Hallway",
+      desc:"The ground floor corridor, closer to the street. Two more doors here, both shut tight.",
+      cannotHaveFire:true, floorCap:100, floor:itemsFromRegistry([ { id:"empty_soda_can", qty:1 } ]), containers:[],
+      exits:[
+        { to:"stairs1", label:"Go back to the stairwell", distanceM:10 },
+        { to:"mid_poplar_1_2", label:"Step outside", distanceM:8 },
+        { to:"onea", label:"Enter 1A", distanceM:6, doorId:"1a" },
+        { to:"onebee", label:"Enter 1B", distanceM:6, doorId:"1b" } ]
+    },
+    onea: { locationId:"acorn_f0", building:"Acorn Apartments", area:"1A", room:"Living Room",
+      desc:"A family lived here. A child's toy sits abandoned on the floor, and the TV's still pointed at a couch nobody's coming back to sit on.",
+      sleepSpot:"couch", cannotHaveFire:true, floorCap:80,
+      floor:itemsFromRegistry([ { id:"stuffed_toy", qty:1 } ]),
+      containers:[
+        { id:"shelf1a", name:"Shelf", capacityKg:15, spawnPools:["recreation","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"board_games", qty:1 },
+          { id:"photo_album", qty:1 } ])},
+        { id:"tvstand1a", name:"TV Stand", capacityKg:10, spawnPools:["recreation","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"tv_remote", qty:1 } ])}
+      ],
+      exits:[
+        { to:"onea_kitchen", label:"Go to the kitchen", distanceM:4 },
+        { to:"onea_bathroom", label:"Go to the bathroom", distanceM:5 },
+        { to:"onea_bedroom", label:"Go to the bedroom", distanceM:5 },
+        { to:"onea_patio", label:"Go to the patio", distanceM:3 },
+        { to:"hallway1", label:"Leave 1A", distanceM:6, doorId:"1a" } ]
+    },
+    onea_kitchen: { locationId:"acorn_f0", building:"Acorn Apartments", area:"1A", room:"Kitchen",
+      desc:"A family kitchen, cluttered with kids' cups and a calendar still turned to two months ago.",
+      hasStove:true, cannotHaveFire:true, floorCap:50, floor:[],
+      containers:[
+        { id:"stove1a", name:"Stove", capacityKg:8, spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"kids_plastic_bowl", qty:1 } ])},
+        { id:"kitchen1a", name:"Kitchen Shelf", capacityKg:15, spawnPools:["kitchen_nonperishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"bottled_water", qty:3 },
+          { id:"canned_corn", qty:2 },
+          { id:"cloth", qty:2 } ])},
+        { id:"fridge1a", name:"Fridge", capacityKg:30, spawnPools:["kitchen_perishable"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"rotten_leftovers", qty:1 } ])}
+      ],
+      exits:[
+        { to:"onea", label:"Go to the living room", distanceM:4 },
+        { to:"hallway1", label:"Leave 1A", distanceM:8, doorId:"1a" } ]
+    },
+    onea_bathroom: { locationId:"acorn_f0", building:"Acorn Apartments", area:"1A", room:"Bathroom",
+      desc:"A step stool sits by the sink, sized for someone much shorter than you.",
+      cannotHaveFire:true, floorCap:30, floor:[],
+      containers:[
+        { id:"medcab1a", name:"Medicine cabinet", capacityKg:5, spawnPools:["medical_otc","hygiene"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"bandages", qty:2 },
+          { id:"childrens_medicine", qty:1 } ])}
+      ],
+      exits:[
+        { to:"onea", label:"Go to the living room", distanceM:5 },
+        { to:"onea_bedroom", label:"Go to the bedroom", distanceM:3 },
+        { to:"hallway1", label:"Leave 1A", distanceM:7, doorId:"1a" } ]
+    },
+    onea_bedroom: { locationId:"acorn_f0", building:"Acorn Apartments", area:"1A", room:"Bedroom",
+      desc:"A suitcase lies open and half-emptied on the bed, packing abandoned halfway through.",
+      sleepSpot:"bed", cannotHaveFire:true, floorCap:60, floor:[],
+      containers:[
+        { id:"suitcase", name:"Open Suitcase", capacityKg:12, spawnPools:["clothing","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"folded_clothes", qty:2 },
+          { id:"winter_jacket", qty:1 } ])},
+        { id:"dresser1a", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"crumpled_cash", qty:1 },
+          { id:"flashlight", qty:1 } ])}
+      ],
+      exits:[
+        { to:"onea", label:"Go to the living room", distanceM:5 },
+        { to:"onea_bathroom", label:"Go to the bathroom", distanceM:3 },
+        { to:"hallway1", label:"Leave 1A", distanceM:7, doorId:"1a" } ]
+    },
+    onea_patio: { locationId:"acorn_f0", building:"Acorn Apartments", area:"1A", room:"Patio",
+      desc:"A small concrete patio out back, low fence, a gate leading to the alley.",
+      cannotHaveFire:true, floorCap:40, floor:[],
+      containers:[
+        { id:"storagebin1a", name:"Storage bin", capacityKg:15, spawnPools:["fuel_fire","tools_general"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"firewood", qty:3 },
+          { id:"nails", qty:1 } ])}
+      ],
+      exits:[
+        { to:"onea", label:"Go to the living room", distanceM:3 },
+        { to:"alley", label:"Go through the back gate", distanceM:6 } ]
+    },
+    onebee: { locationId:"acorn_f0", building:"Acorn Apartments", area:"1B", room:null,
+      desc:"The superintendent's unit — half apartment, half workshop. Someone clearly used this place to fix things. A small gas stove sits in the corner.",
+      hasStove:true, cannotHaveFire:true, floorCap:50, floor:[],
+      containers:[
+        { id:"stove", name:"Stove", capacityKg:8, spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"dented_saucepan", qty:1 }
+        ])},
+        { id:"toolcabinet", name:"Tool Cabinet", capacityKg:25, spawnPools:["tools_general","tools_workshop"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"crowbar", qty:1 },
+          { id:"duct_tape", qty:2 },
+          { id:"wrench", qty:1 } ])},
+        { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"master_key", qty:1 },
+          { id:"building_ledger", qty:1 },
+          { id:"portable_radio", qty:1 } ])},
+        { id:"closet", name:"Closet", capacityKg:25, spawnPools:["clothing"], items:[] }
+      ],
+      searched:false, searchLabel:"Search the unit", searchMinutes:20,
+      exits:[ { to:"hallway1", label:"Leave through the front door", distanceM:6, doorId:"1b" } ]
+    }
+    };
+  }
+
+  function buildStreetsAndOutdoor(){
+    return {
+    outside: { locationId:"outside", building:"Poplar St & 1st St", area:null, room:null,
+      desc:"A quiet intersection. 1st St runs both ways here — Poplar continues in both directions too, though the block to the west feels like it goes on longer than the one to the east. Your building's stoop is partway down the block to the west.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"poplar2nd", label:"Head west on Poplar St" },
+        { to:"mid_poplar_1_2", label:"Step into the block (west)" },
+        { to:"poplar3rd", label:"Head east on Poplar St" },
+        { to:"mid_poplar_1_3", label:"Step into the block (east)" },
+        { to:"main1st", label:"Head north on 1st St" },
+        { to:"mid_1st_o_m", label:"Step into the block (north)" },
+        { to:"maple1st", label:"Head south on 1st St" },
+        { to:"mid_1st_mp_p", label:"Step into the block (south)" } ]
+    },
+    alley: { locationId:"acorn_f0", building:"Poplar St", area:null, room:"Alley",
+      desc:"Narrow, littered, and smelling of garbage. A rusted fire escape climbs the back of Acorn Apartments.",
+      floorCap:60, floor:[],
+      containers:[
+        { id:"dumpster", name:"Dumpster", capacityKg:40, spawnPools:["trash","fuel_fire"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"scrap_metal", qty:3 },
+          { id:"metal_pipe", qty:1 },
+          { id:"firewood", qty:5 } ])}
+      ],
+      exits:[
+        { to:"mid_poplar_1_2", label:"Head out to the street", distanceM:15 },
+        { to:"balcony", label:"Climb the fire escape", distanceM:8 } ]
+    },
+    poplar2nd: { locationId:"poplar2nd", building:"Poplar St & 2nd St", area:null, room:null,
+      desc:"A quiet residential corner. A pickup truck is parked half on the curb.",
+      floorCap:100, floor:[], containers:[],
+      carLocked:true,
+      carContainers:[
+        { id:"trunk", name:"Truck Bed", capacityKg:25, items:itemsFromRegistry([
+          { id:"tow_chain", qty:1 },
+          { id:"work_gloves", qty:1 } ])},
+        { id:"glovebox", name:"Glovebox", capacityKg:3, items:itemsFromRegistry([
+          { id:"flashlight", qty:1 },
+          { id:"owners_manual", qty:1 } ])}
+      ],
+      exits:[
+        { to:"poplar4th", label:"Head west on Poplar St" },
+        { to:"mid_poplar_2_4", label:"Step into the block (west)" },
+        { to:"outside", label:"Head east on Poplar St" },
+        { to:"mid_poplar_1_2", label:"Step into the block (east)" },
+        { to:"main2nd", label:"Head north on 2nd St" },
+        { to:"mid_2nd_p_m", label:"Step into the block (north)" } ]
+    },
+    poplar4th: { locationId:"poplar4th", building:"Poplar St & 4th St", area:null, room:null,
+      desc:"The last residential stretch before Poplar runs into 4th St. Fewer porch lights than a block ago.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"poplar2nd", label:"Head east on Poplar St" },
+        { to:"mid_poplar_2_4", label:"Step into the block (east)" },
+        { to:"maple4th", label:"Head south on 4th St" },
+        { to:"mid_4th_mp_p", label:"Step into the block (south)" },
+        { to:"main4th", label:"Head north on 4th St" },
+        { to:"mid_4th_p_m", label:"Step into the block (north)" } ]
+    },
+    mid_poplar_2_4: { locationId:"mid_poplar_2_4", building:"Poplar St", area:null, room:"between 2nd & 4th",
+      desc:"More of the same quiet block, just further out.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"poplar4th", label:"Head west toward 4th St" },
+        { to:"poplar2nd", label:"Continue east toward 2nd St" },
+        { to:"oak_hallway1", label:"Enter Oak Apartments" } ]
+    },
+    poplar3rd: { locationId:"poplar3rd", building:"Poplar St & 3rd St", area:null, room:null,
+      desc:"The far end of Poplar, where the block gives way to 3rd St.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"outside", label:"Head west on Poplar St" },
+        { to:"mid_poplar_1_3", label:"Step into the block (west)" },
+        { to:"poplar5th", label:"Head east on Poplar St" },
+        { to:"mid_poplar_3_5", label:"Step into the block (east)" },
+        { to:"main3rd", label:"Head north on 3rd St" },
+        { to:"mid_3rd_p_m", label:"Step into the block (north)" },
+        { to:"maple3rd", label:"Head south on 3rd St" },
+        { to:"mid_3rd_mp_p", label:"Step into the block (south)" } ]
+    },
+    poplar5th: { locationId:"poplar5th", building:"Poplar St & 5th St", area:null, room:null,
+      desc:"Poplar's easternmost corner. A chain-link fence marks where somebody's yard ends and the sidewalk starts.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"poplar3rd", label:"Head west on Poplar St" },
+        { to:"mid_poplar_3_5", label:"Step into the block (west)" },
+        { to:"maple5th", label:"Head south on 5th St" },
+        { to:"mid_5th_mp_p", label:"Step into the block (south)" },
+        { to:"main5th", label:"Head north on 5th St" },
+        { to:"mid_5th_p_m", label:"Step into the block (north)" } ]
+    },
+    mid_poplar_3_5: { locationId:"mid_poplar_3_5", building:"Poplar St", area:null, room:"between 3rd & 5th",
+      desc:"The last stretch of Poplar. A kid's bike, abandoned mid-ride, still leans against a fence.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"poplar3rd", label:"Head west toward 3rd St" },
+        { to:"poplar5th", label:"Continue east toward 5th St" } ]
+    },
+    main2nd: { locationId:"main2nd", building:"Main St & 2nd St", area:null, room:null,
+      desc:"The corner store's windows are papered over from the inside. Wide, unusually wide, sidewalks run both ways down Main.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"cornerstore", label:"Enter the corner store", distanceM:5 },
+        { to:"poplar2nd", label:"Head south on 2nd St" },
+        { to:"mid_2nd_p_m", label:"Step into the block (south)" },
+        { to:"main1st", label:"Head east on Main St" },
+        { to:"mid_main_1_2", label:"Step into the block (east)" },
+        { to:"water2nd", label:"Head north on 2nd St" },
+        { to:"mid_2nd_m_w", label:"Step into the block (north)" },
+        { to:"main4th", label:"Head west on Main St" },
+        { to:"mid_main_2_4", label:"Step into the block (west)" } ]
+    },
+    main4th: { locationId:"main4th", building:"Main St & 4th St", area:null, room:null,
+      desc:"Main St keeps its width out this far, but the storefronts stop — this stretch is houses and a chain-link lot.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"main2nd", label:"Head east on Main St" },
+        { to:"mid_main_2_4", label:"Step into the block (east)" },
+        { to:"poplar4th", label:"Head south on 4th St" },
+        { to:"mid_4th_p_m", label:"Step into the block (south)" },
+        { to:"water4th", label:"Head north on 4th St" },
+        { to:"mid_4th_m_w", label:"Step into the block (north)" } ]
+    },
+    mid_main_2_4: { locationId:"mid_main_2_4", building:"Main St", area:null, room:"between 2nd & 4th",
+      desc:"Main St, out past where the shops give way to houses.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"main4th", label:"Head west toward 4th St" },
+        { to:"main2nd", label:"Continue east toward 2nd St" } ]
+    },
+    cornerstore: { locationId:"cornerstore_f0", building:"Main St", area:null, room:"Corner Store",
+      desc:"A small grocery. The door was already unlocked when you got here.",
+      cannotHaveFire:true, floorCap:60, floor:[],
+      containers:[
+        { id:"shelves", name:"Shelves", capacityKg:30, spawnPools:["retail_stock_food","retail_stock_general"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"canned_corn", qty:4 },
+          { id:"potato_chips", qty:3 },
+          { id:"bottled_water", qty:5 } ])},
+        { id:"register", name:"Register Counter", capacityKg:5, spawnPools:["valuables","retail_stock_general"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"loose_change", qty:1 } ])},
+        { id:"storage", name:"Storage Room", capacityKg:40, spawnPools:["retail_stock_food","retail_stock_general"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"canned_beans", qty:4 },
+          { id:"box_cutter", qty:1 },
+          { id:"bandages", qty:3 } ])}
+      ],
+      searched:false, searchLabel:"Search the store", searchMinutes:25,
+      exits:[
+        { to:"main2nd", label:"Leave the store", distanceM:5 },
+        { to:"cornerstore_apt", label:"Go upstairs", distanceM:5 } ]
+    },
+    cornerstore_apt: { locationId:"cornerstore_f1", building:"Main St", area:"Apt above Corner Store", room:null,
+      desc:"A cramped one-room flat over the shop. Whoever ran the register probably lived up here.",
+      cannotHaveFire:true, floorCap:40, floor:[],
+      containers:[
+        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"old_photographs", qty:1 },
+          { id:"reading_lamp", qty:1 } ])}
+      ],
+      exits:[ { to:"cornerstore", label:"Go downstairs", distanceM:5 } ]
+    },
+    main1st: { locationId:"main1st", building:"Main St & 1st St", area:null, room:null,
+      desc:"Main crosses 1st St here. A hand-painted PHARMACY sign is visible partway down the block to the east.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"main2nd", label:"Head west on Main St" },
+        { to:"mid_main_1_2", label:"Step into the block (west)" },
+        { to:"main3rd", label:"Head east on Main St" },
+        { to:"mid_main_1_3", label:"Step into the block (east)" },
+        { to:"outside", label:"Head south on 1st St" },
+        { to:"mid_1st_o_m", label:"Step into the block (south)" },
+        { to:"water1st", label:"Head north on 1st St" },
+        { to:"mid_1st_m_w", label:"Step into the block (north)" } ]
+    },
+    pharmacy: { locationId:"pharmacy_f0", building:"Main St", area:null, room:"Pharmacy",
+      desc:"Dusty shelves, a counter with a chained-off back area. Someone's been through here already, but not thoroughly.",
+      cannotHaveFire:true, floorCap:60, floor:[],
+      containers:[
+        { id:"counter", name:"Pharmacy Counter", capacityKg:10, spawnPools:["medical_pharmacy"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"prescription_bottles", qty:2 },
+          { id:"strong_painkillers", qty:1 } ])},
+        { id:"shelves", name:"Shelves", capacityKg:20, spawnPools:["medical_otc"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"bandages", qty:5 },
+          { id:"cold_medicine", qty:1 } ])},
+        { id:"backroom", name:"Back Room", capacityKg:25, spawnPools:["medical_pharmacy","medical_otc"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"rubbing_alcohol", qty:2 },
+          { id:"gauze_rolls", qty:3 } ])}
+      ],
+      searched:false, searchLabel:"Search the pharmacy", searchMinutes:20,
+      exits:[
+        { to:"mid_main_1_3", label:"Leave the pharmacy", distanceM:5 },
+        { to:"pharmacy_apt", label:"Go upstairs", distanceM:5 } ]
+    },
+    pharmacy_apt: { locationId:"pharmacy_f1", building:"Main St", area:"Apt above Pharmacy", room:null,
+      desc:"The pharmacist's old apartment. Smaller than yours, and someone left in a hurry.",
+      cannotHaveFire:true, floorCap:40, floor:[],
+      containers:[
+        { id:"cabinet", name:"Cabinet", capacityKg:10, spawnPools:["kitchen_nonperishable"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"canned_soup", qty:2 } ])}
+      ],
+      exits:[ { to:"pharmacy", label:"Go downstairs", distanceM:5 } ]
+    },
+    water2nd: { locationId:"water2nd", building:"Water St & 2nd St", area:null, room:null,
+      desc:"The riverfront edge of downtown. A low brick storage building sits between the street and the water.",
+      fishable:true, floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"storage", label:"Enter the storage facility", distanceM:5 },
+        { to:"main2nd", label:"Head south on 2nd St" },
+        { to:"mid_2nd_m_w", label:"Step into the block (south)" },
+        { to:"water1st", label:"Head east on Water St" },
+        { to:"mid_water_1_2", label:"Step into the block (east)" },
+        { to:"water4th", label:"Head west on Water St" },
+        { to:"mid_water_2_4", label:"Step into the block (west)" } ]
+    },
+    water4th: { locationId:"water4th", building:"Water St & 4th St", area:null, room:null,
+      desc:"The riverfront gets quieter still out here. No guardrail on this stretch, just a drop to the mud.",
+      fishable:true, floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"water2nd", label:"Head east on Water St" },
+        { to:"mid_water_2_4", label:"Step into the block (east)" },
+        { to:"main4th", label:"Head south on 4th St" },
+        { to:"mid_4th_m_w", label:"Step into the block (south)" } ]
+    },
+    mid_water_2_4: { locationId:"mid_water_2_4", building:"Water St", area:null, room:"between 2nd & 4th",
+      desc:"The riverfront path gets rougher out here, more weeds than pavement.",
+      fishable:true, floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"water4th", label:"Head west toward 4th St" },
+        { to:"water2nd", label:"Continue east toward 2nd St" } ]
+    },
+    storage: { locationId:"storage_f0", building:"Water St", area:null, room:"Storage Facility",
+      desc:"A row of roll-up storage units. Most are locked. One door hangs open already.",
+      cannotHaveFire:true, floorCap:50, floor:[],
+      containers:[
+        { id:"unit1", name:"Storage Unit 1", capacityKg:30, locked:true, breakTag:"cutting", spawnPools:["outdoor_camping"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"camping_tent", qty:1 },
+          { id:"sleeping_bag", qty:1 } ])},
+        { id:"unit2", name:"Storage Unit 2", capacityKg:30, locked:true, breakTag:"cutting", spawnPools:["recreation","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"old_furniture", qty:1 },
+          { id:"board_games", qty:1 } ])},
+        { id:"unit3", name:"Storage Unit 3", capacityKg:30, spawnPools:["outdoor_camping"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"fishing_rod", qty:1 },
+          { id:"tackle_box", qty:1 } ])}
+      ],
+      exits:[ { to:"water2nd", label:"Back outside", distanceM:5 } ]
+    },
+    water1st: { locationId:"water1st", building:"Water St & 1st St", area:null, room:null,
+      desc:"The riverfront here is just a low guardrail and a view of the water. Quiet.",
+      fishable:true, floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"water2nd", label:"Head west on Water St" },
+        { to:"mid_water_1_2", label:"Step into the block (west)" },
+        { to:"water3rd", label:"Head east on Water St" },
+        { to:"mid_water_1_3", label:"Step into the block (east)" },
+        { to:"main1st", label:"Head south on 1st St" },
+        { to:"mid_1st_m_w", label:"Step into the block (south)" },
+        { to:"riverbank", label:"Climb down to the riverbank" } ]
+    },
+    riverbank: { locationId:"riverbank_f0", building:"", area:null, room:"Riverbank",
+      desc:"Mud and reeds where the paved street gives way to open water. Driftwood is scattered along the bank, and the current's slow enough here to fish without much trouble.",
+      fishable:true, floorCap:40,
+      floor:itemsFromRegistry([ { id:"firewood", qty:4 } ]),
+      containers:[],
+      exits:[ { to:"water1st", label:"Climb back up to the street" } ]
+    },
+    water3rd: { locationId:"water3rd", building:"Water St & 3rd St", area:null, room:null,
+      desc:"Water St keeps going east from here, though the buildings thin out fast past this point. A gravel turnaround still marks where the old road crew stopped bothering to repave.",
+      fishable:true, floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"water1st", label:"Head west on Water St" },
+        { to:"mid_water_1_3", label:"Step into the block (west)" },
+        { to:"water5th", label:"Head east on Water St" },
+        { to:"mid_water_3_5", label:"Step into the block (east)" },
+        { to:"main3rd", label:"Head south on 3rd St" },
+        { to:"mid_3rd_m_w", label:"Step into the block (south)" } ]
+    },
+    water5th: { locationId:"water5th", building:"Water St & 5th St", area:null, room:null,
+      desc:"Water St's eastern corner. The current pulls harder along the outside bend of the river here.",
+      fishable:true, floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"water3rd", label:"Head west on Water St" },
+        { to:"mid_water_3_5", label:"Step into the block (west)" },
+        { to:"main5th", label:"Head south on 5th St" },
+        { to:"mid_5th_m_w", label:"Step into the block (south)" } ]
+    },
+    mid_water_3_5: { locationId:"mid_water_3_5", building:"Water St", area:null, room:"between 3rd & 5th",
+      desc:"The last stretch of Water St before the road narrows to gravel.",
+      fishable:true, floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"water3rd", label:"Head west toward 3rd St" },
+        { to:"water5th", label:"Continue east toward 5th St" } ]
+    },
+    main3rd: { locationId:"main3rd", building:"Main St & 3rd St", area:null, room:null,
+      desc:"Main crosses 3rd St here. A hardware store and a parked work truck sit partway down the block to the west.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"main1st", label:"Head west on Main St" },
+        { to:"mid_main_1_3", label:"Step into the block (west)" },
+        { to:"main5th", label:"Head east on Main St" },
+        { to:"mid_main_3_5", label:"Step into the block (east)" },
+        { to:"poplar3rd", label:"Head south on 3rd St" },
+        { to:"mid_3rd_p_m", label:"Step into the block (south)" },
+        { to:"water3rd", label:"Head north on 3rd St" },
+        { to:"mid_3rd_m_w", label:"Step into the block (north)" } ]
+    },
+    main5th: { locationId:"main5th", building:"Main St & 5th St", area:null, room:null,
+      desc:"The east end of Main, where the auto shop's OPEN sign — dark now — still hangs in the window down the block.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"main3rd", label:"Head west on Main St" },
+        { to:"mid_main_3_5", label:"Step into the block (west)" },
+        { to:"poplar5th", label:"Head south on 5th St" },
+        { to:"mid_5th_p_m", label:"Step into the block (south)" },
+        { to:"water5th", label:"Head north on 5th St" },
+        { to:"mid_5th_m_w", label:"Step into the block (north)" } ]
+    },
+    mid_main_3_5: { locationId:"mid_main_3_5", building:"Main St", area:null, room:"between 3rd & 5th",
+      desc:"A cinderblock garage sits here, roll-up door half open.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"main3rd", label:"Head west toward 3rd St" },
+        { to:"main5th", label:"Continue east toward 5th St" },
+        { to:"auto_shop", label:"Enter the auto shop" } ]
+    },
+    hardware: { locationId:"hardware_f0", building:"Main St", area:null, room:"Hardware Store",
+      desc:"Tool racks along one wall, bins of hardware along the other. Better stocked than you expected.",
+      cannotHaveFire:true, floorCap:60, floor:[],
+      containers:[
+        { id:"toolwall", name:"Tool Wall", capacityKg:30, spawnPools:["hardware_store","tools_general"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"bolt_cutters", qty:1 },
+          { id:"crowbar", qty:1 },
+          { id:"hand_axe", qty:1 },
+          { id:"wrench", qty:1 } ])},
+        { id:"bins", name:"Hardware Bins", capacityKg:25, spawnPools:["hardware_store","tools_general"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"nails", qty:1 },
+          { id:"duct_tape", qty:3 },
+          { id:"rope", qty:2 },
+          { id:"plank", qty:3 } ])},
+        { id:"paintaisle", name:"Paint Aisle", capacityKg:20, spawnPools:["hardware_store","tools_workshop"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"propane_torch", qty:1 },
+          { id:"work_gloves", qty:1 } ])}
+      ],
+      searched:false, searchLabel:"Search the hardware store", searchMinutes:20,
+      exits:[
+        { to:"mid_main_1_3", label:"Leave the hardware store", distanceM:5 },
+        { to:"hardware_apt", label:"Go upstairs", distanceM:5 } ]
+    },
+    hardware_apt: { locationId:"hardware_f1", building:"Main St", area:"Apt above Hardware Store", room:null,
+      desc:"A modest apartment over the shop, plaster cracked from settling.",
+      cannotHaveFire:true, floorCap:40, floor:[],
+      containers:[
+        { id:"shelf", name:"Shelf", capacityKg:10, spawnPools:["recreation","residential_personal"], spawnRolled:true, items:itemsFromRegistry([ { id:"work_boots", qty:1 } ])}
+      ],
+      exits:[ { to:"hardware", label:"Go downstairs", distanceM:5 } ]
+    },
+    mid_poplar_1_2: { locationId:"mid_poplar_1_2", building:"Poplar St", area:null, room:"between 1st & 2nd",
+      desc:"Your building's front stoop is here, along with a sedan parked at the curb.",
+      floorCap:20, floor:[], containers:[],
+      carLocked:true,
+      carContainers:[
+        { id:"trunk", name:"Car Trunk", capacityKg:20, items:itemsFromRegistry([
+          { id:"tire_iron", qty:1 },
+          { id:"bandages", qty:2 } ])},
+        { id:"glovebox", name:"Glovebox", capacityKg:3, items:itemsFromRegistry([
+          { id:"registration_papers", qty:1 },
+          { id:"aspirin", qty:1 } ])}
+      ],
+      exits:[
+        { to:"poplar2nd", label:"Head west toward 2nd St" },
+        { to:"outside", label:"Continue east toward 1st St" },
+        { to:"hallway1", label:"Enter Acorn Apartments" },
+        { to:"alley", label:"Duck into the alley" } ]
+    },
+    mid_poplar_1_3: { locationId:"mid_poplar_1_3", building:"Poplar St", area:null, room:"between 1st & 3rd",
+      desc:"A quiet, ordinary stretch of Poplar St. A big sidewalk tree leans over the curb.",
+      hasTree:true, floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"outside", label:"Head west toward 1st St" },
+        { to:"poplar3rd", label:"Continue east toward 3rd St" } ]
+    },
+    mid_2nd_p_m: { locationId:"mid_2nd_p_m", building:"2nd St", area:null, room:"between Poplar & Main",
+      desc:"2nd St runs quiet here, residential on both sides.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"poplar2nd", label:"Head south toward Poplar St" },
+        { to:"main2nd", label:"Continue north toward Main St" } ]
+    },
+    mid_1st_o_m: { locationId:"mid_1st_o_m", building:"1st St", area:null, room:"between Poplar & Main",
+      desc:"A short stretch of 1st St, nothing much to it.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"outside", label:"Head south toward Poplar St" },
+        { to:"main1st", label:"Continue north toward Main St" } ]
+    },
+    mid_3rd_p_m: { locationId:"mid_3rd_p_m", building:"3rd St", area:null, room:"between Poplar & Main",
+      desc:"3rd St, mid-block. A few darkened windows, and an overgrown sidewalk tree nobody's trimmed in months.",
+      hasTree:true, floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"poplar3rd", label:"Head south toward Poplar St" },
+        { to:"main3rd", label:"Continue north toward Main St" } ]
+    },
+    mid_main_1_2: { locationId:"mid_main_1_2", building:"Main St", area:null, room:"between 1st & 2nd",
+      desc:"A stretch of Main St between the corner store and the pharmacy.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"main2nd", label:"Head west toward 2nd St" },
+        { to:"main1st", label:"Continue east toward 1st St" } ]
+    },
+    mid_main_1_3: { locationId:"mid_main_1_3", building:"Main St", area:null, room:"between 1st & 3rd",
+      desc:"The pharmacy's sign hangs over one side of the street; the hardware store and a parked work truck sit across from it.",
+      floorCap:20, floor:[], containers:[],
+      carLocked:true,
+      carContainers:[
+        { id:"bed", name:"Truck Bed", capacityKg:25, items:itemsFromRegistry([
+          { id:"tow_chain", qty:1 } ])},
+        { id:"cab", name:"Truck Cab", capacityKg:5, items:itemsFromRegistry([
+          { id:"work_gloves", qty:1 },
+          { id:"thermos", qty:1 } ])}
+      ],
+      exits:[
+        { to:"main1st", label:"Head west toward 1st St" },
+        { to:"main3rd", label:"Continue east toward 3rd St" },
+        { to:"pharmacy", label:"Enter the pharmacy" },
+        { to:"hardware", label:"Enter the hardware store" } ]
+    },
+    mid_1st_m_w: { locationId:"mid_1st_m_w", building:"1st St", area:null, room:"between Main & Water",
+      desc:"1st St, closing in on the riverfront.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"main1st", label:"Head south toward Main St" },
+        { to:"water1st", label:"Continue north toward Water St" } ]
+    },
+    mid_2nd_m_w: { locationId:"mid_2nd_m_w", building:"2nd St", area:null, room:"between Main & Water",
+      desc:"A short block of 2nd St, quiet this close to the water.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"main2nd", label:"Head south toward Main St" },
+        { to:"water2nd", label:"Continue north toward Water St" } ]
+    },
+    mid_3rd_m_w: { locationId:"mid_3rd_m_w", building:"3rd St", area:null, room:"between Main & Water",
+      desc:"3rd St runs down toward the river here.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"main3rd", label:"Head south toward Main St" },
+        { to:"water3rd", label:"Continue north toward Water St" } ]
+    },
+    mid_water_1_2: { locationId:"mid_water_1_2", building:"Water St", area:null, room:"between 1st & 2nd",
+      desc:"The riverfront street, storage facility behind you, open water alongside.",
+      fishable:true, floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"water2nd", label:"Head west toward 2nd St" },
+        { to:"water1st", label:"Continue east toward 1st St" } ]
+    },
+    mid_water_1_3: { locationId:"mid_water_1_3", building:"Water St", area:null, room:"between 1st & 3rd",
+      desc:"More riverfront, more quiet. The current moves slow here.",
+      fishable:true, floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"water1st", label:"Head west toward 1st St" },
+        { to:"water3rd", label:"Continue east toward 3rd St" } ]
+    },
+    maple4th: { locationId:"maple4th", building:"Maple St & 4th St", area:null, room:null,
+      desc:"Maple St's western corner — the newest-looking pavement in this part of town, already cracking.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"maple2nd", label:"Head east on Maple St" },
+        { to:"mid_maple_2_4", label:"Step into the block (east)" },
+        { to:"poplar4th", label:"Head north on 4th St" },
+        { to:"mid_4th_mp_p", label:"Step into the block (north)" } ]
+    },
+    mid_maple_2_4: { locationId:"mid_maple_2_4", building:"Maple St", area:null, room:"between 2nd & 4th",
+      desc:"Maple St, mostly gravel shoulder and one working streetlight.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"maple4th", label:"Head west toward 4th St" },
+        { to:"maple2nd", label:"Continue east toward 2nd St" } ]
+    },
+    maple2nd: { locationId:"maple2nd", building:"Maple St & 2nd St", area:null, room:null,
+      desc:"A wide gravel lot borders Maple here, chain-link fence sagging in one corner. INDUSTRIAL-something on a faded sign, the rest weathered off.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"maple4th", label:"Head west on Maple St" },
+        { to:"mid_maple_2_4", label:"Step into the block (west)" },
+        { to:"maple1st", label:"Head east on Maple St" },
+        { to:"mid_maple_1_2", label:"Step into the block (east)" },
+        { to:"poplar2nd", label:"Head north on 2nd St" },
+        { to:"mid_2nd_mp_p", label:"Step into the block (north)" },
+        { to:"industrial_floor", label:"Enter Riverside Freight", distanceM:5 } ]
+    },
+    mid_maple_1_2: { locationId:"mid_maple_1_2", building:"Maple St", area:null, room:"between 1st & 2nd",
+      desc:"A short stretch of Maple, chain-link fencing along one side.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"maple2nd", label:"Head west toward 2nd St" },
+        { to:"maple1st", label:"Continue east toward 1st St" } ]
+    },
+    maple1st: { locationId:"maple1st", building:"Maple St & 1st St", area:null, room:null,
+      desc:"Maple St, dead center of the outer ring. A stop sign, bent but standing.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"maple2nd", label:"Head west on Maple St" },
+        { to:"mid_maple_1_2", label:"Step into the block (west)" },
+        { to:"maple3rd", label:"Head east on Maple St" },
+        { to:"mid_maple_1_3", label:"Step into the block (east)" },
+        { to:"outside", label:"Head north on 1st St" },
+        { to:"mid_1st_mp_p", label:"Step into the block (north)" } ]
+    },
+    mid_maple_1_3: { locationId:"mid_maple_1_3", building:"Maple St", area:null, room:"between 1st & 3rd",
+      desc:"Maple St, quiet enough that the police station's old call box is still audible from here — not that it does anything now.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"maple1st", label:"Head west toward 1st St" },
+        { to:"maple3rd", label:"Continue east toward 3rd St" } ]
+    },
+    maple3rd: { locationId:"maple3rd", building:"Maple St & 3rd St", area:null, room:null,
+      desc:"A squat brick building with barred windows sits at this corner — old paint on the door still reads POLICE, mostly.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"maple1st", label:"Head west on Maple St" },
+        { to:"mid_maple_1_3", label:"Step into the block (west)" },
+        { to:"maple5th", label:"Head east on Maple St" },
+        { to:"mid_maple_3_5", label:"Step into the block (east)" },
+        { to:"poplar3rd", label:"Head north on 3rd St" },
+        { to:"mid_3rd_mp_p", label:"Step into the block (north)" },
+        { to:"police_lobby", label:"Enter the police station", distanceM:5 } ]
+    },
+    mid_maple_3_5: { locationId:"mid_maple_3_5", building:"Maple St", area:null, room:"between 3rd & 5th",
+      desc:"The far end of Maple, where the streetlights stop.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"maple3rd", label:"Head west toward 3rd St" },
+        { to:"maple5th", label:"Continue east toward 5th St" } ]
+    },
+    maple5th: { locationId:"maple5th", building:"Maple St & 5th St", area:null, room:null,
+      desc:"Maple's eastern end. The street narrows here, more gravel shoulder than curb.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"maple3rd", label:"Head west on Maple St" },
+        { to:"mid_maple_3_5", label:"Step into the block (west)" },
+        { to:"poplar5th", label:"Head north on 5th St" },
+        { to:"mid_5th_mp_p", label:"Step into the block (north)" } ]
+    },
+    mid_2nd_mp_p: { locationId:"mid_2nd_mp_p", building:"2nd St", area:null, room:"between Maple & Poplar",
+      desc:"2nd St's southernmost stretch, quiet and residential.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"maple2nd", label:"Head south toward Maple St" },
+        { to:"poplar2nd", label:"Continue north toward Poplar St" } ]
+    },
+    mid_1st_mp_p: { locationId:"mid_1st_mp_p", building:"1st St", area:null, room:"between Maple & Poplar",
+      desc:"1st St running down toward Maple. Fewer houses with lights ever left on.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"maple1st", label:"Head south toward Maple St" },
+        { to:"outside", label:"Continue north toward Poplar St" } ]
+    },
+    mid_3rd_mp_p: { locationId:"mid_3rd_mp_p", building:"3rd St", area:null, room:"between Maple & Poplar",
+      desc:"3rd St's southern stretch, same overgrown quiet as the block further north.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"maple3rd", label:"Head south toward Maple St" },
+        { to:"poplar3rd", label:"Continue north toward Poplar St" } ]
+    },
+    mid_4th_mp_p: { locationId:"mid_4th_mp_p", building:"4th St", area:null, room:"between Maple & Poplar",
+      desc:"4th St, brand new to the map but not to the town — just far enough out that nobody bothered keeping it up.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"maple4th", label:"Head south toward Maple St" },
+        { to:"poplar4th", label:"Continue north toward Poplar St" } ]
+    },
+    mid_4th_p_m: { locationId:"mid_4th_p_m", building:"4th St", area:null, room:"between Poplar & Main",
+      desc:"4th St, mid-block. Houses on both sides, most with the blinds drawn.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"poplar4th", label:"Head south toward Poplar St" },
+        { to:"main4th", label:"Continue north toward Main St" } ]
+    },
+    mid_4th_m_w: { locationId:"mid_4th_m_w", building:"4th St", area:null, room:"between Main & Water",
+      desc:"4th St closing in on the river.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"main4th", label:"Head south toward Main St" },
+        { to:"water4th", label:"Continue north toward Water St" } ]
+    },
+    mid_5th_mp_p: { locationId:"mid_5th_mp_p", building:"5th St", area:null, room:"between Maple & Poplar",
+      desc:"5th St's southern stretch — an auto shop's fence runs along one side.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"maple5th", label:"Head south toward Maple St" },
+        { to:"poplar5th", label:"Continue north toward Poplar St" } ]
+    },
+    mid_5th_p_m: { locationId:"mid_5th_p_m", building:"5th St", area:null, room:"between Poplar & Main",
+      desc:"5th St, mid-block, easternmost street in town.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"poplar5th", label:"Head south toward Poplar St" },
+        { to:"main5th", label:"Continue north toward Main St" } ]
+    },
+    mid_5th_m_w: { locationId:"mid_5th_m_w", building:"5th St", area:null, room:"between Main & Water",
+      desc:"5th St, closing in on the water. The current's visibly faster along this outside bend.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"main5th", label:"Head south toward Main St" },
+        { to:"water5th", label:"Continue north toward Water St" } ]
+    }
+    };
+  }
+
+  function buildOakApartments(){
+    return {
+    oak_hallway1: { locationId:"oak_f0", building:"Oak Apartments", area:"1st Floor", room:"Hallway",
+      desc:"Narrower than Acorn's hallway, and darker — half the bulbs are out.",
+      cannotHaveFire:true, floorCap:80, floor:[], containers:[],
+      exits:[
+        { to:"mid_poplar_2_4", label:"Step outside", distanceM:8 },
+        { to:"oak_1a", label:"Enter 1A", distanceM:6 },
+        { to:"oak_1b", label:"Enter 1B", distanceM:6 },
+        { to:"oak_stairs", label:"Go upstairs", distanceM:10 } ]
+    },
+    oak_stairs: { locationId:"oak_f0", building:"Oak Apartments", area:null, room:"Stairwell",
+      desc:"A tight stairwell, paint peeling on the handrail.",
+      cannotHaveFire:true, floorCap:40, floor:[], containers:[],
+      exits:[
+        { to:"oak_hallway1", label:"Go downstairs", distanceM:10 },
+        { to:"oak_hallway2", label:"Go upstairs", distanceM:10 } ]
+    },
+    oak_hallway2: { locationId:"oak_f1", building:"Oak Apartments", area:"2nd Floor", room:"Hallway",
+      desc:"The upstairs hallway, a little brighter than downstairs. Two doors, both closed.",
+      cannotHaveFire:true, floorCap:80, floor:[], containers:[],
+      exits:[
+        { to:"oak_stairs", label:"Go back downstairs", distanceM:10 },
+        { to:"oak_2a", label:"Enter 2A", distanceM:6 },
+        { to:"oak_2b", label:"Enter 2B", distanceM:6 } ]
+    },
+    oak_1a: { locationId:"oak_f0", building:"Oak Apartments", area:"1A", room:null,
+      desc:"Same layout as yours, roughly — smaller, though, and a half-packed bag still sits by the door.",
+      sleepSpot:"couch", cannotHaveFire:true, floorCap:50, floor:[],
+      containers:[
+        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal"], items:[] },
+        { id:"kitchenette", name:"Kitchenette Shelf", capacityKg:10, spawnPools:["kitchen_nonperishable","kitchen_tools"], items:[] }
+      ],
+      exits:[ { to:"oak_hallway1", label:"Leave the apartment", distanceM:6 } ]
+    },
+    oak_1b: { locationId:"oak_f0", building:"Oak Apartments", area:"1B", room:null,
+      desc:"The blinds are drawn in here, and a calendar on the wall is still turned to two months back.",
+      sleepSpot:"bed", cannotHaveFire:true, floorCap:50, floor:[],
+      containers:[
+        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal"], items:[] },
+        { id:"kitchenette", name:"Kitchenette Cabinet", capacityKg:10, spawnPools:["kitchen_nonperishable","kitchen_tools"], items:[] }
+      ],
+      exits:[ { to:"oak_hallway1", label:"Leave the apartment", distanceM:6 } ]
+    },
+    oak_2a: { locationId:"oak_f1", building:"Oak Apartments", area:"2A", room:null,
+      desc:"A single room upstairs, tidy despite everything — someone made the bed before they left.",
+      sleepSpot:"bed", cannotHaveFire:true, floorCap:50, floor:[],
+      containers:[
+        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal"], items:[] },
+        { id:"kitchenette", name:"Kitchenette Shelf", capacityKg:10, spawnPools:["kitchen_nonperishable","kitchen_tools"], items:[] }
+      ],
+      exits:[ { to:"oak_hallway2", label:"Leave the apartment", distanceM:6 } ]
+    },
+    oak_2b: { locationId:"oak_f1", building:"Oak Apartments", area:"2B", room:null,
+      desc:"Boxes still stacked by the window, like a move that never finished.",
+      sleepSpot:"mattress", cannotHaveFire:true, floorCap:50, floor:[],
+      containers:[
+        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal"], items:[] },
+        { id:"kitchenette", name:"Kitchenette Cabinet", capacityKg:10, spawnPools:["kitchen_nonperishable","kitchen_tools"], items:[] }
+      ],
+      exits:[ { to:"oak_hallway2", label:"Leave the apartment", distanceM:6 } ]
+    }
+    };
+  }
+
+  function buildAutoWorkshop(){
+    return {
+    auto_shop: { locationId:"auto_shop_f0", building:"Auto Workshop", area:null, room:"Main Bay",
+      desc:"A car sits mid-repair on the lift, hood up. A workbench runs along the back wall, tools hung in outline on a pegboard above it.",
+      cannotHaveFire:true, floorCap:70, floor:[],
+      containers:[
+        { id:"workbench", name:"Workbench", capacityKg:30, spawnPools:["tools_workshop"], items:[] },
+        { id:"partsshelf", name:"Parts Shelf", capacityKg:25, spawnPools:["tools_workshop","warehouse_goods"], items:[] }
+      ],
+      exits:[
+        { to:"mid_main_3_5", label:"Leave the shop", distanceM:5 },
+        { to:"auto_shop_back", label:"Go to the back office", distanceM:5 } ]
+    },
+    auto_shop_back: { locationId:"auto_shop_f0", building:"Auto Workshop", area:null, room:"Back Office",
+      desc:"A cramped office off the main bay — a desk buried in paperwork, a filing cabinet in the corner.",
+      cannotHaveFire:true, floorCap:40, floor:[],
+      containers:[
+        { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore"], items:[] },
+        { id:"filingcabinet", name:"Filing Cabinet", capacityKg:20, spawnPools:["office_supplies","documents_lore"], items:[] }
+      ],
+      exits:[ { to:"auto_shop", label:"Go back to the main bay", distanceM:5 } ]
+    }
+    };
+  }
+
+  function buildPoliceStation(){
+    return {
+    police_lobby: { locationId:"police_f0", building:"Police Station", area:null, room:"Lobby",
+      desc:"A front desk, a bulletin board thick with old flyers, a waiting-area bench bolted to the floor.",
+      cannotHaveFire:true, floorCap:60, floor:[],
+      containers:[
+        { id:"frontdesk", name:"Front Desk", capacityKg:15, spawnPools:["office_supplies","police_gear"], items:[] },
+        { id:"lockerroom", name:"Locker Room", capacityKg:25, spawnPools:["police_gear","clothing"], items:[] }
+      ],
+      exits:[
+        { to:"maple3rd", label:"Leave the station", distanceM:5 },
+        { to:"police_evidence", label:"Go to the back", distanceM:5 } ]
+    },
+    police_evidence: { locationId:"police_f0", building:"Police Station", area:null, room:"Evidence & Holding",
+      desc:"An evidence locker along one wall, a single holding cell across from it, door hanging open.",
+      cannotHaveFire:true, floorCap:40, floor:[],
+      containers:[
+        { id:"evidencelocker", name:"Evidence Locker", capacityKg:25, spawnPools:["police_evidence"], items:[] }
+      ],
+      exits:[ { to:"police_lobby", label:"Go back to the lobby", distanceM:5 } ]
+    }
+    };
+  }
+
+  function buildRiversideFreight(){
+    return {
+    industrial_floor: { locationId:"industrial_f0", building:"Riverside Freight", area:null, room:"Warehouse Floor",
+      desc:"Pallet racks line both walls, mostly empty. A forklift sits dead in the middle of the floor, parked mid-task.",
+      cannotHaveFire:true, floorCap:70, floor:[],
+      containers:[
+        { id:"palletrack1", name:"Pallet Rack 1", capacityKg:35, spawnPools:["warehouse_goods"], items:[] },
+        { id:"palletrack2", name:"Pallet Rack 2", capacityKg:35, spawnPools:["warehouse_goods"], items:[] }
+      ],
+      exits:[
+        { to:"maple2nd", label:"Leave the warehouse", distanceM:5 },
+        { to:"industrial_office", label:"Go to the office", distanceM:5 } ]
+    },
+    industrial_office: { locationId:"industrial_f0", building:"Riverside Freight", area:null, room:"Office",
+      desc:"A small office off the warehouse floor — a desk, and a squat safe in the corner, door shut.",
+      cannotHaveFire:true, floorCap:40, floor:[],
+      containers:[
+        { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore"], items:[] },
+        { id:"safe", name:"Safe", capacityKg:20, spawnPools:["valuables","documents_lore"], items:[] }
+      ],
+      exits:[ { to:"industrial_floor", label:"Go back to the warehouse floor", distanceM:5 } ]
+    }
+    };
+  }
+
+  // Straight-line distance between two Locations, rounded to the nearest
+  // whole meter. Computed on demand, never cached — LOCATIONS is the
+  // single source of truth (v0.3.0).
+  function locationDistance(a, b){
+    const A = LOCATIONS[a], B = LOCATIONS[b];
+    return Math.round(Math.sqrt((B.x-A.x)**2 + (B.y-A.y)**2 + (B.z-A.z)**2));
+  }
+  // Compass direction from Location `a` to Location `b`, derived from real
+  // coordinates (v0.3.0). Pure vertical movement resolves to up/down;
+  // otherwise the larger of |dx|/|dy| wins. A true diagonal tie (not
+  // expected on the current rectilinear grid) defaults to the north/south
+  // axis — see the v0.3.0 changelog if one is ever found.
+  function computeDirection(a, b){
+    const A = LOCATIONS[a], B = LOCATIONS[b];
+    const dx = B.x - A.x, dy = B.y - A.y, dz = B.z - A.z;
+    if(dx === 0 && dy === 0) return dz > 0 ? "up" : "down";
+    if(Math.abs(dx) === Math.abs(dy)) return dy > 0 ? "north" : "south";
+    if(Math.abs(dx) > Math.abs(dy)) return dx > 0 ? "east" : "west";
+    return dy > 0 ? "north" : "south";
+  }
+  // Build-time pass (v0.3.0): for every exit that crosses between two
+  // different Locations and whose label already contains an explicit
+  // compass word, replace that word with the one computed from real
+  // coordinates. Runs once, right after the world is assembled — see the
+  // "when the substitution happens" decision in the v0.3.0 handoff.
+  // Labels with no compass word (building entrances, floor transitions,
+  // etc.) are left exactly as authored.
+  const COMPASS_WORD_RE = /\b(north|south|east|west)\b/i;
+  function applyComputedDirections(world){
+    for(const roomId in world){
+      const room = world[roomId];
+      if(!room.exits) continue;
+      for(const exit of room.exits){
+        const toRoom = world[exit.to];
+        if(!toRoom || toRoom.locationId === room.locationId) continue;
+        const match = exit.label.match(COMPASS_WORD_RE);
+        if(!match) continue;
+        const dir = computeDirection(room.locationId, toRoom.locationId);
+        exit.label = exit.label.slice(0, match.index) + dir + exit.label.slice(match.index + match[0].length);
+      }
+    }
+    return world;
+  }
+  function makeDefaultWorld(){
+    const world = Object.assign({},
+      buildAcornApartments(),
+      buildStreetsAndOutdoor(),
+      buildOakApartments(),
+      buildAutoWorkshop(),
+      buildPoliceStation(),
+      buildRiversideFreight()
+    );
+    return applyComputedDirections(world);
+  }
+  let world = makeDefaultWorld();
+
+  // ==================================================
+  // PLAYER STATE
+  // ==================================================
+  function makeDefaultState(){
+    return {
+      currentRoom:"living", gait:"walk", invTab:"inventory", worldTab:"floor",
+      totalMinutes:0, collapseCount:0, illnessMinutesLeft:0,
+      // lastExertionMinute/lastWakeMinute start far in the past so recovery
+      // and Sleep are both available immediately at game start.
+      lastExertionMinute:-9999, lastWakeMinute:-9999,
+      vitals:{ hunger:75, thirst:75, energy:85, health:100, stamina:100, fatigue:0 },
+      inventory:{ name:"Inventory", unitWeight:0, capacityKg:3, items:[] },
+      keychain:{ name:"Keychain", unitWeight:0.05, capacityKg:null, items:itemsFromRegistry([
+        { id:"acorn_apt_2a_key", qty:1 } ])},
+      backpack:null
+    };
+  }
+  let state = makeDefaultState();
+  let gameOver = false; // UI-only: never saved — a loaded save always resumes alive
+  let detailItem = null; // UI-only: { uid, side } — resolved fresh via findItemByUid(), safe against list mutation
+
+  // ==================================================
+  // CORE UTILITIES
+  // ==================================================
+  // Stable item identity: _uid is the ONLY safe way to refer to "the item
+  // the user is looking at" across a render. Array indexes change whenever
+  // a list is spliced/merged, so they must never be cached across a click.
+  let _uidCounter = 1;
+  function ensureUid(it){
+    if(!it._uid) it._uid = "u" + (_uidCounter++);
+    return it._uid;
+  }
+  // getItemAt: defensive lookup used by anything that still needs a plain
+  // index (e.g. a button handler bound during the current render). Returns
+  // null instead of throwing when the list/index no longer point at a real
+  // item, so callers can bail out cleanly instead of crashing on
+  // `undefined.qty`.
+  function getItemAt(list, index){
+    if(!list || index == null || index < 0 || index >= list.length) return null;
+    const it = list[index];
+    return it || null;
+  }
+  function findItemByUid(uid){
+    for(const list of invPools()){
+      const idx = list.findIndex(it=>it._uid===uid);
+      if(idx>=0) return { list, index:idx, item:list[idx] };
+    }
+    for(const roomId of Object.keys(world)){
+      const room = world[roomId];
+      const floorIdx = room.floor.findIndex(it=>it._uid===uid);
+      if(floorIdx>=0) return { list:room.floor, index:floorIdx, item:room.floor[floorIdx] };
+      for(const c of room.containers){
+        const cIdx = c.items.findIndex(it=>it._uid===uid);
+        if(cIdx>=0) return { list:c.items, index:cIdx, item:c.items[cIdx] };
+      }
+      if(room.carContainers){
+        for(const c of room.carContainers){
+          const cIdx = c.items.findIndex(it=>it._uid===uid);
+          if(cIdx>=0) return { list:c.items, index:cIdx, item:c.items[cIdx] };
+        }
+      }
+    }
+    return null;
+  }
+
+  // randInt/weightedPick (v0.4.0): small RNG helpers backing SPAWN_POOLS —
+  // see doOpenContainer() in WORLD INTERACTION.
+  function randInt(min, max){ return min + Math.floor(Math.random() * (max - min + 1)); }
+  function weightedPick(entries){
+    const totalWeight = entries.reduce((s,e)=> s + e.weight, 0);
+    let roll = Math.random() * totalWeight;
+    for(const entry of entries){
+      roll -= entry.weight;
+      if(roll <= 0) return entry;
+    }
+    return entries[entries.length - 1];
+  }
+  function keychainAllows(item){ return item.category === "Key"; }
+  function fmtDuration(min){
+    min = Math.max(MIN_MOVE_MIN, Math.round(min));
+    const h = Math.floor(min/60), m = min%60;
+    return "(" + h + ":" + String(m).padStart(2,"0") + ")";
+  }
+  function moveMinutes(distanceM){ return Math.max(MIN_MOVE_MIN, distanceM / GAITS[state.gait].speed / 60); }
+  function exitMinutes(exit){
+    const fromLoc = world[state.currentRoom].locationId;
+    const toLoc = world[exit.to].locationId;
+    const d = (fromLoc === toLoc) ? exit.distanceM : locationDistance(fromLoc, toLoc);
+    return moveMinutes(d);
+  }
+  function roomLabel(room){
+    if(room.area && room.room) return room.building + ", " + room.area + " - " + room.room;
+    if(room.area) return room.building + ", " + room.area;
+    if(room.room) return room.building + ", " + room.room;
+    return room.building;
+  }
+  function log(text, cls){
+    const p = document.createElement("p");
+    if(cls) p.className = cls;
+    p.textContent = text;
+    const logDiv = document.getElementById("log");
+    logDiv.querySelectorAll("p.fresh").forEach(el=>el.classList.remove("fresh"));
+    if(!cls) p.classList.add("fresh");
+    logDiv.appendChild(p);
+    while(logDiv.children.length > 50) logDiv.removeChild(logDiv.firstChild);
+    logDiv.scrollTop = logDiv.scrollHeight;
+  }
+  // ==================================================
+  // INVENTORY / ITEM SYSTEM
+  // ==================================================
+  function totalWeight(list){ return list.reduce((s,it)=> s + it.qty*it.unitWeight, 0); }
+  function addToList(list, item){
+    if(STACKABLE.has(item.category) && !item.durability){
+      const existing = list.find(i=> i.itemId===item.itemId && i.category===item.category && !i.durability);
+      if(existing){ existing.qty += item.qty; return; }
+    }
+    // A new stack entry must get its own identity. `item` here is often a
+    // shallow copy of a source item (see doTake/doStore/giveItem) made with
+    // `{ ...it, qty:moveQty }` — that spread also copies `_uid`, which would
+    // leave two different array entries (e.g. the remainder on the floor
+    // and the portion just moved into a container) sharing one uid.
+    // findItemByUid() would then resolve to whichever one it hits first,
+    // which is the real cause behind the "Take 1 disappears" class of bug:
+    // the detail view can end up reading a stale duplicate's qty instead of
+    // the item actually still on screen. Stripping _uid here guarantees a
+    // fresh, unique id is assigned (via ensureUid) the next time this new
+    // stack is shown in a detail view.
+    const copy = { ...item };
+    delete copy._uid;
+    list.push(copy);
+  }
+  function invPools(){
+    return [state.inventory.items, state.keychain ? state.keychain.items : [], state.backpack ? state.backpack.items : []];
+  }
+  function countInPools(itemId){
+    return invPools().reduce((sum,list)=> sum + list.filter(it=>it.itemId===itemId).reduce((s,it)=>s+it.qty,0), 0);
+  }
+  function consumeFromPools(itemId, qty){
+    let remaining = qty;
+    invPools().forEach(list=>{
+      for(let i=list.length-1; i>=0 && remaining>0; i--){
+        if(list[i].itemId !== itemId) continue;
+        const take = Math.min(list[i].qty, remaining);
+        list[i].qty -= take; remaining -= take;
+        if(list[i].qty <= 0) list.splice(i,1);
+      }
+    });
+  }
+  function countByTag(tag){
+    return invPools().reduce((sum,list)=> sum + list.filter(it=>it.tags && it.tags.includes(tag)).reduce((s,it)=>s+it.qty,0), 0);
+  }
+  function consumeByTag(tag, qty){
+    let remaining = qty;
+    invPools().forEach(list=>{
+      for(let i=list.length-1; i>=0 && remaining>0; i--){
+        if(!list[i].tags || !list[i].tags.includes(tag)) continue;
+        const take = Math.min(list[i].qty, remaining);
+        list[i].qty -= take; remaining -= take;
+        if(list[i].qty <= 0) list.splice(i,1);
+      }
+    });
+  }
+  function findFireStarter(){
+    for(const list of invPools()){
+      const m = list.find(it=> it.tags && it.tags.includes("fire-starter") && it.durability && it.durability.current>0);
+      if(m) return m;
+    }
+    return null;
+  }
+  function hasMatchUses(){ return !!findFireStarter(); }
+  function consumeMatchUse(){
+    const m = findFireStarter();
+    if(!m) return false;
+    m.durability.current -= 1;
+    return true;
+  }
+  function roomHasHeat(room){ return !!room.heatActive || hasTool("heat"); }
+  function addToDestination(item){
+    const dst = invSlot(state.invTab);
+    if(!dst) return { ok:false, reason:"no-destination" };
+    if(state.invTab === "keychain" && !keychainAllows(item)) return { ok:false, reason:"keychain" };
+    const weight = item.qty * item.unitWeight;
+    if(dst.capacityKg && totalWeight(dst.items) + weight > dst.capacityKg) return { ok:false, reason:"capacity" };
+    addToList(dst.items, item);
+    return { ok:true };
+  }
+  function giveItem(item){
+    const room = world[state.currentRoom];
+    const result = addToDestination(item);
+    if(result.ok) return;
+    const weight = item.qty * item.unitWeight;
+    const floorFull = room.floorCap && totalWeight(room.floor) + weight > room.floorCap;
+    addToList(room.floor, item);
+    if(result.reason === "keychain"){
+      log(`Your keychain can't hold that — the ${item.name.toLowerCase()} drops to the floor instead.`, "warn");
+    } else if(floorFull){
+      log(`No room anywhere — the ${item.name.toLowerCase()} ends up in a heap on the already-cluttered floor.`, "warn");
+    } else {
+      log(`No room for the ${item.name.toLowerCase()} — it drops to the floor instead.`, "warn");
+    }
+  }
+  function invSlot(tab){
+    if(tab === "inventory") return state.inventory;
+    if(tab === "keychain") return state.keychain;
+    if(tab === "backpack") return state.backpack;
+    return null;
+  }
+  function worldSlot(room, tab){
+    if(tab === "floor") return { items:room.floor, capacityKg:room.floorCap };
+    let c = room.containers.find(x=>x.id===tab);
+    if(!c && room.carContainers) c = room.carContainers.find(x=>x.id===tab);
+    return c ? { items:c.items, capacityKg:c.capacityKg } : null;
+  }
+  function hasTool(tag){
+    return invPools().some(list => list.some(it => it.tags && it.tags.includes(tag)));
+  }
+  function hasWatch(){
+    return invPools().some(list => list.some(it => it.isWatch));
+  }
+  // ==================================================
+  // INVENTORY / ITEM SYSTEM — quantity-changing transfers
+  // ==================================================
+  // Safety rules for every function below:
+  //  1. Resolve the source item defensively (getItemAt) — never trust that
+  //     `index` still points at something.
+  //  2. Normalize the requested quantity explicitly: `qty == null ? it.qty
+  //     : qty`, NOT `qty || it.qty` (0 is a legitimate — if useless —
+  //     input, and must not silently become "the whole stack").
+  //  3. Validate 1 <= moveQty <= it.qty before touching anything.
+  //  4. Check destination capacity BEFORE mutating the source, so a failed
+  //     transfer changes nothing (atomic).
+  //  5. Only remove the source stack once its qty reaches exactly zero.
+  //  6. Re-render, which re-resolves detailItem by _uid — never leave a
+  //     stale index/reference hanging around after this returns.
+  function normalizeQty(requested, available){
+    const q = requested == null ? available : requested;
+    if(!Number.isFinite(q)) return null;
+    const rounded = Math.floor(q);
+    if(rounded < 1 || rounded > available) return null;
+    return rounded;
+  }
+  function doTake(index, qty){
+    const room = world[state.currentRoom];
+    const src = worldSlot(room, state.worldTab);
+    const it = getItemAt(src && src.items, index);
+    if(!it) return; // stale reference — nothing to take, fail silently and let render() resync
+    const moveQty = normalizeQty(qty, it.qty);
+    if(moveQty == null) return;
+    const result = addToDestination({ ...it, qty:moveQty });
+    if(!result.ok){
+      if(result.reason === "capacity") log("That won't fit — not enough room there.", "warn");
+      return; // no-destination and keychain-restricted stay silent, matching the disabled/hidden button state
+    }
+    it.qty -= moveQty;
+    if(it.qty <= 0) src.items.splice(index,1);
+    log(`You take the ${it.name.toLowerCase()}${moveQty>1?` (x${moveQty}).`:"."}`, "good");
+    render();
+  }
+  function doStore(index, qty){
+    const room = world[state.currentRoom];
+    const dst = worldSlot(room, state.worldTab);
+    const src = invSlot(state.invTab);
+    const it = getItemAt(src && src.items, index);
+    if(!it || !dst) return;
+    const moveQty = normalizeQty(qty, it.qty);
+    if(moveQty == null) return;
+    if(dst.capacityKg && totalWeight(dst.items) + moveQty*it.unitWeight > dst.capacityKg){
+      log("That won't fit there.", "warn");
+      return;
+    }
+    addToList(dst.items, { ...it, qty:moveQty });
+    it.qty -= moveQty;
+    if(it.qty <= 0) src.items.splice(index,1);
+    const verb = state.worldTab === "floor" ? "place" : "store";
+    log(`You ${verb} the ${it.name.toLowerCase()}${moveQty>1?` (x${moveQty}).`:"."}`);
+    render();
+  }
+  function doConsume(sourceKind, index){
+    const room = world[state.currentRoom];
+    const src = sourceKind === "world" ? worldSlot(room, state.worldTab) : invSlot(state.invTab);
+    const it = getItemAt(src && src.items, index);
+    if(!it || !it.restores) return;
+    if(it.restores.hunger) state.vitals.hunger = clamp(state.vitals.hunger + it.restores.hunger);
+    if(it.restores.thirst) state.vitals.thirst = clamp(state.vitals.thirst + it.restores.thirst);
+    it.qty -= 1;
+    if(it.qty <= 0) src.items.splice(index,1);
+    log(`You ${it.verb.toLowerCase()} the ${it.name.toLowerCase()}.`, "good");
+    if(it.illnessChance && Math.random()*100 < it.illnessChance && state.illnessMinutesLeft <= 0){
+      state.illnessMinutesLeft = 180;
+      log("It doesn't sit right. You can feel it already.", "warn");
+    }
+    render();
+  }
+  function doEquip(sourceKind, index){
+    const room = world[state.currentRoom];
+    const src = sourceKind === "world" ? worldSlot(room, state.worldTab) : invSlot(state.invTab);
+    const it = getItemAt(src && src.items, index);
+    if(!it || !it.slotType) return;
+    if(state[it.slotType]){ log("You're already carrying something in that slot.", "warn"); return; }
+    state[it.slotType] = { name:it.name, unitWeight:it.unitWeight, capacityKg:it.capacityKg, items: it.contents || [] };
+    src.items.splice(index,1);
+    log("You put on the " + it.name.toLowerCase() + ".", "good");
+    state.invTab = it.slotType;
+    render();
+  }
+  function doUnequip(slotKey){
+    const slot = state[slotKey];
+    if(!slot) return;
+    const item = { name:slot.name, category:"Container", qty:1, unitWeight:slot.unitWeight,
+      slotType:slotKey, capacityKg:slot.capacityKg, contents:slot.items };
+    addToList(state.inventory.items, item);
+    state[slotKey] = null;
+    if(state.invTab === slotKey) state.invTab = "inventory";
+    log("You take off the " + item.name.toLowerCase() + " and stow it away.");
+    render();
+  }
+  // ==================================================
+  // INVENTORY / ITEM SYSTEM — item-detail action list
+  // ==================================================
+  // Called fresh on every render with a list/index pair that renderCraftPanel
+  // has already resolved via findItemByUid() for the *current* state, so the
+  // resulting closures capture a correct index for this render. It still
+  // validates defensively (getItemAt) so a future caller that passes a stale
+  // pair fails safe instead of throwing on `undefined.qty`.
+  function getItemActions(list, index, side){
+    const it = getItemAt(list, index);
+    if(!it) return [];
+    const actions = [];
+    if(side === "world"){
+      actions.push({ label:"Take", disabled: state.invTab==="keychain" && !keychainAllows(it), onClick:()=>doTake(index) });
+      if(STACKABLE.has(it.category) && it.qty>1 && !it.durability)
+        actions.push({ label:"Take 1", disabled: state.invTab==="keychain" && !keychainAllows(it), onClick:()=>doTake(index,1) });
+    } else {
+      actions.push({ label: state.worldTab==="floor" ? "Place" : "Store", onClick:()=>doStore(index) });
+      if(STACKABLE.has(it.category) && it.qty>1 && !it.durability)
+        actions.push({ label: state.worldTab==="floor" ? "Place 1" : "Store 1", onClick:()=>doStore(index,1) });
+    }
+    if(it.restores) actions.push({ label: it.verb || "Use", onClick:()=>doConsume(side, index) });
+    if(it.category==="Container" && it.slotType && !state[it.slotType])
+      actions.push({ label:"Equip", onClick:()=>doEquip(side, index) });
+    if(it.category === "Key"){
+      if(it.masterKey){
+        doorsForRoom(state.currentRoom).filter(doorId=>doors[doorId].building===it.building).forEach(doorId=>{
+          const label = (doors[doorId].locked ? "Unlock " : "Lock ") + (DOOR_LABELS[doorId] || doorId);
+          actions.push({ label, onClick:()=>doToggleLock(doorId) });
+        });
+      } else if(it.doorId && doors[it.doorId] && doors[it.doorId].sides.includes(state.currentRoom)){
+        actions.push({ label: doors[it.doorId].locked ? "Unlock" : "Lock", onClick:()=>doToggleLock(it.doorId) });
+      }
+    }
+    if(it.durability && it.durability.mode === "time"){
+      if(it.hasBatteries !== false){
+        actions.push({ label: it.on ? "Turn off" : "Turn on", onClick:()=>{
+          it.on = !it.on;
+          log(it.on ? `You switch on the ${it.name.toLowerCase()}.` : `You switch off the ${it.name.toLowerCase()}.`);
+          render();
+        }});
+        actions.push({ label:"Remove batteries", onClick:()=>{
+          it.hasBatteries = false;
+          it.on = false;
+          giveItem(itemFromRegistry({ id:"spare_batteries", qty:1 }));
+          log(`You pull the batteries out of the ${it.name.toLowerCase()}.`, "good");
+          render();
+        }});
+      }
+      actions.push({ label:"Replace batteries", disabled: countByTag("battery")<1, onClick:()=>{
+        consumeByTag("battery", 1);
+        it.durability.current = it.durability.max;
+        it.hasBatteries = true;
+        log(`You put fresh batteries in the ${it.name.toLowerCase()}.`, "good");
+        render();
+      }});
+    }
+    if(it.itemId === "campfire_kit"){
+      actions.push({ label:"Disassemble", onClick:()=>{
+        it.qty -= 1;
+        if(it.qty <= 0) list.splice(index, 1);
+        giveItem(itemFromRegistry({ id:"firewood", qty:CAMPFIRE_KIT_COST }));
+        log(`You untie the bundle — back to ${CAMPFIRE_KIT_COST} loose firewood.`, "good");
+        render();
+      }});
+    }
+    return actions;
+  }
+  // ==================================================
+  // WORLD INTERACTION
+  // ==================================================
+  function doorsForRoom(roomId){
+    return Object.keys(doors).filter(id => doors[id].sides.includes(roomId));
+  }
+  function findKeyForDoor(doorId){
+    const door = doors[doorId];
+    for(const list of invPools()){
+      for(const it of list){
+        if(it.category !== "Key") continue;
+        if(it.masterKey && it.building === door.building) return it;
+        if(!it.masterKey && it.doorId === doorId) return it;
+      }
+    }
+    return null;
+  }
+  function getClockText(){
+    const abs = Math.round(8*60 + state.totalMinutes);
+    const day = 1 + Math.floor(abs/1440);
+    const tod = ((abs%1440)+1440)%1440;
+    return "Day " + day + ", " + String(Math.floor(tod/60)).padStart(2,"0") + ":" + String(tod%60).padStart(2,"0");
+  }
+  function getWindowsInRoom(roomId){
+    return Object.keys(windows).filter(id=>windows[id].rooms.includes(roomId)).map(id=>Object.assign({id}, windows[id]));
+  }
+  function getExitsForRoom(room, roomId){
+    const exits = room.exits.filter(e => !e.doorId || !doors[e.doorId].locked);
+    getWindowsInRoom(roomId).forEach(w=>{
+      if(w.state !== "closed"){
+        const target = w.rooms.find(r=>r!==roomId);
+        exits.push({ to:target, label:"Climb through the " + w.label, distanceM:4 });
+      }
+    });
+    return exits;
+  }
+  // ==================================================
+  // WORLD INTERACTION (continued) — movement, doors, windows, containers
+  // ==================================================
+  function doMove(exit){
+    const minutes = exitMinutes(exit);
+    advanceTime(minutes);
+    // Walking doesn't directly consume Stamina; jogging does (sec. 8).
+    if(state.gait === "fast") applyExertion(JOG_EXERTION_PER_MIN * minutes);
+    state.currentRoom = exit.to;
+    state.worldTab = "floor";
+    detailItem = null;
+    render();
+  }
+  function doTryDoor(label){
+    log(label.replace("Try the door","You try the door") + ". It's locked tight, and you've got no way through it yet.", "warn");
+  }
+  function doRest(){
+    // Rest recovers Stamina/Fatigue without the recovery Energy surcharge,
+    // but baseline awake Energy consumption still applies and Rest does not
+    // restore Energy itself (sec. 16).
+    let remaining = REST_DURATION_MIN;
+    while(remaining > 1e-9){
+      const dt = Math.min(1, remaining);
+      state.totalMinutes += dt;
+      applyHungerThirst(dt);
+      applyWorldTicking(dt);
+      recoveryStep(dt, "rest");
+      remaining -= dt;
+    }
+    checkGameOver();
+    log("You take an hour to rest and catch your breath.");
+    render();
+  }
+  function doSleep(){
+    if(!sleepAvailable()) return;
+    // Sleep suspends the entire awake Energy/Stamina/Fatigue system
+    // (sec. 26). Fatigue is snapshotted at sleep start and caps how much
+    // Energy this Sleep can restore; Fatigue itself always fully clears by
+    // the time the player wakes (sec. 28).
+    const fatigueAtSleep = state.vitals.fatigue;
+    const ceiling = clamp(100 - fatigueAtSleep);
+    const missingEnergy = Math.max(0, ceiling - state.vitals.energy);
+    let remaining = missingEnergy / SLEEP_ENERGY_RATE;
+    while(remaining > 1e-9){
+      const dt = Math.min(1, remaining);
+      state.totalMinutes += dt;
+      applyHungerThirst(dt);
+      applyWorldTicking(dt);
+      state.vitals.energy = Math.min(ceiling, state.vitals.energy + SLEEP_ENERGY_RATE*dt);
+      remaining -= dt;
+    }
+    state.vitals.energy = clamp(ceiling);
+    state.vitals.fatigue = 0;
+    state.lastWakeMinute = state.totalMinutes;
+    state.lastExertionMinute = state.totalMinutes;
+    checkGameOver();
+    log("You get real sleep. You wake up feeling considerably better.", "good");
+    render();
+  }
+  function doSearch(){
+    const room = world[state.currentRoom];
+    advanceTime(room.searchMinutes);
+    room.searched = true;
+    const names = room.containers.map(c=>c.name.toLowerCase()).join(", ");
+    log("You search the place carefully. You find: " + names + ".", "good");
+    render();
+  }
+  function doBreakCar(){
+    const room = world[state.currentRoom];
+    room.carLocked = false;
+    log("You pry the door open. The lock gives with a crack.", "warn");
+    render();
+  }
+  function doOpenWindow(id){ windows[id].state = "open"; log("You pull the " + windows[id].label + " open."); render(); }
+  function doCloseWindow(id){ windows[id].state = "closed"; log("You pull the " + windows[id].label + " shut."); render(); }
+  function doBreakWindow(id){
+    windows[id].state = "broken";
+    log("You smash the " + windows[id].label + " with your tool. No going back from that.", "warn");
+    render();
+  }
+  function doToggleLock(doorId){
+    const d = doors[doorId];
+    d.locked = !d.locked;
+    log(d.locked ? "You lock the door behind you." : "You unlock the door.", "good");
+    render();
+  }
+  function doUnlockContainer(containerId){
+    const room = world[state.currentRoom];
+    const c = room.containers.find(x=>x.id===containerId);
+    c.locked = false;
+    log("You cut through the lock on the " + c.name.toLowerCase() + ".", "warn");
+    render();
+  }
+  // doOpenContainer (v0.4.0): fires whenever the player switches the world
+  // panel to a container's tab. Rolls each of the container's spawnPools
+  // independently exactly once (gated by spawnRolled — see CONTAINER
+  // SCHEMA), then renders. Containers with no spawnPools, or with
+  // spawnRolled already set (all pre-existing hand-placed containers, set
+  // true at authoring time), are entirely unaffected. See the "Container
+  // Spawn Pools & Population System" handoff for the full rule.
+  function doOpenContainer(room, container){
+    state.worldTab = container.id;
+    if(container.spawnPools && !container.spawnRolled){
+      container.spawnPools.forEach(poolId=>{
+        const pool = SPAWN_POOLS[poolId];
+        if(!pool) return; // defensive — an unknown pool id contributes nothing
+        if(Math.random() < pool.emptyChance) return;
+        const rollCount = randInt(pool.rollCount[0], pool.rollCount[1]);
+        for(let i=0; i<rollCount; i++){
+          const entry = weightedPick(pool.entries);
+          const qty = randInt(entry.qtyMin, entry.qtyMax);
+          addToList(container.items, itemFromRegistry({ id:entry.itemId, qty }));
+        }
+      });
+      container.spawnRolled = true;
+      container.lastRolledMinute = state.totalMinutes;
+    }
+    render();
+  }
+  // ==================================================
+  // SURVIVAL / TIME SIMULATION
+  // ==================================================
+  // applyHungerThirst/applyWorldTicking/applyEnergyBaseline are the pieces
+  // applyDecay used to do in one shot. They're split out so Sleep (which
+  // suspends the awake Energy/Stamina/Fatigue system, sec. 26) can run
+  // Hunger/Thirst and world ticking without the awake Energy baseline, and
+  // so the Stamina/Fatigue system can drive Energy's *recovery* multiplier
+  // (sec. 15, 19) without duplicating the baseline-depletion math.
+  function applyHungerThirst(min){
+    state.vitals.hunger = clamp(state.vitals.hunger - DECAY.hunger*min);
+    state.vitals.thirst = clamp(state.vitals.thirst - DECAY.thirst*min);
+    if(state.vitals.hunger <= 0) state.vitals.health = clamp(state.vitals.health - min/30);
+    if(state.vitals.thirst <= 0) state.vitals.health = clamp(state.vitals.health - min/15);
+    if(state.illnessMinutesLeft > 0){
+      const tick = Math.min(min, state.illnessMinutesLeft);
+      state.vitals.health = clamp(state.vitals.health - tick/20);
+      state.illnessMinutesLeft -= tick;
+    }
+  }
+  function applyWorldTicking(min){
+    invPools().forEach(list=>{
+      list.forEach(it=>{
+        if(it.on && it.durability){
+          it.durability.current = Math.max(0, it.durability.current - it.drainRate*min);
+          if(it.durability.current <= 0){
+            it.on = false;
+            log(`Your ${it.name.toLowerCase()} runs out of battery and shuts off.`, "warn");
+          }
+        }
+      });
+    });
+    Object.keys(world).forEach(id=>{
+      const r = world[id];
+      if(r.heatActive && r.fireMinutesLeft != null){
+        r.fireMinutesLeft -= min;
+        if(r.fireMinutesLeft <= 0){
+          r.heatActive = false;
+          r.fireMinutesLeft = null;
+          if(id === state.currentRoom) log("The fire burns down and goes out.", "warn");
+        }
+      }
+    });
+  }
+  function applyEnergyBaseline(min, multiplier){
+    state.vitals.energy = clamp(state.vitals.energy - DECAY.energy*min*multiplier);
+  }
+  function checkGameOver(){
+    if(!gameOver && state.vitals.health <= 0){
+      gameOver = true;
+      log("Your body finally gives out. This is where it ends.", "warn");
+    }
+  }
+  // ==================================================
+  // STAMINA / FATIGUE SYSTEM
+  // ==================================================
+  // Tasks own their duration/execution/success; they only ever *declare*
+  // Exertion (see CORE ACTIONS below). This module owns every rule about
+  // what Exertion does to Stamina/Fatigue, and how Energy modifies or is
+  // spent by recovery — keeping Stamina out of the task layer entirely
+  // (handoff sec. 3).
+  function applyExertion(exertion){
+    if(exertion <= 0) return;
+    const v = state.vitals;
+    const staminaUsed = Math.min(v.stamina, exertion);
+    v.stamina = Math.max(0, v.stamina - staminaUsed);
+    const remainingExertion = exertion - staminaUsed;
+    v.fatigue = Math.min(100, v.fatigue + remainingExertion);
+    state.lastExertionMinute = state.totalMinutes;
+  }
+  function isExertionDelayActive(){
+    return (state.totalMinutes - state.lastExertionMinute) < STAMINA_RECOVERY_DELAY_MIN;
+  }
+  function energyRecoveryMultiplier(){
+    const e = state.vitals.energy;
+    if(e >= 80) return 1.00;
+    if(e >= 60) return 0.90;
+    if(e >= 40) return 0.75;
+    if(e >= 20) return 0.50;
+    return 0.25;
+  }
+  function staminaMaxForEnergy(){
+    const e = state.vitals.energy;
+    if(e >= 40) return 100;
+    if(e >= 20) return 80;
+    return 50;
+  }
+  function hungerThirstRecoveryPenalty(){
+    // Additive 15%-each penalty (sec. 24) — never compounded multiplicatively.
+    let penalty = 0;
+    if(state.vitals.hunger < LOW_HUNGER_THRESHOLD) penalty += 0.15;
+    if(state.vitals.thirst < LOW_THIRST_THRESHOLD) penalty += 0.15;
+    return penalty;
+  }
+  function fatigueRecoveryAllowed(){
+    // Fatigue only recovers once Stamina has reached its *current* cap
+    // (sec. 18) — this is deliberately staminaMaxForEnergy(), not a flat
+    // 100, so a low-Energy Stamina cap can't be worked around.
+    return state.vitals.fatigue > 0 && state.vitals.stamina >= staminaMaxForEnergy();
+  }
+  // One game-minute (or smaller remainder) of awake Stamina/Fatigue
+  // recovery. mode "rest" uses Rest's flat rate and never adds the
+  // recovery Energy surcharge (sec. 16); mode "normal" is the ordinary
+  // awake state (sec. 11-15, 19).
+  function recoveryStep(dt, mode){
+    if(isExertionDelayActive()){ applyEnergyBaseline(dt, 1); return; }
+    const cap = staminaMaxForEnergy();
+    if(state.vitals.stamina < cap){
+      const rate = mode === "rest"
+        ? REST_STAMINA_RATE
+        : BASELINE_STAMINA_RATE * energyRecoveryMultiplier() * (1 - hungerThirstRecoveryPenalty());
+      state.vitals.stamina = Math.min(cap, state.vitals.stamina + rate*dt);
+      applyEnergyBaseline(dt, mode === "rest" ? 1 : 2);
+    } else if(fatigueRecoveryAllowed()){
+      state.vitals.fatigue = Math.max(0, state.vitals.fatigue - FATIGUE_RECOVERY_RATE*dt);
+      applyEnergyBaseline(dt, mode === "rest" ? 1 : 4);
+    } else {
+      applyEnergyBaseline(dt, 1);
+    }
+  }
+  function sleepAvailable(){
+    return state.totalMinutes >= state.lastWakeMinute + SLEEP_COOLDOWN_MIN;
+  }
+  function estimateSleepMinutes(){
+    const ceiling = clamp(100 - state.vitals.fatigue);
+    const missing = Math.max(0, ceiling - state.vitals.energy);
+    return missing / SLEEP_ENERGY_RATE;
+  }
+  // Advances awake game time in <=1-minute steps so the Stamina/Fatigue
+  // recovery delay (exactly 1 game minute, sec. 10) and the Energy-driven
+  // recovery bands (sec. 12-13) are evaluated at natural resolution instead
+  // of being approximated over an arbitrarily long jump.
+  function runAwakeStep(min){
+    let remaining = min;
+    while(remaining > 1e-9){
+      const dt = Math.min(1, remaining);
+      state.totalMinutes += dt;
+      applyHungerThirst(dt);
+      applyWorldTicking(dt);
+      recoveryStep(dt, "normal");
+      remaining -= dt;
+    }
+  }
+  function advanceTime(min){
+    runAwakeStep(min);
+    if(state.vitals.energy <= 0){
+      state.collapseCount += 1;
+      if(state.collapseCount % 3 === 0){
+        log("Your body gives out completely. You black out — hours pass before you come to, disoriented and vulnerable.", "warn");
+        runAwakeStep(300); state.vitals.energy = clamp(90);
+      } else {
+        log("Exhaustion drops you where you stand. A few minutes pass before you can get up.", "warn");
+        runAwakeStep(20); state.vitals.energy = clamp(state.vitals.energy + 30);
+      }
+    }
+    checkGameOver();
+  }
+  // ==================================================
+  // CRAFTING
+  // ==================================================
+  function canCraft(recipe){
+    const hasAll = recipe.inputs.every(inp => countInPools(inp.id) >= inp.qty);
+    if(!hasAll) return false;
+    if(recipe.tool && !hasTool(recipe.tool)) return false;
+    if(recipe.needsHeat && !roomHasHeat(world[state.currentRoom])) return false;
+    return true;
+  }
+  function doCraft(recipeId){
+    const recipe = RECIPES.find(r=>r.id===recipeId);
+    if(!recipe || !canCraft(recipe)) return;
+    recipe.inputs.forEach(inp=> consumeFromPools(inp.id, inp.qty));
+    advanceTime(recipe.minutes);
+    const crafted = itemFromRegistry({ id: recipe.output.id, qty:1 });
+    giveItem(crafted);
+    log(`You craft a ${crafted.name.toLowerCase()}.`, "good");
+    render();
+  }
+  // ==================================================
+  // FIRE / COOKING
+  // ==================================================
+  function doFish(){
+    advanceTime(20);
+    applyExertion(FISH_EXERTION);
+    if(Math.random() < 0.55){
+      giveItem(itemFromRegistry({ id:"raw_fish", qty:1 }));
+      log("Something bites. You reel in a fish.", "good");
+    } else {
+      log("Nothing bites this time.");
+    }
+    render();
+  }
+  function ensureHeatContainer(room, id, name, capacityKg){
+    let c = room.containers.find(x=>x.id===id);
+    if(!c){ c = { id, name, capacityKg, items:[] }; room.containers.push(c); }
+    return c;
+  }
+  function doLightStove(){
+    if(!consumeMatchUse()) return;
+    const room = world[state.currentRoom];
+    ensureHeatContainer(room, "stove", "Stove", 8);
+    room.heatActive = true;
+    advanceTime(5);
+    log("You light the stove.", "good");
+    render();
+  }
+  const FIRE_MAX_MIN = 360;
+  function canBuildFire(room){
+    if(room.campfireBuilt) return room.fireMinutesLeft > 0 || countInPools("firewood") >= 3;
+    return countInPools("campfire_kit") >= 1;
+  }
+  function doBuildFire(){
+    const room = world[state.currentRoom];
+    if(!canBuildFire(room)) return;
+    if(!consumeMatchUse()) return;
+    const firstTime = !room.campfireBuilt;
+    if(firstTime){
+      consumeFromPools("campfire_kit", 1);
+      room.campfireBuilt = true;
+    }
+    const banked = room.fireMinutesLeft > 0;
+    if(!banked){
+      consumeFromPools("firewood", 3);
+      room.fireMinutesLeft = 180;
+    }
+    ensureHeatContainer(room, "campfire", "Campfire", 8);
+    room.heatActive = true;
+    advanceTime(10);
+    log(firstTime ? "You set up the campfire kit and get a fire going."
+      : (banked ? "You relight the fire from what's left of the wood." : "You get a fire going."), "good");
+    render();
+  }
+  function doAddFuel(){
+    if(countInPools("firewood") < 1) return;
+    const room = world[state.currentRoom];
+    consumeFromPools("firewood", 1);
+    room.fireMinutesLeft = Math.min((room.fireMinutesLeft || 0) + 60, FIRE_MAX_MIN);
+    log("You feed the fire more wood.", "good");
+    render();
+  }
+  function doExtinguish(){
+    const room = world[state.currentRoom];
+    room.heatActive = false;
+    log("You put it out.");
+    render();
+  }
+  function doDismantleCampfire(){
+    const room = world[state.currentRoom];
+    if(!room.campfireBuilt || room.heatActive) return;
+    const container = room.containers.find(c=>c.id==="campfire");
+    if(container){
+      container.items.forEach(it=> addToList(room.floor, it));
+      room.containers = room.containers.filter(c=>c.id!=="campfire");
+    }
+    const refund = Math.ceil(CAMPFIRE_KIT_COST/2);
+    giveItem(itemFromRegistry({ id:"firewood", qty:refund }));
+    room.campfireBuilt = false;
+    room.fireMinutesLeft = null;
+    advanceTime(10);
+    log(`You break down the campfire, salvaging ${refund} firewood from it.`, "good");
+    render();
+  }
+  function getHeatContainer(room){
+    return room.containers.find(c=> c.id==="stove" || c.id==="campfire");
+  }
+  function doCookInContainer(containerId, recipeId){
+    const room = world[state.currentRoom];
+    const container = room.containers.find(c=>c.id===containerId);
+    if(!container) return;
+    const recipe = HEAT_RECIPES.find(r=>r.id===recipeId);
+    if(!recipe) return;
+    const idx = container.items.findIndex(it=>it.itemId===recipe.input);
+    if(idx < 0) return;
+    container.items[idx].qty -= 1;
+    if(container.items[idx].qty <= 0) container.items.splice(idx,1);
+    addToList(container.items, itemFromRegistry({ id: recipe.output.id, qty:1 }));
+    advanceTime(recipe.minutes);
+    log(`The ${ITEM_REGISTRY[recipe.input].name.toLowerCase()} finishes cooking.`, "good");
+    render();
+  }
+  function doChopTree(){
+    if(!hasTool("chopping")) return;
+    const room = world[state.currentRoom];
+    advanceTime(30);
+    applyExertion(CHOP_TREE_EXERTION);
+    room.hasTree = false;
+    giveItem(itemFromRegistry({ id:"firewood", qty:6 }));
+    log("You chop the tree down. It splits into a good stock of firewood.", "good");
+    render();
+  }
+  // ==================================================
+  // PERSISTENCE
+  // ==================================================
+  // Save format is unchanged in 0.1.3 (still { version, state, world, doors,
+  // windows }). _uid is not persisted specially — resyncUidCounter() scans
+  // every item location after a load so newly-created items during the next
+  // session keep getting unique ids, and ensureUid() lazily assigns one to
+  // any loaded item that predates the uid system.
+  function serializeGame(){ return JSON.stringify({ version: GAME_CONFIG.VERSION, state, world, doors, windows }, null, 2); }
+  function resyncUidCounter(){
+    let maxSeen = 0;
+    const scanList = (list)=> (list || []).forEach(it=>{
+      if(it && it._uid){
+        const n = parseInt(String(it._uid).replace(/^u/, ""), 10);
+        if(!isNaN(n) && n > maxSeen) maxSeen = n;
+      }
+    });
+    invPools().forEach(scanList);
+    Object.keys(world).forEach(roomId=>{
+      const room = world[roomId];
+      scanList(room.floor);
+      (room.containers || []).forEach(c=>scanList(c.items));
+      (room.carContainers || []).forEach(c=>scanList(c.items));
+    });
+    _uidCounter = maxSeen + 1;
+  }
+  // backfillItemIds(): companion to resyncUidCounter(), run alongside it on
+  // every load. Older saves predate ITEM_REGISTRY's itemId field — this
+  // assigns itemId to any loaded item missing it, by reverse name match
+  // against ITEM_REGISTRY (current registry names are unique, so this is
+  // unambiguous). Items with no registry match are left without itemId and
+  // keep working exactly as before via _uid/list position.
+  function backfillItemIds(){
+    const nameToId = {};
+    Object.keys(ITEM_REGISTRY).forEach(id=>{ nameToId[ITEM_REGISTRY[id].name] = id; });
+    const scanList = (list)=> (list || []).forEach(it=>{
+      if(it && !it.itemId && nameToId[it.name]) it.itemId = nameToId[it.name];
+    });
+    invPools().forEach(scanList);
+    Object.keys(world).forEach(roomId=>{
+      const room = world[roomId];
+      scanList(room.floor);
+      (room.containers || []).forEach(c=>scanList(c.items));
+      (room.carContainers || []).forEach(c=>scanList(c.items));
+    });
+  }
+  // backfillLocationIds(): companion to backfillItemIds(), run alongside it
+  // on every load. Older saves (pre-v0.2.9) predate the locationId field —
+  // this assigns it to any loaded room missing it, by direct room-id lookup
+  // against a freshly-built default world. Unlike backfillItemIds()'s name
+  // matching, room ids are stable, so this is an unambiguous key lookup.
+  function backfillLocationIds(){
+    const defaults = makeDefaultWorld();
+    Object.keys(world).forEach(roomId=>{
+      const room = world[roomId];
+      if(room && !room.locationId && defaults[roomId]){
+        room.locationId = defaults[roomId].locationId;
+      }
+    });
+  }
+  // backfillContainerFields(): companion to backfillLocationIds(), run
+  // alongside it on every load. Older saves (pre-v0.4.0) predate both
+  // spawnPools and spawnRolled entirely — for any loaded container whose
+  // matching default-world container has spawnPools, this copies
+  // spawnPools (if missing) the same way backfillLocationIds() copies a
+  // missing locationId, then copies spawnRolled (if missing) to match the
+  // default. That ordering matters: without spawnPools also being
+  // restored, doOpenContainer()'s `container.spawnPools && ...` guard
+  // could never fire for anything loaded from an old save, silently
+  // defeating the roll entirely rather than just mistiming it. The net
+  // effect: an old save's already-populated container doesn't become
+  // eligible for an auto-roll it was never meant to get, and a still-empty
+  // one does get a chance to roll on next open.
+  function backfillContainerFields(){
+    const defaults = makeDefaultWorld();
+    Object.keys(world).forEach(roomId=>{
+      const room = world[roomId];
+      const defaultRoom = defaults[roomId];
+      if(!room || !defaultRoom) return;
+      const scan = (containers, defaultContainers)=>{
+        (containers || []).forEach(c=>{
+          const dc = (defaultContainers || []).find(x=>x.id===c.id);
+          if(!dc || !dc.spawnPools) return;
+          if(c.spawnPools === undefined) c.spawnPools = dc.spawnPools;
+          if(c.spawnRolled === undefined) c.spawnRolled = dc.spawnRolled;
+        });
+      };
+      scan(room.containers, defaultRoom.containers);
+      scan(room.carContainers, defaultRoom.carContainers);
+    });
+  }
+  function applyLoadedData(data){
+    if(!data || !data.state || !data.world || !data.world[data.state.currentRoom]){
+      log("That save doesn't look valid — nothing was loaded.", "warn");
+      return false;
+    }
+    if(!data.version){
+      log("This save has no version tag (from an older build) — it may not load correctly.", "warn");
+    } else if(versionCompat(data.version) !== versionCompat(GAME_CONFIG.VERSION)){
+      log(`This save is from v${data.version}, this build is v${GAME_CONFIG.VERSION} — it may not load correctly.`, "warn");
+    }
+    const base = makeDefaultState();
+    state = { ...base, ...data.state, vitals: { ...base.vitals, ...(data.state.vitals || {}) } };
+    world = data.world;
+    doors = data.doors || doors; windows = data.windows || windows;
+    detailItem = null;
+    gameOver = false;
+    resyncUidCounter();
+    backfillItemIds();
+    backfillLocationIds();
+    backfillContainerFields();
+    render();
+    return true;
+  }
+  // validateItemRegistry(): dev-only console helper (not wired to any
+  // button or UI, runs nothing automatically). Walks RECIPES/HEAT_RECIPES
+  // inputs/outputs and confirms every id they reference resolves in
+  // ITEM_REGISTRY, logging any that don't. Call manually from the browser
+  // console when auditing recipe/registry consistency.
+  function validateItemRegistry(){
+    const missing = [];
+    RECIPES.forEach(r=>{
+      r.inputs.forEach(inp=>{ if(!ITEM_REGISTRY[inp.id]) missing.push(`RECIPES[${r.id}].inputs: ${inp.id}`); });
+      if(!ITEM_REGISTRY[r.output.id]) missing.push(`RECIPES[${r.id}].output: ${r.output.id}`);
+    });
+    HEAT_RECIPES.forEach(r=>{
+      if(!ITEM_REGISTRY[r.input]) missing.push(`HEAT_RECIPES[${r.id}].input: ${r.input}`);
+      if(!ITEM_REGISTRY[r.output.id]) missing.push(`HEAT_RECIPES[${r.id}].output: ${r.output.id}`);
+    });
+    if(missing.length) console.warn("validateItemRegistry: unresolved ids", missing);
+    else console.log("validateItemRegistry: all recipe ids resolve in ITEM_REGISTRY");
+    return missing;
+  }
+  // validateLocations(): dev-only console helper (not wired to any button
+  // or UI, runs nothing automatically), modeled on validateItemRegistry().
+  // Walks every room in world, confirms locationId is set and resolves in
+  // LOCATIONS. Call manually from the browser console when auditing.
+  function validateLocations(){
+    const missing = [];
+    Object.keys(world).forEach(roomId=>{
+      const room = world[roomId];
+      if(!room.locationId) missing.push(`${roomId}: no locationId set`);
+      else if(!LOCATIONS[room.locationId]) missing.push(`${roomId}: locationId "${room.locationId}" does not resolve in LOCATIONS`);
+    });
+    if(missing.length) console.warn("validateLocations: unresolved rooms", missing);
+    else console.log("validateLocations: every room resolves a locationId");
+    return missing;
+  }
+  function doRestart(){
+    gameOver = false;
+    state = makeDefaultState();
+    world = makeDefaultWorld();
+    doors = makeDefaultDoors();
+    windows = makeDefaultWindows();
+    detailItem = null;
+    _uidCounter = 1;
+    document.getElementById("log").innerHTML = "";
+    log("You wake up in your apartment. Everything's exactly where you left it — for now.");
+    render();
+  }
+
+  function doSaveLocal(){
+    try{ localStorage.setItem(SAVE_KEY, serializeGame()); log("Progress saved to this browser.", "sys"); }
+    catch(e){ log("Couldn't save to browser storage here — use Export instead.", "warn"); }
+  }
+  function doLoadLocal(){
+    try{
+      const raw = localStorage.getItem(SAVE_KEY);
+      if(!raw){ log("No saved game found in this browser.", "warn"); return; }
+      if(applyLoadedData(JSON.parse(raw))) log("Progress loaded from this browser.", "sys");
+    }catch(e){ log("Couldn't read a save from this browser.", "warn"); }
+  }
+  function doExportSave(){
+    const blob = new Blob([serializeGame()], { type:"application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "ashfall-save.json";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    log("Save file exported.", "sys");
+  }
+  function doImportSave(file){
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{ if(applyLoadedData(JSON.parse(reader.result))) log("Save file imported.", "sys"); }
+      catch(e){ log("That file couldn't be read as a save.", "warn"); }
+    };
+    reader.onerror = ()=> log("That file couldn't be read.", "warn");
+    reader.readAsText(file);
+  }
+  document.getElementById("saveLocalBtn").addEventListener("click", doSaveLocal);
+  document.getElementById("loadLocalBtn").addEventListener("click", doLoadLocal);
+  document.getElementById("exportBtn").addEventListener("click", doExportSave);
+  document.getElementById("importBtn").addEventListener("click", ()=> document.getElementById("importInput").click());
+  document.getElementById("importInput").addEventListener("change", (e)=>{
+    const file = e.target.files[0];
+    if(file) doImportSave(file);
+    e.target.value = "";
+  });
+  document.getElementById("restartMenuBtn").addEventListener("click", ()=>{
+    if(confirm("Restart the game? This throws away all current progress.")) doRestart();
+  });
+  const sideMenu = document.getElementById("sideMenu");
+  const menuBackdrop = document.getElementById("menuBackdrop");
+  // ==================================================
+  // EVENTS / UI HELPERS
+  // ==================================================
+  function openMenu(){ sideMenu.classList.add("open"); menuBackdrop.classList.add("show"); }
+  function closeMenu(){ sideMenu.classList.remove("open"); menuBackdrop.classList.remove("show"); }
+  document.getElementById("menuToggle").addEventListener("click", openMenu);
+  document.getElementById("closeMenu").addEventListener("click", closeMenu);
+  menuBackdrop.addEventListener("click", closeMenu);
+  document.querySelectorAll("#gaitBar button[data-gait]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      if(state.vitals.fatigue >= 100 && btn.dataset.gait !== "sneak") return;
+      document.querySelectorAll("#gaitBar button[data-gait]").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+      state.gait = btn.dataset.gait;
+      render();
+    });
+  });
+  document.querySelectorAll("#mapZoomToggle button[data-zoom]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      if(mapZoomMode === btn.dataset.zoom) return;
+      mapZoomMode = btn.dataset.zoom;
+      document.querySelectorAll("#mapZoomToggle button[data-zoom]").forEach(b=>{
+        b.classList.toggle("active", b.dataset.zoom === mapZoomMode);
+      });
+      render();
+    });
+  });
+  // ==================================================
+  // RENDERING
+  // ==================================================
+  // Unchanged in this revision, apart from what INVENTORY/ITEM SYSTEM
+  // changes required (renderCraftPanel already resolved by _uid before
+  // this pass and needed no functional change). Added in v0.2.5: the
+  // In-Game Viewing Map (renderMap() and its helpers below), per the
+  // "Ashfall v0.2.5.md" handoff — ported from map_demo.html, the
+  // reference prototype built and iterated on during planning.
+  // ==================================================
+  // MAP (In-Game Viewing Map — Tier 1 item 3)
+  // ==================================================
+  const MAP_SPACING = 130;
+  const MAP_MARGIN = 55;
+  const MAP_CLOSE_VIEW = 260;
+  // Grid extents (see LOCATIONS above) — col 0..4, row 0..3. Retunable
+  // default per the "Ashfall v0.2.6.md" handoff: the grid now spans
+  // ~630x500 units including margins.
+  const MAP_MAX_COL = 4;
+  const MAP_MAX_ROW = 3;
+  const MAP_WIDE_VIEWBOX = { x:20, y:20, w:610, h:480 };
+
+  // Street runs (Wide view) — one continuous named path per street.
+  const MAP_STREETS = [
+    { name:"MAPLE ST",  chain:["maple4th","mid_maple_2_4","maple2nd","mid_maple_1_2","maple1st","mid_maple_1_3","maple3rd","mid_maple_3_5","maple5th"] },
+    { name:"POPLAR ST", chain:["poplar4th","mid_poplar_2_4","poplar2nd","mid_poplar_1_2","outside","mid_poplar_1_3","poplar3rd","mid_poplar_3_5","poplar5th"] },
+    { name:"MAIN ST",   chain:["main4th","mid_main_2_4","main2nd","mid_main_1_2","main1st","mid_main_1_3","main3rd","mid_main_3_5","main5th"] },
+    { name:"WATER ST",  chain:["water4th","mid_water_2_4","water2nd","mid_water_1_2","water1st","mid_water_1_3","water3rd","mid_water_3_5","water5th"] },
+    { name:"4TH ST",    chain:["maple4th","mid_4th_mp_p","poplar4th","mid_4th_p_m","main4th","mid_4th_m_w","water4th"] },
+    { name:"2ND ST",    chain:["maple2nd","mid_2nd_mp_p","poplar2nd","mid_2nd_p_m","main2nd","mid_2nd_m_w","water2nd"] },
+    { name:"1ST ST",    chain:["maple1st","mid_1st_mp_p","outside","mid_1st_o_m","main1st","mid_1st_m_w","water1st"] },
+    { name:"3RD ST",    chain:["maple3rd","mid_3rd_mp_p","poplar3rd","mid_3rd_p_m","main3rd","mid_3rd_m_w","water3rd"] },
+    { name:"5TH ST",    chain:["maple5th","mid_5th_mp_p","poplar5th","mid_5th_p_m","main5th","mid_5th_m_w","water5th"] }
+  ];
+  // Every street/mid-block Location id, derived from MAP_STREETS above
+  // (every such id appears in some chain) rather than hand-duplicated —
+  // used by renderMapClose() to draw the node dots.
+  const MAP_STREET_NODE_IDS = Array.from(new Set(MAP_STREETS.flatMap(s => s.chain)));
+  // Building markers (Close view only) — anchor node + label-offset in
+  // grid units. Pharmacy/Hardware Store deliberately share an anchor
+  // (both entered from the same mid-block) — the offset, not a second
+  // coordinate, is what keeps them legible as two separate markers.
+  const MAP_BUILDINGS = [
+    { name:"Acorn Apartments", anchor:"acorn_f0",       dx:-0.05, dy:-0.28 },
+    { name:"Alley",            anchor:"acorn_f0",       dx:0.32,  dy:-0.05 },
+    { name:"Corner Store",     anchor:"cornerstore_f0", dx:-0.32, dy:-0.05 },
+    { name:"Pharmacy",         anchor:"pharmacy_f0",    dx:-0.05, dy:-0.28 },
+    { name:"Hardware Store",   anchor:"hardware_f0",    dx:-0.05, dy:0.28 },
+    { name:"Storage Facility", anchor:"storage_f0",     dx:0.32,  dy:0.05 },
+    { name:"Riverbank",        anchor:"riverbank_f0",   dx:0.05,  dy:0.32 },
+    { name:"Oak Apartments",   anchor:"oak_f0",         dx:0.3,   dy:0.05 },
+    { name:"Auto Workshop",    anchor:"auto_shop_f0",   dx:-0.05, dy:0.28 },
+    { name:"Police Station",   anchor:"police_f0",      dx:0.32,  dy:-0.05 },
+    { name:"Riverside Freight",anchor:"industrial_f0",  dx:0.32,  dy:0.05 }
+  ];
+
+  let mapZoomMode = "close";
+  let mapRenderedZoom = null;   // zoom mode the current SVG content was built for
+  let mapLastNode = null;       // last resolved player map node
+  let mapCurrentViewBox = null; // {x,y,w,h} of the viewBox, animated toward its target
+
+  function mapToSvg(col, row){
+    // row 0 (Maple) at bottom, row MAP_MAX_ROW (Water) at top
+    return { x: MAP_MARGIN + col * MAP_SPACING, y: MAP_MARGIN + (MAP_MAX_ROW - row) * MAP_SPACING };
+  }
+  function mapPathD(chain){
+    return chain.map((id,i)=>{
+      const p = mapToSvg(LOCATIONS[id].x / 100, LOCATIONS[id].y / 100);
+      return (i===0 ? "M " : "L ") + p.x + " " + p.y;
+    }).join(" ");
+  }
+  function mapRepeatedLabel(name){
+    // repeats the name along the path so it reads as the street itself
+    // rather than a one-off tag stuck on top of a plain line
+    return `${name}   \u2022   ${name}   \u2022   ${name}`;
+  }
+  function renderMapClose(){
+    let html = "";
+    const wStart = mapToSvg(0, MAP_MAX_ROW), wEnd = mapToSvg(MAP_MAX_COL, MAP_MAX_ROW);
+    html += `<path class="map-river" d="M ${wStart.x-25} ${wStart.y} L ${wEnd.x+25} ${wEnd.y}"/>`;
+    MAP_STREETS.forEach(s=>{
+      html += `<path class="map-street" d="${mapPathD(s.chain)}"/>`;
+    });
+    MAP_STREET_NODE_IDS.forEach(id=>{
+      const p = mapToSvg(LOCATIONS[id].x / 100, LOCATIONS[id].y / 100);
+      html += `<circle class="map-node-dot" cx="${p.x}" cy="${p.y}" r="3"/>`;
+    });
+    MAP_BUILDINGS.forEach(b=>{
+      const anchor = LOCATIONS[b.anchor];
+      const p = mapToSvg(anchor.x / 100 + b.dx, anchor.y / 100 + b.dy);
+      html += `<circle class="map-bldg-dot" cx="${p.x}" cy="${p.y}" r="6"/>`;
+      const words = b.name.split(" ");
+      const twoLines = words.length > 1;
+      const line1 = twoLines ? words[0] : b.name;
+      const line2 = twoLines ? words.slice(1).join(" ") : null;
+      const LINE_H = 11;
+      let y1, y2;
+      if(b.dy < 0){ y2 = p.y - 10; y1 = y2 - LINE_H; }
+      else { y1 = p.y + 16; y2 = y1 + LINE_H; }
+      html += `<text class="map-bldg-label" x="${p.x}" y="${y1}" text-anchor="middle">${line1}</text>`;
+      if(twoLines){
+        html += `<text class="map-bldg-label" x="${p.x}" y="${y2}" text-anchor="middle">${line2}</text>`;
+      }
+    });
+    html += `<circle id="mapPlayer" cx="0" cy="0" r="5"/>`;
+    return html;
+  }
+  function renderMapWide(){
+    let html = "<defs>";
+    MAP_STREETS.forEach((s,i)=>{
+      html += `<path id="mapstreetpath-${i}" d="${mapPathD(s.chain)}" fill="none"/>`;
+    });
+    html += "</defs>";
+    const wStart = mapToSvg(0, MAP_MAX_ROW), wEnd = mapToSvg(MAP_MAX_COL, MAP_MAX_ROW);
+    html += `<path class="map-river" d="M ${wStart.x-25} ${wStart.y} L ${wEnd.x+25} ${wEnd.y}"/>`;
+    MAP_STREETS.forEach((s,i)=>{
+      html += `<path class="map-street-thin" d="${mapPathD(s.chain)}"/>`;
+      html += `<text class="map-street-name"><textPath href="#mapstreetpath-${i}" startOffset="50%" text-anchor="middle">${mapRepeatedLabel(s.name)}</textPath></text>`;
+    });
+    html += `<circle id="mapPlayer" cx="0" cy="0" r="5"/>`;
+    return html;
+  }
+  function mapPositionPlayer(node){
+    const n = LOCATIONS[node];
+    const p = mapToSvg(n.x / 100, n.y / 100);
+    const el = document.getElementById("mapPlayer");
+    if(el){ el.setAttribute("cx", p.x); el.setAttribute("cy", p.y); }
+  }
+  function mapTargetViewBox(node){
+    if(mapZoomMode === "wide") return { x:MAP_WIDE_VIEWBOX.x, y:MAP_WIDE_VIEWBOX.y, w:MAP_WIDE_VIEWBOX.w, h:MAP_WIDE_VIEWBOX.h };
+    const n = LOCATIONS[node];
+    const p = mapToSvg(n.x / 100, n.y / 100);
+    return { x: p.x - MAP_CLOSE_VIEW/2, y: p.y - MAP_CLOSE_VIEW/2, w: MAP_CLOSE_VIEW, h: MAP_CLOSE_VIEW };
+  }
+  function mapUpdateViewBox(node, snap){
+    const svg = document.getElementById("mapSvg");
+    const target = mapTargetViewBox(node);
+    if(snap || !mapCurrentViewBox){
+      mapCurrentViewBox = target;
+      svg.setAttribute("viewBox", `${target.x} ${target.y} ${target.w} ${target.h}`);
+      return;
+    }
+    const start = mapCurrentViewBox;
+    const duration = 350, startTime = performance.now();
+    function step(now){
+      const t = Math.min(1, (now - startTime) / duration);
+      const ease = 1 - Math.pow(1 - t, 3);
+      const x = start.x + (target.x - start.x) * ease;
+      const y = start.y + (target.y - start.y) * ease;
+      const w = start.w + (target.w - start.w) * ease;
+      const h = start.h + (target.h - start.h) * ease;
+      svg.setAttribute("viewBox", `${x} ${y} ${w} ${h}`);
+      mapCurrentViewBox = { x, y, w, h };
+      if(t < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  // Re-renders the side-menu map to match the player's current location
+  // and the active zoom level. Rebuilds the SVG content (and snaps the
+  // viewBox) only when the zoom level just changed or on first render;
+  // a location change within an already-current zoom level animates the
+  // viewBox (Close only — Wide's viewBox is fixed) rather than rebuilding.
+  function renderMap(){
+    const node = (world[state.currentRoom] && world[state.currentRoom].locationId) || mapLastNode || "mid_poplar_1_2";
+    const zoomChanged = mapRenderedZoom !== mapZoomMode;
+    if(zoomChanged){
+      document.getElementById("mapSvg").innerHTML = mapZoomMode === "close" ? renderMapClose() : renderMapWide();
+      mapRenderedZoom = mapZoomMode;
+      mapPositionPlayer(node);
+      mapUpdateViewBox(node, true);
+      mapLastNode = node;
+      return;
+    }
+    if(node !== mapLastNode){
+      mapPositionPlayer(node);
+      mapUpdateViewBox(node, false);
+      mapLastNode = node;
+    }
+  }
+  function actionButton(label, onClick, opts){
+    if(typeof opts === "string") opts = { cls: opts };
+    opts = opts || {};
+    const btn = document.createElement("button");
+    btn.className = "action" + (opts.cls ? " " + opts.cls : "");
+    btn.appendChild(document.createTextNode(label));
+    if(opts.cost){
+      const span = document.createElement("span");
+      span.className = "cost";
+      span.textContent = " " + opts.cost;
+      btn.appendChild(span);
+    }
+    btn.addEventListener("click", onClick);
+    return btn;
+  }
+  function renderItemList(el, list, buttons, side){
+    el.innerHTML = "";
+    if(list.length === 0){ el.innerHTML = '<li class="empty">Nothing here.</li>'; return; }
+    list.forEach((it, i)=>{
+      const li = document.createElement("li");
+      const total = (it.qty * it.unitWeight).toFixed(2);
+      const meta = document.createElement("span");
+      meta.className = "meta";
+      const nameEl = document.createElement("b");
+      nameEl.className = "itemname";
+      nameEl.textContent = it.name;
+      nameEl.addEventListener("click", ()=>{ detailItem = { uid: ensureUid(it), side }; render(); });
+      meta.appendChild(nameEl);
+      meta.appendChild(document.createTextNode(` ×${it.qty} — ${total} kg `));
+      const catSpan = document.createElement("span");
+      catSpan.className = "cat";
+      catSpan.textContent = `(${it.category})`;
+      meta.appendChild(catSpan);
+      li.appendChild(meta);
+      const row = document.createElement("span");
+      row.className = "btnrow";
+      buttons.forEach(b=>{
+        if(b.test && !b.test(it)) return;
+        const isDisabled = b.disabled && b.disabled(it);
+        const btn = document.createElement("button");
+        btn.className = "mini" + (b.cls ? " " + b.cls : "") + (isDisabled ? " blocked" : "");
+        btn.textContent = typeof b.label === "function" ? b.label(it) : b.label;
+        if(isDisabled){ btn.disabled = true; }
+        else { btn.addEventListener("click", ()=> b.onClick(i)); }
+        row.appendChild(btn);
+      });
+      li.appendChild(row);
+      el.appendChild(li);
+    });
+  }
+  function renderCraftPanel(){
+    const body = document.getElementById("craftBody");
+    const backBtn = document.getElementById("craftBackBtn");
+    body.innerHTML = "";
+    if(detailItem){
+      const found = findItemByUid(detailItem.uid);
+      if(!found){ detailItem = null; renderCraftPanel(); return; }
+      const it = found.item;
+      backBtn.style.display = "";
+      backBtn.onclick = ()=>{ detailItem = null; render(); };
+      const box = document.createElement("div");
+      box.className = "detailBox";
+      const nameLine = document.createElement("div");
+      const nameB = document.createElement("b");
+      nameB.textContent = it.name;
+      nameLine.appendChild(nameB);
+      box.appendChild(nameLine);
+      const statsLine = document.createElement("div");
+      statsLine.appendChild(document.createTextNode(`${it.category} · ${(it.qty*it.unitWeight).toFixed(2)} kg `));
+      const eachSpan = document.createElement("span");
+      eachSpan.style.color = "var(--ink-faint)";
+      eachSpan.textContent = `(${it.unitWeight.toFixed(2)} kg each)`;
+      statsLine.appendChild(eachSpan);
+      box.appendChild(statsLine);
+      if(it.durability){
+        const durLine = document.createElement("div");
+        durLine.textContent = it.durability.mode === "uses"
+          ? `${Math.round(it.durability.current)}/${it.durability.max} uses`
+          : it.hasBatteries === false
+            ? "No batteries installed"
+            : `${Math.round(100*it.durability.current/it.durability.max)}% charge${it.on ? " — On" : " — Off"}`;
+        box.appendChild(durLine);
+      }
+      body.appendChild(box);
+      getItemActions(found.list, found.index, detailItem.side).forEach(a=>{
+        const btn = document.createElement("button");
+        btn.className = "action" + (a.disabled ? " blocked" : "");
+        btn.textContent = a.label;
+        if(a.disabled){ btn.disabled = true; }
+        else { btn.addEventListener("click", a.onClick); }
+        body.appendChild(btn);
+        body.appendChild(document.createElement("br"));
+      });
+    } else {
+      backBtn.style.display = "none";
+      RECIPES.forEach(r=>{
+        const ok = canCraft(r);
+        const need = r.inputs.map(inp=>`${ITEM_REGISTRY[inp.id].name} x${inp.qty}`).join(", ")
+          + (r.tool ? `, ${r.tool} tool` : "") + (r.needsHeat ? ", heat source" : "");
+        const btn = document.createElement("button");
+        btn.className = "action" + (ok ? "" : " blocked");
+        btn.innerHTML = `${r.label} <span class="cost">(needs ${need})</span>`;
+        if(ok){ btn.addEventListener("click", ()=> doCraft(r.id)); }
+        else { btn.disabled = true; }
+        body.appendChild(btn);
+      });
+    }
+  }
+  function renderLocationPanel(){
+    const room = world[state.currentRoom];
+    document.getElementById("locLabel").textContent = roomLabel(room);
+    let heatNote = "";
+    if(room.heatActive){
+      heatNote = room.fireMinutesLeft != null
+        ? ` A fire is burning here — roughly ${fmtDuration(room.fireMinutesLeft).replace(/[()]/g,"")} of fuel left.`
+        : " A fire is burning here.";
+    }
+    document.getElementById("roomDesc").textContent = room.desc + heatNote;
+    document.getElementById("clockLabel").textContent = hasWatch() ? getClockText() : "";
+  }
+  function renderStatsPanel(){
+    document.getElementById("statsBox").innerHTML =
+      "Hunger: " + Math.round(state.vitals.hunger) + "<br>" +
+      "Thirst: " + Math.round(state.vitals.thirst) + "<br>" +
+      "Energy: " + Math.round(state.vitals.energy) + "<br>" +
+      "Stamina: " + Math.round(state.vitals.stamina) + "<br>" +
+      "Health: " + Math.round(state.vitals.health);
+    // Fatigue 100 restricts movement to Sneaking (sec. 22) — Fatigue itself
+    // stays hidden from normal UI (sec. 5, 38); there's no debug panel in
+    // this build to expose it through.
+    const fatigueLocked = state.vitals.fatigue >= 100;
+    if(fatigueLocked) state.gait = "sneak";
+    document.querySelectorAll("#gaitBar button[data-gait]").forEach(btn=>{
+      btn.classList.toggle("active", state.gait === btn.dataset.gait);
+      btn.disabled = fatigueLocked && btn.dataset.gait !== "sneak";
+    });
+  }
+  function renderMoveActionsPanel(){
+    const room = world[state.currentRoom];
+    const moveBox = document.getElementById("moveActions");
+    moveBox.innerHTML = "";
+    getExitsForRoom(room, state.currentRoom).forEach(exit=>{
+      const minutes = exitMinutes(exit);
+      moveBox.appendChild(actionButton(exit.label, ()=> doMove(exit), { cost: fmtDuration(minutes) }));
+    });
+  }
+  function renderHereActionsPanel(){
+    const room = world[state.currentRoom];
+    const hereGroup = document.getElementById("hereGroup");
+    const hereBox = document.getElementById("hereActions");
+    hereBox.innerHTML = "";
+    if(room.lockedDoors) room.lockedDoors.forEach(d=>{
+      hereBox.appendChild(actionButton(d.label, ()=> doTryDoor(d.label), "locked"));
+    });
+    doorsForRoom(state.currentRoom).forEach(doorId=>{
+      if(!doors[doorId].locked) return;
+      const label = DOOR_LABELS[doorId] || doorId;
+      const key = findKeyForDoor(doorId);
+      if(key){
+        hereBox.appendChild(actionButton(`Unlock the door to ${label}`, ()=> doToggleLock(doorId)));
+      } else {
+        const note = document.createElement("div");
+        note.style.cssText = "color:var(--ink-faint); font-size:12.5px; padding:6px 0;";
+        note.textContent = `The door to ${label} is locked.`;
+        hereBox.appendChild(note);
+      }
+    });
+    hereBox.appendChild(actionButton("Rest " + fmtDuration(REST_DURATION_MIN), doRest));
+    if(room.sleepSpot){
+      if(sleepAvailable()){
+        hereBox.appendChild(actionButton("Sleep " + fmtDuration(estimateSleepMinutes()), doSleep));
+      } else {
+        const note = document.createElement("div");
+        note.style.cssText = "color:var(--ink-faint); font-size:12.5px; padding:6px 0;";
+        note.textContent = "You're not tired enough to sleep yet.";
+        hereBox.appendChild(note);
+      }
+    }
+    if(room.searchLabel && !room.searched){
+      hereBox.appendChild(actionButton(room.searchLabel + " " + fmtDuration(room.searchMinutes), doSearch));
+    }
+    getWindowsInRoom(state.currentRoom).forEach(w=>{
+      if(w.state === "closed"){
+        hereBox.appendChild(actionButton("Open the " + w.label, ()=> doOpenWindow(w.id)));
+        if(hasTool(w.breakTag)) hereBox.appendChild(actionButton("Break the " + w.label, ()=> doBreakWindow(w.id), "locked"));
+      } else if(w.state === "open"){
+        hereBox.appendChild(actionButton("Close the " + w.label, ()=> doCloseWindow(w.id)));
+      }
+    });
+    if(room.carContainers && room.carLocked && hasTool("blunt")){
+      hereBox.appendChild(actionButton("Force the vehicle open", doBreakCar, "locked"));
+    }
+    if(room.fishable && hasTool("fishing") && hasTool("tackle")){
+      hereBox.appendChild(actionButton("Go fishing " + fmtDuration(20), doFish));
+    }
+    if(room.hasStove && !room.heatActive && hasMatchUses()){
+      hereBox.appendChild(actionButton("Light the stove " + fmtDuration(5), doLightStove));
+    }
+    if(!room.cannotHaveFire && !room.heatActive && hasMatchUses() && canBuildFire(room)){
+      const label = !room.campfireBuilt ? "Set up the campfire kit"
+        : (room.fireMinutesLeft > 0 ? "Relight the fire" : "Build a campfire");
+      hereBox.appendChild(actionButton(label + " " + fmtDuration(10), doBuildFire));
+    }
+    if(room.campfireBuilt && !room.heatActive){
+      hereBox.appendChild(actionButton("Dismantle the campfire " + fmtDuration(10), doDismantleCampfire, "locked"));
+    }
+    if(room.heatActive){
+      hereBox.appendChild(actionButton(room.hasStove ? "Turn off the stove" : "Put out the fire", doExtinguish));
+      if(room.fireMinutesLeft != null && countInPools("firewood") >= 1 && room.fireMinutesLeft < FIRE_MAX_MIN){
+        hereBox.appendChild(actionButton("Add fuel to the fire", doAddFuel));
+      }
+      const heatContainer = getHeatContainer(room);
+      if(heatContainer){
+        HEAT_RECIPES.forEach(recipe=>{
+          if(heatContainer.items.some(it=>it.itemId===recipe.input)){
+            hereBox.appendChild(actionButton(`Cook the ${ITEM_REGISTRY[recipe.input].name.toLowerCase()} ` + fmtDuration(recipe.minutes),
+              ()=> doCookInContainer(heatContainer.id, recipe.id)));
+          }
+        });
+      }
+    }
+    if(room.hasTree && hasTool("chopping")){
+      hereBox.appendChild(actionButton("Chop down the tree " + fmtDuration(30), doChopTree));
+    }
+    if(!room.searchLabel || room.searched){
+      room.containers.forEach(c=>{
+        if(c.locked && hasTool(c.breakTag)){
+          hereBox.appendChild(actionButton("Cut the lock on " + c.name, ()=> doUnlockContainer(c.id), "locked"));
+        }
+      });
+    }
+    hereGroup.style.display = hereBox.children.length ? "" : "none";
+  }
+  function renderInventoryPanel(){
+    const invTabsEl = document.getElementById("invTabs");
+    invTabsEl.innerHTML = "";
+    const invTabDefs = [["inventory","Inventory"]];
+    if(state.keychain) invTabDefs.push(["keychain","Keychain"]);
+    if(state.backpack) invTabDefs.push(["backpack","Backpack"]);
+    if(state.invTab !== "inventory" && !state[state.invTab]) state.invTab = "inventory";
+    invTabDefs.forEach(([key,label])=>{
+      const btn = document.createElement("button");
+      btn.textContent = label;
+      if(state.invTab === key) btn.classList.add("active");
+      btn.addEventListener("click", ()=>{ state.invTab = key; render(); });
+      invTabsEl.appendChild(btn);
+    });
+    const currentInv = invSlot(state.invTab);
+    document.getElementById("invWeight").textContent =
+      totalWeight(currentInv.items).toFixed(2) + (currentInv.capacityKg ? " / " + currentInv.capacityKg + " kg" : " kg");
+    const unequipBtn = document.getElementById("unequipBtn");
+    if(state.invTab === "keychain" || state.invTab === "backpack"){
+      unequipBtn.style.display = "";
+      unequipBtn.onclick = ()=> doUnequip(state.invTab);
+    } else { unequipBtn.style.display = "none"; }
+    renderItemList(document.getElementById("invList"), currentInv.items, [
+      { label: state.worldTab === "floor" ? "Place" : "Store", onClick:(i)=> doStore(i) }
+    ], "inv");
+  }
+  function renderWorldItemsPanel(){
+    const room = world[state.currentRoom];
+    const worldTabsEl = document.getElementById("worldTabs");
+    worldTabsEl.innerHTML = "";
+    const worldTabDefs = [["floor","Floor"]];
+    if(!room.searchLabel || room.searched){
+      room.containers.forEach(c=>{ if(!c.locked) worldTabDefs.push([c.id, c.name]); });
+    }
+    if(room.carContainers && !room.carLocked) room.carContainers.forEach(c=> worldTabDefs.push([c.id, c.name]));
+    worldTabDefs.forEach(([key,label])=>{
+      const btn = document.createElement("button");
+      btn.textContent = label;
+      if(state.worldTab === key) btn.classList.add("active");
+      btn.addEventListener("click", ()=>{
+        const c = room.containers.find(x=>x.id===key) || (room.carContainers && room.carContainers.find(x=>x.id===key));
+        if(c) doOpenContainer(room, c);
+        else { state.worldTab = key; render(); }
+      });
+      worldTabsEl.appendChild(btn);
+    });
+    if(!worldTabDefs.find(d=>d[0]===state.worldTab)) state.worldTab = "floor";
+    const currentWorld = worldSlot(room, state.worldTab);
+    document.getElementById("worldWeight").textContent =
+      totalWeight(currentWorld.items).toFixed(2) + " / " + currentWorld.capacityKg + " kg";
+    renderItemList(document.getElementById("worldList"), currentWorld.items, [
+      { label:"Take", disabled:(it)=> state.invTab === "keychain" && !keychainAllows(it), onClick:(i)=> doTake(i) }
+    ], "world");
+  }
+  function render(){
+    if(gameOver){
+      document.getElementById("locLabel").textContent = "";
+      document.getElementById("clockLabel").textContent = "";
+      document.getElementById("roomDesc").textContent = "You did not survive.";
+      document.getElementById("statsBox").innerHTML = "Hunger: —<br>Thirst: —<br>Energy: —<br>Health: 0";
+      const moveBox = document.getElementById("moveActions");
+      moveBox.innerHTML = "";
+      moveBox.appendChild(actionButton("Restart", doRestart));
+      document.getElementById("hereGroup").style.display = "none";
+      document.getElementById("invTabs").innerHTML = "";
+      document.getElementById("invList").innerHTML = "";
+      document.getElementById("invWeight").textContent = "";
+      document.getElementById("unequipBtn").style.display = "none";
+      document.getElementById("worldTabs").innerHTML = "";
+      document.getElementById("worldList").innerHTML = "";
+      document.getElementById("worldWeight").textContent = "";
+      document.getElementById("craftBackBtn").style.display = "none";
+      document.getElementById("craftBody").innerHTML = "";
+      return;
+    }
+    renderLocationPanel();
+    renderStatsPanel();
+    renderMoveActionsPanel();
+    renderHereActionsPanel();
+    renderInventoryPanel();
+    renderWorldItemsPanel();
+    renderCraftPanel();
+    renderMap();
+  }
+
+  document.title = "Ashfall — v" + GAME_CONFIG.VERSION;
+  document.getElementById("pageTitle").textContent = "ASHFALL — v" + GAME_CONFIG.VERSION;
+  log("You wake up in your apartment. Everything's exactly where you left it — for now.");
+  render();
+})();
+</script>
+</body>
+</html>
