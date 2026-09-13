@@ -147,6 +147,9 @@ bump.
 - `ashfall.html` — the game.
 - `CHANGELOG.md` — one cumulative file, newest entry on top. See
   `CHANGELOG_GUIDE.md`.
+- `CLAUDE.md` — the rules that bind even when these guides go unread.
+- `docs/` — this guide and its two siblings. Process documentation only;
+  nothing a session needs at runtime.
 - `handoffs/<feature-name>.md` — one file per handoff, kept after it
   ships. Its commit date says when it was written; nothing needs deleting.
 - The backlog is GitHub Issues, not a file. Tier is a label

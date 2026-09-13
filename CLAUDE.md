@@ -5,10 +5,10 @@ A quiet-apocalypse survival game: one self-contained file, `ashfall.html`
 
 ## Read before you change anything
 
-- **`Ashfall_Project_Guide.md`** — tone, conventions, and the session workflow.
+- **`docs/Ashfall_Project_Guide.md`** — tone, conventions, and the session workflow.
   Read it once per session, before making changes.
-- **`Ashfall_Handoff_Guide.md`** — versioning scheme, and how a plan becomes a spec.
-- **`CHANGELOG_GUIDE.md`** — how to write the changelog entry.
+- **`docs/Ashfall_Handoff_Guide.md`** — versioning scheme, and how a plan becomes a spec.
+- **`docs/CHANGELOG_GUIDE.md`** — how to write the changelog entry.
 - **The `ARCHITECTURE` comment** at the top of the script (`ashfall.html:175`) is
   the source of truth for section layout. No document restates that list; check
   the comment.
@@ -65,7 +65,7 @@ proof. Assertion is not.
 Every PR carries all four:
 
 1. `ashfall.html` with `GAME_CONFIG.VERSION` bumped (`ashfall.html:243`).
-2. A new `CHANGELOG.md` entry at the top, per `CHANGELOG_GUIDE.md`, naming the
+2. A new `CHANGELOG.md` entry at the top, per `docs/CHANGELOG_GUIDE.md`, naming the
    handoff by path.
 3. `Closes #NN` in the PR description for the issue this fulfils. Never close an
    issue by hand.
