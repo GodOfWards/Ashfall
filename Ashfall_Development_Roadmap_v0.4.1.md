@@ -3,7 +3,7 @@
 ## Purpose
 
 This document is the current development roadmap for Ashfall. It has been
-audited against the game code (v0.4.0) and `CHANGELOG.md` — every item
+audited against the game code (v0.4.1) and `CHANGELOG.md` — every item
 below was confirmed as not-yet-implemented at time of writing. When an
 item is completed, move it out of this file and into a changelog entry
 instead of leaving it here marked "done."
@@ -23,6 +23,14 @@ container/item tagging pass) has since **shipped in v0.4.0** — see
 (container property tags, the no-respawn flag, the actual respawn
 trigger, vehicle spawn pools, and fauna) is still open, below. Item 16
 is also still open — untouched by the v0.4.0 pass.
+
+A planning session covering the street grid produced "Ashfall Handoff —
+Map Expansion to 8×8 Grid.md." Its **street-grid half shipped in v0.4.1**
+— see `CHANGELOG_v0.4.1.md` — growing the grid from 5 numbered × 4 named
+streets to 8 × 8 (125 new rooms). Item 14 is **not** closed: that pass
+deliberately placed no buildings in the new blocks, so the item remains
+open below with its scope narrowed to exactly that remaining half. Item 9
+is also still open, and more pressing than it was — see its note.
 
 The backlog is organized into tiers based primarily on **urgency,
 dependencies, and implementation convenience**, rather than treating every
@@ -55,17 +63,28 @@ the foundation for several later mechanics.
 
 The v0.2.8 WORLD DATA / RENDERING modularity pass split
 `makeDefaultWorld()` into one function per building, but left every
-street/outdoor room (currently 60 rooms — all of Poplar St, Main St,
-Water St, Maple St, the numbered cross-streets, mid-block nodes, and
-the riverbank) in a single combined `buildStreetsAndOutdoor()` function.
+street/outdoor room (then 60 rooms — all of Poplar St, Main St, Water St,
+Maple St, the numbered cross-streets, mid-block nodes, and the riverbank)
+in a single combined `buildStreetsAndOutdoor()` function.
+
+As of v0.4.1 there are **185 street/outdoor rooms** split across two
+functions: the original 60 in `buildStreetsAndOutdoor()` and the 125 added
+by the 8×8 expansion in a new sibling `buildOuterStreets()`. That split is
+along one seam (old core versus new outer ring) and was a placement choice
+made to avoid tripling the original function — it is **not** this item.
 
 ### Scope
-- Once the street/outdoor world data grows enough to make one combined
-  function unwieldy, split it further — by town or by location — rather
-  than continuing to add to a single ever-growing function.
-- No urgency yet; this is a forward-looking maintainability note, not a
-  current blocker. Safe to defer indefinitely until the room count in
-  that function actually becomes a problem.
+- Split the street/outdoor world data by town or by location, rather than
+  continuing to add to functions that grow without a principled boundary.
+  Both existing functions are now candidates: `buildStreetsAndOutdoor()`
+  still mixes four streets with the riverbank and the alley, and
+  `buildOuterStreets()` is a single 125-room block whose only organising
+  principle is "added in the same pass."
+- The v0.4.1 expansion is the growth the original "defer until the room
+  count actually becomes a problem" note was waiting on, so this is no
+  longer a purely forward-looking item. Still Tier 0 — mechanical, no
+  design content, no behavior change — and still safe to do
+  opportunistically during an unrelated WORLD DATA pass.
 
 ### Note
 Raised by Tom immediately following the v0.2.8 pass, as a known gap in
@@ -172,17 +191,35 @@ addition, not a new system.
 
 Add more locations to grow the game world beyond its current footprint.
 
-### Scope
-- New locations/buildings beyond the current 5×4 street grid.
-- Concrete building types TBD — see planning discussion for a long
-  brainstormed list of possible building categories (residential,
-  commercial, civic, industrial, medical, recreational, agricultural,
-  impound/vehicle storage, etc.) to draw from when this is scoped.
+### Current status
+The **street-grid half shipped in v0.4.1** per "Ashfall Handoff — Map
+Expansion to 8×8 Grid.md": the grid is now 8 numbered × 8 named streets
+(6th, 4th, 2nd, 1st, 3rd, 5th, 7th, 9th west→east; Dock, Mill, Cedar, Elm,
+Maple, Poplar, Main, Water south→north), 176 street nodes in total, fully
+wired and drawn on the in-game map. That pass placed **no buildings** —
+it was explicitly the street skeleton only. What remains below is the
+other half.
+
+### Remaining scope
+- Which buildings go in the 44 new intersections and 81 new mid-blocks,
+  and where. Concrete building types still TBD — see planning discussion
+  for a long brainstormed list of possible building categories
+  (residential, commercial, civic, industrial, medical, recreational,
+  agricultural, impound/vehicle storage, etc.) to draw from.
+- New outdoor set-pieces of the Storage Facility / Riverbank kind in the
+  new blocks; none were added in v0.4.1.
+- Loot for the new blocks. The v0.4.1 nodes all ship `containers:[]`, so
+  any building placed out there needs its containers tagged with
+  `spawnPools` per the v0.4.0 population system.
+- The new areas already have implied character to build against — Elm and
+  Cedar as the outer residential ring thinning into fields, Mill as the
+  industrial belt, Dock as the rail-freight edge — set by their room
+  descriptions rather than by any mechanic, so it is a starting point,
+  not a constraint.
 
 ### Note
-This is a future-reference placeholder, not a specced pass — which
-buildings/locations actually get added still needs a dedicated planning
-session.
+Still needs a dedicated planning session: which buildings actually get
+added is a design question, not an implementation detail.
 
 ---
 

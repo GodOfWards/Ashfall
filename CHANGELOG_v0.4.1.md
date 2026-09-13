@@ -7,6 +7,206 @@ owns which behavior.
 
 ---
 
+## v0.4.1 — Map Expansion to 8×8 Street Grid
+
+Implements the "Ashfall Handoff — Map Expansion to 8×8 Grid" handoff for
+its street-grid component. Fulfills roadmap Tier 1 item 14 (Expand the
+Map) **in part only** — the building-placement half of that item is
+untouched by this pass and item 14 stays open. Content pass: WORLD DATA
+additions plus the mechanical `MAP` updates the larger grid required. No
+new mechanics, no new state fields, no save-format change.
+
+**Open questions resolved** (the handoff shipped with three unresolved;
+Tom answered all three before this session)
+
+- **Street names/direction.** Cedar, Elm, Mill and Dock confirmed, but all
+  four placed **south** of Maple St rather than Mill/Dock north of Water.
+  The handoff's table put Mill at y=400 and Dock at y=500, north of Water
+  St — which would have put both streets in the river. Water St is the
+  riverfront on every existing node (`fishable:true`, "just a drop to the
+  mud", `riverbank`'s "Climb down to the riverbank"), so the town grows
+  *away* from the water instead: Elm and Cedar continue the residential
+  tree-name ring, Mill and Dock are the industrial and rail-freight edge
+  beyond it. Water St remains the river / north hard limit and no existing
+  description needed rewriting.
+- **Numbered-street asymmetry.** Resolved symmetric the other way round:
+  8th St dropped, 9th St added east, giving 3 streets west of center
+  (6th, 4th, 2nd) and 4 east (3rd, 5th, 7th, 9th).
+- **Pass size/phasing.** Built as a single pass, not split.
+
+**New content** — WORLD DATA, `LOCATIONS` and the new `buildOuterStreets()`
+
+- Street grid grown from 5 numbered × 4 named to **8 × 8**. New numbered
+  streets (x, west→east): 6th `-100`, [4th `0`, 2nd `100`, 1st `200`,
+  3rd `300`, 5th `400`], 7th `500`, 9th `600`. New named streets (y,
+  south→north): Dock `-400`, Mill `-300`, Cedar `-200`, Elm `-100`,
+  [Maple `0`, Poplar `100`, Main `200`, Water `300`]. Every existing
+  coordinate is unchanged — origin stays `maple4th`, and the new grid is
+  what introduces negative x and y.
+- **125 new rooms**, each with a `LOCATIONS` entry at the same fixed
+  100m spacing: 44 intersections (`dock6th` … `water9th`, `building`
+  `"<Named> St & <Numbered> St"`, `floorCap:100`), 40 mid-blocks along the
+  named streets (`mid_<name>_<lo>_<hi>`) and 41 along the numbered streets
+  (`mid_<number>_<a>_<b>`), all `floorCap:20`. Mid-block coordinates are
+  the midpoint of their two endpoints; adjacency is spatial order, not
+  numeric, exactly as in the original grid. Room total 93 → 218.
+- All 125 descriptions hand-written per the Project Guide's tone
+  checklist — one to two sentences, matching the existing mid-block and
+  intersection density rather than building-interior depth. New areas
+  carry their own character: Elm and Cedar are the outer residential
+  ring thinning into fields, Mill is the fenced industrial belt, Dock is
+  the rail-freight edge where the town stops.
+- New nodes ship with empty `containers:[]` — no loot placed in this
+  pass. Eight mid-blocks get incidental `floor` items for texture, each
+  tied to what the description already shows: `mid_cedar_5_7` (firewood,
+  the dumped yard waste), `mid_dock_1_2` (planks, the broken pallet),
+  `mid_dock_2_4` (tow chain), `mid_elm_2_4` (stuffed toy), `mid_main_5_7`
+  (tire iron, the used-car lot), `mid_mill_7_9` (scrap metal),
+  `mid_7th_mp_p` (metal pipe, the collapsed trampoline's leg) and
+  `mid_water_7_9` (firewood, driftwood off the bend).
+- The three new Water St nodes and their three mid-blocks carry
+  `fishable:true`, matching every existing Water St node.
+  `mid_elm_1_3`, `mid_maple_7_9` and `mid_9th_c_e` carry `hasTree:true`,
+  the only three new descriptions that name a tree.
+
+**Changed** — WORLD DATA, `buildStreetsAndOutdoor()`
+
+- The 11 rooms that were the old grid's outer edge gained 26 exits
+  connecting them outward: `maple4th`…`water4th` west toward 6th St,
+  `maple5th`…`water5th` east toward 7th St, and all five Maple St nodes
+  south toward Elm St (`maple4th` and `maple5th` were corners and gained
+  two directions each). Each direction adds the established pair — one
+  exit to the next intersection, one "Step into the block" exit to the
+  new mid-block between them. All are cross-`Location` exits carrying
+  only `{ to, label }`; `exitMinutes()` and `computeDirection()` derive
+  travel time and compass wording from coordinates, as since v0.3.0.
+- Water St gained no new exits north: it is still the river and the
+  town's north hard limit.
+
+**Fixed**
+
+- `poplar2nd` was missing both of its southbound exits. `maple2nd` and
+  `mid_2nd_mp_p` each point north to it, but it had no exit back, so
+  Poplar & 2nd was a one-way trip from the south — a pre-existing v0.4.0
+  content bug, not something this pass introduced (confirmed by running
+  the reciprocity audit below against the unmodified v0.4.0 file). Added
+  `{ to:"maple2nd" }` and `{ to:"mid_2nd_mp_p" }`, matching the
+  intersection pattern every other node follows.
+
+**Function relocation / new function**
+
+- New `buildOuterStreets()` (WORLD DATA), merged in `makeDefaultWorld()`
+  directly after `buildStreetsAndOutdoor()`. The handoff left placement
+  of the 125 rooms to this session; they went in a sibling function
+  rather than into `buildStreetsAndOutdoor()`, which would otherwise have
+  roughly tripled in length. The split is along the obvious seam — the
+  original 5×4 core versus the outer ring added here — and moved no
+  existing line, so it is not roadmap item 9 (a by-town/by-location split
+  of the existing function), which stays open and is now more pressing.
+
+**UI** — RENDERING, `MAP` sub-block
+
+- `MAP_STREETS` rebuilt: 16 chains (8 named + 8 numbered) of 15 nodes
+  each, replacing the previous 9 chains of 9 and 7. The new nodes are
+  inserted at their correct spatial position within each existing chain,
+  not appended.
+- `MAP_MAX_COL` `4` → `6` and `MAP_WIDE_VIEWBOX` `{20,20,610,480}` →
+  `{20,20,1000,1000}`, both scaled from the 5×4 values by the same
+  margin/spacing logic. New `MAP_MIN_COL` (`-1`) and `MAP_MIN_ROW` (`-4`)
+  constants, because the grid now carries negative coordinates:
+  `mapToSvg()` offsets by `MAP_MIN_COL` so column −1 still lands on the
+  left margin. `MAP_MAX_ROW` is deliberately unchanged at `3` — Water St
+  is still the northernmost row, so the river line and every pre-existing
+  node keep their exact old SVG positions.
+- The river path in `renderMapClose()`/`renderMapWide()` now spans
+  `mapToSvg(MAP_MIN_COL, …)` → `mapToSvg(MAP_MAX_COL, …)` instead of
+  starting at column 0, so it runs the full width of the wider grid.
+- `MAP_BUILDINGS` untouched — no buildings were placed by this pass.
+  Wide view shows the larger grid; Close view is structurally unaffected
+  (it already pans per-node) and was spot-checked against the new nodes.
+
+**Documentation**
+
+- `LOCATIONS`' coordinate-convention comment rewritten for the 8×8 grid:
+  the new col/row ranges and street orders, why the four new named
+  streets sit south of Maple, and that the origin did not move.
+- `MAP`'s grid-extents comment updated, including why `MAP_MIN_COL`/
+  `MAP_MIN_ROW` exist and why `MAP_MAX_ROW` didn't change.
+- ARCHITECTURE comment's "Current version" line bumped.
+- Roadmap updated and renamed to `Ashfall_Development_Roadmap_v0.4.1.md`.
+  Item 14 kept open with its scope narrowed to the building-placement
+  half that this pass did not build. Item 9's room count corrected
+  (60 → 185 street/outdoor rooms across two functions) and its "no
+  urgency yet" note revised, since this pass is exactly the growth that
+  note was waiting on. Nothing was removed.
+
+**Explicitly out of scope** (per the handoff)
+
+- Any new buildings in the new blocks, and any new outdoor set-pieces
+  like the Storage Facility or Riverbank. This pass is the street
+  skeleton only; what gets placed out there is a separate planning pass
+  and the remaining half of roadmap item 14.
+- No loot in the new blocks beyond the eight incidental floor items above.
+- Splitting `buildStreetsAndOutdoor()` itself (roadmap item 9).
+- The missing item-category population pass (separate handoff).
+- Container property tags / item respawn (roadmap item 15).
+
+**Validation performed**
+
+Audited with a harness that evaluates the real `<script>` body under a DOM
+stub and inspects the assembled `world`, run against both this file and
+the unmodified v0.4.0 file for comparison:
+
+- 218/218 rooms resolve a `locationId` in `LOCATIONS`; 774 exits, every
+  target resolving to a real room.
+- Every street↔street exit is reciprocal (this is the check that caught
+  the `poplar2nd` bug, and it fails identically on unmodified v0.4.0).
+- Every street exit spans exactly one grid step — 50m to a mid-block or
+  100m to the next intersection — so no exit accidentally skips a node.
+- Every compass word in every cross-`Location` exit label matches the
+  direction `computeDirection()` derives from the coordinates.
+- All 176 expected grid nodes present (64 intersections + 56 + 56
+  mid-blocks) against an independently enumerated 8×8 grid.
+- All 16 `MAP_STREETS` chains are 15 nodes, every id resolving; every
+  grid node appears in some chain; all 176 render inside
+  `MAP_WIDE_VIEWBOX`.
+- Every room reachable from the player's start room by exit-graph search.
+- Wide map rendered to SVG and rasterized — 8×8 grid draws correctly with
+  the river along Water St at the north edge.
+- Diffed against `ashfall_0_4_0.html`: 23 lines removed, all of them the
+  intended `MAP`/comment/version edits. No existing room, container, item
+  or exit was removed or rewritten — every world-data change is an
+  addition.
+
+**Notes / assumptions**
+
+- Street names, the north/south flip, the symmetric numbered-street
+  scheme and the one-pass phasing are Tom's answers to the handoff's
+  three open questions, not this session's picks.
+- Which four new named streets are residential (Elm, Cedar) versus
+  industrial (Mill, Dock), and the specific character given to each — the
+  mill and its yards, the rail spur and loading docks along Dock St — is
+  this session's invention, extrapolated from the existing Riverside
+  Freight warehouse and the "INDUSTRIAL-something" sign already on
+  Maple St's south side. Retunable; nothing mechanical depends on it.
+- The eight incidental floor items, the three `hasTree` nodes and the
+  `fishable` flags on the new Water St nodes are judgment calls within the
+  handoff's "sprinkle a handful for texture" guidance. Item choices are
+  flavor, but `hasTree` feeds `doChopTree` and `fishable` feeds `doFish`,
+  so they are live gameplay affordances and worth re-balancing if the
+  outer grid ends up too generous a firewood/food source.
+- `MAP_MIN_ROW` is defined and documented but not yet read by any code,
+  since `MAP_MAX_ROW` alone still anchors the y axis. It is there as the
+  matching half of `MAP_MIN_COL` so the extents read as a pair.
+- The handoff described the 14 edge rooms as gaining "a new exit" each.
+  Following the file's own convention, each new direction gains a *pair*
+  (next intersection + mid-block), which is why the count here is 26
+  exits across 11 rooms rather than 14.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.0"` → `"0.4.1"`
+
+---
+
 ## v0.4.0 — Container Spawn Pools & Population System
 
 Implements the "Ashfall Handoff — Container Spawn Pools & Population
