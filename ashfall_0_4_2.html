@@ -19,7 +19,7 @@
   #menuToggle:hover{ border-color:var(--accent-dim); }
   #menuBackdrop{ position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:15; display:none; }
   #menuBackdrop.show{ display:block; }
-  #sideMenu{ position:fixed; top:0; left:0; height:100%; width:360px; background:var(--panel);
+  #sideMenu{ position:fixed; top:0; left:0; height:100%; width:460px; max-width:92vw; background:var(--panel);
     border-right:1px solid var(--line); transform:translateX(-100%); transition:transform .22s ease;
     z-index:20; padding:20px 18px; display:flex; flex-direction:column; gap:16px; font-family:system-ui,sans-serif; overflow-y:auto; }
   #sideMenu.open{ transform:translateX(0); }
@@ -41,7 +41,7 @@
   .map-street{ stroke:var(--line); stroke-width:3; fill:none; }
   .map-street-thin{ stroke:var(--line); stroke-width:1.5; opacity:.6; fill:none; }
   .map-node-dot{ fill:var(--ink-faint); }
-  .map-street-name{ fill:var(--ink-dim); font-size:11px; font-family:system-ui,sans-serif; letter-spacing:2px; font-weight:600; }
+  .map-street-name{ fill:var(--ink-dim); font-size:15px; font-family:system-ui,sans-serif; letter-spacing:.5px; font-weight:600; }
   .map-bldg-dot{ fill:var(--panel-2); stroke:var(--accent-dim); stroke-width:1.5; }
   .map-bldg-label{ fill:var(--ink); font-size:10px; font-weight:600; font-family:system-ui,sans-serif; }
   .map-river{ fill:none; stroke:#2a4a5c; stroke-width:10; stroke-linecap:round; opacity:.5; }
@@ -4412,6 +4412,7 @@
   const MAP_MIN_ROW = -4;
   const MAP_MAX_ROW = 3;
   const MAP_WIDE_VIEWBOX = { x:20, y:20, w:1000, h:1000 };
+  const MAP_PLAYER_R_WIDE = 12;
 
   // Street runs (Wide view) — one continuous named path per street.
   const MAP_STREETS = [
@@ -4471,10 +4472,28 @@
       return (i===0 ? "M " : "L ") + p.x + " " + p.y;
     }).join(" ");
   }
-  function mapRepeatedLabel(name){
-    // repeats the name along the path so it reads as the street itself
-    // rather than a one-off tag stuck on top of a plain line
-    return `${name}   \u2022   ${name}   \u2022   ${name}`;
+  // One name per block (Wide view). A chain alternates intersection,
+  // mid-block, intersection, ... so the even indices are the intersections
+  // and the odd index between any two of them is that block's midpoint —
+  // which is where the label goes, instead of repeating the street name
+  // along the whole run and ending up with "1ST ST - 1ST ST - 1ST ST".
+  // The label is rotated onto the block's own heading (always 0 or +/-90
+  // on this grid) and nudged off the line by MAP_LABEL_OFFSET so it sits
+  // beside the street rather than on top of it.
+  const MAP_LABEL_OFFSET = 5;
+  function mapBlockLabels(name, chain){
+    let out = "";
+    for(let i = 0; i + 2 < chain.length; i += 2){
+      const a = mapToSvg(LOCATIONS[chain[i]].x / 100, LOCATIONS[chain[i]].y / 100);
+      const b = mapToSvg(LOCATIONS[chain[i+2]].x / 100, LOCATIONS[chain[i+2]].y / 100);
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      // keep the text upright: fold the heading into (-90, 90]
+      let ang = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+      if(ang > 90) ang -= 180;
+      else if(ang <= -90) ang += 180;
+      out += `<text class="map-street-name" transform="translate(${mx} ${my}) rotate(${ang})" y="${-MAP_LABEL_OFFSET}" text-anchor="middle">${name}</text>`;
+    }
+    return out;
   }
   function renderMapClose(){
     let html = "";
@@ -4508,18 +4527,18 @@
     return html;
   }
   function renderMapWide(){
-    let html = "<defs>";
-    MAP_STREETS.forEach((s,i)=>{
-      html += `<path id="mapstreetpath-${i}" d="${mapPathD(s.chain)}" fill="none"/>`;
-    });
-    html += "</defs>";
     const wStart = mapToSvg(MAP_MIN_COL, MAP_MAX_ROW), wEnd = mapToSvg(MAP_MAX_COL, MAP_MAX_ROW);
-    html += `<path class="map-river" d="M ${wStart.x-25} ${wStart.y} L ${wEnd.x+25} ${wEnd.y}"/>`;
-    MAP_STREETS.forEach((s,i)=>{
+    let html = `<path class="map-river" d="M ${wStart.x-25} ${wStart.y} L ${wEnd.x+25} ${wEnd.y}"/>`;
+    MAP_STREETS.forEach(s=>{
       html += `<path class="map-street-thin" d="${mapPathD(s.chain)}"/>`;
-      html += `<text class="map-street-name"><textPath href="#mapstreetpath-${i}" startOffset="50%" text-anchor="middle">${mapRepeatedLabel(s.name)}</textPath></text>`;
     });
-    html += `<circle id="mapPlayer" cx="0" cy="0" r="5"/>`;
+    // labels after every street line so no run is drawn over its own names
+    MAP_STREETS.forEach(s=>{
+      html += mapBlockLabels(s.name, s.chain);
+    });
+    // Wide's viewBox is ~4x Close's, so the marker needs a matching radius
+    // to read as the player at all rather than as another node dot.
+    html += `<circle id="mapPlayer" cx="0" cy="0" r="${MAP_PLAYER_R_WIDE}"/>`;
     return html;
   }
   function mapPositionPlayer(node){
