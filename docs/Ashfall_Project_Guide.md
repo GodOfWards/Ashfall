@@ -126,7 +126,8 @@ data; now they're defined once and referenced by id.
 
 The corollary to the rule above, applied to numbers. Any literal that
 encodes a game rule — a duration, threshold, rate, capacity, or quantity —
-is a named constant in CONFIG/CONSTANTS or beside the system that owns it.
+should normally be a named constant, in CONFIG/CONSTANTS or beside the
+system that owns it.
 A bare number in a mechanic is a fact with no name, and a fact with no name
 is one that can be silently duplicated.
 
@@ -136,19 +137,32 @@ spend `recipe.minutes`, and the buttons that launch them display
 while its button displays `fmtDuration(20)` — the same fact written twice,
 where changing one makes the button lie to the player.
 
-Three kinds of number are *not* game rules and stay literal:
+When a derived value exists, write the derivation rather than the result.
+Three firewood burning for sixty minutes each is `FIRE_BUILD_WOOD *
+FIRE_MINUTES_PER_WOOD`, not `180` — the second form is correct today and
+silently wrong the moment either input is retuned.
+
+**The test is whether the call site reads better, not whether the rule
+applies.** Naming is the default because most game rules are clearer
+named, not because every number must be. If the named form is harder to
+read than the number was, or the name would only restate the digits
+(`TWO = 2`), or the constant would sit so far from its one and only use
+that a reader has to go looking — leave the literal. A rule that makes
+code worse in order to satisfy itself has stopped being useful.
+
+Cases where the literal usually wins:
 
 - **Mathematical identities** — `* 180 / Math.PI`, a loop's `1e-9`
-  epsilon, an easing exponent. A name makes these harder to read.
+  epsilon, an easing exponent. These are not game rules and a name
+  obscures them.
 - **Per-instance content** — one building's label offset, one item's
   weight, one room's capacity. These are data, defined once at their
   instance; they are not shared facts.
 - **Structurally trivial** — `0`, `1`, array bounds, and the like.
 
-When a derived value exists, write the derivation rather than the result.
-Three firewood burning for sixty minutes each is `FIRE_BUILD_WOOD *
-FIRE_MINUTES_PER_WOOD`, not `180` — the second form is correct today and
-silently wrong the moment either input is retuned.
+That list is a guide, not a boundary. The question to ask at each literal
+is which form a reader would rather meet, and the honest answer is
+sometimes the number.
 
 ### Comments carry intent, not history
 
@@ -171,9 +185,16 @@ Comments that earn their place:
   deliberately unkeyed; why firearms were left out. A reader can see what
   the code does and still not know why it was allowed to.
 
-Comments that don't: restating the line below, recording when a change
-shipped, pointing at a document outside the repository, or standing in for
-structure a function name would carry better.
+Comments that usually don't: restating the line below, recording when a
+change shipped, pointing at a document outside the repository, or standing
+in for structure a function name would carry better.
+
+**The goal is fewer comments, not none.** Deleting a comment that was
+doing real work is a regression dressed as tidying. Where a comment is
+genuinely the clearest way to convey something — and in a single-file,
+no-build-step, untyped codebase it often is — keep it, whichever list
+above it appears to fall under. Before removing one, say what a reader
+loses; if the answer is anything, it stays.
 
 ### Every "no behavior change" claim gets proven, not asserted
 
