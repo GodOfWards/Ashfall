@@ -7,6 +7,235 @@ owns which behavior.
 
 ---
 
+## v0.4.8 — Map zoom ladder, and street names clear of intersections
+
+Implements #27 and #28 in full, per `handoffs/map-zoom-and-label-collisions.md`.
+Two changes taken as one pass because they land in the same code: the `+`/`−`
+buttons shipped inert in v0.4.5 get a working zoom ladder, and the street-name
+placement that ladder retunes gets its intersection-collision fix.
+
+RENDERING only, and within it the MAP sub-block. No new state fields — the zoom
+step joins `mapZoomMode` as a module-level `let`, deliberately outside `state` —
+so `SAVE_KEY` still derives from `0.4` and existing browser saves keep loading.
+No WORLD DATA, no mechanics, no stylesheet change.
+
+**Changed / Reworked**
+
+*Zoom ladder*
+
+- A view's span is now a whole number of blocks: `span = mapZoomStep *
+  MAP_SPACING`. `MAP_ZOOM_RANGE` gives each mode the steps it allows and the
+  step it opens at — Close `1..3`, base `2` (130 / 260 / 390 units across);
+  Wide `3..6`, base `6` (390 / 520 / 650 / 780). `mapTargetViewBox()` reads the
+  step instead of picking a span from `mapZoomMode`, which now only bounds the
+  range.
+- `+` zooms in, which is a *smaller* span: the step counts blocks across, so
+  `mapZoomIn` decrements it.
+- The step is clamped in `mapSetZoomStep()`, at the two places it changes — a
+  `+`/`−` click, and the mode toggle moving the range under it — and nowhere
+  else. Both buttons take their `disabled` state from the same range in the
+  same call, so a button never offers a step that would do nothing, and
+  `mapTargetViewBox()` does no per-frame clamping of a value that changes only
+  on a click.
+- Switching mode clamps to the nearest step the new mode allows rather than
+  resetting to its base. Where the ranges overlap this keeps the box: Close@3 →
+  Wide@3 is the same 390-unit view with only the content changing.
+- A zoom step re-aims the existing viewBox and does not rebuild the SVG —
+  content stays keyed on the mode via `mapRenderedZoom`. The existing 350ms
+  animation already interpolates `w`/`h`, and `mapPositionStreetLabels()`
+  already runs per frame, so the names re-place themselves as the span changes.
+  A **mode** switch still rebuilds, as before.
+
+*Street-name placement (Wide)*
+
+- `mapLabelPositions()` now passes its tier positions through
+  `mapClearCrossings()`: a position within `MAP_LABEL_CLEARANCE` of an
+  intersection slides to the mid-block beside it. Intersections fall on the grid
+  pitch along both axes, so this is arithmetic on the position rather than a
+  walk through the street's chain.
+- `mapPositionStreetLabels()` takes the player's map node and drops any name
+  whose box would fall under the player marker, which nothing in the placement
+  previously knew about. `mapLabelBox()` is the one description of what a name
+  occupies, used by that test and derived from the same constants as the
+  clearance.
+
+**Fixed** — #28, street names colliding at intersections
+
+A name is placed against the *clipped visible* stretch of its street, so an
+inset position frequently landed within a name's own width of a crossing, where
+a horizontal name's band and a vertical name's band overlap. v0.4.7 put 213
+overlapping pairs on screen across the 176 map nodes at its single span. Sliding
+those positions to a mid-block — `MAP_SPACING / 2` from either crossing — is
+what removes them; the count is now 0 at every span on the ladder (see
+**Validation performed**).
+
+**Removed**
+
+- `MAP_CLOSE_VIEW` (260) and `MAP_WIDE_VIEW` (800). Both are now the `base`
+  entries of `MAP_ZOOM_RANGE`, expressed in blocks, and the span is derived
+  where it is read. Keeping either as a named derivation would have left a
+  constant with no remaining use.
+
+**New constants**
+
+- `MAP_LABEL_W` (99.1) and `MAP_LABEL_CAP` (12) — the rendered width of the
+  widest name on the map (`"POPLAR ST"`) and the cap height, in user units at
+  the 15px `.map-street-name` face. Measured against the font, not chosen, and
+  commented as such: every name is upper case with no descender, so the cap
+  height is the whole ink band.
+- `MAP_LABEL_CLEARANCE` = `MAP_LABEL_W / 2 + MAP_LABEL_OFFSET + MAP_LABEL_CAP`
+  (66.55) — how far past an intersection a name's box can still reach the
+  crossing street's name.
+- `MAP_LABEL_EDGE_GAP` (5), the breathing room in the inset below.
+
+**Derivations named** (previously bare literals, same or near-same values)
+
+| Was | Now | Value |
+|---|---|---|
+| `MAP_CLOSE_VIEW = 260` | `MAP_ZOOM_RANGE.close.base * MAP_SPACING` | 260 |
+| `MAP_WIDE_VIEW = 800` | `MAP_ZOOM_RANGE.wide.base * MAP_SPACING` | **780** |
+| `MAP_LABEL_INSET = 55` | `MAP_LABEL_W / 2 + MAP_LABEL_EDGE_GAP` | 54.55 |
+| `MAP_LABEL_TIERS` 600 / 300 / 110 | `6 / 3 / 1 * MAP_LABEL_W` | 594.6 / 297.3 / 99.1 |
+
+Wide's default view is **780 rather than 800** — a deliberate 2.5% tightening
+of shipped v0.4.5 behaviour, approved during planning, so that every view on the
+ladder sits on the block pitch. The tier thresholds move by under 2% except the
+smallest, where 110 → 99.1 makes "one name wide" the literal condition for
+getting one name. The tiers are a crowding rule, not a legibility one: a name's
+width in user units is the same at every span, so what they measure still means
+the same thing, and the ladder's ranges are what keep names readable. As
+predicted in #27, the 1-label tier is reachable now — unreachable at span 800,
+it fires at every span on the ladder.
+
+**UI**
+
+- `+` and `−` are live, each disabling itself at its end of the current mode's
+  range; the static `disabled` attributes are gone from the markup and the
+  initial state is set from the range at boot. Neither button gained a
+  `data-zoom` attribute, which would have captured it into the Close/Wide
+  handler.
+- Close gains one step in and one step out of its previous view; Wide gains
+  three steps in, and its default view is very slightly tighter.
+- Wide street names no longer collide at intersections and no longer sit under
+  the player marker. A street that loses one of its two or three names to either
+  rule keeps the others; where it was the only one, `#locBar` still names the
+  player's location.
+
+**Open questions / decisions resolved**
+
+The handoff left four implementation choices open. The first three took its
+recommended default; the fourth did too, as `mapSetZoomStep()`.
+
+1. *Nudge direction* — toward the centre of the visible stretch. The mid-block
+   on the far side is the fallback, and a name with neither left inside the
+   stretch is dropped rather than slid again.
+2. *Two names converging on one mid-block* — the one nearer the centre of the
+   stretch keeps it. Generalised slightly: any two names on a street that end
+   up closer than one name's width apart resolve the same way, which covers the
+   near-miss as well as the exact tie.
+3. *Shape of the clearance constant* — computed from the width and geometry
+   constants at use, so retuning the face or the widest name carries through.
+4. *How `disabled` is refreshed* — one helper, called from both handlers.
+
+A fifth decision the handoff did not anticipate: **the clearance formula
+itself**. The handoff derived `(width + height) / 2 ≈ 57.05` by treating a name
+as a box centred on its anchor. It is not centred — it sits `MAP_LABEL_OFFSET`
+off its own street line and its ink runs one cap height further, so the distance
+at which a crossing name can still be touched is `MAP_LABEL_W / 2 +
+MAP_LABEL_OFFSET + MAP_LABEL_CAP` = 66.55, and under the handoff's number a name
+could sit 9.5 units inside that reach without being nudged. The implemented
+constant uses the measured geometry.
+
+**Notes / assumptions**
+
+- Every number introduced here is retunable and none has a prior convention
+  behind it: the two step ranges and their bases, the tier multipliers, and
+  `MAP_LABEL_EDGE_GAP`. Close's ceiling was picked as the step where its 10-unit
+  building labels stay near 10 CSS px (the map renders ~420px wide); Wide's base
+  is the widest step that still leaves the town's 910 units something to pan
+  within.
+- `MAP_LABEL_W` keeps the handoff's measured 99.1. The same string measures
+  98.2 in the browser this pass was validated in — fonts resolve differently per
+  system — and the larger value is the conservative one for a clearance.
+- **The clearance a mid-block gives is not symmetric, and one side of it is
+  thin.** A mid-block sits 65 units from either crossing, which clears the 66.55
+  reach on the side a name is slid away from but comes ~1.5 units short of it at
+  the crossing beyond. Closing that gap needs the two names meeting there to
+  *both* be within ~3 units of the widest: only `"POPLAR ST"` is, and it runs
+  east-west, so it never meets another name that wide. The sweep confirms it —
+  zero overlaps, and the closest two crossing names come is 12.6 units. A
+  north-south street named wider than `MAP_SPACING - 2 * (MAP_LABEL_OFFSET +
+  MAP_LABEL_CAP)` would reintroduce the collisions, and that constraint is
+  recorded beside the constant. It is a tighter bound than the handoff's
+  estimate of ~115 units, which came from the centred-box model above.
+
+**Documentation**
+
+- Filed #37: in Wide, a street lying exactly on the viewBox edge is still
+  treated as on screen and given its names, which then render entirely outside
+  the box. Pre-existing — v0.4.7 emitted the same 370 such labels at span 800,
+  where they were sliced by the edge rather than missed by it — and out of this
+  pass's scope. Surfaced by this pass's sweep.
+- Nothing else was deferred. No ARCHITECTURE comment or schema comment changed:
+  no section moved and no schema shape changed.
+
+**Explicitly out of scope** (deferred by the handoff, still open)
+
+- #16's close-map building-label clipping, and its mobile breakpoint.
+- Neighbourhood / district labels, and any content that varies by span — that
+  needs a spatial grouping layer the file does not have.
+- Zoom or mode persistence, and any preferences store.
+- Viewport culling in `renderMapClose()`, which still emits all 176 node dots
+  per rebuild.
+- Clamping `mapTargetViewBox()` to the town's bounds, deliberately left
+  unclamped in v0.4.5.
+- Any change to `LOCATIONS`, `MAP_STREETS` or `MAP_BUILDINGS`.
+- #33's comment and literal pass, apart from the `MAP_*` derivations above,
+  which this pass owned by agreement.
+
+**Validation performed**
+
+Headless sweep in Chromium against the real renderer, driving an instrumented
+copy of `ashfall.html` (the shipped file plus one line exporting the map
+internals). Every label box is read from the element's own `getBBox()` and
+transform, so the geometry checked is what the browser drew, not the model the
+code places from.
+
+- **Wide — 176 nodes × 4 spans (390/520/650/780) = 704 positions, 11,428
+  labels.** Zero overlapping pairs. Zero names outside their street's visible
+  stretch. Zero clipped along the street's axis. No street over its tier's
+  count. Zero names intersecting the player marker. Closest approach between two
+  crossing names: 12.6 units.
+- **The same sweep against v0.4.7** (176 nodes at span 800, 4,696 labels):
+  **213 overlapping pairs**. This is the #28 regression test.
+- **Close — 176 nodes × 3 spans (130/260/390) = 528 positions.** The viewBox is
+  exactly the expected player-centred box at every one, and zero street names
+  are emitted in any of them.
+- **Controls**, clicked through the real UI: opens at Close step 2 with both
+  buttons enabled; `+` reaches 130 and disables itself; `−` reaches 390 and
+  disables itself; a forced click on a disabled button changes nothing; a zoom
+  step leaves the SVG's children untouched (a marker attribute on the first
+  child survives every step) while a mode switch replaces them (224 ↔ 66
+  children); Close@3 → Wide holds the 390 box; Wide@6 → Close clamps to 3, not
+  to base 2; Close@1 → Wide clamps to 3. Neither `+` nor `−` carries
+  `data-zoom`.
+- `node --check` on the extracted script, and a play-through (move six times,
+  switch modes, zoom) with no page or console errors.
+- Diff: `git diff origin/main...HEAD -- ashfall.html`.
+
+**Sections touched**
+
+RENDERING, MAP sub-block only — `MAP_ZOOM_RANGE` and the `MAP_LABEL_*`
+constants, `mapSetZoomStep()`, `mapTargetViewBox()`, `mapUpdateViewBox()`,
+`mapLabelPositions()`, `mapClearCrossings()`, `mapLabelBox()`,
+`mapLabelHitsPlayer()`, `mapPositionStreetLabels()`, and the `#mapZoomToggle`
+handlers. Plus the two `<button>` elements in the document body, and one line in
+the boot sequence.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.7"` → `"0.4.8"`
+
+---
+
 ## v0.4.7 — WORLD DATA cleanup: street/building split, vestigial exit fields, registry duplicate
 
 Implements #3, #4 and #5 in full, per `handoffs/world-data-cleanup.md`. Three
