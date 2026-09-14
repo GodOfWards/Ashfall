@@ -109,22 +109,48 @@ The handoff is committed to `main` when the planning session wraps, and
 kept after it ships. Its commit date is the record that the spec predated
 the code; there's no delete-when-consumed step.
 
-### When a handoff stops being implementable
+### When a handoff is no longer live
 
-Keeping handoffs means some of them go stale — the code moves underneath
-one, or a later pass ships the same fix by a different mechanism. A stale
-handoff is a trap rather than merely clutter, because of how a coding
-session reads: it opens the handoff and `ashfall.html` and nothing else,
-so it never sees the issue that knows better.
+Keeping handoffs means most of them are not instructions any more. The
+test is one question: **would a coding session handed this file and
+`ashfall.html` today produce the right change?** If not, for any reason,
+it is not live. That is the coding session's literal contract, so it is
+the only question worth asking.
 
-Marking it in the issue is therefore not enough. A handoff that should no
-longer be implemented gets marked **in the file itself**:
+There are two ways to fail it, and they are recorded differently.
+
+**Spent** — it shipped. Re-implementing it is redundant at best. This is
+already recorded, because every changelog entry names the handoff it
+implements by path (`CHANGELOG_GUIDE.md`), so status is derivable with no
+new bookkeeping:
+
+```
+grep -l "handoffs/<name>.md" CHANGELOG.md
+```
+
+A hit means spent, and the `## vX.Y.Z` heading above it says which version
+consumed it. **Never banner a spent handoff** — that would hand-maintain a
+copy of the changelog, which is what one-source-of-truth exists to
+prevent, and it would drift.
+
+**Superseded** — it never shipped, or only partly, and the code moved
+underneath it. Implementing it would now be actively wrong. Signs: code it
+names by identifier is gone from `ashfall.html`; its "Relevant existing
+state" no longer describes the file; its findings were fixed by a
+different mechanism; its issue was closed by a pull request that did not
+use it.
+
+Nothing in the repository knows this — a handoff can be wrong while every
+other file stays silent — so it is the one case that must be written down,
+and it is written **in the handoff itself**. Marking it in the issue does
+not reach anyone: a coding session opens the handoff and `ashfall.html`
+and nothing else, which is the workflow working as intended.
 
 - A blockquote at the very top, above the title, saying it is superseded
-  and must not be implemented.
+  and must not be implemented. First line, so `head -1 handoffs/*.md`
+  reports the whole directory without opening a file.
 - What is true now, finding by finding where the handoff had several —
-  including which parts have shipped, and which code it names no longer
-  exists.
+  including which parts shipped and which code it names no longer exists.
 - Where the live truth lives: the issue carrying the re-verified findings.
 
 Nothing below the banner is edited or deleted. The point of keeping a
@@ -133,8 +159,12 @@ the body destroys exactly that, and the banner is what lets the stale text
 stand without misleading anyone. `handoffs/map-view-ui-fixes.md` is the
 worked example.
 
-Mark it when it's found stale, not at the next wrap — the gap is when
+Mark it when it is found stale, not at the next wrap — the gap is when
 someone implements it.
+
+Status is never put in the filename or in a subdirectory. Changelog
+entries cite handoffs by path, so moving or renaming one breaks every
+historical reference to it.
 
 ---
 
