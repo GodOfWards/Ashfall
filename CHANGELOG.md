@@ -7,6 +7,539 @@ owns which behavior.
 
 ---
 
+## v0.4.6 — Log: routine lines removed, repeated lines collapsed
+
+Implements #21 and #22 in full, per `handoffs/log-noise-and-collapse.md`. The
+log stops confirming what a panel already shows, and a run of the same action
+reports once instead of once per repetition. Rendering behavior — how existing
+state changes are surfaced. No mechanics, no world data, no vitals math, no new
+state fields, no save-format change.
+
+**Removed** — INVENTORY / ITEM SYSTEM, seven routine `log()` calls
+
+Each failed the same test: does the line tell the player something the screen
+doesn't already show?
+
+- `doTake()` and `doStore()` — the item visibly moves between the Here and
+  Inventory panels. `doStore()`'s `verb` local went with its line.
+- `doEquip()` and `doUnequip()` — a new inventory tab appears, or disappears.
+- The battery controls in `getItemActions()`: on/off (the detail view already
+  reads "— On" / "— Off"), removal (the batteries appear in inventory and the
+  view reads "No batteries installed") and replacement (the charge readout
+  jumps to 100%).
+- Every failure and redirect still speaks: "That won't fit", "No room for the
+  … — it drops to the floor instead", "Your keychain can't hold that", "You're
+  already carrying something in that slot", and every consequence line with no
+  visible counterpart.
+- `doConsume()` keeps its line. Eating is the one case where the panels don't
+  tell the story: the item count drops, but the effect lands on Hunger and
+  Thirst, which live behind the ☰ menu and are invisible during normal play.
+
+**New** — EVENTS / UI HELPERS, collapsing consecutive runs
+
+- `log(text, cls)` becomes `log(text, cls, key, outcome)`. Both new parameters
+  are optional and every existing unkeyed call site behaves exactly as before:
+  it never collapses, and nothing collapses into it.
+- With a `key`, the line collapses into `#log`'s last child if that child
+  carries the same `dataset.logKey`; otherwise it appends a new element
+  carrying it. **Only consecutive runs collapse.** Any intervening line breaks
+  a run — including a `warn`, on purpose: a string of ten "That won't fit"
+  failures is worth seeing in full, and hiding repeated failures would hide a
+  stuck player from themselves. `fish, fish, chop, eat, eat, drink, fish, eat`
+  logs as `fish, chop, eat, drink, fish, eat`.
+- **Tally actions** (fixed text) key on the action and re-render as prose from
+  the second occurrence: `doFish()` as `fish` with `bite`/`miss` outcomes,
+  `doRest()` as `rest`, `doChopTree()` as `chop`, `doAddFuel()` as `fuel`. The
+  four sentences live in one `LOG_SUMMARIES` table beside `log()`: "You fish
+  seven times. Three bites." / "Nothing bites." / "One bite." for the
+  degenerate counts, "You rest for three hours.", "You chop down three
+  trees.", "You feed three more pieces of wood into the fire."
+- **Counted actions** (the text names an object) keep their sentence and class
+  and gain a dim trailing `<span class="logcount">×3</span>`. Their keys carry
+  the object — `consume:` + item id, `craft:` + output id, `cook:` + recipe id
+  — so eating three different things can never render as one line naming the
+  first. New style: `.logcount{ color:var(--ink-faint); font-size:11.5px;
+  margin-left:5px; }`, so the count reads as functional UI rather than as part
+  of the prose.
+- `numberWord()` in UTILITIES, beside `fmtDuration()`: spelled out through
+  ten, digits from eleven up, matching the game's prose.
+- On collapsing a tally run the element's outcome class is cleared — a fishing
+  run mixes a `good` bite with an unclassed miss, and the summary is a neutral
+  report of both. Counted runs keep their class.
+- `.fresh` follows its existing rule unchanged — stripped from every line,
+  then applied to the line just written when `cls` is falsy — so the newest
+  line stays highlighted whether it was appended or rewritten in place.
+- Runs may span movement: `doMove()` logs nothing, so chopping a tree in three
+  rooms in a row still collapses to one line. Intended.
+- `doSearch()` is deliberately unkeyed: a room can only be searched once and
+  different rooms would key differently, so it could never collapse.
+- The 50-entry cap and the scroll-to-bottom behavior are unchanged.
+
+**UI**
+
+- Taking, storing, equipping, unequipping and servicing batteries are silent.
+  Their failure warnings are not.
+- Eating and drinking still report.
+- A repeated action reads as one line: "You fish seven times. Three bites." /
+  "You rest for three hours." / "You chop down three trees." / "You eat the
+  canned soup. ×3".
+- Failures never collapse.
+
+**Sections touched**
+
+- EVENTS / UI HELPERS — `log()`, the new `LOG_SUMMARIES` table.
+- UTILITIES — the new `numberWord()` and `NUMBER_WORDS`.
+- INVENTORY / ITEM SYSTEM — five removed `log()` calls across `doTake()`,
+  `doStore()`, `doEquip()`, `doUnequip()` and the battery actions in
+  `getItemActions()`; one key added in `doConsume()`.
+- FIRE / COOKING — keys in `doFish()`, `doAddFuel()`, `doChopTree()`,
+  `doCookInContainer()`.
+- CRAFTING — key in `doCraft()`.
+- WORLD INTERACTION — key in `doRest()`.
+- The document `<style>` block for `.logcount`.
+
+Only the `log()` calls inside those action functions changed; no ACTIONS
+logic, no simulation rule and no vitals math was touched.
+
+**Open questions / decisions resolved**
+
+The handoff left four implementation calls open; all four took its recommended
+default.
+
+- **Where the summary text lives**: one `LOG_SUMMARIES` table next to `log()`,
+  keyed by action id and taking the tally object — not sentences built at the
+  four call sites. A future content pass edits all four strings in one place.
+- **How a call site passes its outcome**: a fourth optional parameter
+  defaulting to the key itself, so only `doFish()` names an outcome
+  (`bite`/`miss`) and the three single-outcome actions pass nothing extra.
+- **`numberWord()` placement**: UTILITIES, beside `fmtDuration()`.
+- **When a tally run starts tallying**: from the first occurrence, so the
+  transition at n = 2 is a re-render rather than a reconstruction.
+
+**Notes / assumptions**
+
+- The two battery-servicing removals ("You pull the batteries out of the …",
+  "You put fresh batteries in the …") are an **explicit extension of #21's
+  original table by two call sites**, made because they fail the same test and
+  leaving them would have made the battery controls inconsistent — silent when
+  toggled, chatty when serviced.
+- Collapse state lives on the `<p>` element: `dataset.logKey` for matching and
+  a `_logTally` expando for the counts, since `dataset` values are strings.
+  Nothing about the log is in `state`, so nothing about it is serialized.
+- `doConsume()`'s key is `"consume:" + (it.itemId || it.name)`. The handoff
+  specified `it.itemId`; the name fallback is a guard for the runtime-literal
+  items the remaining `giveItem()` call sites still build (the `tier-0`
+  registry cleanup), which would otherwise all key as `consume:undefined` and
+  collapse different foods into one line.
+- The summary wording is the handoff's, including "You fish two times." for a
+  run of exactly two — retunable prose, not a settled style rule.
+
+**Explicitly NOT changed**
+
+- `#log`'s 110px cap, its 50-entry trim, its gap and its line styles.
+- `serializeGame()`, `applyLoadedData()`, `doRestart()`'s `innerHTML = ""`.
+  `SAVE_KEY` is unchanged: `versionCompat()` reads `MAJOR.MINOR`, and this
+  pass adds no state.
+- Illness, vitals, `doConsume()`'s mechanics — only its `log()` call's key.
+- `doSearch()`, `doSleep()`, `doLightStove()`, `doBuildFire()`,
+  `doExtinguish()`, `doDismantleCampfire()`, the door/window lines, the save
+  and load `sys` lines, and every `warn` in the file: all unkeyed, all
+  unchanged.
+- No vitals readout was added outside the ☰ menu, per the handoff.
+
+**Validation performed**
+
+Driven in headless Chromium against an instrumented copy, with `Math.random`
+scripted where an outcome had to be forced:
+
+- Seven fishing attempts, three bites: one line, "You fish seven times. Three
+  bites." Two attempts with one bite: "You fish two times. One bite." Three
+  attempts, no bites: "You fish three times. Nothing bites." A single attempt
+  keeps its ordinary sentence with no summary.
+- A fishing run broken by an intervening `warn` produces two fish lines with
+  the warning between them, not a run of two.
+- Rest ×3 → "You rest for three hours."; ×12 → "You rest for 12 hours."
+  (digits above ten). Fuel ×3 → "You feed three more pieces of wood into the
+  fire." Chop ×3 across three different rooms → "You chop down three trees.",
+  confirming a run spans movement.
+- Eating the same item three times then a different one: two lines, "You eat
+  the canned soup. ×3" and "You eat the granola bars." Alternating two items
+  four times: four separate lines, never collapsed. Three raw fish where the
+  second triggers the illness warning: "×2", the warning, then a fresh line.
+- Crafting the same recipe twice: one line with "×2".
+- Equipping, unequipping, storing and taking, all four verified to have
+  actually moved the item: **zero** log lines. The following "That won't fit
+  there." warning still appears. Battery on/off, removal and replacement write
+  nothing.
+- `.fresh` lands on the rewritten line when the collapsing call is unclassed,
+  and exactly one line carries it.
+- The cap holds: 60 filler lines plus a collapsed rest run leaves exactly 50
+  children with the summary last.
+- `node --check` on the extracted script; no page or console errors in any
+  scenario.
+- Re-ran v0.4.4's and v0.4.5's own validations against this build: 672/102
+  exit split intact with all 224 head/block pairs ordered, 42 rooms hiding
+  Move, and the Wide map still exactly player-centred with label counts
+  matching their tiers.
+
+**Explicitly out of scope**
+
+Per the handoff: no resizing or restyling of `#log`, no vitals readout outside
+the ☰ menu, no change to illness or vitals, no summarising across
+non-consecutive occurrences (rejected during planning — it deletes the events
+between survivors and implies an order that didn't happen), and no collapsing
+of `warn` lines. #23 (illness system) is the recorded home of the
+hidden-vitals finding and is untouched.
+
+**Documentation**
+
+- The ARCHITECTURE comment's "Current version" line is bumped to 0.4.6.
+- Filed #29: re-judge `#log`'s 110px cap and 50-entry limit against the
+  quieter feed. The handoff deferred this explicitly on the grounds that it
+  has to be judged in play rather than guessed at; the issue records the
+  current values and says so.
+- Nothing else was deferred out of this pass.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.5"` → `"0.4.6"` (third of three
+passes in this pull request: `"0.4.3"` → `"0.4.4"` → `"0.4.5"` → `"0.4.6"`)
+
+---
+
+## v0.4.5 — Wide map: panning, zoom placeholders, viewport-relative labels
+
+Implements #19 and #20 in full, per `handoffs/wide-map-panning.md`. The Wide
+map now centres on the player and slides as they move; street names are placed
+against the part of each street on screen; two inert `+` / `−` buttons reserve
+the layout slot for a later zoom pass. Rendering-only, MAP sub-block. No
+mechanics, no world data, no new state fields, no save-format change.
+
+**Changed / Reworked** — RENDERING / MAP, Wide is a span, not a box
+
+- `MAP_WIDE_VIEWBOX = { x:20, y:20, w:1000, h:1000 }` is replaced by
+  `MAP_WIDE_VIEW = 800`, a span mirroring `MAP_CLOSE_VIEW = 260`.
+  `mapTargetViewBox()` collapses to one code path for both modes: a
+  player-centred box of the active span. Wide never panned before because its
+  target was a constant; nothing in `renderMap()` or `mapUpdateViewBox()`
+  needed changing to make it pan, and the existing 350ms ease-out animation
+  now runs for Wide moves too.
+- The span had to shrink for panning to mean anything. Node extents run 55 →
+  965 on both axes — 910 units — so a 1000-unit box has almost nothing to pan
+  within. At span 800 the box ranges over x ∈ [−345, 565] as the player
+  crosses town, which is the full width of the grid.
+- The box is **not clamped** to content bounds. At the western edge a
+  player-centred Wide box is 47% empty canvas; Close at the same spot is
+  already 40% empty. Clamping was rejected: the ask was for Wide to pan the
+  way Close does, and clamping would also stop Wide panning at all for any
+  span ≥ 960.
+- The player marker is untouched: `r="5"` in Close, `MAP_PLAYER_R_WIDE = 12`
+  in Wide.
+
+**Changed / Reworked** — RENDERING / MAP, street names placed against the viewport
+
+- `mapBlockLabels()` is gone. It emitted one `<text>` per block at build time
+  — 7 blocks × 16 streets = 112 labels — which stops meaning anything once the
+  view moves.
+- `renderMapWide()` now emits a fixed pool of `MAP_LABELS_PER_STREET` (3)
+  empty, hidden `<text class="map-street-name" data-street="N">` nodes per
+  street: 48 in total, created once per Wide render and thereafter only moved,
+  shown or hidden. Nothing is created or destroyed during a pan.
+- `mapBindStreetLabels()` caches that pool as element references, plus each
+  street's endpoints and heading angle, in the module-level `mapStreetLabels`.
+  It runs from `renderMap()` right after the SVG content is rebuilt, and
+  clears the pool for Close, which emits no street names at all.
+- `mapPositionStreetLabels(box)` places them. Every street run is
+  axis-aligned, so visibility is a 1-D clamp: a horizontal street is on screen
+  only if its single `y` lies inside the box, and its visible stretch is
+  `[max(min(ax,bx), box.x), min(max(ax,bx), box.x + box.w)]`; vertical streets
+  are the same with the axes swapped. Label count follows `MAP_LABEL_TIERS` on
+  that stretch's length — 3 at ≥ 600, 2 at ≥ 300, 1 at ≥ 110, none below —
+  positioned at `lo + MAP_LABEL_INSET`, the midpoint, and `hi −
+  MAP_LABEL_INSET` (one label sits at the midpoint alone). Unused pool nodes
+  get `display:none`.
+- Rotation and offset are v0.4.3's logic unchanged: the label rides its
+  street's heading folded into `(-90, 90]`, so vertical streets still read
+  bottom-to-top, offset off the line by `MAP_LABEL_OFFSET = 5`. This pass
+  changes where labels sit, never which way they read.
+- Labels are repositioned wherever the viewBox is set — the snap branch of
+  `mapUpdateViewBox()` and every `requestAnimationFrame` step — since the
+  placement is relative to the window, not to the street.
+
+**UI**
+
+- Wide shows about 80% of the town at a time, centred on the player, sliding
+  as they move, instead of the whole town fixed in place.
+- On-screen street names drop from 112 to at most 42, averaging 26.7 across
+  all 176 street positions.
+- Two greyed-out `+` / `−` buttons sit to the right of Wide, in that order,
+  using `&minus;` so they read as a matched pair. They are `disabled`, carry no
+  handler, and deliberately carry **no `data-zoom` attribute** — the mode
+  toggle binds `#mapZoomToggle button[data-zoom]`, and giving the placeholders
+  that attribute would have broken the Close/Wide switch. They get the
+  existing disabled treatment, `#mapZoomToggle button:disabled{ opacity:.4;
+  cursor:not-allowed; }`, matching `#gaitBar`.
+- Near the town's edges Wide shows empty canvas past the player, as Close
+  already does.
+
+**Removed**
+
+- `mapBlockLabels()` and `MAP_WIDE_VIEWBOX`. Replaced by the label pool and
+  `MAP_WIDE_VIEW` respectively.
+
+**Sections touched**
+
+UI/RENDERING, the MAP sub-block only — `mapTargetViewBox()`,
+`mapUpdateViewBox()`, `renderMapWide()`, `renderMap()`, the new
+`mapBindStreetLabels()` / `mapPositionStreetLabels()` / `mapLabelPositions()`,
+the `#mapZoomToggle` markup, and one rule in the document `<style>` block.
+
+**Open questions / decisions resolved**
+
+The handoff left four implementation calls open; all four took its recommended
+default.
+
+- **Per-frame vs. on-settle label repositioning**: per frame, inside
+  `step()`. At most 48 nodes exist and only `transform` and `display` change,
+  so no element is created or destroyed mid-animation. Verified mid-pan:
+  labels track the intermediate box, not the target.
+- **Where the pool lives**: a module-level array of element references,
+  `mapStreetLabels`, populated once per rebuild — the DOM is not re-queried
+  per frame. Mirrors how `mapPositionPlayer()` resolves `#mapPlayer`.
+- **Button order and glyphs**: `+` then `−`, using `&minus;`.
+- **Four named constants or one table**: one table, `MAP_LABEL_TIERS`, read by
+  `mapLabelPositions()` via a `find()` on the longest matching tier. No inline
+  magic numbers.
+
+**Notes / assumptions**
+
+- `MAP_WIDE_VIEW = 800`, `MAP_LABEL_INSET = 55`, and all three
+  `MAP_LABEL_TIERS` thresholds (600 / 300 / 110) are **retunable** and have no
+  prior convention behind them. 800 is the smallest span that both zooms in
+  noticeably and leaves room to pan; 55 is half the widest street name
+  (`POPLAR ST`, 99.1 units at 15px), which is what keeps a full-width label
+  inside the visible span instead of clipped at its edge.
+- The 1-label tier is currently unreachable: sweeping all 176 street nodes at
+  span 800 produced only 0-, 2- and 3-label streets. It is kept because the
+  spans a working zoom introduces (#27) will reach it.
+- Zoom mode stays a module-level `let`, not a field on `state`, so
+  `versionCompat()` still yields `"0.4"` and `SAVE_KEY` is unchanged.
+  Persisting a zoom level would have made this MINOR.
+
+**Explicitly NOT changed**
+
+- Close view: `renderMapClose()` is untouched, its span stays 260, its marker
+  stays `r="5"`, and it still emits zero `text.map-street-name` nodes.
+  Re-checked after a Wide round trip.
+- `LOCATIONS`, `MAP_STREETS`, `MAP_BUILDINGS`, `MAP_STREET_NODE_IDS`,
+  `MAP_SPACING`, `MAP_MARGIN`, `mapToSvg()`, `mapPathD()`,
+  `mapPositionPlayer()` — no node moves.
+- The viewBox is not clamped in either mode; Close's own edge behavior is
+  unchanged.
+- `serializeGame()`, `SAVE_KEY`, and every balance constant outside the MAP
+  sub-block.
+
+**Validation performed**
+
+Driven in headless Chromium against an instrumented copy of the new file:
+
+- The Wide viewBox is exactly player-centred at every one of 14 sampled
+  positions across two full-width walks (POPLAR ST west → east, 1ST ST south →
+  north, plus the four grid corners): `box.x === px − 400` and
+  `box.y === py − 400` with no exception.
+- Sampled mid-animation as well as settled: the box is intermediate and the
+  labels are placed against that intermediate box, confirming per-frame
+  repositioning.
+- Swept **all 176 street/mid-block nodes**. At every position, each street's
+  label count matches `MAP_LABEL_TIERS` applied to its own visible stretch
+  (992 two-label streets, 904 three-label, 920 with none, zero mismatches); no
+  label falls outside its street's visible span; and no label — measured with
+  its real rendered width — is clipped at a span edge. Peak 42 labels on
+  screen, mean 26.7.
+- Close view after load and after a Wide round trip: `viewBox` back to the
+  260-span player-centred box, player `r="5"`, 11 building dots, 19 building
+  labels, 176 node dots, 0 street-name nodes, empty label pool.
+- The `+` / `−` buttons are present, `disabled`, rendered at `opacity:.4` with
+  `cursor:not-allowed`; clicking both changes neither the zoom mode, the
+  active-button class, nor the viewBox.
+- No page or console errors on load, on toggling modes, or across the walks.
+- `node --check` on the extracted script; `git diff main -- ashfall.html`
+  confirms the MAP sub-block, the markup and the one CSS rule are all that
+  moved.
+- One property the handoff asked for did **not** hold: labels can collide at
+  an intersection. 116 of the 176 positions show at least one overlapping
+  pair, worst case `ELM ST` over `3RD ST` at 17 × 17 units. It is inherent to
+  the placement rule as specced — an inset position often lands near a
+  crossing, where two 15-unit-tall name bands can cross — so this pass shipped
+  the rule as written and filed #28 rather than inventing a placement rule the
+  handoff didn't specify.
+
+**Explicitly out of scope**
+
+Per the handoff: no working zoom (the buttons ship inert), no persisted zoom
+level, no viewBox clamping, no change to Close view or to any map geometry
+constant. Close-map building-label clipping and phone-viewport overflow (both
+findings under #16) live in nearby code and are untouched; #16 stays open.
+Building placement in the outer ring (#8) is unrelated.
+
+**Documentation**
+
+- The ARCHITECTURE comment's "Current version" line is bumped to 0.4.5.
+- Filed #27: make the `+` / `−` controls work, carrying the handoff's
+  recommendation that the zoom variable be scoped per mode so Close and Wide
+  each scale from their own base span, plus the note that
+  `MAP_LABEL_TIERS` needs re-checking at any new span.
+- Filed #28: Wide-map street names can collide at an intersection, with the
+  measured sweep above and three candidate fixes.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.4"` → `"0.4.5"`
+
+---
+
+## v0.4.4 — Exit split: grid travel vs. Here
+
+Implements #18 in full, per `handoffs/exit-move-split.md`. Rendering-only:
+the Move panel now holds street travel alone, ordered by compass, and every
+other exit renders at the top of Here. No WORLD DATA, no PLAYER STATE, no
+mechanics, no save-format change.
+
+**Changed / Reworked** — UI/RENDERING, exit panels
+
+Every exit used to render as a Move button in `exits`-array authoring order,
+so "Climb the stairs", "Enter the pharmacy" and "Climb through the window" all
+sat under a heading that means travel, and a street's four directions came out
+in whatever order the world data happened to list them.
+
+- New `isGridTravel(fromId, toId)` in WORLD INTERACTION, beside
+  `getExitsForRoom()`: an exit is grid travel if and only if both endpoints are
+  street/mid-block nodes, which the ROOM SCHEMA marks by giving such a room its
+  own id as its `locationId`. This is deliberately *not* the cross-Location
+  test (`fromRoom.locationId !== toRoom.locationId`), which sends 706 of the
+  world's 774 exits to Move — 34 too many, among them the stairwells, the
+  apartment-over-shop doors, the `balcony → alley` fire escape and every
+  "Enter the …" building door.
+- `renderMoveActionsPanel()` filters `getExitsForRoom()` to grid travel and
+  sorts it by `MOVE_DIRECTION_RANK` — `north:0, east:1, west:2, south:3` —
+  keyed on `computeDirection()` of the two rooms' `locationId`s. No label
+  parsing and no new exit field: `computeDirection()` already reproduces the
+  compass word in every grid exit's own label.
+- The sort has no secondary key on purpose. `Array.prototype.sort` is stable,
+  which is what keeps each intersection's "Head …" exit ahead of its
+  "Step into the block …" exit — the relationship is authoring order, not
+  something re-derived from label text.
+- `renderHereActionsPanel()` renders the non-grid exits first, above the
+  locked-door notices, in unmodified authoring order, with their existing
+  `fmtDuration(exitMinutes(exit))` cost suffix and `actionButton` styling.
+  Window-climb exits are among them: `getExitsForRoom()` still generates them
+  and they still track window state; only their parent panel changed.
+- `getExitsForRoom()` is untouched — same signature, same one list, same
+  window handling. Each panel filters it.
+
+**UI**
+
+- Indoors the Move group disappears entirely: the static markup's Move
+  `.actions-group` gained `id="moveGroup"`, and the panel hides it when it
+  holds no buttons, mirroring `hereGroup`. 42 of the game's 218 rooms are
+  non-street rooms, so an empty "MOVE" heading was the common case indoors.
+- The game-over branch of `render()` returns before
+  `renderMoveActionsPanel()` runs and puts its "Restart" button in
+  `moveActions`, so it now sets `moveGroup` back to visible — otherwise dying
+  indoors would have left Restart behind a hidden group.
+- On a street, Move holds only travel, ordered North, East, West, South.
+  Nine street rooms with building entrances gain a Here section; the other
+  167 still show none.
+- No button label, cost, or styling changed.
+
+**Sections touched**
+
+- UI/RENDERING — `renderMoveActionsPanel()`, `renderHereActionsPanel()`,
+  `render()`'s game-over branch, and the static Move `.actions-group` markup.
+- WORLD INTERACTION — one added helper, `isGridTravel()`.
+
+**Open questions / decisions resolved**
+
+The handoff left three narrow implementation calls open; all three took its
+recommended default.
+
+- **Where the classification helper lives**: WORLD INTERACTION, beside
+  `getExitsForRoom()`, which already owns "which exits does this room offer".
+  It reads WORLD DATA and is consumed by RENDERING, so RENDERING was the other
+  candidate.
+- **One list or two**: one. `getExitsForRoom()` keeps its signature and each
+  render function filters, which keeps window-exit generation in a single
+  place and makes the change provably additive.
+- **A visual separator for the relocated exits in Here**: none. They are
+  ordinary action buttons and the panel already mixes kinds. If they read as
+  crowded in play, that is a follow-up.
+
+**Notes / assumptions**
+
+- The compass order North/East/West/South comes from the handoff, not from a
+  prior convention in the code — it is the retunable part of this pass.
+- An unknown direction ranks 4, after `south`, rather than resolving to
+  `undefined` and poisoning the comparator. No street node can currently
+  produce `up`/`down` (every one is `z:0`), but the sort no longer depends on
+  that staying true.
+
+**Explicitly NOT changed**
+
+- No `exits` array is reordered, renamed, or given a new field; no exit label,
+  `distanceM`, or duration changed.
+- `getExitsForRoom()`'s body, `doMove()`, `exitMinutes()` and
+  `computeDirection()` are untouched.
+- The Here panel's existing actions (locked doors, Rest, Sleep, Search,
+  windows, vehicle, fishing, stove, fire, tree, container locks) keep their
+  order; the relocated exits are inserted ahead of them.
+- `SAVE_KEY` is unchanged — `versionCompat()` reads `MAJOR.MINOR`, so a PATCH
+  bump keeps existing browser saves loading.
+
+**Validation performed**
+
+Driven in headless Chromium against an instrumented copy of the new file,
+walking all 218 rooms and all 774 exits:
+
+- The split classifies 672 exits as grid travel and 102 as everything else,
+  matching the handoff's verified counts exactly. 176 rooms satisfy
+  `locationId === id`.
+- Every street room's Move buttons match the expected filtered-and-sorted
+  list, label for label; direction ranks are monotonic in all 176 street
+  rooms; the compass word in every grid label agrees with the computed
+  direction. Move-button counts per street room: 2 buttons in 112 rooms, 4 in
+  4, 6 in 24, 8 in 36.
+- All 224 two-exit direction buckets render "Head …"/"Continue …" before
+  "Step into the block …", with no secondary sort key.
+- All 42 non-street rooms hide the Move group; no street room hides it.
+- In the nine street rooms with non-grid exits, the relocated exits render
+  first in Here and in authoring order.
+- Both windows, driven through `closed` and `open` in both of their rooms:
+  the climb exit appears in Here and never in Move when open, and is absent
+  from both when closed.
+- No page errors or console errors during the walk.
+- The diff is the proof of the data claim: `git diff main -- ashfall.html`
+  (equivalently `git diff v0.4.3:ashfall_0_4_3.html`, since the release tags
+  predate the filename-normalization pass) touches only the five sites listed
+  under **Sections touched** and the version constants.
+
+**Explicitly out of scope**
+
+Per the handoff: no reordering of the Here panel's existing actions, no
+compass-rose or spatial button layout (a rose degrades badly in the many rooms
+with no directional exits), no change to `exits` data or labels, no renaming
+of the "Move" and "Here" headings. #4 (vestigial `distanceM` on cross-Location
+exits) is adjacent but not a prerequisite. Phone-viewport layout (#16) and map
+rendering (#19, #20) are untouched.
+
+**Documentation**
+
+- The ARCHITECTURE comment's "Current version" line is bumped to 0.4.4.
+- Filed #26: the `git diff vX.Y.Z -- ashfall.html` recipe in the Project Guide
+  and the changelog guide no longer resolves, because every existing release
+  tag predates the rename to `ashfall.html` and carries a versioned filename
+  instead.
+- Nothing else was deferred out of this pass.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.3"` → `"0.4.4"`
+
+---
+
 ## v0.4.3 — Wide-view map readability
 
 No handoff file — a direct request to make the side-menu map's Wide view

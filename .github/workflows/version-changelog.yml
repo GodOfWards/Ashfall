@@ -16,9 +16,11 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        # No pipefail: the extraction pipelines below use early-exiting
-        # readers (grep -m1), which SIGPIPE the upstream command. Every
-        # extracted value is checked for emptiness explicitly instead.
+        # `shell: bash` always runs with -e -o pipefail on GitHub runners, so
+        # the extraction pipelines below must not contain an early-exiting
+        # reader: one would SIGPIPE its upstream command and fail the step
+        # with exit 141 before any value is read. Every stage here reads its
+        # input to EOF. Extracted values are still checked for emptiness.
         run: |
           set -eu
 
@@ -29,7 +31,9 @@ jobs:
           fi
 
           read_version() {  # $1 = git ref
-            git show "$1:ashfall.html" | grep -m1 -o 'VERSION: *"[0-9][0-9.]*"' | tr -d '"' | sed 's/VERSION: *//'
+            git show "$1:ashfall.html" \
+              | sed -n 's/.*VERSION: *"\([0-9][0-9.]*\)".*/\1/p' \
+              | awk 'NR==1'
           }
 
           BASE_VERSION="$(read_version "$BASE_SHA")"

@@ -37,6 +37,7 @@
   #mapZoomToggle button{ font-family:system-ui,sans-serif; font-size:10.5px; background:var(--panel-2);
     border:1px solid var(--line); color:var(--ink-dim); padding:4px 9px; border-radius:3px; cursor:pointer; }
   #mapZoomToggle button.active{ border-color:var(--accent); color:var(--accent); }
+  #mapZoomToggle button:disabled{ opacity:.4; cursor:not-allowed; }
   #mapSvg{ width:100%; height:auto; display:block; background:var(--panel-2); border-radius:3px; margin-top:8px; }
   .map-street{ stroke:var(--line); stroke-width:3; fill:none; }
   .map-street-thin{ stroke:var(--line); stroke-width:1.5; opacity:.6; fill:none; }
@@ -66,6 +67,7 @@
   #log p.sys{ font-style:italic; color:var(--accent); font-family:system-ui,sans-serif; font-size:12px; }
   #log p.warn{ color:var(--warn); font-family:system-ui,sans-serif; font-size:12px; }
   #log p.good{ color:var(--good); font-family:system-ui,sans-serif; font-size:12px; }
+  .logcount{ color:var(--ink-faint); font-size:11.5px; margin-left:5px; }
   .actions-group h2{ font-family:system-ui,sans-serif; font-size:11px; text-transform:uppercase;
     letter-spacing:.08em; color:var(--ink-faint); margin:0 0 8px; }
   .actions{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
@@ -128,6 +130,8 @@
     <h3 class="map-heading">Map <div id="mapZoomToggle">
       <button data-zoom="close" class="active">Close</button>
       <button data-zoom="wide">Wide</button>
+      <button id="mapZoomIn" disabled>+</button>
+      <button id="mapZoomOut" disabled>&minus;</button>
     </div></h3>
     <svg id="mapSvg" viewBox="0 0 260 260" xmlns="http://www.w3.org/2000/svg"></svg>
   </div>
@@ -148,7 +152,7 @@
   <div id="left">
     <p id="roomDesc"></p>
     <div id="log"></div>
-    <div class="actions-group"><h2>Move</h2><div class="actions" id="moveActions"></div></div>
+    <div class="actions-group" id="moveGroup"><h2>Move</h2><div class="actions" id="moveActions"></div></div>
     <div class="actions-group" id="hereGroup" style="display:none;"><h2>Here</h2><div class="actions" id="hereActions"></div></div>
   </div>
   <div id="sidebar">
@@ -217,7 +221,7 @@
   //   indexes are temporary and must never be treated as stable identity.
   //   doRestart lives in PERSISTENCE, not SIMULATION, since it performs a
   //   full state reset rather than a time-driven update.
-  // Current version: 0.4.3.
+  // Current version: 0.4.6.
   //
   // WORLD DATA also carries LOCATIONS — real integer (x,y,z) coordinates
   // (meters) for every street/mid-block node and building floor, keyed by
@@ -240,7 +244,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.4.3" };
+  const GAME_CONFIG = { VERSION: "0.4.6" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Ammunition","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -3410,6 +3414,10 @@
     const h = Math.floor(min/60), m = min%60;
     return "(" + h + ":" + String(m).padStart(2,"0") + ")";
   }
+  // Spelled out through ten, digits from eleven up — the convention the
+  // game's prose already follows. Used by the collapsed log summaries.
+  const NUMBER_WORDS = ["zero","one","two","three","four","five","six","seven","eight","nine","ten"];
+  function numberWord(n){ return n >= 0 && n < NUMBER_WORDS.length ? NUMBER_WORDS[n] : String(n); }
   function moveMinutes(distanceM){ return Math.max(MIN_MOVE_MIN, distanceM / GAITS[state.gait].speed / 60); }
   function exitMinutes(exit){
     const fromLoc = world[state.currentRoom].locationId;
@@ -3423,14 +3431,68 @@
     if(room.room) return room.building + ", " + room.room;
     return room.building;
   }
-  function log(text, cls){
-    const p = document.createElement("p");
-    if(cls) p.className = cls;
-    p.textContent = text;
+  // Summaries for the tally actions (v0.4.6) — the fixed-text ones, whose
+  // collapsed run reads as prose rather than as a count. Kept in one table
+  // so a future content pass can edit all four sentences in one place
+  // instead of hunting through four call sites. A run is always >= 2, so
+  // every summary can be written plural.
+  const LOG_SUMMARIES = {
+    fish(t){
+      const times = `You fish ${numberWord(t.total)} times.`;
+      if(!t.bite) return times + " Nothing bites.";
+      if(t.bite === 1) return times + " One bite.";
+      return times + " " + numberWord(t.bite).charAt(0).toUpperCase() + numberWord(t.bite).slice(1) + " bites.";
+    },
+    rest: t => `You rest for ${numberWord(t.total)} hours.`,
+    chop: t => `You chop down ${numberWord(t.total)} trees.`,
+    fuel: t => `You feed ${numberWord(t.total)} more pieces of wood into the fire.`
+  };
+  // Consecutive runs of the same action collapse into one line (v0.4.6). A
+  // call site opts in by passing `key`; `outcome` separates variants that
+  // share one key (only doFish() needs it — it defaults to the key itself).
+  // A run is broken by any intervening line, warnings included: a string of
+  // failures is worth seeing in full. Collapse state lives on the <p> — the
+  // matching key in `dataset`, the counts in a `_logTally` expando, since
+  // dataset values are strings — never in `state`, so the log stays
+  // DOM-only and unserialized.
+  function log(text, cls, key, outcome){
     const logDiv = document.getElementById("log");
+    const last = logDiv.lastElementChild;
+    let p;
+    if(key && last && last.dataset.logKey === key){
+      p = last;
+      const tally = p._logTally;
+      tally.total += 1;
+      tally[outcome || key] = (tally[outcome || key] || 0) + 1;
+      if(LOG_SUMMARIES[key]){
+        // A fishing run mixes a `good` bite with an unclassed miss, and the
+        // summary is a neutral report of both, so it renders unclassed.
+        p.className = "";
+        p.textContent = LOG_SUMMARIES[key](tally);
+      } else {
+        // A counted run keeps its own sentence and class; only the dim
+        // trailing count changes.
+        let count = p.querySelector("span.logcount");
+        if(!count){
+          count = document.createElement("span");
+          count.className = "logcount";
+          p.appendChild(count);
+        }
+        count.textContent = "\u00d7" + tally.total;
+      }
+    } else {
+      p = document.createElement("p");
+      if(cls) p.className = cls;
+      p.textContent = text;
+      if(key){
+        p.dataset.logKey = key;
+        p._logTally = { total:1 };
+        p._logTally[outcome || key] = 1;
+      }
+      logDiv.appendChild(p);
+    }
     logDiv.querySelectorAll("p.fresh").forEach(el=>el.classList.remove("fresh"));
     if(!cls) p.classList.add("fresh");
-    logDiv.appendChild(p);
     while(logDiv.children.length > 50) logDiv.removeChild(logDiv.firstChild);
     logDiv.scrollTop = logDiv.scrollHeight;
   }
@@ -3581,7 +3643,9 @@
     }
     it.qty -= moveQty;
     if(it.qty <= 0) src.items.splice(index,1);
-    log(`You take the ${it.name.toLowerCase()}${moveQty>1?` (x${moveQty}).`:"."}`, "good");
+    // No log line: the item visibly moves between the Here and Inventory
+    // panels, so the line only repeated what the screen already showed
+    // (v0.4.6). The capacity warning above still speaks.
     render();
   }
   function doStore(index, qty){
@@ -3599,8 +3663,8 @@
     addToList(dst.items, { ...it, qty:moveQty });
     it.qty -= moveQty;
     if(it.qty <= 0) src.items.splice(index,1);
-    const verb = state.worldTab === "floor" ? "place" : "store";
-    log(`You ${verb} the ${it.name.toLowerCase()}${moveQty>1?` (x${moveQty}).`:"."}`);
+    // Silent, as doTake() is: the item visibly moves between the panels
+    // (v0.4.6). The capacity warning above still speaks.
     render();
   }
   function doConsume(sourceKind, index){
@@ -3612,7 +3676,7 @@
     if(it.restores.thirst) state.vitals.thirst = clamp(state.vitals.thirst + it.restores.thirst);
     it.qty -= 1;
     if(it.qty <= 0) src.items.splice(index,1);
-    log(`You ${it.verb.toLowerCase()} the ${it.name.toLowerCase()}.`, "good");
+    log(`You ${it.verb.toLowerCase()} the ${it.name.toLowerCase()}.`, "good", "consume:" + (it.itemId || it.name));
     if(it.illnessChance && Math.random()*100 < it.illnessChance && state.illnessMinutesLeft <= 0){
       state.illnessMinutesLeft = 180;
       log("It doesn't sit right. You can feel it already.", "warn");
@@ -3627,7 +3691,7 @@
     if(state[it.slotType]){ log("You're already carrying something in that slot.", "warn"); return; }
     state[it.slotType] = { name:it.name, unitWeight:it.unitWeight, capacityKg:it.capacityKg, items: it.contents || [] };
     src.items.splice(index,1);
-    log("You put on the " + it.name.toLowerCase() + ".", "good");
+    // Silent: equipping makes a new inventory tab appear (v0.4.6).
     state.invTab = it.slotType;
     render();
   }
@@ -3639,7 +3703,7 @@
     addToList(state.inventory.items, item);
     state[slotKey] = null;
     if(state.invTab === slotKey) state.invTab = "inventory";
-    log("You take off the " + item.name.toLowerCase() + " and stow it away.");
+    // Silent: unequipping makes the tab disappear (v0.4.6).
     render();
   }
   // ==================================================
@@ -3680,14 +3744,15 @@
       if(it.hasBatteries !== false){
         actions.push({ label: it.on ? "Turn off" : "Turn on", onClick:()=>{
           it.on = !it.on;
-          log(it.on ? `You switch on the ${it.name.toLowerCase()}.` : `You switch off the ${it.name.toLowerCase()}.`);
+          // Silent: the detail view already reads "— On" / "— Off" (v0.4.6).
           render();
         }});
         actions.push({ label:"Remove batteries", onClick:()=>{
           it.hasBatteries = false;
           it.on = false;
           giveItem(itemFromRegistry({ id:"spare_batteries", qty:1 }));
-          log(`You pull the batteries out of the ${it.name.toLowerCase()}.`, "good");
+          // Silent: the batteries appear in inventory and the detail view
+          // reads "No batteries installed" (v0.4.6).
           render();
         }});
       }
@@ -3695,7 +3760,7 @@
         consumeByTag("battery", 1);
         it.durability.current = it.durability.max;
         it.hasBatteries = true;
-        log(`You put fresh batteries in the ${it.name.toLowerCase()}.`, "good");
+        // Silent: the detail view's charge readout jumps to 100% (v0.4.6).
         render();
       }});
     }
@@ -3746,6 +3811,16 @@
     });
     return exits;
   }
+  // An exit is grid travel if and only if both of its endpoints are
+  // street/mid-block nodes, which the ROOM SCHEMA marks by giving such a room
+  // its own id as its `locationId`. RENDERING splits the two action panels on
+  // this: Move holds grid travel, Here holds everything else, window climbs
+  // included (v0.4.4). Deliberately not the cross-Location test — that also
+  // catches stairs, building doors and the fire escape, which are not travel.
+  function isGridTravel(fromId, toId){
+    const from = world[fromId], to = world[toId];
+    return !!from && !!to && from.locationId === fromId && to.locationId === toId;
+  }
   // ==================================================
   // WORLD INTERACTION (continued) — movement, doors, windows, containers
   // ==================================================
@@ -3776,7 +3851,7 @@
       remaining -= dt;
     }
     checkGameOver();
-    log("You take an hour to rest and catch your breath.");
+    log("You take an hour to rest and catch your breath.", null, "rest");
     render();
   }
   function doSleep(){
@@ -4039,7 +4114,7 @@
     advanceTime(recipe.minutes);
     const crafted = itemFromRegistry({ id: recipe.output.id, qty:1 });
     giveItem(crafted);
-    log(`You craft a ${crafted.name.toLowerCase()}.`, "good");
+    log(`You craft a ${crafted.name.toLowerCase()}.`, "good", "craft:" + recipe.output.id);
     render();
   }
   // ==================================================
@@ -4050,9 +4125,9 @@
     applyExertion(FISH_EXERTION);
     if(Math.random() < 0.55){
       giveItem(itemFromRegistry({ id:"raw_fish", qty:1 }));
-      log("Something bites. You reel in a fish.", "good");
+      log("Something bites. You reel in a fish.", "good", "fish", "bite");
     } else {
-      log("Nothing bites this time.");
+      log("Nothing bites this time.", null, "fish", "miss");
     }
     render();
   }
@@ -4101,7 +4176,7 @@
     const room = world[state.currentRoom];
     consumeFromPools("firewood", 1);
     room.fireMinutesLeft = Math.min((room.fireMinutesLeft || 0) + 60, FIRE_MAX_MIN);
-    log("You feed the fire more wood.", "good");
+    log("You feed the fire more wood.", "good", "fuel");
     render();
   }
   function doExtinguish(){
@@ -4141,7 +4216,7 @@
     if(container.items[idx].qty <= 0) container.items.splice(idx,1);
     addToList(container.items, itemFromRegistry({ id: recipe.output.id, qty:1 }));
     advanceTime(recipe.minutes);
-    log(`The ${ITEM_REGISTRY[recipe.input].name.toLowerCase()} finishes cooking.`, "good");
+    log(`The ${ITEM_REGISTRY[recipe.input].name.toLowerCase()} finishes cooking.`, "good", "cook:" + recipe.id);
     render();
   }
   function doChopTree(){
@@ -4151,7 +4226,7 @@
     applyExertion(CHOP_TREE_EXERTION);
     room.hasTree = false;
     giveItem(itemFromRegistry({ id:"firewood", qty:6 }));
-    log("You chop the tree down. It splits into a good stock of firewood.", "good");
+    log("You chop the tree down. It splits into a good stock of firewood.", "good", "chop");
     render();
   }
   // ==================================================
@@ -4411,7 +4486,12 @@
   const MAP_MAX_COL = 6;
   const MAP_MIN_ROW = -4;
   const MAP_MAX_ROW = 3;
-  const MAP_WIDE_VIEWBOX = { x:20, y:20, w:1000, h:1000 };
+  // Wide is a span, like MAP_CLOSE_VIEW, not a fixed box (v0.4.5): a
+  // 1000-unit box over 910 units of content has nothing to pan within, so
+  // Wide has to zoom in for centring on the player to mean anything. 800 is
+  // the smallest span that both zooms in noticeably and leaves room to pan —
+  // retunable, with no prior convention behind it.
+  const MAP_WIDE_VIEW = 800;
   const MAP_PLAYER_R_WIDE = 12;
 
   // Street runs (Wide view) — one continuous named path per street.
@@ -4459,6 +4539,7 @@
   let mapRenderedZoom = null;   // zoom mode the current SVG content was built for
   let mapLastNode = null;       // last resolved player map node
   let mapCurrentViewBox = null; // {x,y,w,h} of the viewBox, animated toward its target
+  let mapStreetLabels = [];     // Wide's label pool: one entry per street (v0.4.5)
 
   function mapToSvg(col, row){
     // row MAP_MIN_ROW (Dock) at bottom, row MAP_MAX_ROW (Water) at top;
@@ -4472,28 +4553,86 @@
       return (i===0 ? "M " : "L ") + p.x + " " + p.y;
     }).join(" ");
   }
-  // One name per block (Wide view). A chain alternates intersection,
-  // mid-block, intersection, ... so the even indices are the intersections
-  // and the odd index between any two of them is that block's midpoint —
-  // which is where the label goes, instead of repeating the street name
-  // along the whole run and ending up with "1ST ST - 1ST ST - 1ST ST".
-  // The label is rotated onto the block's own heading (always 0 or +/-90
-  // on this grid) and nudged off the line by MAP_LABEL_OFFSET so it sits
-  // beside the street rather than on top of it.
+  // Street names (Wide view). Since v0.4.5 they are placed against the
+  // portion of each street currently on screen rather than once per block:
+  // the view moves now, so a build-time position stops meaning anything.
+  // Each street owns a fixed pool of MAP_LABELS_PER_STREET <text> nodes,
+  // created once by renderMapWide() and thereafter only moved, shown or
+  // hidden — never created or destroyed during a pan.
+  // MAP_LABEL_OFFSET nudges a name off its own street line; the label is
+  // rotated onto the street's heading (always 0 or +/-90 on this grid),
+  // folded into (-90, 90] so vertical streets read bottom-to-top.
   const MAP_LABEL_OFFSET = 5;
-  function mapBlockLabels(name, chain){
-    let out = "";
-    for(let i = 0; i + 2 < chain.length; i += 2){
-      const a = mapToSvg(LOCATIONS[chain[i]].x / 100, LOCATIONS[chain[i]].y / 100);
-      const b = mapToSvg(LOCATIONS[chain[i+2]].x / 100, LOCATIONS[chain[i+2]].y / 100);
-      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-      // keep the text upright: fold the heading into (-90, 90]
-      let ang = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
-      if(ang > 90) ang -= 180;
-      else if(ang <= -90) ang += 180;
-      out += `<text class="map-street-name" transform="translate(${mx} ${my}) rotate(${ang})" y="${-MAP_LABEL_OFFSET}" text-anchor="middle">${name}</text>`;
-    }
-    return out;
+  const MAP_LABELS_PER_STREET = 3;
+  // Half the widest street name ("POPLAR ST", 99.1 units at 15px), so a
+  // full-width label sits inside the visible span instead of clipped at its
+  // edge. Retunable.
+  const MAP_LABEL_INSET = 55;
+  // How many names one street gets, by the length of it currently visible —
+  // longest tier first. Below the shortest tier the street gets none, since
+  // a name wider than its visible stretch would read as floating loose.
+  // All four numbers are retunable and have no prior convention behind them.
+  const MAP_LABEL_TIERS = [
+    { minVisible: 600, count: 3 },
+    { minVisible: 300, count: 2 },
+    { minVisible: 110, count: 1 }
+  ];
+  // Positions along a street's visible stretch [lo, hi], in that street's
+  // own axis. Two or three labels sit MAP_LABEL_INSET in from each end; one
+  // sits at the midpoint.
+  function mapLabelPositions(lo, hi){
+    const tier = MAP_LABEL_TIERS.find(t => hi - lo >= t.minVisible);
+    if(!tier) return [];
+    if(tier.count === 1) return [(lo + hi) / 2];
+    if(tier.count === 2) return [lo + MAP_LABEL_INSET, hi - MAP_LABEL_INSET];
+    return [lo + MAP_LABEL_INSET, (lo + hi) / 2, hi - MAP_LABEL_INSET];
+  }
+  // Caches the Wide label pool as element references plus each street's
+  // fixed geometry, so a pan touches no DOM queries — mirrors how
+  // mapPositionPlayer() resolves #mapPlayer. Cleared for Close, which emits
+  // no street names at all.
+  function mapBindStreetLabels(){
+    mapStreetLabels = [];
+    if(mapZoomMode !== "wide") return;
+    const svg = document.getElementById("mapSvg");
+    MAP_STREETS.forEach((street, i)=>{
+      const first = LOCATIONS[street.chain[0]], last = LOCATIONS[street.chain[street.chain.length-1]];
+      const a = mapToSvg(first.x / 100, first.y / 100);
+      const b = mapToSvg(last.x / 100, last.y / 100);
+      let angle = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+      if(angle > 90) angle -= 180;
+      else if(angle <= -90) angle += 180;
+      const els = Array.prototype.slice.call(svg.querySelectorAll(`text.map-street-name[data-street="${i}"]`));
+      els.forEach(el=> el.textContent = street.name);
+      mapStreetLabels.push({ a, b, angle, horizontal: a.y === b.y, els });
+    });
+  }
+  // Moves every pooled label to match the viewBox `box`. Called wherever the
+  // viewBox is set — the snap branch and every animation frame — since the
+  // placement is relative to the window, not to the street.
+  function mapPositionStreetLabels(box){
+    mapStreetLabels.forEach(street=>{
+      let positions = [];
+      if(street.horizontal){
+        // A horizontal street is on screen only if its single y is
+        if(street.a.y >= box.y && street.a.y <= box.y + box.h){
+          positions = mapLabelPositions(
+            Math.max(Math.min(street.a.x, street.b.x), box.x),
+            Math.min(Math.max(street.a.x, street.b.x), box.x + box.w));
+        }
+      } else if(street.a.x >= box.x && street.a.x <= box.x + box.w){
+        positions = mapLabelPositions(
+          Math.max(Math.min(street.a.y, street.b.y), box.y),
+          Math.min(Math.max(street.a.y, street.b.y), box.y + box.h));
+      }
+      street.els.forEach((el, i)=>{
+        if(i >= positions.length){ el.style.display = "none"; return; }
+        const x = street.horizontal ? positions[i] : street.a.x;
+        const y = street.horizontal ? street.a.y : positions[i];
+        el.setAttribute("transform", `translate(${x} ${y}) rotate(${street.angle})`);
+        el.style.display = "";
+      });
+    });
   }
   function renderMapClose(){
     let html = "";
@@ -4532,9 +4671,13 @@
     MAP_STREETS.forEach(s=>{
       html += `<path class="map-street-thin" d="${mapPathD(s.chain)}"/>`;
     });
-    // labels after every street line so no run is drawn over its own names
-    MAP_STREETS.forEach(s=>{
-      html += mapBlockLabels(s.name, s.chain);
+    // The label pool goes after every street line so no run is drawn over
+    // its own names. The nodes ship empty and hidden; mapBindStreetLabels()
+    // fills in the names and mapPositionStreetLabels() places them.
+    MAP_STREETS.forEach((s, i)=>{
+      for(let k = 0; k < MAP_LABELS_PER_STREET; k++){
+        html += `<text class="map-street-name" data-street="${i}" y="${-MAP_LABEL_OFFSET}" text-anchor="middle" style="display:none"></text>`;
+      }
     });
     // Wide's viewBox is ~4x Close's, so the marker needs a matching radius
     // to read as the player at all rather than as another node dot.
@@ -4547,11 +4690,15 @@
     const el = document.getElementById("mapPlayer");
     if(el){ el.setAttribute("cx", p.x); el.setAttribute("cy", p.y); }
   }
+  // Both modes are a player-centred window on their own span since v0.4.5 —
+  // Wide used to return a constant box, which is why it never panned. The box
+  // is deliberately not clamped to the town's bounds: the ask was for Wide to
+  // pan the way Close does, and Close shows empty canvas past the edge too.
   function mapTargetViewBox(node){
-    if(mapZoomMode === "wide") return { x:MAP_WIDE_VIEWBOX.x, y:MAP_WIDE_VIEWBOX.y, w:MAP_WIDE_VIEWBOX.w, h:MAP_WIDE_VIEWBOX.h };
+    const span = mapZoomMode === "wide" ? MAP_WIDE_VIEW : MAP_CLOSE_VIEW;
     const n = LOCATIONS[node];
     const p = mapToSvg(n.x / 100, n.y / 100);
-    return { x: p.x - MAP_CLOSE_VIEW/2, y: p.y - MAP_CLOSE_VIEW/2, w: MAP_CLOSE_VIEW, h: MAP_CLOSE_VIEW };
+    return { x: p.x - span/2, y: p.y - span/2, w: span, h: span };
   }
   function mapUpdateViewBox(node, snap){
     const svg = document.getElementById("mapSvg");
@@ -4559,6 +4706,7 @@
     if(snap || !mapCurrentViewBox){
       mapCurrentViewBox = target;
       svg.setAttribute("viewBox", `${target.x} ${target.y} ${target.w} ${target.h}`);
+      mapPositionStreetLabels(target);
       return;
     }
     const start = mapCurrentViewBox;
@@ -4572,6 +4720,10 @@
       const h = start.h + (target.h - start.h) * ease;
       svg.setAttribute("viewBox", `${x} ${y} ${w} ${h}`);
       mapCurrentViewBox = { x, y, w, h };
+      // Per frame, not on settle: the pool is fixed, so this only writes
+      // `transform` and `display` on at most MAP_LABELS_PER_STREET nodes per
+      // street. Nothing is created or destroyed mid-animation.
+      mapPositionStreetLabels(mapCurrentViewBox);
       if(t < 1) requestAnimationFrame(step);
     }
     requestAnimationFrame(step);
@@ -4580,13 +4732,15 @@
   // and the active zoom level. Rebuilds the SVG content (and snaps the
   // viewBox) only when the zoom level just changed or on first render;
   // a location change within an already-current zoom level animates the
-  // viewBox (Close only — Wide's viewBox is fixed) rather than rebuilding.
+  // viewBox rather than rebuilding — in both modes since v0.4.5, Wide
+  // included, now that its target follows the player.
   function renderMap(){
     const node = (world[state.currentRoom] && world[state.currentRoom].locationId) || mapLastNode || "mid_poplar_1_2";
     const zoomChanged = mapRenderedZoom !== mapZoomMode;
     if(zoomChanged){
       document.getElementById("mapSvg").innerHTML = mapZoomMode === "close" ? renderMapClose() : renderMapWide();
       mapRenderedZoom = mapZoomMode;
+      mapBindStreetLabels();
       mapPositionPlayer(node);
       mapUpdateViewBox(node, true);
       mapLastNode = node;
@@ -4735,20 +4889,47 @@
       btn.disabled = fatigueLocked && btn.dataset.gait !== "sneak";
     });
   }
+  // Compass order for the Move panel (v0.4.4). An unknown direction ranks
+  // after south rather than resolving to `undefined` — no street node can
+  // currently produce up/down (every one of them is z:0), but the sort must
+  // not depend on that staying true.
+  const MOVE_DIRECTION_RANK = { north:0, east:1, west:2, south:3 };
+  function moveDirectionRank(fromId, toId){
+    const rank = MOVE_DIRECTION_RANK[computeDirection(world[fromId].locationId, world[toId].locationId)];
+    return rank == null ? 4 : rank;
+  }
   function renderMoveActionsPanel(){
     const room = world[state.currentRoom];
+    const moveGroup = document.getElementById("moveGroup");
     const moveBox = document.getElementById("moveActions");
     moveBox.innerHTML = "";
-    getExitsForRoom(room, state.currentRoom).forEach(exit=>{
-      const minutes = exitMinutes(exit);
-      moveBox.appendChild(actionButton(exit.label, ()=> doMove(exit), { cost: fmtDuration(minutes) }));
-    });
+    // Sorting by direction rank alone is enough: Array.prototype.sort is
+    // stable, so each intersection's "Head …" stays ahead of its "Step into
+    // the block …" in authoring order without a secondary key.
+    getExitsForRoom(room, state.currentRoom)
+      .filter(exit => isGridTravel(state.currentRoom, exit.to))
+      .sort((a,b) => moveDirectionRank(state.currentRoom, a.to) - moveDirectionRank(state.currentRoom, b.to))
+      .forEach(exit=>{
+        const minutes = exitMinutes(exit);
+        moveBox.appendChild(actionButton(exit.label, ()=> doMove(exit), { cost: fmtDuration(minutes) }));
+      });
+    // Indoors there is no grid travel at all, so the heading would otherwise
+    // sit above an empty row — mirrors hereGroup's own hiding rule.
+    moveGroup.style.display = moveBox.children.length ? "" : "none";
   }
   function renderHereActionsPanel(){
     const room = world[state.currentRoom];
     const hereGroup = document.getElementById("hereGroup");
     const hereBox = document.getElementById("hereActions");
     hereBox.innerHTML = "";
+    // Everything that isn't grid travel — stairs, building doors, the fire
+    // escape, window climbs — renders here, first and in authoring order
+    // (v0.4.4). Same button, same cost suffix; only the parent changed.
+    getExitsForRoom(room, state.currentRoom)
+      .filter(exit => !isGridTravel(state.currentRoom, exit.to))
+      .forEach(exit=>{
+        hereBox.appendChild(actionButton(exit.label, ()=> doMove(exit), { cost: fmtDuration(exitMinutes(exit)) }));
+      });
     if(room.lockedDoors) room.lockedDoors.forEach(d=>{
       hereBox.appendChild(actionButton(d.label, ()=> doTryDoor(d.label), "locked"));
     });
@@ -4899,6 +5080,7 @@
       const moveBox = document.getElementById("moveActions");
       moveBox.innerHTML = "";
       moveBox.appendChild(actionButton("Restart", doRestart));
+      document.getElementById("moveGroup").style.display = "";
       document.getElementById("hereGroup").style.display = "none";
       document.getElementById("invTabs").innerHTML = "";
       document.getElementById("invList").innerHTML = "";
