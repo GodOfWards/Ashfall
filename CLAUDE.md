@@ -81,7 +81,12 @@ The merge ships the version. Tag the merge commit `vX.Y.Z`.
 - **The backlog is GitHub Issues**, labelled `tier-0` through `tier-3`.
   `tier-0`/`tier-1` maps to PATCH, `tier-2`/`tier-3` to MINOR.
 - **Handoffs are kept**, not deleted once implemented. Their commit date records
-  that the spec predated the code.
+  that the spec predated the code. Whether one already **shipped** is derivable —
+  `grep -l "handoffs/<name>.md" CHANGELOG.md` — so it never gets marked by hand. A
+  handoff that is **superseded** (never shipped, and the code moved) is the one case
+  nothing else records: it gets a banner on the file's first line, body untouched,
+  because a coding session reads the handoff and nothing else. Never rename or move a
+  handoff to show status — changelog entries cite them by path. Handoff Guide, Part 2.
 - If the issue tracker is unreachable, say so and continue — the repo's files
   stand alone.
 

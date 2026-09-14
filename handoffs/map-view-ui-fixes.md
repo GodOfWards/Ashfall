@@ -1,3 +1,21 @@
+> **SUPERSEDED — do not implement this handoff.**
+>
+> **Status: inert.** Written against v0.4.0; re-verified against v0.4.7 and
+> found partly wrong. It is kept for its commit date and for the record of
+> what was measured at the time, not as an instruction. Nothing below is a
+> live spec.
+>
+> Its three findings now stand as:
+>
+> | Finding | Status at v0.4.7 | Live tracker |
+> |---|---|---|
+> | 1. Close-map building labels clip at the view edge | Still open; the recommended fix still applies | **#16** |
+> | 2. Wide-map vertical street labels unreadable | **Fixed** — twice over, and the code described here (`mapRepeatedLabel()`, `mapBlockLabels()`, `textPath`) no longer exists in the file | residual label collisions: **#28** |
+> | 3. Page overflows on phone-class viewports | Still open; numbers re-measured and unchanged | **#16** |
+>
+> Implementing section 2 as written would edit code that is not there. The
+> re-verified findings live in **#16** — go there, not here.
+
 # Ashfall Handoff — Map View & UI Fixes
 
 Current shipped version: v0.4.0
