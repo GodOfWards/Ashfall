@@ -67,6 +67,7 @@
   #log p.sys{ font-style:italic; color:var(--accent); font-family:system-ui,sans-serif; font-size:12px; }
   #log p.warn{ color:var(--warn); font-family:system-ui,sans-serif; font-size:12px; }
   #log p.good{ color:var(--good); font-family:system-ui,sans-serif; font-size:12px; }
+  .logcount{ color:var(--ink-faint); font-size:11.5px; margin-left:5px; }
   .actions-group h2{ font-family:system-ui,sans-serif; font-size:11px; text-transform:uppercase;
     letter-spacing:.08em; color:var(--ink-faint); margin:0 0 8px; }
   .actions{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
@@ -220,7 +221,7 @@
   //   indexes are temporary and must never be treated as stable identity.
   //   doRestart lives in PERSISTENCE, not SIMULATION, since it performs a
   //   full state reset rather than a time-driven update.
-  // Current version: 0.4.5.
+  // Current version: 0.4.6.
   //
   // WORLD DATA also carries LOCATIONS — real integer (x,y,z) coordinates
   // (meters) for every street/mid-block node and building floor, keyed by
@@ -243,7 +244,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.4.5" };
+  const GAME_CONFIG = { VERSION: "0.4.6" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Ammunition","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -3413,6 +3414,10 @@
     const h = Math.floor(min/60), m = min%60;
     return "(" + h + ":" + String(m).padStart(2,"0") + ")";
   }
+  // Spelled out through ten, digits from eleven up — the convention the
+  // game's prose already follows. Used by the collapsed log summaries.
+  const NUMBER_WORDS = ["zero","one","two","three","four","five","six","seven","eight","nine","ten"];
+  function numberWord(n){ return n >= 0 && n < NUMBER_WORDS.length ? NUMBER_WORDS[n] : String(n); }
   function moveMinutes(distanceM){ return Math.max(MIN_MOVE_MIN, distanceM / GAITS[state.gait].speed / 60); }
   function exitMinutes(exit){
     const fromLoc = world[state.currentRoom].locationId;
@@ -3426,14 +3431,68 @@
     if(room.room) return room.building + ", " + room.room;
     return room.building;
   }
-  function log(text, cls){
-    const p = document.createElement("p");
-    if(cls) p.className = cls;
-    p.textContent = text;
+  // Summaries for the tally actions (v0.4.6) — the fixed-text ones, whose
+  // collapsed run reads as prose rather than as a count. Kept in one table
+  // so a future content pass can edit all four sentences in one place
+  // instead of hunting through four call sites. A run is always >= 2, so
+  // every summary can be written plural.
+  const LOG_SUMMARIES = {
+    fish(t){
+      const times = `You fish ${numberWord(t.total)} times.`;
+      if(!t.bite) return times + " Nothing bites.";
+      if(t.bite === 1) return times + " One bite.";
+      return times + " " + numberWord(t.bite).charAt(0).toUpperCase() + numberWord(t.bite).slice(1) + " bites.";
+    },
+    rest: t => `You rest for ${numberWord(t.total)} hours.`,
+    chop: t => `You chop down ${numberWord(t.total)} trees.`,
+    fuel: t => `You feed ${numberWord(t.total)} more pieces of wood into the fire.`
+  };
+  // Consecutive runs of the same action collapse into one line (v0.4.6). A
+  // call site opts in by passing `key`; `outcome` separates variants that
+  // share one key (only doFish() needs it — it defaults to the key itself).
+  // A run is broken by any intervening line, warnings included: a string of
+  // failures is worth seeing in full. Collapse state lives on the <p> — the
+  // matching key in `dataset`, the counts in a `_logTally` expando, since
+  // dataset values are strings — never in `state`, so the log stays
+  // DOM-only and unserialized.
+  function log(text, cls, key, outcome){
     const logDiv = document.getElementById("log");
+    const last = logDiv.lastElementChild;
+    let p;
+    if(key && last && last.dataset.logKey === key){
+      p = last;
+      const tally = p._logTally;
+      tally.total += 1;
+      tally[outcome || key] = (tally[outcome || key] || 0) + 1;
+      if(LOG_SUMMARIES[key]){
+        // A fishing run mixes a `good` bite with an unclassed miss, and the
+        // summary is a neutral report of both, so it renders unclassed.
+        p.className = "";
+        p.textContent = LOG_SUMMARIES[key](tally);
+      } else {
+        // A counted run keeps its own sentence and class; only the dim
+        // trailing count changes.
+        let count = p.querySelector("span.logcount");
+        if(!count){
+          count = document.createElement("span");
+          count.className = "logcount";
+          p.appendChild(count);
+        }
+        count.textContent = "\u00d7" + tally.total;
+      }
+    } else {
+      p = document.createElement("p");
+      if(cls) p.className = cls;
+      p.textContent = text;
+      if(key){
+        p.dataset.logKey = key;
+        p._logTally = { total:1 };
+        p._logTally[outcome || key] = 1;
+      }
+      logDiv.appendChild(p);
+    }
     logDiv.querySelectorAll("p.fresh").forEach(el=>el.classList.remove("fresh"));
     if(!cls) p.classList.add("fresh");
-    logDiv.appendChild(p);
     while(logDiv.children.length > 50) logDiv.removeChild(logDiv.firstChild);
     logDiv.scrollTop = logDiv.scrollHeight;
   }
@@ -3584,7 +3643,9 @@
     }
     it.qty -= moveQty;
     if(it.qty <= 0) src.items.splice(index,1);
-    log(`You take the ${it.name.toLowerCase()}${moveQty>1?` (x${moveQty}).`:"."}`, "good");
+    // No log line: the item visibly moves between the Here and Inventory
+    // panels, so the line only repeated what the screen already showed
+    // (v0.4.6). The capacity warning above still speaks.
     render();
   }
   function doStore(index, qty){
@@ -3602,8 +3663,8 @@
     addToList(dst.items, { ...it, qty:moveQty });
     it.qty -= moveQty;
     if(it.qty <= 0) src.items.splice(index,1);
-    const verb = state.worldTab === "floor" ? "place" : "store";
-    log(`You ${verb} the ${it.name.toLowerCase()}${moveQty>1?` (x${moveQty}).`:"."}`);
+    // Silent, as doTake() is: the item visibly moves between the panels
+    // (v0.4.6). The capacity warning above still speaks.
     render();
   }
   function doConsume(sourceKind, index){
@@ -3615,7 +3676,7 @@
     if(it.restores.thirst) state.vitals.thirst = clamp(state.vitals.thirst + it.restores.thirst);
     it.qty -= 1;
     if(it.qty <= 0) src.items.splice(index,1);
-    log(`You ${it.verb.toLowerCase()} the ${it.name.toLowerCase()}.`, "good");
+    log(`You ${it.verb.toLowerCase()} the ${it.name.toLowerCase()}.`, "good", "consume:" + (it.itemId || it.name));
     if(it.illnessChance && Math.random()*100 < it.illnessChance && state.illnessMinutesLeft <= 0){
       state.illnessMinutesLeft = 180;
       log("It doesn't sit right. You can feel it already.", "warn");
@@ -3630,7 +3691,7 @@
     if(state[it.slotType]){ log("You're already carrying something in that slot.", "warn"); return; }
     state[it.slotType] = { name:it.name, unitWeight:it.unitWeight, capacityKg:it.capacityKg, items: it.contents || [] };
     src.items.splice(index,1);
-    log("You put on the " + it.name.toLowerCase() + ".", "good");
+    // Silent: equipping makes a new inventory tab appear (v0.4.6).
     state.invTab = it.slotType;
     render();
   }
@@ -3642,7 +3703,7 @@
     addToList(state.inventory.items, item);
     state[slotKey] = null;
     if(state.invTab === slotKey) state.invTab = "inventory";
-    log("You take off the " + item.name.toLowerCase() + " and stow it away.");
+    // Silent: unequipping makes the tab disappear (v0.4.6).
     render();
   }
   // ==================================================
@@ -3683,14 +3744,15 @@
       if(it.hasBatteries !== false){
         actions.push({ label: it.on ? "Turn off" : "Turn on", onClick:()=>{
           it.on = !it.on;
-          log(it.on ? `You switch on the ${it.name.toLowerCase()}.` : `You switch off the ${it.name.toLowerCase()}.`);
+          // Silent: the detail view already reads "— On" / "— Off" (v0.4.6).
           render();
         }});
         actions.push({ label:"Remove batteries", onClick:()=>{
           it.hasBatteries = false;
           it.on = false;
           giveItem(itemFromRegistry({ id:"spare_batteries", qty:1 }));
-          log(`You pull the batteries out of the ${it.name.toLowerCase()}.`, "good");
+          // Silent: the batteries appear in inventory and the detail view
+          // reads "No batteries installed" (v0.4.6).
           render();
         }});
       }
@@ -3698,7 +3760,7 @@
         consumeByTag("battery", 1);
         it.durability.current = it.durability.max;
         it.hasBatteries = true;
-        log(`You put fresh batteries in the ${it.name.toLowerCase()}.`, "good");
+        // Silent: the detail view's charge readout jumps to 100% (v0.4.6).
         render();
       }});
     }
@@ -3789,7 +3851,7 @@
       remaining -= dt;
     }
     checkGameOver();
-    log("You take an hour to rest and catch your breath.");
+    log("You take an hour to rest and catch your breath.", null, "rest");
     render();
   }
   function doSleep(){
@@ -4052,7 +4114,7 @@
     advanceTime(recipe.minutes);
     const crafted = itemFromRegistry({ id: recipe.output.id, qty:1 });
     giveItem(crafted);
-    log(`You craft a ${crafted.name.toLowerCase()}.`, "good");
+    log(`You craft a ${crafted.name.toLowerCase()}.`, "good", "craft:" + recipe.output.id);
     render();
   }
   // ==================================================
@@ -4063,9 +4125,9 @@
     applyExertion(FISH_EXERTION);
     if(Math.random() < 0.55){
       giveItem(itemFromRegistry({ id:"raw_fish", qty:1 }));
-      log("Something bites. You reel in a fish.", "good");
+      log("Something bites. You reel in a fish.", "good", "fish", "bite");
     } else {
-      log("Nothing bites this time.");
+      log("Nothing bites this time.", null, "fish", "miss");
     }
     render();
   }
@@ -4114,7 +4176,7 @@
     const room = world[state.currentRoom];
     consumeFromPools("firewood", 1);
     room.fireMinutesLeft = Math.min((room.fireMinutesLeft || 0) + 60, FIRE_MAX_MIN);
-    log("You feed the fire more wood.", "good");
+    log("You feed the fire more wood.", "good", "fuel");
     render();
   }
   function doExtinguish(){
@@ -4154,7 +4216,7 @@
     if(container.items[idx].qty <= 0) container.items.splice(idx,1);
     addToList(container.items, itemFromRegistry({ id: recipe.output.id, qty:1 }));
     advanceTime(recipe.minutes);
-    log(`The ${ITEM_REGISTRY[recipe.input].name.toLowerCase()} finishes cooking.`, "good");
+    log(`The ${ITEM_REGISTRY[recipe.input].name.toLowerCase()} finishes cooking.`, "good", "cook:" + recipe.id);
     render();
   }
   function doChopTree(){
@@ -4164,7 +4226,7 @@
     applyExertion(CHOP_TREE_EXERTION);
     room.hasTree = false;
     giveItem(itemFromRegistry({ id:"firewood", qty:6 }));
-    log("You chop the tree down. It splits into a good stock of firewood.", "good");
+    log("You chop the tree down. It splits into a good stock of firewood.", "good", "chop");
     render();
   }
   // ==================================================

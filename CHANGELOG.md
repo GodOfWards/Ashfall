@@ -7,6 +7,204 @@ owns which behavior.
 
 ---
 
+## v0.4.6 — Log: routine lines removed, repeated lines collapsed
+
+Implements #21 and #22 in full, per `handoffs/log-noise-and-collapse.md`. The
+log stops confirming what a panel already shows, and a run of the same action
+reports once instead of once per repetition. Rendering behavior — how existing
+state changes are surfaced. No mechanics, no world data, no vitals math, no new
+state fields, no save-format change.
+
+**Removed** — INVENTORY / ITEM SYSTEM, seven routine `log()` calls
+
+Each failed the same test: does the line tell the player something the screen
+doesn't already show?
+
+- `doTake()` and `doStore()` — the item visibly moves between the Here and
+  Inventory panels. `doStore()`'s `verb` local went with its line.
+- `doEquip()` and `doUnequip()` — a new inventory tab appears, or disappears.
+- The battery controls in `getItemActions()`: on/off (the detail view already
+  reads "— On" / "— Off"), removal (the batteries appear in inventory and the
+  view reads "No batteries installed") and replacement (the charge readout
+  jumps to 100%).
+- Every failure and redirect still speaks: "That won't fit", "No room for the
+  … — it drops to the floor instead", "Your keychain can't hold that", "You're
+  already carrying something in that slot", and every consequence line with no
+  visible counterpart.
+- `doConsume()` keeps its line. Eating is the one case where the panels don't
+  tell the story: the item count drops, but the effect lands on Hunger and
+  Thirst, which live behind the ☰ menu and are invisible during normal play.
+
+**New** — EVENTS / UI HELPERS, collapsing consecutive runs
+
+- `log(text, cls)` becomes `log(text, cls, key, outcome)`. Both new parameters
+  are optional and every existing unkeyed call site behaves exactly as before:
+  it never collapses, and nothing collapses into it.
+- With a `key`, the line collapses into `#log`'s last child if that child
+  carries the same `dataset.logKey`; otherwise it appends a new element
+  carrying it. **Only consecutive runs collapse.** Any intervening line breaks
+  a run — including a `warn`, on purpose: a string of ten "That won't fit"
+  failures is worth seeing in full, and hiding repeated failures would hide a
+  stuck player from themselves. `fish, fish, chop, eat, eat, drink, fish, eat`
+  logs as `fish, chop, eat, drink, fish, eat`.
+- **Tally actions** (fixed text) key on the action and re-render as prose from
+  the second occurrence: `doFish()` as `fish` with `bite`/`miss` outcomes,
+  `doRest()` as `rest`, `doChopTree()` as `chop`, `doAddFuel()` as `fuel`. The
+  four sentences live in one `LOG_SUMMARIES` table beside `log()`: "You fish
+  seven times. Three bites." / "Nothing bites." / "One bite." for the
+  degenerate counts, "You rest for three hours.", "You chop down three
+  trees.", "You feed three more pieces of wood into the fire."
+- **Counted actions** (the text names an object) keep their sentence and class
+  and gain a dim trailing `<span class="logcount">×3</span>`. Their keys carry
+  the object — `consume:` + item id, `craft:` + output id, `cook:` + recipe id
+  — so eating three different things can never render as one line naming the
+  first. New style: `.logcount{ color:var(--ink-faint); font-size:11.5px;
+  margin-left:5px; }`, so the count reads as functional UI rather than as part
+  of the prose.
+- `numberWord()` in UTILITIES, beside `fmtDuration()`: spelled out through
+  ten, digits from eleven up, matching the game's prose.
+- On collapsing a tally run the element's outcome class is cleared — a fishing
+  run mixes a `good` bite with an unclassed miss, and the summary is a neutral
+  report of both. Counted runs keep their class.
+- `.fresh` follows its existing rule unchanged — stripped from every line,
+  then applied to the line just written when `cls` is falsy — so the newest
+  line stays highlighted whether it was appended or rewritten in place.
+- Runs may span movement: `doMove()` logs nothing, so chopping a tree in three
+  rooms in a row still collapses to one line. Intended.
+- `doSearch()` is deliberately unkeyed: a room can only be searched once and
+  different rooms would key differently, so it could never collapse.
+- The 50-entry cap and the scroll-to-bottom behavior are unchanged.
+
+**UI**
+
+- Taking, storing, equipping, unequipping and servicing batteries are silent.
+  Their failure warnings are not.
+- Eating and drinking still report.
+- A repeated action reads as one line: "You fish seven times. Three bites." /
+  "You rest for three hours." / "You chop down three trees." / "You eat the
+  canned soup. ×3".
+- Failures never collapse.
+
+**Sections touched**
+
+- EVENTS / UI HELPERS — `log()`, the new `LOG_SUMMARIES` table.
+- UTILITIES — the new `numberWord()` and `NUMBER_WORDS`.
+- INVENTORY / ITEM SYSTEM — five removed `log()` calls across `doTake()`,
+  `doStore()`, `doEquip()`, `doUnequip()` and the battery actions in
+  `getItemActions()`; one key added in `doConsume()`.
+- FIRE / COOKING — keys in `doFish()`, `doAddFuel()`, `doChopTree()`,
+  `doCookInContainer()`.
+- CRAFTING — key in `doCraft()`.
+- WORLD INTERACTION — key in `doRest()`.
+- The document `<style>` block for `.logcount`.
+
+Only the `log()` calls inside those action functions changed; no ACTIONS
+logic, no simulation rule and no vitals math was touched.
+
+**Open questions / decisions resolved**
+
+The handoff left four implementation calls open; all four took its recommended
+default.
+
+- **Where the summary text lives**: one `LOG_SUMMARIES` table next to `log()`,
+  keyed by action id and taking the tally object — not sentences built at the
+  four call sites. A future content pass edits all four strings in one place.
+- **How a call site passes its outcome**: a fourth optional parameter
+  defaulting to the key itself, so only `doFish()` names an outcome
+  (`bite`/`miss`) and the three single-outcome actions pass nothing extra.
+- **`numberWord()` placement**: UTILITIES, beside `fmtDuration()`.
+- **When a tally run starts tallying**: from the first occurrence, so the
+  transition at n = 2 is a re-render rather than a reconstruction.
+
+**Notes / assumptions**
+
+- The two battery-servicing removals ("You pull the batteries out of the …",
+  "You put fresh batteries in the …") are an **explicit extension of #21's
+  original table by two call sites**, made because they fail the same test and
+  leaving them would have made the battery controls inconsistent — silent when
+  toggled, chatty when serviced.
+- Collapse state lives on the `<p>` element: `dataset.logKey` for matching and
+  a `_logTally` expando for the counts, since `dataset` values are strings.
+  Nothing about the log is in `state`, so nothing about it is serialized.
+- `doConsume()`'s key is `"consume:" + (it.itemId || it.name)`. The handoff
+  specified `it.itemId`; the name fallback is a guard for the runtime-literal
+  items the remaining `giveItem()` call sites still build (the `tier-0`
+  registry cleanup), which would otherwise all key as `consume:undefined` and
+  collapse different foods into one line.
+- The summary wording is the handoff's, including "You fish two times." for a
+  run of exactly two — retunable prose, not a settled style rule.
+
+**Explicitly NOT changed**
+
+- `#log`'s 110px cap, its 50-entry trim, its gap and its line styles.
+- `serializeGame()`, `applyLoadedData()`, `doRestart()`'s `innerHTML = ""`.
+  `SAVE_KEY` is unchanged: `versionCompat()` reads `MAJOR.MINOR`, and this
+  pass adds no state.
+- Illness, vitals, `doConsume()`'s mechanics — only its `log()` call's key.
+- `doSearch()`, `doSleep()`, `doLightStove()`, `doBuildFire()`,
+  `doExtinguish()`, `doDismantleCampfire()`, the door/window lines, the save
+  and load `sys` lines, and every `warn` in the file: all unkeyed, all
+  unchanged.
+- No vitals readout was added outside the ☰ menu, per the handoff.
+
+**Validation performed**
+
+Driven in headless Chromium against an instrumented copy, with `Math.random`
+scripted where an outcome had to be forced:
+
+- Seven fishing attempts, three bites: one line, "You fish seven times. Three
+  bites." Two attempts with one bite: "You fish two times. One bite." Three
+  attempts, no bites: "You fish three times. Nothing bites." A single attempt
+  keeps its ordinary sentence with no summary.
+- A fishing run broken by an intervening `warn` produces two fish lines with
+  the warning between them, not a run of two.
+- Rest ×3 → "You rest for three hours."; ×12 → "You rest for 12 hours."
+  (digits above ten). Fuel ×3 → "You feed three more pieces of wood into the
+  fire." Chop ×3 across three different rooms → "You chop down three trees.",
+  confirming a run spans movement.
+- Eating the same item three times then a different one: two lines, "You eat
+  the canned soup. ×3" and "You eat the granola bars." Alternating two items
+  four times: four separate lines, never collapsed. Three raw fish where the
+  second triggers the illness warning: "×2", the warning, then a fresh line.
+- Crafting the same recipe twice: one line with "×2".
+- Equipping, unequipping, storing and taking, all four verified to have
+  actually moved the item: **zero** log lines. The following "That won't fit
+  there." warning still appears. Battery on/off, removal and replacement write
+  nothing.
+- `.fresh` lands on the rewritten line when the collapsing call is unclassed,
+  and exactly one line carries it.
+- The cap holds: 60 filler lines plus a collapsed rest run leaves exactly 50
+  children with the summary last.
+- `node --check` on the extracted script; no page or console errors in any
+  scenario.
+- Re-ran v0.4.4's and v0.4.5's own validations against this build: 672/102
+  exit split intact with all 224 head/block pairs ordered, 42 rooms hiding
+  Move, and the Wide map still exactly player-centred with label counts
+  matching their tiers.
+
+**Explicitly out of scope**
+
+Per the handoff: no resizing or restyling of `#log`, no vitals readout outside
+the ☰ menu, no change to illness or vitals, no summarising across
+non-consecutive occurrences (rejected during planning — it deletes the events
+between survivors and implies an order that didn't happen), and no collapsing
+of `warn` lines. #23 (illness system) is the recorded home of the
+hidden-vitals finding and is untouched.
+
+**Documentation**
+
+- The ARCHITECTURE comment's "Current version" line is bumped to 0.4.6.
+- Filed #29: re-judge `#log`'s 110px cap and 50-entry limit against the
+  quieter feed. The handoff deferred this explicitly on the grounds that it
+  has to be judged in play rather than guessed at; the issue records the
+  current values and says so.
+- Nothing else was deferred out of this pass.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.5"` → `"0.4.6"` (third of three
+passes in this pull request: `"0.4.3"` → `"0.4.4"` → `"0.4.5"` → `"0.4.6"`)
+
+---
+
 ## v0.4.5 — Wide map: panning, zoom placeholders, viewport-relative labels
 
 Implements #19 and #20 in full, per `handoffs/wide-map-panning.md`. The Wide
