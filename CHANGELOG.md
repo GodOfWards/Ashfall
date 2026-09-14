@@ -7,6 +7,195 @@ owns which behavior.
 
 ---
 
+## v0.4.5 — Wide map: panning, zoom placeholders, viewport-relative labels
+
+Implements #19 and #20 in full, per `handoffs/wide-map-panning.md`. The Wide
+map now centres on the player and slides as they move; street names are placed
+against the part of each street on screen; two inert `+` / `−` buttons reserve
+the layout slot for a later zoom pass. Rendering-only, MAP sub-block. No
+mechanics, no world data, no new state fields, no save-format change.
+
+**Changed / Reworked** — RENDERING / MAP, Wide is a span, not a box
+
+- `MAP_WIDE_VIEWBOX = { x:20, y:20, w:1000, h:1000 }` is replaced by
+  `MAP_WIDE_VIEW = 800`, a span mirroring `MAP_CLOSE_VIEW = 260`.
+  `mapTargetViewBox()` collapses to one code path for both modes: a
+  player-centred box of the active span. Wide never panned before because its
+  target was a constant; nothing in `renderMap()` or `mapUpdateViewBox()`
+  needed changing to make it pan, and the existing 350ms ease-out animation
+  now runs for Wide moves too.
+- The span had to shrink for panning to mean anything. Node extents run 55 →
+  965 on both axes — 910 units — so a 1000-unit box has almost nothing to pan
+  within. At span 800 the box ranges over x ∈ [−345, 565] as the player
+  crosses town, which is the full width of the grid.
+- The box is **not clamped** to content bounds. At the western edge a
+  player-centred Wide box is 47% empty canvas; Close at the same spot is
+  already 40% empty. Clamping was rejected: the ask was for Wide to pan the
+  way Close does, and clamping would also stop Wide panning at all for any
+  span ≥ 960.
+- The player marker is untouched: `r="5"` in Close, `MAP_PLAYER_R_WIDE = 12`
+  in Wide.
+
+**Changed / Reworked** — RENDERING / MAP, street names placed against the viewport
+
+- `mapBlockLabels()` is gone. It emitted one `<text>` per block at build time
+  — 7 blocks × 16 streets = 112 labels — which stops meaning anything once the
+  view moves.
+- `renderMapWide()` now emits a fixed pool of `MAP_LABELS_PER_STREET` (3)
+  empty, hidden `<text class="map-street-name" data-street="N">` nodes per
+  street: 48 in total, created once per Wide render and thereafter only moved,
+  shown or hidden. Nothing is created or destroyed during a pan.
+- `mapBindStreetLabels()` caches that pool as element references, plus each
+  street's endpoints and heading angle, in the module-level `mapStreetLabels`.
+  It runs from `renderMap()` right after the SVG content is rebuilt, and
+  clears the pool for Close, which emits no street names at all.
+- `mapPositionStreetLabels(box)` places them. Every street run is
+  axis-aligned, so visibility is a 1-D clamp: a horizontal street is on screen
+  only if its single `y` lies inside the box, and its visible stretch is
+  `[max(min(ax,bx), box.x), min(max(ax,bx), box.x + box.w)]`; vertical streets
+  are the same with the axes swapped. Label count follows `MAP_LABEL_TIERS` on
+  that stretch's length — 3 at ≥ 600, 2 at ≥ 300, 1 at ≥ 110, none below —
+  positioned at `lo + MAP_LABEL_INSET`, the midpoint, and `hi −
+  MAP_LABEL_INSET` (one label sits at the midpoint alone). Unused pool nodes
+  get `display:none`.
+- Rotation and offset are v0.4.3's logic unchanged: the label rides its
+  street's heading folded into `(-90, 90]`, so vertical streets still read
+  bottom-to-top, offset off the line by `MAP_LABEL_OFFSET = 5`. This pass
+  changes where labels sit, never which way they read.
+- Labels are repositioned wherever the viewBox is set — the snap branch of
+  `mapUpdateViewBox()` and every `requestAnimationFrame` step — since the
+  placement is relative to the window, not to the street.
+
+**UI**
+
+- Wide shows about 80% of the town at a time, centred on the player, sliding
+  as they move, instead of the whole town fixed in place.
+- On-screen street names drop from 112 to at most 42, averaging 26.7 across
+  all 176 street positions.
+- Two greyed-out `+` / `−` buttons sit to the right of Wide, in that order,
+  using `&minus;` so they read as a matched pair. They are `disabled`, carry no
+  handler, and deliberately carry **no `data-zoom` attribute** — the mode
+  toggle binds `#mapZoomToggle button[data-zoom]`, and giving the placeholders
+  that attribute would have broken the Close/Wide switch. They get the
+  existing disabled treatment, `#mapZoomToggle button:disabled{ opacity:.4;
+  cursor:not-allowed; }`, matching `#gaitBar`.
+- Near the town's edges Wide shows empty canvas past the player, as Close
+  already does.
+
+**Removed**
+
+- `mapBlockLabels()` and `MAP_WIDE_VIEWBOX`. Replaced by the label pool and
+  `MAP_WIDE_VIEW` respectively.
+
+**Sections touched**
+
+UI/RENDERING, the MAP sub-block only — `mapTargetViewBox()`,
+`mapUpdateViewBox()`, `renderMapWide()`, `renderMap()`, the new
+`mapBindStreetLabels()` / `mapPositionStreetLabels()` / `mapLabelPositions()`,
+the `#mapZoomToggle` markup, and one rule in the document `<style>` block.
+
+**Open questions / decisions resolved**
+
+The handoff left four implementation calls open; all four took its recommended
+default.
+
+- **Per-frame vs. on-settle label repositioning**: per frame, inside
+  `step()`. At most 48 nodes exist and only `transform` and `display` change,
+  so no element is created or destroyed mid-animation. Verified mid-pan:
+  labels track the intermediate box, not the target.
+- **Where the pool lives**: a module-level array of element references,
+  `mapStreetLabels`, populated once per rebuild — the DOM is not re-queried
+  per frame. Mirrors how `mapPositionPlayer()` resolves `#mapPlayer`.
+- **Button order and glyphs**: `+` then `−`, using `&minus;`.
+- **Four named constants or one table**: one table, `MAP_LABEL_TIERS`, read by
+  `mapLabelPositions()` via a `find()` on the longest matching tier. No inline
+  magic numbers.
+
+**Notes / assumptions**
+
+- `MAP_WIDE_VIEW = 800`, `MAP_LABEL_INSET = 55`, and all three
+  `MAP_LABEL_TIERS` thresholds (600 / 300 / 110) are **retunable** and have no
+  prior convention behind them. 800 is the smallest span that both zooms in
+  noticeably and leaves room to pan; 55 is half the widest street name
+  (`POPLAR ST`, 99.1 units at 15px), which is what keeps a full-width label
+  inside the visible span instead of clipped at its edge.
+- The 1-label tier is currently unreachable: sweeping all 176 street nodes at
+  span 800 produced only 0-, 2- and 3-label streets. It is kept because the
+  spans a working zoom introduces (#27) will reach it.
+- Zoom mode stays a module-level `let`, not a field on `state`, so
+  `versionCompat()` still yields `"0.4"` and `SAVE_KEY` is unchanged.
+  Persisting a zoom level would have made this MINOR.
+
+**Explicitly NOT changed**
+
+- Close view: `renderMapClose()` is untouched, its span stays 260, its marker
+  stays `r="5"`, and it still emits zero `text.map-street-name` nodes.
+  Re-checked after a Wide round trip.
+- `LOCATIONS`, `MAP_STREETS`, `MAP_BUILDINGS`, `MAP_STREET_NODE_IDS`,
+  `MAP_SPACING`, `MAP_MARGIN`, `mapToSvg()`, `mapPathD()`,
+  `mapPositionPlayer()` — no node moves.
+- The viewBox is not clamped in either mode; Close's own edge behavior is
+  unchanged.
+- `serializeGame()`, `SAVE_KEY`, and every balance constant outside the MAP
+  sub-block.
+
+**Validation performed**
+
+Driven in headless Chromium against an instrumented copy of the new file:
+
+- The Wide viewBox is exactly player-centred at every one of 14 sampled
+  positions across two full-width walks (POPLAR ST west → east, 1ST ST south →
+  north, plus the four grid corners): `box.x === px − 400` and
+  `box.y === py − 400` with no exception.
+- Sampled mid-animation as well as settled: the box is intermediate and the
+  labels are placed against that intermediate box, confirming per-frame
+  repositioning.
+- Swept **all 176 street/mid-block nodes**. At every position, each street's
+  label count matches `MAP_LABEL_TIERS` applied to its own visible stretch
+  (992 two-label streets, 904 three-label, 920 with none, zero mismatches); no
+  label falls outside its street's visible span; and no label — measured with
+  its real rendered width — is clipped at a span edge. Peak 42 labels on
+  screen, mean 26.7.
+- Close view after load and after a Wide round trip: `viewBox` back to the
+  260-span player-centred box, player `r="5"`, 11 building dots, 19 building
+  labels, 176 node dots, 0 street-name nodes, empty label pool.
+- The `+` / `−` buttons are present, `disabled`, rendered at `opacity:.4` with
+  `cursor:not-allowed`; clicking both changes neither the zoom mode, the
+  active-button class, nor the viewBox.
+- No page or console errors on load, on toggling modes, or across the walks.
+- `node --check` on the extracted script; `git diff main -- ashfall.html`
+  confirms the MAP sub-block, the markup and the one CSS rule are all that
+  moved.
+- One property the handoff asked for did **not** hold: labels can collide at
+  an intersection. 116 of the 176 positions show at least one overlapping
+  pair, worst case `ELM ST` over `3RD ST` at 17 × 17 units. It is inherent to
+  the placement rule as specced — an inset position often lands near a
+  crossing, where two 15-unit-tall name bands can cross — so this pass shipped
+  the rule as written and filed #28 rather than inventing a placement rule the
+  handoff didn't specify.
+
+**Explicitly out of scope**
+
+Per the handoff: no working zoom (the buttons ship inert), no persisted zoom
+level, no viewBox clamping, no change to Close view or to any map geometry
+constant. Close-map building-label clipping and phone-viewport overflow (both
+findings under #16) live in nearby code and are untouched; #16 stays open.
+Building placement in the outer ring (#8) is unrelated.
+
+**Documentation**
+
+- The ARCHITECTURE comment's "Current version" line is bumped to 0.4.5.
+- Filed #27: make the `+` / `−` controls work, carrying the handoff's
+  recommendation that the zoom variable be scoped per mode so Close and Wide
+  each scale from their own base span, plus the note that
+  `MAP_LABEL_TIERS` needs re-checking at any new span.
+- Filed #28: Wide-map street names can collide at an intersection, with the
+  measured sweep above and three candidate fixes.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.4"` → `"0.4.5"`
+
+---
+
 ## v0.4.4 — Exit split: grid travel vs. Here
 
 Implements #18 in full, per `handoffs/exit-move-split.md`. Rendering-only:
