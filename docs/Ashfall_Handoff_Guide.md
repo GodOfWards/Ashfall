@@ -109,6 +109,33 @@ The handoff is committed to `main` when the planning session wraps, and
 kept after it ships. Its commit date is the record that the spec predated
 the code; there's no delete-when-consumed step.
 
+### When a handoff stops being implementable
+
+Keeping handoffs means some of them go stale — the code moves underneath
+one, or a later pass ships the same fix by a different mechanism. A stale
+handoff is a trap rather than merely clutter, because of how a coding
+session reads: it opens the handoff and `ashfall.html` and nothing else,
+so it never sees the issue that knows better.
+
+Marking it in the issue is therefore not enough. A handoff that should no
+longer be implemented gets marked **in the file itself**:
+
+- A blockquote at the very top, above the title, saying it is superseded
+  and must not be implemented.
+- What is true now, finding by finding where the handoff had several —
+  including which parts have shipped, and which code it names no longer
+  exists.
+- Where the live truth lives: the issue carrying the re-verified findings.
+
+Nothing below the banner is edited or deleted. The point of keeping a
+handoff is that it records what was known when it was written; correcting
+the body destroys exactly that, and the banner is what lets the stale text
+stand without misleading anyone. `handoffs/map-view-ui-fixes.md` is the
+worked example.
+
+Mark it when it's found stale, not at the next wrap — the gap is when
+someone implements it.
+
 ---
 
 ## Part 3 — Handoff Template
