@@ -244,7 +244,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.4.6" };
+  const GAME_CONFIG = { VERSION: "0.4.7" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Ammunition","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -402,7 +402,6 @@
     rotten_leftovers: { name:"Rotten leftovers", category:"Misc", unitWeight:0.8 },
     bottled_water: { name:"Bottled water", category:"Food", unitWeight:0.5, restores:{thirst:30}, verb:"Drink" },
     granola_bars: { name:"Granola bars", category:"Food", unitWeight:0.1, restores:{hunger:15}, verb:"Eat" },
-    bandages: { name:"Bandages", category:"Medical", unitWeight:0.05 },
     painkillers: { name:"Painkillers", category:"Medical", unitWeight:0.1 },
     toilet_paper: { name:"Toilet paper", category:"Materials", unitWeight:0.2 },
     bleach: { name:"Bleach", category:"Materials", unitWeight:1.0 },
@@ -658,7 +657,7 @@
       { itemId:"dish_soap", weight:3, qtyMin:1, qtyMax:1 },
       { itemId:"laundry_detergent", weight:3, qtyMin:1, qtyMax:1 } ]},
     medical_otc: { rollCount:[1,2], emptyChance:0.2, entries:[
-      { itemId:"bandages", weight:8, qtyMin:1, qtyMax:3 },
+      { itemId:"bandage", weight:8, qtyMin:1, qtyMax:3 },
       { itemId:"painkillers", weight:6, qtyMin:1, qtyMax:1 },
       { itemId:"aspirin", weight:6, qtyMin:1, qtyMax:1 },
       { itemId:"cold_medicine", weight:5, qtyMin:1, qtyMax:1 },
@@ -1125,7 +1124,7 @@
       cannotHaveFire:true, floorCap:30, floor:[],
       containers:[
         { id:"medcab", name:"Medicine cabinet", capacityKg:5, spawnPools:["medical_otc","hygiene"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"bandages", qty:4 },
+          { id:"bandage", qty:4 },
           { id:"painkillers", qty:1 } ])},
         { id:"undersink", name:"Under-sink cabinet", capacityKg:10, spawnPools:["hygiene","cleaning_supplies"], spawnRolled:true, items:itemsFromRegistry([
           { id:"toilet_paper", qty:3 },
@@ -1169,7 +1168,7 @@
       ],
       exits:[
         { to:"living", label:"Go to the living room", distanceM:3 },
-        { to:"alley", label:"Climb down the fire escape", distanceM:8 } ]
+        { to:"alley", label:"Climb down the fire escape" } ]
     },
     hallway2: { locationId:"acorn_f1", building:"Acorn Apartments", area:"2nd Floor", room:"Hallway",
       desc:"A dim corridor lit by one flickering bulb. Your door is one of two here, with a small transom window set beside it.",
@@ -1220,7 +1219,7 @@
       cannotHaveFire:true, floorCap:30, floor:[],
       containers:[
         { id:"medcab", name:"Medicine cabinet", capacityKg:5, spawnPools:["medical_otc","hygiene"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"bandages", qty:2 },
+          { id:"bandage", qty:2 },
           { id:"aspirin", qty:1 } ])},
         { id:"undersink", name:"Under-sink cabinet", capacityKg:10, spawnPools:["hygiene","cleaning_supplies"], items:[] }
       ],
@@ -1262,13 +1261,13 @@
       cannotHaveFire:true, floorCap:50, floor:[], containers:[],
       exits:[
         { to:"hallway2", label:"Go back to the hallway", distanceM:10 },
-        { to:"stairs1", label:"Head downstairs", distanceM:15 } ]
+        { to:"stairs1", label:"Head downstairs" } ]
     },
     stairs1: { locationId:"acorn_f0", building:"Acorn Apartments", area:"1st Floor", room:"Stairs",
       desc:"Ground level. The stairwell door out to the hallway is propped open.",
       cannotHaveFire:true, floorCap:50, floor:[], containers:[],
       exits:[
-        { to:"stairs2", label:"Head upstairs", distanceM:15 },
+        { to:"stairs2", label:"Head upstairs" },
         { to:"hallway1", label:"Go to the hallway", distanceM:10 } ]
     },
     hallway1: { locationId:"acorn_f0", building:"Acorn Apartments", area:"1st Floor", room:"Hallway",
@@ -1276,7 +1275,7 @@
       cannotHaveFire:true, floorCap:100, floor:itemsFromRegistry([ { id:"empty_soda_can", qty:1 } ]), containers:[],
       exits:[
         { to:"stairs1", label:"Go back to the stairwell", distanceM:10 },
-        { to:"mid_poplar_1_2", label:"Step outside", distanceM:8 },
+        { to:"mid_poplar_1_2", label:"Step outside" },
         { to:"onea", label:"Enter 1A", distanceM:6, doorId:"1a" },
         { to:"onebee", label:"Enter 1B", distanceM:6, doorId:"1b" } ]
     },
@@ -1320,7 +1319,7 @@
       cannotHaveFire:true, floorCap:30, floor:[],
       containers:[
         { id:"medcab1a", name:"Medicine cabinet", capacityKg:5, spawnPools:["medical_otc","hygiene"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"bandages", qty:2 },
+          { id:"bandage", qty:2 },
           { id:"childrens_medicine", qty:1 } ])}
       ],
       exits:[
@@ -1380,144 +1379,190 @@
     };
   }
 
-  function buildStreetsAndOutdoor(){
+  function buildOakApartments(){
     return {
-    outside: { locationId:"outside", building:"Poplar St & 1st St", area:null, room:null,
-      desc:"A quiet intersection. 1st St runs both ways here — Poplar continues in both directions too, though the block to the west feels like it goes on longer than the one to the east. Your building's stoop is partway down the block to the west.",
-      floorCap:100, floor:[], containers:[],
+    oak_hallway1: { locationId:"oak_f0", building:"Oak Apartments", area:"1st Floor", room:"Hallway",
+      desc:"Narrower than Acorn's hallway, and darker — half the bulbs are out.",
+      cannotHaveFire:true, floorCap:80, floor:[], containers:[],
       exits:[
-        { to:"poplar2nd", label:"Head west on Poplar St" },
-        { to:"mid_poplar_1_2", label:"Step into the block (west)" },
-        { to:"poplar3rd", label:"Head east on Poplar St" },
-        { to:"mid_poplar_1_3", label:"Step into the block (east)" },
-        { to:"main1st", label:"Head north on 1st St" },
-        { to:"mid_1st_o_m", label:"Step into the block (north)" },
-        { to:"maple1st", label:"Head south on 1st St" },
-        { to:"mid_1st_mp_p", label:"Step into the block (south)" } ]
+        { to:"mid_poplar_2_4", label:"Step outside" },
+        { to:"oak_1a", label:"Enter 1A", distanceM:6 },
+        { to:"oak_1b", label:"Enter 1B", distanceM:6 },
+        { to:"oak_stairs", label:"Go upstairs", distanceM:10 } ]
     },
-    alley: { locationId:"acorn_f0", building:"Poplar St", area:null, room:"Alley",
-      desc:"Narrow, littered, and smelling of garbage. A rusted fire escape climbs the back of Acorn Apartments.",
-      floorCap:60, floor:[],
+    oak_stairs: { locationId:"oak_f0", building:"Oak Apartments", area:null, room:"Stairwell",
+      desc:"A tight stairwell, paint peeling on the handrail.",
+      cannotHaveFire:true, floorCap:40, floor:[], containers:[],
+      exits:[
+        { to:"oak_hallway1", label:"Go downstairs", distanceM:10 },
+        { to:"oak_hallway2", label:"Go upstairs" } ]
+    },
+    oak_hallway2: { locationId:"oak_f1", building:"Oak Apartments", area:"2nd Floor", room:"Hallway",
+      desc:"The upstairs hallway, a little brighter than downstairs. Two doors, both closed.",
+      cannotHaveFire:true, floorCap:80, floor:[], containers:[],
+      exits:[
+        { to:"oak_stairs", label:"Go back downstairs" },
+        { to:"oak_2a", label:"Enter 2A", distanceM:6 },
+        { to:"oak_2b", label:"Enter 2B", distanceM:6 } ]
+    },
+    oak_1a: { locationId:"oak_f0", building:"Oak Apartments", area:"1A", room:null,
+      desc:"Same layout as yours, roughly — smaller, though, and a half-packed bag still sits by the door.",
+      sleepSpot:"couch", cannotHaveFire:true, floorCap:50, floor:[],
       containers:[
-        { id:"dumpster", name:"Dumpster", capacityKg:40, spawnPools:["trash","fuel_fire"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"scrap_metal", qty:3 },
-          { id:"metal_pipe", qty:1 },
-          { id:"firewood", qty:5 } ])}
+        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal","baby_items"], items:[] },
+        { id:"kitchenette", name:"Kitchenette Shelf", capacityKg:10, spawnPools:["kitchen_nonperishable","kitchen_tools"], items:[] }
+      ],
+      exits:[ { to:"oak_hallway1", label:"Leave the apartment", distanceM:6 } ]
+    },
+    oak_1b: { locationId:"oak_f0", building:"Oak Apartments", area:"1B", room:null,
+      desc:"The blinds are drawn in here, and a calendar on the wall is still turned to two months back.",
+      sleepSpot:"bed", cannotHaveFire:true, floorCap:50, floor:[],
+      containers:[
+        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal","pet_supplies"], items:[] },
+        { id:"kitchenette", name:"Kitchenette Cabinet", capacityKg:10, spawnPools:["kitchen_nonperishable","kitchen_tools"], items:[] }
+      ],
+      exits:[ { to:"oak_hallway1", label:"Leave the apartment", distanceM:6 } ]
+    },
+    oak_2a: { locationId:"oak_f1", building:"Oak Apartments", area:"2A", room:null,
+      desc:"A single room upstairs, tidy despite everything — someone made the bed before they left.",
+      sleepSpot:"bed", cannotHaveFire:true, floorCap:50, floor:[],
+      containers:[
+        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal","self_defense"], items:[] },
+        { id:"kitchenette", name:"Kitchenette Shelf", capacityKg:10, spawnPools:["kitchen_nonperishable","kitchen_tools"], items:[] }
+      ],
+      exits:[ { to:"oak_hallway2", label:"Leave the apartment", distanceM:6 } ]
+    },
+    oak_2b: { locationId:"oak_f1", building:"Oak Apartments", area:"2B", room:null,
+      desc:"Boxes still stacked by the window, like a move that never finished.",
+      sleepSpot:"mattress", cannotHaveFire:true, floorCap:50, floor:[],
+      containers:[
+        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal","pet_supplies"], items:[] },
+        { id:"kitchenette", name:"Kitchenette Cabinet", capacityKg:10, spawnPools:["kitchen_nonperishable","kitchen_tools"], items:[] }
+      ],
+      exits:[ { to:"oak_hallway2", label:"Leave the apartment", distanceM:6 } ]
+    }
+    };
+  }
+
+  function buildAutoWorkshop(){
+    return {
+    auto_shop: { locationId:"auto_shop_f0", building:"Auto Workshop", area:null, room:"Main Bay",
+      desc:"A car sits mid-repair on the lift, hood up. A workbench runs along the back wall, tools hung in outline on a pegboard above it.",
+      cannotHaveFire:true, floorCap:70, floor:[],
+      containers:[
+        { id:"workbench", name:"Workbench", capacityKg:30, spawnPools:["tools_workshop"], items:[] },
+        { id:"partsshelf", name:"Parts Shelf", capacityKg:25, spawnPools:["tools_workshop","warehouse_goods"], items:[] }
       ],
       exits:[
-        { to:"mid_poplar_1_2", label:"Head out to the street", distanceM:15 },
-        { to:"balcony", label:"Climb the fire escape", distanceM:8 } ]
+        { to:"mid_main_3_5", label:"Leave the shop" },
+        { to:"auto_shop_back", label:"Go to the back office", distanceM:5 } ]
     },
-    poplar2nd: { locationId:"poplar2nd", building:"Poplar St & 2nd St", area:null, room:null,
-      desc:"A quiet residential corner. A pickup truck is parked half on the curb.",
-      floorCap:100, floor:[], containers:[],
-      carLocked:true,
-      carContainers:[
-        { id:"trunk", name:"Truck Bed", capacityKg:25, items:itemsFromRegistry([
-          { id:"tow_chain", qty:1 },
-          { id:"work_gloves", qty:1 } ])},
-        { id:"glovebox", name:"Glovebox", capacityKg:3, items:itemsFromRegistry([
-          { id:"flashlight", qty:1 },
-          { id:"owners_manual", qty:1 } ])}
+    auto_shop_back: { locationId:"auto_shop_f0", building:"Auto Workshop", area:null, room:"Back Office",
+      desc:"A cramped office off the main bay — a desk buried in paperwork, a filing cabinet in the corner.",
+      cannotHaveFire:true, floorCap:40, floor:[],
+      containers:[
+        { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore","electronics"], items:[] },
+        { id:"filingcabinet", name:"Filing Cabinet", capacityKg:20, spawnPools:["office_supplies","documents_lore","electronics"], items:[] }
+      ],
+      exits:[ { to:"auto_shop", label:"Go back to the main bay", distanceM:5 } ]
+    }
+    };
+  }
+
+  function buildPoliceStation(){
+    return {
+    police_lobby: { locationId:"police_f0", building:"Police Station", area:null, room:"Lobby",
+      desc:"A front desk, a bulletin board thick with old flyers, a waiting-area bench bolted to the floor.",
+      cannotHaveFire:true, floorCap:60, floor:[],
+      containers:[
+        { id:"frontdesk", name:"Front Desk", capacityKg:15, spawnPools:["office_supplies","police_gear","electronics"], items:[] },
+        { id:"lockerroom", name:"Locker Room", capacityKg:25, spawnPools:["police_gear","clothing"], items:[] }
       ],
       exits:[
-        { to:"poplar4th", label:"Head west on Poplar St" },
-        { to:"mid_poplar_2_4", label:"Step into the block (west)" },
-        { to:"outside", label:"Head east on Poplar St" },
-        { to:"mid_poplar_1_2", label:"Step into the block (east)" },
-        { to:"maple2nd", label:"Head south on 2nd St" },
-        { to:"mid_2nd_mp_p", label:"Step into the block (south)" },
-        { to:"main2nd", label:"Head north on 2nd St" },
-        { to:"mid_2nd_p_m", label:"Step into the block (north)" } ]
+        { to:"maple3rd", label:"Leave the station" },
+        { to:"police_evidence", label:"Go to the back", distanceM:5 } ]
     },
-    poplar4th: { locationId:"poplar4th", building:"Poplar St & 4th St", area:null, room:null,
-      desc:"The last residential stretch before Poplar runs into 4th St. Fewer porch lights than a block ago.",
-      floorCap:100, floor:[], containers:[],
+    police_evidence: { locationId:"police_f0", building:"Police Station", area:null, room:"Evidence & Holding",
+      desc:"An evidence locker along one wall, a single holding cell across from it, door hanging open.",
+      cannotHaveFire:true, floorCap:40, floor:[],
+      containers:[
+        { id:"evidencelocker", name:"Evidence Locker", capacityKg:25, spawnPools:["police_evidence"], items:[] }
+      ],
+      exits:[ { to:"police_lobby", label:"Go back to the lobby", distanceM:5 } ]
+    }
+    };
+  }
+
+  function buildRiversideFreight(){
+    return {
+    industrial_floor: { locationId:"industrial_f0", building:"Riverside Freight", area:null, room:"Warehouse Floor",
+      desc:"Pallet racks line both walls, mostly empty. A forklift sits dead in the middle of the floor, parked mid-task.",
+      cannotHaveFire:true, floorCap:70, floor:[],
+      containers:[
+        { id:"palletrack1", name:"Pallet Rack 1", capacityKg:35, spawnPools:["warehouse_goods"], items:[] },
+        { id:"palletrack2", name:"Pallet Rack 2", capacityKg:35, spawnPools:["warehouse_goods"], items:[] }
+      ],
       exits:[
-        { to:"poplar6th", label:"Head west on Poplar St" },
-        { to:"mid_poplar_4_6", label:"Step into the block (west)" },
-        { to:"poplar2nd", label:"Head east on Poplar St" },
-        { to:"mid_poplar_2_4", label:"Step into the block (east)" },
-        { to:"maple4th", label:"Head south on 4th St" },
-        { to:"mid_4th_mp_p", label:"Step into the block (south)" },
-        { to:"main4th", label:"Head north on 4th St" },
-        { to:"mid_4th_p_m", label:"Step into the block (north)" } ]
+        { to:"maple2nd", label:"Leave the warehouse" },
+        { to:"industrial_office", label:"Go to the office", distanceM:5 } ]
     },
-    mid_poplar_2_4: { locationId:"mid_poplar_2_4", building:"Poplar St", area:null, room:"between 2nd & 4th",
-      desc:"More of the same quiet block, just further out.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"poplar4th", label:"Head west toward 4th St" },
-        { to:"poplar2nd", label:"Continue east toward 2nd St" },
-        { to:"oak_hallway1", label:"Enter Oak Apartments" } ]
-    },
-    poplar3rd: { locationId:"poplar3rd", building:"Poplar St & 3rd St", area:null, room:null,
-      desc:"The far end of Poplar, where the block gives way to 3rd St.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"outside", label:"Head west on Poplar St" },
-        { to:"mid_poplar_1_3", label:"Step into the block (west)" },
-        { to:"poplar5th", label:"Head east on Poplar St" },
-        { to:"mid_poplar_3_5", label:"Step into the block (east)" },
-        { to:"main3rd", label:"Head north on 3rd St" },
-        { to:"mid_3rd_p_m", label:"Step into the block (north)" },
-        { to:"maple3rd", label:"Head south on 3rd St" },
-        { to:"mid_3rd_mp_p", label:"Step into the block (south)" } ]
-    },
-    poplar5th: { locationId:"poplar5th", building:"Poplar St & 5th St", area:null, room:null,
-      desc:"Poplar's easternmost corner. A chain-link fence marks where somebody's yard ends and the sidewalk starts.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"poplar3rd", label:"Head west on Poplar St" },
-        { to:"mid_poplar_3_5", label:"Step into the block (west)" },
-        { to:"poplar7th", label:"Head east on Poplar St" },
-        { to:"mid_poplar_5_7", label:"Step into the block (east)" },
-        { to:"maple5th", label:"Head south on 5th St" },
-        { to:"mid_5th_mp_p", label:"Step into the block (south)" },
-        { to:"main5th", label:"Head north on 5th St" },
-        { to:"mid_5th_p_m", label:"Step into the block (north)" } ]
-    },
-    mid_poplar_3_5: { locationId:"mid_poplar_3_5", building:"Poplar St", area:null, room:"between 3rd & 5th",
-      desc:"The last stretch of Poplar. A kid's bike, abandoned mid-ride, still leans against a fence.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"poplar3rd", label:"Head west toward 3rd St" },
-        { to:"poplar5th", label:"Continue east toward 5th St" } ]
-    },
-    main2nd: { locationId:"main2nd", building:"Main St & 2nd St", area:null, room:null,
-      desc:"The corner store's windows are papered over from the inside. Wide, unusually wide, sidewalks run both ways down Main.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"cornerstore", label:"Enter the corner store", distanceM:5 },
-        { to:"poplar2nd", label:"Head south on 2nd St" },
-        { to:"mid_2nd_p_m", label:"Step into the block (south)" },
-        { to:"main1st", label:"Head east on Main St" },
-        { to:"mid_main_1_2", label:"Step into the block (east)" },
-        { to:"water2nd", label:"Head north on 2nd St" },
-        { to:"mid_2nd_m_w", label:"Step into the block (north)" },
-        { to:"main4th", label:"Head west on Main St" },
-        { to:"mid_main_2_4", label:"Step into the block (west)" } ]
-    },
-    main4th: { locationId:"main4th", building:"Main St & 4th St", area:null, room:null,
-      desc:"Main St keeps its width out this far, but the storefronts stop — this stretch is houses and a chain-link lot.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"main6th", label:"Head west on Main St" },
-        { to:"mid_main_4_6", label:"Step into the block (west)" },
-        { to:"main2nd", label:"Head east on Main St" },
-        { to:"mid_main_2_4", label:"Step into the block (east)" },
-        { to:"poplar4th", label:"Head south on 4th St" },
-        { to:"mid_4th_p_m", label:"Step into the block (south)" },
-        { to:"water4th", label:"Head north on 4th St" },
-        { to:"mid_4th_m_w", label:"Step into the block (north)" } ]
-    },
-    mid_main_2_4: { locationId:"mid_main_2_4", building:"Main St", area:null, room:"between 2nd & 4th",
-      desc:"Main St, out past where the shops give way to houses.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"main4th", label:"Head west toward 4th St" },
-        { to:"main2nd", label:"Continue east toward 2nd St" } ]
-    },
+    industrial_office: { locationId:"industrial_f0", building:"Riverside Freight", area:null, room:"Office",
+      desc:"A small office off the warehouse floor — a desk, and a squat safe in the corner, door shut.",
+      cannotHaveFire:true, floorCap:40, floor:[],
+      containers:[
+        { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore","electronics"], items:[] },
+        { id:"safe", name:"Safe", capacityKg:20, spawnPools:["valuables","documents_lore"], items:[] }
+      ],
+      exits:[ { to:"industrial_floor", label:"Go back to the warehouse floor", distanceM:5 } ]
+    }
+    };
+  }
+
+  // Straight-line distance between two Locations, rounded to the nearest
+  // whole meter. Computed on demand, never cached — LOCATIONS is the
+  // single source of truth (v0.3.0).
+  function locationDistance(a, b){
+    const A = LOCATIONS[a], B = LOCATIONS[b];
+    return Math.round(Math.sqrt((B.x-A.x)**2 + (B.y-A.y)**2 + (B.z-A.z)**2));
+  }
+  // Compass direction from Location `a` to Location `b`, derived from real
+  // coordinates (v0.3.0). Pure vertical movement resolves to up/down;
+  // otherwise the larger of |dx|/|dy| wins. A true diagonal tie (not
+  // expected on the current rectilinear grid) defaults to the north/south
+  // axis — see the v0.3.0 changelog if one is ever found.
+  function computeDirection(a, b){
+    const A = LOCATIONS[a], B = LOCATIONS[b];
+    const dx = B.x - A.x, dy = B.y - A.y, dz = B.z - A.z;
+    if(dx === 0 && dy === 0) return dz > 0 ? "up" : "down";
+    if(Math.abs(dx) === Math.abs(dy)) return dy > 0 ? "north" : "south";
+    if(Math.abs(dx) > Math.abs(dy)) return dx > 0 ? "east" : "west";
+    return dy > 0 ? "north" : "south";
+  }
+  // Build-time pass (v0.3.0): for every exit that crosses between two
+  // different Locations and whose label already contains an explicit
+  // compass word, replace that word with the one computed from real
+  // coordinates. Runs once, right after the world is assembled — see the
+  // "when the substitution happens" decision in the v0.3.0 handoff.
+  // Labels with no compass word (building entrances, floor transitions,
+  // etc.) are left exactly as authored.
+  const COMPASS_WORD_RE = /\b(north|south|east|west)\b/i;
+  function applyComputedDirections(world){
+    for(const roomId in world){
+      const room = world[roomId];
+      if(!room.exits) continue;
+      for(const exit of room.exits){
+        const toRoom = world[exit.to];
+        if(!toRoom || toRoom.locationId === room.locationId) continue;
+        const match = exit.label.match(COMPASS_WORD_RE);
+        if(!match) continue;
+        const dir = computeDirection(room.locationId, toRoom.locationId);
+        exit.label = exit.label.slice(0, match.index) + dir + exit.label.slice(match.index + match[0].length);
+      }
+    }
+    return world;
+  }
+  function buildCornerStore(){
+    return {
     cornerstore: { locationId:"cornerstore_f0", building:"Main St", area:null, room:"Corner Store",
       desc:"A small grocery. The door was already unlocked when you got here.",
       cannotHaveFire:true, floorCap:60, floor:[],
@@ -1531,12 +1576,12 @@
         { id:"storage", name:"Storage Room", capacityKg:40, spawnPools:["retail_stock_food","retail_stock_general","cleaning_supplies"], spawnRolled:true, items:itemsFromRegistry([
           { id:"canned_beans", qty:4 },
           { id:"box_cutter", qty:1 },
-          { id:"bandages", qty:3 } ])}
+          { id:"bandage", qty:3 } ])}
       ],
       searched:false, searchLabel:"Search the store", searchMinutes:25,
       exits:[
-        { to:"main2nd", label:"Leave the store", distanceM:5 },
-        { to:"cornerstore_apt", label:"Go upstairs", distanceM:5 } ]
+        { to:"main2nd", label:"Leave the store" },
+        { to:"cornerstore_apt", label:"Go upstairs" } ]
     },
     cornerstore_apt: { locationId:"cornerstore_f1", building:"Main St", area:"Apt above Corner Store", room:null,
       desc:"A cramped one-room flat over the shop. Whoever ran the register probably lived up here.",
@@ -1547,21 +1592,13 @@
           { id:"reading_lamp", qty:1 },
           { id:"tote_bag", qty:1 } ])}
       ],
-      exits:[ { to:"cornerstore", label:"Go downstairs", distanceM:5 } ]
-    },
-    main1st: { locationId:"main1st", building:"Main St & 1st St", area:null, room:null,
-      desc:"Main crosses 1st St here. A hand-painted PHARMACY sign is visible partway down the block to the east.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"main2nd", label:"Head west on Main St" },
-        { to:"mid_main_1_2", label:"Step into the block (west)" },
-        { to:"main3rd", label:"Head east on Main St" },
-        { to:"mid_main_1_3", label:"Step into the block (east)" },
-        { to:"outside", label:"Head south on 1st St" },
-        { to:"mid_1st_o_m", label:"Step into the block (south)" },
-        { to:"water1st", label:"Head north on 1st St" },
-        { to:"mid_1st_m_w", label:"Step into the block (north)" } ]
-    },
+      exits:[ { to:"cornerstore", label:"Go downstairs" } ]
+    }
+    };
+  }
+
+  function buildPharmacy(){
+    return {
     pharmacy: { locationId:"pharmacy_f0", building:"Main St", area:null, room:"Pharmacy",
       desc:"Dusty shelves, a counter with a chained-off back area. Someone's been through here already, but not thoroughly.",
       cannotHaveFire:true, floorCap:60, floor:[],
@@ -1570,7 +1607,7 @@
           { id:"prescription_bottles", qty:2 },
           { id:"strong_painkillers", qty:1 } ])},
         { id:"shelves", name:"Shelves", capacityKg:20, spawnPools:["medical_otc"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"bandages", qty:5 },
+          { id:"bandage", qty:5 },
           { id:"cold_medicine", qty:1 } ])},
         { id:"backroom", name:"Back Room", capacityKg:25, spawnPools:["medical_pharmacy","medical_otc"], spawnRolled:true, items:itemsFromRegistry([
           { id:"rubbing_alcohol", qty:2 },
@@ -1578,8 +1615,8 @@
       ],
       searched:false, searchLabel:"Search the pharmacy", searchMinutes:20,
       exits:[
-        { to:"mid_main_1_3", label:"Leave the pharmacy", distanceM:5 },
-        { to:"pharmacy_apt", label:"Go upstairs", distanceM:5 } ]
+        { to:"mid_main_1_3", label:"Leave the pharmacy" },
+        { to:"pharmacy_apt", label:"Go upstairs" } ]
     },
     pharmacy_apt: { locationId:"pharmacy_f1", building:"Main St", area:"Apt above Pharmacy", room:null,
       desc:"The pharmacist's old apartment. Smaller than yours, and someone left in a hurry.",
@@ -1588,136 +1625,13 @@
         { id:"cabinet", name:"Cabinet", capacityKg:10, spawnPools:["kitchen_nonperishable"], spawnRolled:true, items:itemsFromRegistry([
           { id:"canned_soup", qty:2 } ])}
       ],
-      exits:[ { to:"pharmacy", label:"Go downstairs", distanceM:5 } ]
-    },
-    water2nd: { locationId:"water2nd", building:"Water St & 2nd St", area:null, room:null,
-      desc:"The riverfront edge of downtown. A low brick storage building sits between the street and the water.",
-      fishable:true, floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"storage", label:"Enter the storage facility", distanceM:5 },
-        { to:"main2nd", label:"Head south on 2nd St" },
-        { to:"mid_2nd_m_w", label:"Step into the block (south)" },
-        { to:"water1st", label:"Head east on Water St" },
-        { to:"mid_water_1_2", label:"Step into the block (east)" },
-        { to:"water4th", label:"Head west on Water St" },
-        { to:"mid_water_2_4", label:"Step into the block (west)" } ]
-    },
-    water4th: { locationId:"water4th", building:"Water St & 4th St", area:null, room:null,
-      desc:"The riverfront gets quieter still out here. No guardrail on this stretch, just a drop to the mud.",
-      fishable:true, floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"water6th", label:"Head west on Water St" },
-        { to:"mid_water_4_6", label:"Step into the block (west)" },
-        { to:"water2nd", label:"Head east on Water St" },
-        { to:"mid_water_2_4", label:"Step into the block (east)" },
-        { to:"main4th", label:"Head south on 4th St" },
-        { to:"mid_4th_m_w", label:"Step into the block (south)" } ]
-    },
-    mid_water_2_4: { locationId:"mid_water_2_4", building:"Water St", area:null, room:"between 2nd & 4th",
-      desc:"The riverfront path gets rougher out here, more weeds than pavement.",
-      fishable:true, floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"water4th", label:"Head west toward 4th St" },
-        { to:"water2nd", label:"Continue east toward 2nd St" } ]
-    },
-    storage: { locationId:"storage_f0", building:"Water St", area:null, room:"Storage Facility",
-      desc:"A row of roll-up storage units. Most are locked. One door hangs open already.",
-      cannotHaveFire:true, floorCap:50, floor:[],
-      containers:[
-        { id:"unit1", name:"Storage Unit 1", capacityKg:30, locked:true, breakTag:"cutting", spawnPools:["outdoor_camping"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"camping_tent", qty:1 },
-          { id:"sleeping_bag", qty:1 } ])},
-        { id:"unit2", name:"Storage Unit 2", capacityKg:30, locked:true, breakTag:"cutting", spawnPools:["recreation","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"old_furniture", qty:1 },
-          { id:"board_games", qty:1 } ])},
-        { id:"unit3", name:"Storage Unit 3", capacityKg:30, spawnPools:["outdoor_camping"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"fishing_rod", qty:1 },
-          { id:"tackle_box", qty:1 } ])}
-      ],
-      exits:[ { to:"water2nd", label:"Back outside", distanceM:5 } ]
-    },
-    water1st: { locationId:"water1st", building:"Water St & 1st St", area:null, room:null,
-      desc:"The riverfront here is just a low guardrail and a view of the water. Quiet.",
-      fishable:true, floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"water2nd", label:"Head west on Water St" },
-        { to:"mid_water_1_2", label:"Step into the block (west)" },
-        { to:"water3rd", label:"Head east on Water St" },
-        { to:"mid_water_1_3", label:"Step into the block (east)" },
-        { to:"main1st", label:"Head south on 1st St" },
-        { to:"mid_1st_m_w", label:"Step into the block (south)" },
-        { to:"riverbank", label:"Climb down to the riverbank" } ]
-    },
-    riverbank: { locationId:"riverbank_f0", building:"", area:null, room:"Riverbank",
-      desc:"Mud and reeds where the paved street gives way to open water. Driftwood is scattered along the bank, and the current's slow enough here to fish without much trouble.",
-      fishable:true, floorCap:40,
-      floor:itemsFromRegistry([ { id:"firewood", qty:4 } ]),
-      containers:[],
-      exits:[ { to:"water1st", label:"Climb back up to the street" } ]
-    },
-    water3rd: { locationId:"water3rd", building:"Water St & 3rd St", area:null, room:null,
-      desc:"Water St keeps going east from here, though the buildings thin out fast past this point. A gravel turnaround still marks where the old road crew stopped bothering to repave.",
-      fishable:true, floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"water1st", label:"Head west on Water St" },
-        { to:"mid_water_1_3", label:"Step into the block (west)" },
-        { to:"water5th", label:"Head east on Water St" },
-        { to:"mid_water_3_5", label:"Step into the block (east)" },
-        { to:"main3rd", label:"Head south on 3rd St" },
-        { to:"mid_3rd_m_w", label:"Step into the block (south)" } ]
-    },
-    water5th: { locationId:"water5th", building:"Water St & 5th St", area:null, room:null,
-      desc:"Water St's eastern corner. The current pulls harder along the outside bend of the river here.",
-      fishable:true, floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"water3rd", label:"Head west on Water St" },
-        { to:"mid_water_3_5", label:"Step into the block (west)" },
-        { to:"water7th", label:"Head east on Water St" },
-        { to:"mid_water_5_7", label:"Step into the block (east)" },
-        { to:"main5th", label:"Head south on 5th St" },
-        { to:"mid_5th_m_w", label:"Step into the block (south)" } ]
-    },
-    mid_water_3_5: { locationId:"mid_water_3_5", building:"Water St", area:null, room:"between 3rd & 5th",
-      desc:"The last stretch of Water St before the road narrows to gravel.",
-      fishable:true, floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"water3rd", label:"Head west toward 3rd St" },
-        { to:"water5th", label:"Continue east toward 5th St" } ]
-    },
-    main3rd: { locationId:"main3rd", building:"Main St & 3rd St", area:null, room:null,
-      desc:"Main crosses 3rd St here. A hardware store and a parked work truck sit partway down the block to the west.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"main1st", label:"Head west on Main St" },
-        { to:"mid_main_1_3", label:"Step into the block (west)" },
-        { to:"main5th", label:"Head east on Main St" },
-        { to:"mid_main_3_5", label:"Step into the block (east)" },
-        { to:"poplar3rd", label:"Head south on 3rd St" },
-        { to:"mid_3rd_p_m", label:"Step into the block (south)" },
-        { to:"water3rd", label:"Head north on 3rd St" },
-        { to:"mid_3rd_m_w", label:"Step into the block (north)" } ]
-    },
-    main5th: { locationId:"main5th", building:"Main St & 5th St", area:null, room:null,
-      desc:"The east end of Main, where the auto shop's OPEN sign — dark now — still hangs in the window down the block.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"main3rd", label:"Head west on Main St" },
-        { to:"mid_main_3_5", label:"Step into the block (west)" },
-        { to:"main7th", label:"Head east on Main St" },
-        { to:"mid_main_5_7", label:"Step into the block (east)" },
-        { to:"poplar5th", label:"Head south on 5th St" },
-        { to:"mid_5th_p_m", label:"Step into the block (south)" },
-        { to:"water5th", label:"Head north on 5th St" },
-        { to:"mid_5th_m_w", label:"Step into the block (north)" } ]
-    },
-    mid_main_3_5: { locationId:"mid_main_3_5", building:"Main St", area:null, room:"between 3rd & 5th",
-      desc:"A cinderblock garage sits here, roll-up door half open.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"main3rd", label:"Head west toward 3rd St" },
-        { to:"main5th", label:"Continue east toward 5th St" },
-        { to:"auto_shop", label:"Enter the auto shop" } ]
-    },
+      exits:[ { to:"pharmacy", label:"Go downstairs" } ]
+    }
+    };
+  }
+
+  function buildHardwareStore(){
+    return {
     hardware: { locationId:"hardware_f0", building:"Main St", area:null, room:"Hardware Store",
       desc:"Tool racks along one wall, bins of hardware along the other. Better stocked than you expected.",
       cannotHaveFire:true, floorCap:60, floor:[],
@@ -1738,8 +1652,8 @@
       ],
       searched:false, searchLabel:"Search the hardware store", searchMinutes:20,
       exits:[
-        { to:"mid_main_1_3", label:"Leave the hardware store", distanceM:5 },
-        { to:"hardware_apt", label:"Go upstairs", distanceM:5 } ]
+        { to:"mid_main_1_3", label:"Leave the hardware store" },
+        { to:"hardware_apt", label:"Go upstairs" } ]
     },
     hardware_apt: { locationId:"hardware_f1", building:"Main St", area:"Apt above Hardware Store", room:null,
       desc:"A modest apartment over the shop, plaster cracked from settling.",
@@ -1749,284 +1663,46 @@
           { id:"work_boots", qty:1 },
           { id:"fanny_pack", qty:1 } ])}
       ],
-      exits:[ { to:"hardware", label:"Go downstairs", distanceM:5 } ]
-    },
-    mid_poplar_1_2: { locationId:"mid_poplar_1_2", building:"Poplar St", area:null, room:"between 1st & 2nd",
-      desc:"Your building's front stoop is here, along with a sedan parked at the curb.",
-      floorCap:20, floor:[], containers:[],
-      carLocked:true,
-      carContainers:[
-        { id:"trunk", name:"Car Trunk", capacityKg:20, items:itemsFromRegistry([
-          { id:"tire_iron", qty:1 },
-          { id:"bandages", qty:2 } ])},
-        { id:"glovebox", name:"Glovebox", capacityKg:3, items:itemsFromRegistry([
-          { id:"registration_papers", qty:1 },
-          { id:"aspirin", qty:1 } ])}
-      ],
-      exits:[
-        { to:"poplar2nd", label:"Head west toward 2nd St" },
-        { to:"outside", label:"Continue east toward 1st St" },
-        { to:"hallway1", label:"Enter Acorn Apartments" },
-        { to:"alley", label:"Duck into the alley" } ]
-    },
-    mid_poplar_1_3: { locationId:"mid_poplar_1_3", building:"Poplar St", area:null, room:"between 1st & 3rd",
-      desc:"A quiet, ordinary stretch of Poplar St. A big sidewalk tree leans over the curb.",
-      hasTree:true, floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"outside", label:"Head west toward 1st St" },
-        { to:"poplar3rd", label:"Continue east toward 3rd St" } ]
-    },
-    mid_2nd_p_m: { locationId:"mid_2nd_p_m", building:"2nd St", area:null, room:"between Poplar & Main",
-      desc:"2nd St runs quiet here, residential on both sides.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"poplar2nd", label:"Head south toward Poplar St" },
-        { to:"main2nd", label:"Continue north toward Main St" } ]
-    },
-    mid_1st_o_m: { locationId:"mid_1st_o_m", building:"1st St", area:null, room:"between Poplar & Main",
-      desc:"A short stretch of 1st St, nothing much to it.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"outside", label:"Head south toward Poplar St" },
-        { to:"main1st", label:"Continue north toward Main St" } ]
-    },
-    mid_3rd_p_m: { locationId:"mid_3rd_p_m", building:"3rd St", area:null, room:"between Poplar & Main",
-      desc:"3rd St, mid-block. A few darkened windows, and an overgrown sidewalk tree nobody's trimmed in months.",
-      hasTree:true, floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"poplar3rd", label:"Head south toward Poplar St" },
-        { to:"main3rd", label:"Continue north toward Main St" } ]
-    },
-    mid_main_1_2: { locationId:"mid_main_1_2", building:"Main St", area:null, room:"between 1st & 2nd",
-      desc:"A stretch of Main St between the corner store and the pharmacy.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"main2nd", label:"Head west toward 2nd St" },
-        { to:"main1st", label:"Continue east toward 1st St" } ]
-    },
-    mid_main_1_3: { locationId:"mid_main_1_3", building:"Main St", area:null, room:"between 1st & 3rd",
-      desc:"The pharmacy's sign hangs over one side of the street; the hardware store and a parked work truck sit across from it.",
-      floorCap:20, floor:[], containers:[],
-      carLocked:true,
-      carContainers:[
-        { id:"bed", name:"Truck Bed", capacityKg:25, items:itemsFromRegistry([
-          { id:"tow_chain", qty:1 } ])},
-        { id:"cab", name:"Truck Cab", capacityKg:5, items:itemsFromRegistry([
-          { id:"work_gloves", qty:1 },
-          { id:"thermos", qty:1 } ])}
-      ],
-      exits:[
-        { to:"main1st", label:"Head west toward 1st St" },
-        { to:"main3rd", label:"Continue east toward 3rd St" },
-        { to:"pharmacy", label:"Enter the pharmacy" },
-        { to:"hardware", label:"Enter the hardware store" } ]
-    },
-    mid_1st_m_w: { locationId:"mid_1st_m_w", building:"1st St", area:null, room:"between Main & Water",
-      desc:"1st St, closing in on the riverfront.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"main1st", label:"Head south toward Main St" },
-        { to:"water1st", label:"Continue north toward Water St" } ]
-    },
-    mid_2nd_m_w: { locationId:"mid_2nd_m_w", building:"2nd St", area:null, room:"between Main & Water",
-      desc:"A short block of 2nd St, quiet this close to the water.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"main2nd", label:"Head south toward Main St" },
-        { to:"water2nd", label:"Continue north toward Water St" } ]
-    },
-    mid_3rd_m_w: { locationId:"mid_3rd_m_w", building:"3rd St", area:null, room:"between Main & Water",
-      desc:"3rd St runs down toward the river here.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"main3rd", label:"Head south toward Main St" },
-        { to:"water3rd", label:"Continue north toward Water St" } ]
-    },
-    mid_water_1_2: { locationId:"mid_water_1_2", building:"Water St", area:null, room:"between 1st & 2nd",
-      desc:"The riverfront street, storage facility behind you, open water alongside.",
-      fishable:true, floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"water2nd", label:"Head west toward 2nd St" },
-        { to:"water1st", label:"Continue east toward 1st St" } ]
-    },
-    mid_water_1_3: { locationId:"mid_water_1_3", building:"Water St", area:null, room:"between 1st & 3rd",
-      desc:"More riverfront, more quiet. The current moves slow here.",
-      fishable:true, floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"water1st", label:"Head west toward 1st St" },
-        { to:"water3rd", label:"Continue east toward 3rd St" } ]
-    },
-    maple4th: { locationId:"maple4th", building:"Maple St & 4th St", area:null, room:null,
-      desc:"Maple St's western corner — the newest-looking pavement in this part of town, already cracking.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"maple6th", label:"Head west on Maple St" },
-        { to:"mid_maple_4_6", label:"Step into the block (west)" },
-        { to:"maple2nd", label:"Head east on Maple St" },
-        { to:"mid_maple_2_4", label:"Step into the block (east)" },
-        { to:"elm4th", label:"Head south on 4th St" },
-        { to:"mid_4th_e_mp", label:"Step into the block (south)" },
-        { to:"poplar4th", label:"Head north on 4th St" },
-        { to:"mid_4th_mp_p", label:"Step into the block (north)" } ]
-    },
-    mid_maple_2_4: { locationId:"mid_maple_2_4", building:"Maple St", area:null, room:"between 2nd & 4th",
-      desc:"Maple St, mostly gravel shoulder and one working streetlight.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple4th", label:"Head west toward 4th St" },
-        { to:"maple2nd", label:"Continue east toward 2nd St" } ]
-    },
-    maple2nd: { locationId:"maple2nd", building:"Maple St & 2nd St", area:null, room:null,
-      desc:"A wide gravel lot borders Maple here, chain-link fence sagging in one corner. INDUSTRIAL-something on a faded sign, the rest weathered off.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"maple4th", label:"Head west on Maple St" },
-        { to:"mid_maple_2_4", label:"Step into the block (west)" },
-        { to:"maple1st", label:"Head east on Maple St" },
-        { to:"mid_maple_1_2", label:"Step into the block (east)" },
-        { to:"elm2nd", label:"Head south on 2nd St" },
-        { to:"mid_2nd_e_mp", label:"Step into the block (south)" },
-        { to:"poplar2nd", label:"Head north on 2nd St" },
-        { to:"mid_2nd_mp_p", label:"Step into the block (north)" },
-        { to:"industrial_floor", label:"Enter Riverside Freight", distanceM:5 } ]
-    },
-    mid_maple_1_2: { locationId:"mid_maple_1_2", building:"Maple St", area:null, room:"between 1st & 2nd",
-      desc:"A short stretch of Maple, chain-link fencing along one side.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple2nd", label:"Head west toward 2nd St" },
-        { to:"maple1st", label:"Continue east toward 1st St" } ]
-    },
-    maple1st: { locationId:"maple1st", building:"Maple St & 1st St", area:null, room:null,
-      desc:"Maple St, dead center of the outer ring. A stop sign, bent but standing.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"maple2nd", label:"Head west on Maple St" },
-        { to:"mid_maple_1_2", label:"Step into the block (west)" },
-        { to:"maple3rd", label:"Head east on Maple St" },
-        { to:"mid_maple_1_3", label:"Step into the block (east)" },
-        { to:"elm1st", label:"Head south on 1st St" },
-        { to:"mid_1st_e_mp", label:"Step into the block (south)" },
-        { to:"outside", label:"Head north on 1st St" },
-        { to:"mid_1st_mp_p", label:"Step into the block (north)" } ]
-    },
-    mid_maple_1_3: { locationId:"mid_maple_1_3", building:"Maple St", area:null, room:"between 1st & 3rd",
-      desc:"Maple St, quiet enough that the police station's old call box is still audible from here — not that it does anything now.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple1st", label:"Head west toward 1st St" },
-        { to:"maple3rd", label:"Continue east toward 3rd St" } ]
-    },
-    maple3rd: { locationId:"maple3rd", building:"Maple St & 3rd St", area:null, room:null,
-      desc:"A squat brick building with barred windows sits at this corner — old paint on the door still reads POLICE, mostly.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"maple1st", label:"Head west on Maple St" },
-        { to:"mid_maple_1_3", label:"Step into the block (west)" },
-        { to:"maple5th", label:"Head east on Maple St" },
-        { to:"mid_maple_3_5", label:"Step into the block (east)" },
-        { to:"elm3rd", label:"Head south on 3rd St" },
-        { to:"mid_3rd_e_mp", label:"Step into the block (south)" },
-        { to:"poplar3rd", label:"Head north on 3rd St" },
-        { to:"mid_3rd_mp_p", label:"Step into the block (north)" },
-        { to:"police_lobby", label:"Enter the police station", distanceM:5 } ]
-    },
-    mid_maple_3_5: { locationId:"mid_maple_3_5", building:"Maple St", area:null, room:"between 3rd & 5th",
-      desc:"The far end of Maple, where the streetlights stop.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple3rd", label:"Head west toward 3rd St" },
-        { to:"maple5th", label:"Continue east toward 5th St" } ]
-    },
-    maple5th: { locationId:"maple5th", building:"Maple St & 5th St", area:null, room:null,
-      desc:"Maple's eastern end. The street narrows here, more gravel shoulder than curb.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"maple3rd", label:"Head west on Maple St" },
-        { to:"mid_maple_3_5", label:"Step into the block (west)" },
-        { to:"maple7th", label:"Head east on Maple St" },
-        { to:"mid_maple_5_7", label:"Step into the block (east)" },
-        { to:"elm5th", label:"Head south on 5th St" },
-        { to:"mid_5th_e_mp", label:"Step into the block (south)" },
-        { to:"poplar5th", label:"Head north on 5th St" },
-        { to:"mid_5th_mp_p", label:"Step into the block (north)" } ]
-    },
-    mid_2nd_mp_p: { locationId:"mid_2nd_mp_p", building:"2nd St", area:null, room:"between Maple & Poplar",
-      desc:"2nd St's southernmost stretch, quiet and residential.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple2nd", label:"Head south toward Maple St" },
-        { to:"poplar2nd", label:"Continue north toward Poplar St" } ]
-    },
-    mid_1st_mp_p: { locationId:"mid_1st_mp_p", building:"1st St", area:null, room:"between Maple & Poplar",
-      desc:"1st St running down toward Maple. Fewer houses with lights ever left on.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple1st", label:"Head south toward Maple St" },
-        { to:"outside", label:"Continue north toward Poplar St" } ]
-    },
-    mid_3rd_mp_p: { locationId:"mid_3rd_mp_p", building:"3rd St", area:null, room:"between Maple & Poplar",
-      desc:"3rd St's southern stretch, same overgrown quiet as the block further north.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple3rd", label:"Head south toward Maple St" },
-        { to:"poplar3rd", label:"Continue north toward Poplar St" } ]
-    },
-    mid_4th_mp_p: { locationId:"mid_4th_mp_p", building:"4th St", area:null, room:"between Maple & Poplar",
-      desc:"4th St, brand new to the map but not to the town — just far enough out that nobody bothered keeping it up.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple4th", label:"Head south toward Maple St" },
-        { to:"poplar4th", label:"Continue north toward Poplar St" } ]
-    },
-    mid_4th_p_m: { locationId:"mid_4th_p_m", building:"4th St", area:null, room:"between Poplar & Main",
-      desc:"4th St, mid-block. Houses on both sides, most with the blinds drawn.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"poplar4th", label:"Head south toward Poplar St" },
-        { to:"main4th", label:"Continue north toward Main St" } ]
-    },
-    mid_4th_m_w: { locationId:"mid_4th_m_w", building:"4th St", area:null, room:"between Main & Water",
-      desc:"4th St closing in on the river.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"main4th", label:"Head south toward Main St" },
-        { to:"water4th", label:"Continue north toward Water St" } ]
-    },
-    mid_5th_mp_p: { locationId:"mid_5th_mp_p", building:"5th St", area:null, room:"between Maple & Poplar",
-      desc:"5th St's southern stretch — an auto shop's fence runs along one side.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple5th", label:"Head south toward Maple St" },
-        { to:"poplar5th", label:"Continue north toward Poplar St" } ]
-    },
-    mid_5th_p_m: { locationId:"mid_5th_p_m", building:"5th St", area:null, room:"between Poplar & Main",
-      desc:"5th St, mid-block, easternmost street in town.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"poplar5th", label:"Head south toward Poplar St" },
-        { to:"main5th", label:"Continue north toward Main St" } ]
-    },
-    mid_5th_m_w: { locationId:"mid_5th_m_w", building:"5th St", area:null, room:"between Main & Water",
-      desc:"5th St, closing in on the water. The current's visibly faster along this outside bend.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"main5th", label:"Head south toward Main St" },
-        { to:"water5th", label:"Continue north toward Water St" } ]
+      exits:[ { to:"hardware", label:"Go downstairs" } ]
     }
     };
   }
 
-
-  // buildOuterStreets(): the outer ring of the 8x8 grid, added in v0.4.1.
-  // Kept separate from buildStreetsAndOutdoor() (which holds the original
-  // 5x4 core) rather than tripling that function's length — the placement
-  // choice the "Map Expansion to 8x8 Grid" handoff left to this session.
-  // Street skeleton only: every node here ships with `containers:[]` and no
-  // buildings, per that handoff's Explicitly out of scope.
-  function buildOuterStreets(){
+  function buildStorageFacility(){
     return {
-    // DOCK ST
+    storage: { locationId:"storage_f0", building:"Water St", area:null, room:"Storage Facility",
+      desc:"A row of roll-up storage units. Most are locked. One door hangs open already.",
+      cannotHaveFire:true, floorCap:50, floor:[],
+      containers:[
+        { id:"unit1", name:"Storage Unit 1", capacityKg:30, locked:true, breakTag:"cutting", spawnPools:["outdoor_camping"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"camping_tent", qty:1 },
+          { id:"sleeping_bag", qty:1 } ])},
+        { id:"unit2", name:"Storage Unit 2", capacityKg:30, locked:true, breakTag:"cutting", spawnPools:["recreation","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"old_furniture", qty:1 },
+          { id:"board_games", qty:1 } ])},
+        { id:"unit3", name:"Storage Unit 3", capacityKg:30, spawnPools:["outdoor_camping"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"fishing_rod", qty:1 },
+          { id:"tackle_box", qty:1 } ])}
+      ],
+      exits:[ { to:"water2nd", label:"Back outside" } ]
+    }
+    };
+  }
+
+  function buildRiverbank(){
+    return {
+    riverbank: { locationId:"riverbank_f0", building:"", area:null, room:"Riverbank",
+      desc:"Mud and reeds where the paved street gives way to open water. Driftwood is scattered along the bank, and the current's slow enough here to fish without much trouble.",
+      fishable:true, floorCap:40,
+      floor:itemsFromRegistry([ { id:"firewood", qty:4 } ]),
+      containers:[],
+      exits:[ { to:"water1st", label:"Climb back up to the street" } ]
+    }
+    };
+  }
+
+  function buildDockSt(){
+    return {
     dock6th: { locationId:"dock6th", building:"Dock St & 6th St", area:null, room:null,
       desc:"Dock St and 6th, the far corner of town. Beyond the fence the rail bed runs off west into scrub.",
       floorCap:100, floor:[], containers:[],
@@ -2159,8 +1835,12 @@
         { to:"mid_dock_7_9", label:"Step into the block (west)" },
         { to:"mill9th", label:"Head north on 9th St" },
         { to:"mid_9th_d_mi", label:"Step into the block (north)" } ]
-    },
-    // MILL ST
+    }
+    };
+  }
+
+  function buildMillSt(){
+    return {
     mill6th: { locationId:"mill6th", building:"Mill St & 6th St", area:null, room:null,
       desc:"Mill St and 6th, both of them running along the back of a fenced yard stacked with pallets.",
       floorCap:100, floor:[], containers:[],
@@ -2309,8 +1989,12 @@
         { to:"mid_9th_d_mi", label:"Step into the block (south)" },
         { to:"cedar9th", label:"Head north on 9th St" },
         { to:"mid_9th_mi_c", label:"Step into the block (north)" } ]
-    },
-    // CEDAR ST
+    }
+    };
+  }
+
+  function buildCedarSt(){
+    return {
     cedar6th: { locationId:"cedar6th", building:"Cedar St & 6th St", area:null, room:null,
       desc:"Cedar and 6th, the town's southwest corner in every practical sense. Two streets, no buildings, and a field starting on the far side.",
       floorCap:100, floor:[], containers:[],
@@ -2459,8 +2143,12 @@
         { to:"mid_9th_mi_c", label:"Step into the block (south)" },
         { to:"elm9th", label:"Head north on 9th St" },
         { to:"mid_9th_c_e", label:"Step into the block (north)" } ]
-    },
-    // ELM ST
+    }
+    };
+  }
+
+  function buildElmSt(){
+    return {
     elm6th: { locationId:"elm6th", building:"Elm St & 6th St", area:null, room:null,
       desc:"Elm St meets 6th at a corner with no stop sign, just a faded triangle painted straight onto the asphalt.",
       floorCap:100, floor:[], containers:[],
@@ -2609,8 +2297,107 @@
         { to:"mid_9th_c_e", label:"Step into the block (south)" },
         { to:"maple9th", label:"Head north on 9th St" },
         { to:"mid_9th_e_mp", label:"Step into the block (north)" } ]
+    }
+    };
+  }
+
+  function buildMapleSt(){
+    return {
+    maple4th: { locationId:"maple4th", building:"Maple St & 4th St", area:null, room:null,
+      desc:"Maple St's western corner — the newest-looking pavement in this part of town, already cracking.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"maple6th", label:"Head west on Maple St" },
+        { to:"mid_maple_4_6", label:"Step into the block (west)" },
+        { to:"maple2nd", label:"Head east on Maple St" },
+        { to:"mid_maple_2_4", label:"Step into the block (east)" },
+        { to:"elm4th", label:"Head south on 4th St" },
+        { to:"mid_4th_e_mp", label:"Step into the block (south)" },
+        { to:"poplar4th", label:"Head north on 4th St" },
+        { to:"mid_4th_mp_p", label:"Step into the block (north)" } ]
     },
-    // MAPLE ST
+    mid_maple_2_4: { locationId:"mid_maple_2_4", building:"Maple St", area:null, room:"between 2nd & 4th",
+      desc:"Maple St, mostly gravel shoulder and one working streetlight.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"maple4th", label:"Head west toward 4th St" },
+        { to:"maple2nd", label:"Continue east toward 2nd St" } ]
+    },
+    maple2nd: { locationId:"maple2nd", building:"Maple St & 2nd St", area:null, room:null,
+      desc:"A wide gravel lot borders Maple here, chain-link fence sagging in one corner. INDUSTRIAL-something on a faded sign, the rest weathered off.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"maple4th", label:"Head west on Maple St" },
+        { to:"mid_maple_2_4", label:"Step into the block (west)" },
+        { to:"maple1st", label:"Head east on Maple St" },
+        { to:"mid_maple_1_2", label:"Step into the block (east)" },
+        { to:"elm2nd", label:"Head south on 2nd St" },
+        { to:"mid_2nd_e_mp", label:"Step into the block (south)" },
+        { to:"poplar2nd", label:"Head north on 2nd St" },
+        { to:"mid_2nd_mp_p", label:"Step into the block (north)" },
+        { to:"industrial_floor", label:"Enter Riverside Freight" } ]
+    },
+    mid_maple_1_2: { locationId:"mid_maple_1_2", building:"Maple St", area:null, room:"between 1st & 2nd",
+      desc:"A short stretch of Maple, chain-link fencing along one side.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"maple2nd", label:"Head west toward 2nd St" },
+        { to:"maple1st", label:"Continue east toward 1st St" } ]
+    },
+    maple1st: { locationId:"maple1st", building:"Maple St & 1st St", area:null, room:null,
+      desc:"Maple St, dead center of the outer ring. A stop sign, bent but standing.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"maple2nd", label:"Head west on Maple St" },
+        { to:"mid_maple_1_2", label:"Step into the block (west)" },
+        { to:"maple3rd", label:"Head east on Maple St" },
+        { to:"mid_maple_1_3", label:"Step into the block (east)" },
+        { to:"elm1st", label:"Head south on 1st St" },
+        { to:"mid_1st_e_mp", label:"Step into the block (south)" },
+        { to:"outside", label:"Head north on 1st St" },
+        { to:"mid_1st_mp_p", label:"Step into the block (north)" } ]
+    },
+    mid_maple_1_3: { locationId:"mid_maple_1_3", building:"Maple St", area:null, room:"between 1st & 3rd",
+      desc:"Maple St, quiet enough that the police station's old call box is still audible from here — not that it does anything now.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"maple1st", label:"Head west toward 1st St" },
+        { to:"maple3rd", label:"Continue east toward 3rd St" } ]
+    },
+    maple3rd: { locationId:"maple3rd", building:"Maple St & 3rd St", area:null, room:null,
+      desc:"A squat brick building with barred windows sits at this corner — old paint on the door still reads POLICE, mostly.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"maple1st", label:"Head west on Maple St" },
+        { to:"mid_maple_1_3", label:"Step into the block (west)" },
+        { to:"maple5th", label:"Head east on Maple St" },
+        { to:"mid_maple_3_5", label:"Step into the block (east)" },
+        { to:"elm3rd", label:"Head south on 3rd St" },
+        { to:"mid_3rd_e_mp", label:"Step into the block (south)" },
+        { to:"poplar3rd", label:"Head north on 3rd St" },
+        { to:"mid_3rd_mp_p", label:"Step into the block (north)" },
+        { to:"police_lobby", label:"Enter the police station" } ]
+    },
+    mid_maple_3_5: { locationId:"mid_maple_3_5", building:"Maple St", area:null, room:"between 3rd & 5th",
+      desc:"The far end of Maple, where the streetlights stop.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"maple3rd", label:"Head west toward 3rd St" },
+        { to:"maple5th", label:"Continue east toward 5th St" } ]
+    },
+    maple5th: { locationId:"maple5th", building:"Maple St & 5th St", area:null, room:null,
+      desc:"Maple's eastern end. The street narrows here, more gravel shoulder than curb.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"maple3rd", label:"Head west on Maple St" },
+        { to:"mid_maple_3_5", label:"Step into the block (west)" },
+        { to:"maple7th", label:"Head east on Maple St" },
+        { to:"mid_maple_5_7", label:"Step into the block (east)" },
+        { to:"elm5th", label:"Head south on 5th St" },
+        { to:"mid_5th_e_mp", label:"Step into the block (south)" },
+        { to:"poplar5th", label:"Head north on 5th St" },
+        { to:"mid_5th_mp_p", label:"Step into the block (north)" } ]
+    },
     maple6th: { locationId:"maple6th", building:"Maple St & 6th St", area:null, room:null,
       desc:"Maple St's west corner, at 6th. A fire hydrant sits at an angle somebody backed into and never reported.",
       floorCap:100, floor:[], containers:[],
@@ -2666,8 +2453,142 @@
         { to:"mid_9th_e_mp", label:"Step into the block (south)" },
         { to:"poplar9th", label:"Head north on 9th St" },
         { to:"mid_9th_mp_p", label:"Step into the block (north)" } ]
+    }
+    };
+  }
+
+  function buildPoplarSt(){
+    return {
+    // The Poplar St / 1st St intersection, under an id that predates the grid.
+    // Not renamed: a save restores its world wholesale rather than rebuilding
+    // it, so the id every existing save already holds has to keep resolving.
+    outside: { locationId:"outside", building:"Poplar St & 1st St", area:null, room:null,
+      desc:"A quiet intersection. 1st St runs both ways here — Poplar continues in both directions too, though the block to the west feels like it goes on longer than the one to the east. Your building's stoop is partway down the block to the west.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"poplar2nd", label:"Head west on Poplar St" },
+        { to:"mid_poplar_1_2", label:"Step into the block (west)" },
+        { to:"poplar3rd", label:"Head east on Poplar St" },
+        { to:"mid_poplar_1_3", label:"Step into the block (east)" },
+        { to:"main1st", label:"Head north on 1st St" },
+        { to:"mid_1st_o_m", label:"Step into the block (north)" },
+        { to:"maple1st", label:"Head south on 1st St" },
+        { to:"mid_1st_mp_p", label:"Step into the block (south)" } ]
     },
-    // POPLAR ST
+    alley: { locationId:"acorn_f0", building:"Poplar St", area:null, room:"Alley",
+      desc:"Narrow, littered, and smelling of garbage. A rusted fire escape climbs the back of Acorn Apartments.",
+      floorCap:60, floor:[],
+      containers:[
+        { id:"dumpster", name:"Dumpster", capacityKg:40, spawnPools:["trash","fuel_fire"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"scrap_metal", qty:3 },
+          { id:"metal_pipe", qty:1 },
+          { id:"firewood", qty:5 } ])}
+      ],
+      exits:[
+        { to:"mid_poplar_1_2", label:"Head out to the street" },
+        { to:"balcony", label:"Climb the fire escape" } ]
+    },
+    poplar2nd: { locationId:"poplar2nd", building:"Poplar St & 2nd St", area:null, room:null,
+      desc:"A quiet residential corner. A pickup truck is parked half on the curb.",
+      floorCap:100, floor:[], containers:[],
+      carLocked:true,
+      carContainers:[
+        { id:"trunk", name:"Truck Bed", capacityKg:25, items:itemsFromRegistry([
+          { id:"tow_chain", qty:1 },
+          { id:"work_gloves", qty:1 } ])},
+        { id:"glovebox", name:"Glovebox", capacityKg:3, items:itemsFromRegistry([
+          { id:"flashlight", qty:1 },
+          { id:"owners_manual", qty:1 } ])}
+      ],
+      exits:[
+        { to:"poplar4th", label:"Head west on Poplar St" },
+        { to:"mid_poplar_2_4", label:"Step into the block (west)" },
+        { to:"outside", label:"Head east on Poplar St" },
+        { to:"mid_poplar_1_2", label:"Step into the block (east)" },
+        { to:"maple2nd", label:"Head south on 2nd St" },
+        { to:"mid_2nd_mp_p", label:"Step into the block (south)" },
+        { to:"main2nd", label:"Head north on 2nd St" },
+        { to:"mid_2nd_p_m", label:"Step into the block (north)" } ]
+    },
+    poplar4th: { locationId:"poplar4th", building:"Poplar St & 4th St", area:null, room:null,
+      desc:"The last residential stretch before Poplar runs into 4th St. Fewer porch lights than a block ago.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"poplar6th", label:"Head west on Poplar St" },
+        { to:"mid_poplar_4_6", label:"Step into the block (west)" },
+        { to:"poplar2nd", label:"Head east on Poplar St" },
+        { to:"mid_poplar_2_4", label:"Step into the block (east)" },
+        { to:"maple4th", label:"Head south on 4th St" },
+        { to:"mid_4th_mp_p", label:"Step into the block (south)" },
+        { to:"main4th", label:"Head north on 4th St" },
+        { to:"mid_4th_p_m", label:"Step into the block (north)" } ]
+    },
+    mid_poplar_2_4: { locationId:"mid_poplar_2_4", building:"Poplar St", area:null, room:"between 2nd & 4th",
+      desc:"More of the same quiet block, just further out.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"poplar4th", label:"Head west toward 4th St" },
+        { to:"poplar2nd", label:"Continue east toward 2nd St" },
+        { to:"oak_hallway1", label:"Enter Oak Apartments" } ]
+    },
+    poplar3rd: { locationId:"poplar3rd", building:"Poplar St & 3rd St", area:null, room:null,
+      desc:"The far end of Poplar, where the block gives way to 3rd St.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"outside", label:"Head west on Poplar St" },
+        { to:"mid_poplar_1_3", label:"Step into the block (west)" },
+        { to:"poplar5th", label:"Head east on Poplar St" },
+        { to:"mid_poplar_3_5", label:"Step into the block (east)" },
+        { to:"main3rd", label:"Head north on 3rd St" },
+        { to:"mid_3rd_p_m", label:"Step into the block (north)" },
+        { to:"maple3rd", label:"Head south on 3rd St" },
+        { to:"mid_3rd_mp_p", label:"Step into the block (south)" } ]
+    },
+    poplar5th: { locationId:"poplar5th", building:"Poplar St & 5th St", area:null, room:null,
+      desc:"Poplar's easternmost corner. A chain-link fence marks where somebody's yard ends and the sidewalk starts.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"poplar3rd", label:"Head west on Poplar St" },
+        { to:"mid_poplar_3_5", label:"Step into the block (west)" },
+        { to:"poplar7th", label:"Head east on Poplar St" },
+        { to:"mid_poplar_5_7", label:"Step into the block (east)" },
+        { to:"maple5th", label:"Head south on 5th St" },
+        { to:"mid_5th_mp_p", label:"Step into the block (south)" },
+        { to:"main5th", label:"Head north on 5th St" },
+        { to:"mid_5th_p_m", label:"Step into the block (north)" } ]
+    },
+    mid_poplar_3_5: { locationId:"mid_poplar_3_5", building:"Poplar St", area:null, room:"between 3rd & 5th",
+      desc:"The last stretch of Poplar. A kid's bike, abandoned mid-ride, still leans against a fence.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"poplar3rd", label:"Head west toward 3rd St" },
+        { to:"poplar5th", label:"Continue east toward 5th St" } ]
+    },
+    mid_poplar_1_2: { locationId:"mid_poplar_1_2", building:"Poplar St", area:null, room:"between 1st & 2nd",
+      desc:"Your building's front stoop is here, along with a sedan parked at the curb.",
+      floorCap:20, floor:[], containers:[],
+      carLocked:true,
+      carContainers:[
+        { id:"trunk", name:"Car Trunk", capacityKg:20, items:itemsFromRegistry([
+          { id:"tire_iron", qty:1 },
+          { id:"bandage", qty:2 } ])},
+        { id:"glovebox", name:"Glovebox", capacityKg:3, items:itemsFromRegistry([
+          { id:"registration_papers", qty:1 },
+          { id:"aspirin", qty:1 } ])}
+      ],
+      exits:[
+        { to:"poplar2nd", label:"Head west toward 2nd St" },
+        { to:"outside", label:"Continue east toward 1st St" },
+        { to:"hallway1", label:"Enter Acorn Apartments" },
+        { to:"alley", label:"Duck into the alley" } ]
+    },
+    mid_poplar_1_3: { locationId:"mid_poplar_1_3", building:"Poplar St", area:null, room:"between 1st & 3rd",
+      desc:"A quiet, ordinary stretch of Poplar St. A big sidewalk tree leans over the curb.",
+      hasTree:true, floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"outside", label:"Head west toward 1st St" },
+        { to:"poplar3rd", label:"Continue east toward 3rd St" } ]
+    },
     poplar6th: { locationId:"poplar6th", building:"Poplar St & 6th St", area:null, room:null,
       desc:"Poplar and 6th. A hand-painted sign on a post reads FIREWOOD, with a phone number under it.",
       floorCap:100, floor:[], containers:[],
@@ -2723,8 +2644,117 @@
         { to:"mid_9th_mp_p", label:"Step into the block (south)" },
         { to:"main9th", label:"Head north on 9th St" },
         { to:"mid_9th_p_m", label:"Step into the block (north)" } ]
+    }
+    };
+  }
+
+  function buildMainSt(){
+    return {
+    main2nd: { locationId:"main2nd", building:"Main St & 2nd St", area:null, room:null,
+      desc:"The corner store's windows are papered over from the inside. Wide, unusually wide, sidewalks run both ways down Main.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"cornerstore", label:"Enter the corner store" },
+        { to:"poplar2nd", label:"Head south on 2nd St" },
+        { to:"mid_2nd_p_m", label:"Step into the block (south)" },
+        { to:"main1st", label:"Head east on Main St" },
+        { to:"mid_main_1_2", label:"Step into the block (east)" },
+        { to:"water2nd", label:"Head north on 2nd St" },
+        { to:"mid_2nd_m_w", label:"Step into the block (north)" },
+        { to:"main4th", label:"Head west on Main St" },
+        { to:"mid_main_2_4", label:"Step into the block (west)" } ]
     },
-    // MAIN ST
+    main4th: { locationId:"main4th", building:"Main St & 4th St", area:null, room:null,
+      desc:"Main St keeps its width out this far, but the storefronts stop — this stretch is houses and a chain-link lot.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"main6th", label:"Head west on Main St" },
+        { to:"mid_main_4_6", label:"Step into the block (west)" },
+        { to:"main2nd", label:"Head east on Main St" },
+        { to:"mid_main_2_4", label:"Step into the block (east)" },
+        { to:"poplar4th", label:"Head south on 4th St" },
+        { to:"mid_4th_p_m", label:"Step into the block (south)" },
+        { to:"water4th", label:"Head north on 4th St" },
+        { to:"mid_4th_m_w", label:"Step into the block (north)" } ]
+    },
+    mid_main_2_4: { locationId:"mid_main_2_4", building:"Main St", area:null, room:"between 2nd & 4th",
+      desc:"Main St, out past where the shops give way to houses.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"main4th", label:"Head west toward 4th St" },
+        { to:"main2nd", label:"Continue east toward 2nd St" } ]
+    },
+    main1st: { locationId:"main1st", building:"Main St & 1st St", area:null, room:null,
+      desc:"Main crosses 1st St here. A hand-painted PHARMACY sign is visible partway down the block to the east.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"main2nd", label:"Head west on Main St" },
+        { to:"mid_main_1_2", label:"Step into the block (west)" },
+        { to:"main3rd", label:"Head east on Main St" },
+        { to:"mid_main_1_3", label:"Step into the block (east)" },
+        { to:"outside", label:"Head south on 1st St" },
+        { to:"mid_1st_o_m", label:"Step into the block (south)" },
+        { to:"water1st", label:"Head north on 1st St" },
+        { to:"mid_1st_m_w", label:"Step into the block (north)" } ]
+    },
+    main3rd: { locationId:"main3rd", building:"Main St & 3rd St", area:null, room:null,
+      desc:"Main crosses 3rd St here. A hardware store and a parked work truck sit partway down the block to the west.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"main1st", label:"Head west on Main St" },
+        { to:"mid_main_1_3", label:"Step into the block (west)" },
+        { to:"main5th", label:"Head east on Main St" },
+        { to:"mid_main_3_5", label:"Step into the block (east)" },
+        { to:"poplar3rd", label:"Head south on 3rd St" },
+        { to:"mid_3rd_p_m", label:"Step into the block (south)" },
+        { to:"water3rd", label:"Head north on 3rd St" },
+        { to:"mid_3rd_m_w", label:"Step into the block (north)" } ]
+    },
+    main5th: { locationId:"main5th", building:"Main St & 5th St", area:null, room:null,
+      desc:"The east end of Main, where the auto shop's OPEN sign — dark now — still hangs in the window down the block.",
+      floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"main3rd", label:"Head west on Main St" },
+        { to:"mid_main_3_5", label:"Step into the block (west)" },
+        { to:"main7th", label:"Head east on Main St" },
+        { to:"mid_main_5_7", label:"Step into the block (east)" },
+        { to:"poplar5th", label:"Head south on 5th St" },
+        { to:"mid_5th_p_m", label:"Step into the block (south)" },
+        { to:"water5th", label:"Head north on 5th St" },
+        { to:"mid_5th_m_w", label:"Step into the block (north)" } ]
+    },
+    mid_main_3_5: { locationId:"mid_main_3_5", building:"Main St", area:null, room:"between 3rd & 5th",
+      desc:"A cinderblock garage sits here, roll-up door half open.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"main3rd", label:"Head west toward 3rd St" },
+        { to:"main5th", label:"Continue east toward 5th St" },
+        { to:"auto_shop", label:"Enter the auto shop" } ]
+    },
+    mid_main_1_2: { locationId:"mid_main_1_2", building:"Main St", area:null, room:"between 1st & 2nd",
+      desc:"A stretch of Main St between the corner store and the pharmacy.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"main2nd", label:"Head west toward 2nd St" },
+        { to:"main1st", label:"Continue east toward 1st St" } ]
+    },
+    mid_main_1_3: { locationId:"mid_main_1_3", building:"Main St", area:null, room:"between 1st & 3rd",
+      desc:"The pharmacy's sign hangs over one side of the street; the hardware store and a parked work truck sit across from it.",
+      floorCap:20, floor:[], containers:[],
+      carLocked:true,
+      carContainers:[
+        { id:"bed", name:"Truck Bed", capacityKg:25, items:itemsFromRegistry([
+          { id:"tow_chain", qty:1 } ])},
+        { id:"cab", name:"Truck Cab", capacityKg:5, items:itemsFromRegistry([
+          { id:"work_gloves", qty:1 },
+          { id:"thermos", qty:1 } ])}
+      ],
+      exits:[
+        { to:"main1st", label:"Head west toward 1st St" },
+        { to:"main3rd", label:"Continue east toward 3rd St" },
+        { to:"pharmacy", label:"Enter the pharmacy" },
+        { to:"hardware", label:"Enter the hardware store" } ]
+    },
     main6th: { locationId:"main6th", building:"Main St & 6th St", area:null, room:null,
       desc:"Main St and 6th. The storefronts are long behind you — out here it's a laundromat with the windows soaped over.",
       floorCap:100, floor:[], containers:[],
@@ -2780,8 +2810,97 @@
         { to:"mid_9th_p_m", label:"Step into the block (south)" },
         { to:"water9th", label:"Head north on 9th St" },
         { to:"mid_9th_m_w", label:"Step into the block (north)" } ]
+    }
+    };
+  }
+
+  function buildWaterSt(){
+    return {
+    water2nd: { locationId:"water2nd", building:"Water St & 2nd St", area:null, room:null,
+      desc:"The riverfront edge of downtown. A low brick storage building sits between the street and the water.",
+      fishable:true, floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"storage", label:"Enter the storage facility" },
+        { to:"main2nd", label:"Head south on 2nd St" },
+        { to:"mid_2nd_m_w", label:"Step into the block (south)" },
+        { to:"water1st", label:"Head east on Water St" },
+        { to:"mid_water_1_2", label:"Step into the block (east)" },
+        { to:"water4th", label:"Head west on Water St" },
+        { to:"mid_water_2_4", label:"Step into the block (west)" } ]
     },
-    // WATER ST
+    water4th: { locationId:"water4th", building:"Water St & 4th St", area:null, room:null,
+      desc:"The riverfront gets quieter still out here. No guardrail on this stretch, just a drop to the mud.",
+      fishable:true, floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"water6th", label:"Head west on Water St" },
+        { to:"mid_water_4_6", label:"Step into the block (west)" },
+        { to:"water2nd", label:"Head east on Water St" },
+        { to:"mid_water_2_4", label:"Step into the block (east)" },
+        { to:"main4th", label:"Head south on 4th St" },
+        { to:"mid_4th_m_w", label:"Step into the block (south)" } ]
+    },
+    mid_water_2_4: { locationId:"mid_water_2_4", building:"Water St", area:null, room:"between 2nd & 4th",
+      desc:"The riverfront path gets rougher out here, more weeds than pavement.",
+      fishable:true, floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"water4th", label:"Head west toward 4th St" },
+        { to:"water2nd", label:"Continue east toward 2nd St" } ]
+    },
+    water1st: { locationId:"water1st", building:"Water St & 1st St", area:null, room:null,
+      desc:"The riverfront here is just a low guardrail and a view of the water. Quiet.",
+      fishable:true, floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"water2nd", label:"Head west on Water St" },
+        { to:"mid_water_1_2", label:"Step into the block (west)" },
+        { to:"water3rd", label:"Head east on Water St" },
+        { to:"mid_water_1_3", label:"Step into the block (east)" },
+        { to:"main1st", label:"Head south on 1st St" },
+        { to:"mid_1st_m_w", label:"Step into the block (south)" },
+        { to:"riverbank", label:"Climb down to the riverbank" } ]
+    },
+    water3rd: { locationId:"water3rd", building:"Water St & 3rd St", area:null, room:null,
+      desc:"Water St keeps going east from here, though the buildings thin out fast past this point. A gravel turnaround still marks where the old road crew stopped bothering to repave.",
+      fishable:true, floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"water1st", label:"Head west on Water St" },
+        { to:"mid_water_1_3", label:"Step into the block (west)" },
+        { to:"water5th", label:"Head east on Water St" },
+        { to:"mid_water_3_5", label:"Step into the block (east)" },
+        { to:"main3rd", label:"Head south on 3rd St" },
+        { to:"mid_3rd_m_w", label:"Step into the block (south)" } ]
+    },
+    water5th: { locationId:"water5th", building:"Water St & 5th St", area:null, room:null,
+      desc:"Water St's eastern corner. The current pulls harder along the outside bend of the river here.",
+      fishable:true, floorCap:100, floor:[], containers:[],
+      exits:[
+        { to:"water3rd", label:"Head west on Water St" },
+        { to:"mid_water_3_5", label:"Step into the block (west)" },
+        { to:"water7th", label:"Head east on Water St" },
+        { to:"mid_water_5_7", label:"Step into the block (east)" },
+        { to:"main5th", label:"Head south on 5th St" },
+        { to:"mid_5th_m_w", label:"Step into the block (south)" } ]
+    },
+    mid_water_3_5: { locationId:"mid_water_3_5", building:"Water St", area:null, room:"between 3rd & 5th",
+      desc:"The last stretch of Water St before the road narrows to gravel.",
+      fishable:true, floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"water3rd", label:"Head west toward 3rd St" },
+        { to:"water5th", label:"Continue east toward 5th St" } ]
+    },
+    mid_water_1_2: { locationId:"mid_water_1_2", building:"Water St", area:null, room:"between 1st & 2nd",
+      desc:"The riverfront street, storage facility behind you, open water alongside.",
+      fishable:true, floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"water2nd", label:"Head west toward 2nd St" },
+        { to:"water1st", label:"Continue east toward 1st St" } ]
+    },
+    mid_water_1_3: { locationId:"mid_water_1_3", building:"Water St", area:null, room:"between 1st & 3rd",
+      desc:"More riverfront, more quiet. The current moves slow here.",
+      fishable:true, floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"water1st", label:"Head west toward 1st St" },
+        { to:"water3rd", label:"Continue east toward 3rd St" } ]
+    },
     water6th: { locationId:"water6th", building:"Water St & 6th St", area:null, room:null,
       desc:"Water St's west corner at 6th. The bank is riprap here, broken stone dumped to keep the river off the road.",
       fishable:true, floorCap:100, floor:[], containers:[],
@@ -2831,8 +2950,12 @@
         { to:"mid_water_7_9", label:"Step into the block (west)" },
         { to:"main9th", label:"Head south on 9th St" },
         { to:"mid_9th_m_w", label:"Step into the block (south)" } ]
-    },
-    // 6TH ST
+    }
+    };
+  }
+
+  function buildSixthSt(){
+    return {
     mid_6th_d_mi: { locationId:"mid_6th_d_mi", building:"6th St", area:null, room:"between Dock & Mill",
       desc:"6th St between the rail bed and the mill fence. Nothing either side but chain-link and thistle.",
       floorCap:20, floor:[], containers:[],
@@ -2881,8 +3004,33 @@
       exits:[
         { to:"main6th", label:"Head south toward Main St" },
         { to:"water6th", label:"Continue north toward Water St" } ]
+    }
+    };
+  }
+
+  function buildFourthSt(){
+    return {
+    mid_4th_mp_p: { locationId:"mid_4th_mp_p", building:"4th St", area:null, room:"between Maple & Poplar",
+      desc:"4th St, brand new to the map but not to the town — just far enough out that nobody bothered keeping it up.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"maple4th", label:"Head south toward Maple St" },
+        { to:"poplar4th", label:"Continue north toward Poplar St" } ]
     },
-    // 4TH ST
+    mid_4th_p_m: { locationId:"mid_4th_p_m", building:"4th St", area:null, room:"between Poplar & Main",
+      desc:"4th St, mid-block. Houses on both sides, most with the blinds drawn.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"poplar4th", label:"Head south toward Poplar St" },
+        { to:"main4th", label:"Continue north toward Main St" } ]
+    },
+    mid_4th_m_w: { locationId:"mid_4th_m_w", building:"4th St", area:null, room:"between Main & Water",
+      desc:"4th St closing in on the river.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"main4th", label:"Head south toward Main St" },
+        { to:"water4th", label:"Continue north toward Water St" } ]
+    },
     mid_4th_d_mi: { locationId:"mid_4th_d_mi", building:"4th St", area:null, room:"between Dock & Mill",
       desc:"4th St between Dock and Mill, running past the back of a loading bay.",
       floorCap:20, floor:[], containers:[],
@@ -2910,8 +3058,33 @@
       exits:[
         { to:"elm4th", label:"Head south toward Elm St" },
         { to:"maple4th", label:"Continue north toward Maple St" } ]
+    }
+    };
+  }
+
+  function buildSecondSt(){
+    return {
+    mid_2nd_p_m: { locationId:"mid_2nd_p_m", building:"2nd St", area:null, room:"between Poplar & Main",
+      desc:"2nd St runs quiet here, residential on both sides.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"poplar2nd", label:"Head south toward Poplar St" },
+        { to:"main2nd", label:"Continue north toward Main St" } ]
     },
-    // 2ND ST
+    mid_2nd_m_w: { locationId:"mid_2nd_m_w", building:"2nd St", area:null, room:"between Main & Water",
+      desc:"A short block of 2nd St, quiet this close to the water.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"main2nd", label:"Head south toward Main St" },
+        { to:"water2nd", label:"Continue north toward Water St" } ]
+    },
+    mid_2nd_mp_p: { locationId:"mid_2nd_mp_p", building:"2nd St", area:null, room:"between Maple & Poplar",
+      desc:"2nd St's southernmost stretch, quiet and residential.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"maple2nd", label:"Head south toward Maple St" },
+        { to:"poplar2nd", label:"Continue north toward Poplar St" } ]
+    },
     mid_2nd_d_mi: { locationId:"mid_2nd_d_mi", building:"2nd St", area:null, room:"between Dock & Mill",
       desc:"2nd St crossing the rail spur at a shallow angle. The crossing lights are dead, but the bell housing's still up there.",
       floorCap:20, floor:[], containers:[],
@@ -2939,8 +3112,33 @@
       exits:[
         { to:"elm2nd", label:"Head south toward Elm St" },
         { to:"maple2nd", label:"Continue north toward Maple St" } ]
+    }
+    };
+  }
+
+  function buildFirstSt(){
+    return {
+    mid_1st_o_m: { locationId:"mid_1st_o_m", building:"1st St", area:null, room:"between Poplar & Main",
+      desc:"A short stretch of 1st St, nothing much to it.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"outside", label:"Head south toward Poplar St" },
+        { to:"main1st", label:"Continue north toward Main St" } ]
     },
-    // 1ST ST
+    mid_1st_m_w: { locationId:"mid_1st_m_w", building:"1st St", area:null, room:"between Main & Water",
+      desc:"1st St, closing in on the riverfront.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"main1st", label:"Head south toward Main St" },
+        { to:"water1st", label:"Continue north toward Water St" } ]
+    },
+    mid_1st_mp_p: { locationId:"mid_1st_mp_p", building:"1st St", area:null, room:"between Maple & Poplar",
+      desc:"1st St running down toward Maple. Fewer houses with lights ever left on.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"maple1st", label:"Head south toward Maple St" },
+        { to:"outside", label:"Continue north toward Poplar St" } ]
+    },
     mid_1st_d_mi: { locationId:"mid_1st_d_mi", building:"1st St", area:null, room:"between Dock & Mill",
       desc:"1st St at its southern end, all fence and dock doors and nowhere to turn around.",
       floorCap:20, floor:[], containers:[],
@@ -2968,8 +3166,33 @@
       exits:[
         { to:"elm1st", label:"Head south toward Elm St" },
         { to:"maple1st", label:"Continue north toward Maple St" } ]
+    }
+    };
+  }
+
+  function buildThirdSt(){
+    return {
+    mid_3rd_p_m: { locationId:"mid_3rd_p_m", building:"3rd St", area:null, room:"between Poplar & Main",
+      desc:"3rd St, mid-block. A few darkened windows, and an overgrown sidewalk tree nobody's trimmed in months.",
+      hasTree:true, floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"poplar3rd", label:"Head south toward Poplar St" },
+        { to:"main3rd", label:"Continue north toward Main St" } ]
     },
-    // 3RD ST
+    mid_3rd_m_w: { locationId:"mid_3rd_m_w", building:"3rd St", area:null, room:"between Main & Water",
+      desc:"3rd St runs down toward the river here.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"main3rd", label:"Head south toward Main St" },
+        { to:"water3rd", label:"Continue north toward Water St" } ]
+    },
+    mid_3rd_mp_p: { locationId:"mid_3rd_mp_p", building:"3rd St", area:null, room:"between Maple & Poplar",
+      desc:"3rd St's southern stretch, same overgrown quiet as the block further north.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"maple3rd", label:"Head south toward Maple St" },
+        { to:"poplar3rd", label:"Continue north toward Poplar St" } ]
+    },
     mid_3rd_d_mi: { locationId:"mid_3rd_d_mi", building:"3rd St", area:null, room:"between Dock & Mill",
       desc:"3rd St, squeezed between stacked containers on one side and a fence on the other.",
       floorCap:20, floor:[], containers:[],
@@ -2997,8 +3220,33 @@
       exits:[
         { to:"elm3rd", label:"Head south toward Elm St" },
         { to:"maple3rd", label:"Continue north toward Maple St" } ]
+    }
+    };
+  }
+
+  function buildFifthSt(){
+    return {
+    mid_5th_mp_p: { locationId:"mid_5th_mp_p", building:"5th St", area:null, room:"between Maple & Poplar",
+      desc:"5th St's southern stretch — an auto shop's fence runs along one side.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"maple5th", label:"Head south toward Maple St" },
+        { to:"poplar5th", label:"Continue north toward Poplar St" } ]
     },
-    // 5TH ST
+    mid_5th_p_m: { locationId:"mid_5th_p_m", building:"5th St", area:null, room:"between Poplar & Main",
+      desc:"5th St, mid-block, easternmost street in town.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"poplar5th", label:"Head south toward Poplar St" },
+        { to:"main5th", label:"Continue north toward Main St" } ]
+    },
+    mid_5th_m_w: { locationId:"mid_5th_m_w", building:"5th St", area:null, room:"between Main & Water",
+      desc:"5th St, closing in on the water. The current's visibly faster along this outside bend.",
+      floorCap:20, floor:[], containers:[],
+      exits:[
+        { to:"main5th", label:"Head south toward Main St" },
+        { to:"water5th", label:"Continue north toward Water St" } ]
+    },
     mid_5th_d_mi: { locationId:"mid_5th_d_mi", building:"5th St", area:null, room:"between Dock & Mill",
       desc:"5th St between Dock and Mill, dock doors down one side the whole length of the block.",
       floorCap:20, floor:[], containers:[],
@@ -3026,8 +3274,12 @@
       exits:[
         { to:"elm5th", label:"Head south toward Elm St" },
         { to:"maple5th", label:"Continue north toward Maple St" } ]
-    },
-    // 7TH ST
+    }
+    };
+  }
+
+  function buildSeventhSt(){
+    return {
     mid_7th_d_mi: { locationId:"mid_7th_d_mi", building:"7th St", area:null, room:"between Dock & Mill",
       desc:"7th St between the docks and the mill yards. Truck tires have chewed the edges off the pavement.",
       floorCap:20, floor:[], containers:[],
@@ -3076,8 +3328,12 @@
       exits:[
         { to:"main7th", label:"Head south toward Main St" },
         { to:"water7th", label:"Continue north toward Water St" } ]
-    },
-    // 9TH ST
+    }
+    };
+  }
+
+  function buildNinthSt(){
+    return {
     mid_9th_d_mi: { locationId:"mid_9th_d_mi", building:"9th St", area:null, room:"between Dock & Mill",
       desc:"9th St along the fence line, the rail bed on your right the whole way.",
       floorCap:20, floor:[], containers:[],
@@ -3130,197 +3386,34 @@
     };
   }
 
-  function buildOakApartments(){
-    return {
-    oak_hallway1: { locationId:"oak_f0", building:"Oak Apartments", area:"1st Floor", room:"Hallway",
-      desc:"Narrower than Acorn's hallway, and darker — half the bulbs are out.",
-      cannotHaveFire:true, floorCap:80, floor:[], containers:[],
-      exits:[
-        { to:"mid_poplar_2_4", label:"Step outside", distanceM:8 },
-        { to:"oak_1a", label:"Enter 1A", distanceM:6 },
-        { to:"oak_1b", label:"Enter 1B", distanceM:6 },
-        { to:"oak_stairs", label:"Go upstairs", distanceM:10 } ]
-    },
-    oak_stairs: { locationId:"oak_f0", building:"Oak Apartments", area:null, room:"Stairwell",
-      desc:"A tight stairwell, paint peeling on the handrail.",
-      cannotHaveFire:true, floorCap:40, floor:[], containers:[],
-      exits:[
-        { to:"oak_hallway1", label:"Go downstairs", distanceM:10 },
-        { to:"oak_hallway2", label:"Go upstairs", distanceM:10 } ]
-    },
-    oak_hallway2: { locationId:"oak_f1", building:"Oak Apartments", area:"2nd Floor", room:"Hallway",
-      desc:"The upstairs hallway, a little brighter than downstairs. Two doors, both closed.",
-      cannotHaveFire:true, floorCap:80, floor:[], containers:[],
-      exits:[
-        { to:"oak_stairs", label:"Go back downstairs", distanceM:10 },
-        { to:"oak_2a", label:"Enter 2A", distanceM:6 },
-        { to:"oak_2b", label:"Enter 2B", distanceM:6 } ]
-    },
-    oak_1a: { locationId:"oak_f0", building:"Oak Apartments", area:"1A", room:null,
-      desc:"Same layout as yours, roughly — smaller, though, and a half-packed bag still sits by the door.",
-      sleepSpot:"couch", cannotHaveFire:true, floorCap:50, floor:[],
-      containers:[
-        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal","baby_items"], items:[] },
-        { id:"kitchenette", name:"Kitchenette Shelf", capacityKg:10, spawnPools:["kitchen_nonperishable","kitchen_tools"], items:[] }
-      ],
-      exits:[ { to:"oak_hallway1", label:"Leave the apartment", distanceM:6 } ]
-    },
-    oak_1b: { locationId:"oak_f0", building:"Oak Apartments", area:"1B", room:null,
-      desc:"The blinds are drawn in here, and a calendar on the wall is still turned to two months back.",
-      sleepSpot:"bed", cannotHaveFire:true, floorCap:50, floor:[],
-      containers:[
-        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal","pet_supplies"], items:[] },
-        { id:"kitchenette", name:"Kitchenette Cabinet", capacityKg:10, spawnPools:["kitchen_nonperishable","kitchen_tools"], items:[] }
-      ],
-      exits:[ { to:"oak_hallway1", label:"Leave the apartment", distanceM:6 } ]
-    },
-    oak_2a: { locationId:"oak_f1", building:"Oak Apartments", area:"2A", room:null,
-      desc:"A single room upstairs, tidy despite everything — someone made the bed before they left.",
-      sleepSpot:"bed", cannotHaveFire:true, floorCap:50, floor:[],
-      containers:[
-        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal","self_defense"], items:[] },
-        { id:"kitchenette", name:"Kitchenette Shelf", capacityKg:10, spawnPools:["kitchen_nonperishable","kitchen_tools"], items:[] }
-      ],
-      exits:[ { to:"oak_hallway2", label:"Leave the apartment", distanceM:6 } ]
-    },
-    oak_2b: { locationId:"oak_f1", building:"Oak Apartments", area:"2B", room:null,
-      desc:"Boxes still stacked by the window, like a move that never finished.",
-      sleepSpot:"mattress", cannotHaveFire:true, floorCap:50, floor:[],
-      containers:[
-        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal","pet_supplies"], items:[] },
-        { id:"kitchenette", name:"Kitchenette Cabinet", capacityKg:10, spawnPools:["kitchen_nonperishable","kitchen_tools"], items:[] }
-      ],
-      exits:[ { to:"oak_hallway2", label:"Leave the apartment", distanceM:6 } ]
-    }
-    };
-  }
-
-  function buildAutoWorkshop(){
-    return {
-    auto_shop: { locationId:"auto_shop_f0", building:"Auto Workshop", area:null, room:"Main Bay",
-      desc:"A car sits mid-repair on the lift, hood up. A workbench runs along the back wall, tools hung in outline on a pegboard above it.",
-      cannotHaveFire:true, floorCap:70, floor:[],
-      containers:[
-        { id:"workbench", name:"Workbench", capacityKg:30, spawnPools:["tools_workshop"], items:[] },
-        { id:"partsshelf", name:"Parts Shelf", capacityKg:25, spawnPools:["tools_workshop","warehouse_goods"], items:[] }
-      ],
-      exits:[
-        { to:"mid_main_3_5", label:"Leave the shop", distanceM:5 },
-        { to:"auto_shop_back", label:"Go to the back office", distanceM:5 } ]
-    },
-    auto_shop_back: { locationId:"auto_shop_f0", building:"Auto Workshop", area:null, room:"Back Office",
-      desc:"A cramped office off the main bay — a desk buried in paperwork, a filing cabinet in the corner.",
-      cannotHaveFire:true, floorCap:40, floor:[],
-      containers:[
-        { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore","electronics"], items:[] },
-        { id:"filingcabinet", name:"Filing Cabinet", capacityKg:20, spawnPools:["office_supplies","documents_lore","electronics"], items:[] }
-      ],
-      exits:[ { to:"auto_shop", label:"Go back to the main bay", distanceM:5 } ]
-    }
-    };
-  }
-
-  function buildPoliceStation(){
-    return {
-    police_lobby: { locationId:"police_f0", building:"Police Station", area:null, room:"Lobby",
-      desc:"A front desk, a bulletin board thick with old flyers, a waiting-area bench bolted to the floor.",
-      cannotHaveFire:true, floorCap:60, floor:[],
-      containers:[
-        { id:"frontdesk", name:"Front Desk", capacityKg:15, spawnPools:["office_supplies","police_gear","electronics"], items:[] },
-        { id:"lockerroom", name:"Locker Room", capacityKg:25, spawnPools:["police_gear","clothing"], items:[] }
-      ],
-      exits:[
-        { to:"maple3rd", label:"Leave the station", distanceM:5 },
-        { to:"police_evidence", label:"Go to the back", distanceM:5 } ]
-    },
-    police_evidence: { locationId:"police_f0", building:"Police Station", area:null, room:"Evidence & Holding",
-      desc:"An evidence locker along one wall, a single holding cell across from it, door hanging open.",
-      cannotHaveFire:true, floorCap:40, floor:[],
-      containers:[
-        { id:"evidencelocker", name:"Evidence Locker", capacityKg:25, spawnPools:["police_evidence"], items:[] }
-      ],
-      exits:[ { to:"police_lobby", label:"Go back to the lobby", distanceM:5 } ]
-    }
-    };
-  }
-
-  function buildRiversideFreight(){
-    return {
-    industrial_floor: { locationId:"industrial_f0", building:"Riverside Freight", area:null, room:"Warehouse Floor",
-      desc:"Pallet racks line both walls, mostly empty. A forklift sits dead in the middle of the floor, parked mid-task.",
-      cannotHaveFire:true, floorCap:70, floor:[],
-      containers:[
-        { id:"palletrack1", name:"Pallet Rack 1", capacityKg:35, spawnPools:["warehouse_goods"], items:[] },
-        { id:"palletrack2", name:"Pallet Rack 2", capacityKg:35, spawnPools:["warehouse_goods"], items:[] }
-      ],
-      exits:[
-        { to:"maple2nd", label:"Leave the warehouse", distanceM:5 },
-        { to:"industrial_office", label:"Go to the office", distanceM:5 } ]
-    },
-    industrial_office: { locationId:"industrial_f0", building:"Riverside Freight", area:null, room:"Office",
-      desc:"A small office off the warehouse floor — a desk, and a squat safe in the corner, door shut.",
-      cannotHaveFire:true, floorCap:40, floor:[],
-      containers:[
-        { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore","electronics"], items:[] },
-        { id:"safe", name:"Safe", capacityKg:20, spawnPools:["valuables","documents_lore"], items:[] }
-      ],
-      exits:[ { to:"industrial_floor", label:"Go back to the warehouse floor", distanceM:5 } ]
-    }
-    };
-  }
-
-  // Straight-line distance between two Locations, rounded to the nearest
-  // whole meter. Computed on demand, never cached — LOCATIONS is the
-  // single source of truth (v0.3.0).
-  function locationDistance(a, b){
-    const A = LOCATIONS[a], B = LOCATIONS[b];
-    return Math.round(Math.sqrt((B.x-A.x)**2 + (B.y-A.y)**2 + (B.z-A.z)**2));
-  }
-  // Compass direction from Location `a` to Location `b`, derived from real
-  // coordinates (v0.3.0). Pure vertical movement resolves to up/down;
-  // otherwise the larger of |dx|/|dy| wins. A true diagonal tie (not
-  // expected on the current rectilinear grid) defaults to the north/south
-  // axis — see the v0.3.0 changelog if one is ever found.
-  function computeDirection(a, b){
-    const A = LOCATIONS[a], B = LOCATIONS[b];
-    const dx = B.x - A.x, dy = B.y - A.y, dz = B.z - A.z;
-    if(dx === 0 && dy === 0) return dz > 0 ? "up" : "down";
-    if(Math.abs(dx) === Math.abs(dy)) return dy > 0 ? "north" : "south";
-    if(Math.abs(dx) > Math.abs(dy)) return dx > 0 ? "east" : "west";
-    return dy > 0 ? "north" : "south";
-  }
-  // Build-time pass (v0.3.0): for every exit that crosses between two
-  // different Locations and whose label already contains an explicit
-  // compass word, replace that word with the one computed from real
-  // coordinates. Runs once, right after the world is assembled — see the
-  // "when the substitution happens" decision in the v0.3.0 handoff.
-  // Labels with no compass word (building entrances, floor transitions,
-  // etc.) are left exactly as authored.
-  const COMPASS_WORD_RE = /\b(north|south|east|west)\b/i;
-  function applyComputedDirections(world){
-    for(const roomId in world){
-      const room = world[roomId];
-      if(!room.exits) continue;
-      for(const exit of room.exits){
-        const toRoom = world[exit.to];
-        if(!toRoom || toRoom.locationId === room.locationId) continue;
-        const match = exit.label.match(COMPASS_WORD_RE);
-        if(!match) continue;
-        const dir = computeDirection(room.locationId, toRoom.locationId);
-        exit.label = exit.label.slice(0, match.index) + dir + exit.label.slice(match.index + match[0].length);
-      }
-    }
-    return world;
-  }
   function makeDefaultWorld(){
     const world = Object.assign({},
       buildAcornApartments(),
-      buildStreetsAndOutdoor(),
-      buildOuterStreets(),
       buildOakApartments(),
       buildAutoWorkshop(),
       buildPoliceStation(),
-      buildRiversideFreight()
+      buildRiversideFreight(),
+      buildCornerStore(),
+      buildPharmacy(),
+      buildHardwareStore(),
+      buildStorageFacility(),
+      buildRiverbank(),
+      buildDockSt(),
+      buildMillSt(),
+      buildCedarSt(),
+      buildElmSt(),
+      buildMapleSt(),
+      buildPoplarSt(),
+      buildMainSt(),
+      buildWaterSt(),
+      buildSixthSt(),
+      buildFourthSt(),
+      buildSecondSt(),
+      buildFirstSt(),
+      buildThirdSt(),
+      buildFifthSt(),
+      buildSeventhSt(),
+      buildNinthSt()
     );
     return applyComputedDirections(world);
   }

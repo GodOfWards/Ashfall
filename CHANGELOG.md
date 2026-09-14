@@ -7,6 +7,175 @@ owns which behavior.
 
 ---
 
+## v0.4.7 — WORLD DATA cleanup: street/building split, vestigial exit fields, registry duplicate
+
+Implements #3, #4 and #5 in full, per `handoffs/world-data-cleanup.md`. Three
+`tier-0` cleanups taken as one pass because they all land in WORLD DATA. No
+mechanics, no rendering, no new state fields, no save-format change —
+`SAVE_KEY` still derives from `0.4`, so existing browser saves keep loading.
+
+Parts 1 and 2 below are content edits; Part 3 is pure code motion. The only
+player-visible change in the whole pass is the item name in Part 2.
+
+**Removed** — WORLD DATA, 26 vestigial `distanceM` fields
+
+`exitMinutes()` reads `exit.distanceM` only when both rooms share a
+`locationId`; for a cross-Location exit it calls `locationDistance()` on the
+two `LOCATIONS` entries instead and the field is never consulted. 26
+cross-Location exits still carried one. All 26 are gone, leaving `{ to, label }`
+(plus `doorId` where present), which is the shape the EXIT SCHEMA comment
+already documented — this makes the code match a comment that was already
+right, so the comment itself needed no edit.
+
+- The 68 same-Location exits are untouched; every one still carries its
+  hand-authored `distanceM`.
+- `getExitsForRoom()`'s synthesized window-climb exit keeps its `distanceM:4`.
+  Both windows (`2a-transom`, `1b-alley`) join rooms inside one Location, so
+  that value *is* read; stripping it would have made a climb cost `NaN`
+  minutes. It is also built at render time in WORLD INTERACTION, not WORLD
+  DATA.
+
+**Removed** — WORLD DATA, the `bandages` registry entry
+
+`ITEM_REGISTRY` carried `bandages` ("Bandages") and `bandage` ("Bandage") as
+byte-identical `Medical` / `0.05 kg` entries differing only in display name.
+The singular survives; the plural is deleted and its seven references
+repointed, every quantity preserved exactly:
+
+- One `SPAWN_POOLS` entry (`{ itemId:"bandage", weight:8, qtyMin:1, qtyMax:3 }`)
+  and six world placements (qty 4, 2, 2, 3, 5, 2 — 18 in total).
+- The singular wins because it is the `RECIPES` output, so "Craft a bandage"
+  no longer produces **Bandages ×1**; and because `Medical` is in `STACKABLE`
+  and the detail view appends `×N`, where **Bandage ×4** is unambiguous and
+  **Bandages ×4** is not. The registry's other Medical plurals (`Painkillers`,
+  `Gauze rolls`) are mass or packaged nouns where `×N` counts containers; a
+  bandage is not one of those.
+
+**Organization / Structural** — WORLD DATA, one builder per street and per building
+
+`buildStreetsAndOutdoor()` (60 rooms) and `buildOuterStreets()` (125 rooms) are
+deleted and their 185 rooms redistributed across 21 new builders. The old seam
+was "original core vs. the v0.4.1 outer ring", which cut through ten of the
+sixteen streets — Maple, Main, Water and Poplar each had nodes in both
+functions, as did 4th, 2nd, 1st, 3rd and 5th. A room now belongs to the street
+its id names, so each street is defined in exactly one place.
+
+- **Five building builders**, matching the existing `buildOakApartments()`
+  pattern and placed beside the other building builders: `buildCornerStore()`,
+  `buildPharmacy()`, `buildHardwareStore()`, `buildStorageFacility()`,
+  `buildRiverbank()`. The v0.2.8 modularity pass extracted one function per
+  building but left these four buildings and the riverbank set-piece inside
+  the street function.
+- **Sixteen street builders**, each merging that street's core and outer
+  nodes: `buildDockSt()`, `buildMillSt()`, `buildCedarSt()`, `buildElmSt()`,
+  `buildMapleSt()`, `buildPoplarSt()`, `buildMainSt()`, `buildWaterSt()` (15
+  rooms each — 8 intersections plus 7 mid-blocks), and `buildSixthSt()`,
+  `buildFourthSt()`, `buildSecondSt()`, `buildFirstSt()`, `buildThirdSt()`,
+  `buildFifthSt()`, `buildSeventhSt()`, `buildNinthSt()` (7 mid-blocks each).
+  They are emitted west to east, the order the grid itself runs in.
+- `makeDefaultWorld()` now lists all 26 builders. Its `Object.assign` shape and
+  its `applyComputedDirections(world)` return are unchanged.
+- `buildOuterStreets()`'s sixteen `// DOCK ST` … `// 9TH ST` group comments are
+  deleted rather than moved: the function names now carry what they carried.
+  Its header comment describing the core/outer seam went with it, that seam no
+  longer existing.
+- Every room definition moved verbatim — same id, `locationId`, `desc`, flags,
+  containers, floor items and exit list, in the same order within each room.
+
+**Open questions / decisions resolved**
+
+Both placement calls the handoff left open, resolved as it recommended:
+
+- **`outside` goes in `buildPoplarSt()`.** It is the Poplar St / 1st St
+  intersection under an id predating the grid, so the id-names-the-street rule
+  doesn't reach it. The counts settle it: with `outside` in Poplar, all eight
+  named streets own 15 rooms and all eight numbered streets own 7. It is
+  **not** renamed to `poplar1st` — `applyLoadedData()` restores a save's world
+  wholesale rather than rebuilding it from `makeDefaultWorld()`, so the id
+  every existing save already holds has to keep resolving. A comment at the
+  definition says so.
+- **`alley` goes in `buildPoplarSt()`** too, keeping `buildAcornApartments()`
+  strictly interior. The room's own `building:"Poplar St"` field is the
+  tiebreak against its `locationId:"acorn_f0"`; it is the one room in the pass
+  that neither the naming rule nor the room counts decide, which is why Poplar
+  holds 16 rooms where the other named streets hold 15.
+
+**Explicitly NOT changed**
+
+- **No room id, container id or item id renamed**, the `bandages` deletion
+  aside. See the `outside` note above for why.
+- **No travel time re-tuned.** The 26 stripped values were already unread; see
+  Validation below.
+- **No new `distanceM` added anywhere**, and no same-Location exit lost one.
+- **`SAVE_KEY`, the save format, and `applyLoadedData()`** — untouched. A PATCH
+  bump keeps `ashfall_save_v0.4`.
+- **No ACTIONS, SIMULATION, PERSISTENCE, or UI/RENDERING code.** `exitMinutes()`
+  was read to confirm Part 1's premise and not edited.
+- **No balance constant, threshold, or spawn weight.** `bandage` inherits the
+  plural's `weight:8, qtyMin:1, qtyMax:3` exactly.
+- **The outer nodes keep their empty `containers:[]`.** Placing buildings in
+  the 44 new intersections and 81 new mid-blocks is #8, not this pass.
+- **`bandage` gains no mechanical behavior.** It still has no `restores`,
+  `verb`, `durability` or tags, and "Craft a bandage" is still a dead end;
+  that belongs to #23.
+
+**Validation performed**
+
+`git diff origin/main...HEAD -- ashfall.html` is the diff of record (973
+insertions, 880 deletions — the net +93 lines is the 21 function headers and
+returns replacing 2, plus the `outside` comment). Beyond reading it, the world
+was built out of the file before and after and compared:
+
+- **Room set identical.** `Object.keys(makeDefaultWorld())` sorted matches
+  exactly, 218 ids before and after.
+- **Exit census.** Cross-Location exits carrying `distanceM` went 26 → 0; the
+  26 that lost the field are exactly the 26 the handoff named. Same-Location
+  exits missing one stayed 0. Totals held at 706 cross and 68 same.
+- **Travel times unchanged.** `exitMinutes()` was evaluated for all 774 exits
+  at all three gaits — 2,322 probes — with zero differences. This is the real
+  test of Part 1: the field being unread was the premise, and this is what
+  checks it.
+- **Every room otherwise byte-identical.** With the stripped distances and the
+  `Bandages`/`bandages` → `Bandage`/`bandage` rename normalized away, all 218
+  room objects compare equal, exit order included. Nothing else moved.
+- **Window climbs still finite.** Both windows, both directions, all three
+  gaits: same-Location and 0:01, not `NaN`. Confirmed again in the browser —
+  "Climb through the transom window (0:01)".
+- **Syntax and runtime.** The script block parses, and the file was loaded in
+  Chromium and driven through the DOM: a route out of the apartment across
+  `mid_poplar_1_2`, `alley`, `outside`, `main1st` and `main3rd` (four different
+  new builders) reported correct durations at every step, both map views
+  rendered (188 node dots, 16 street runs, and the street names inside the
+  player-centred window), and the medicine cabinet read
+  `Bandage ×4 — 0.20 kg (Medical)`. Zero page errors throughout.
+
+**UI**
+
+- Six world placements and one loot pool now read **"Bandage ×N"** instead of
+  **"Bandages ×N"**. Same weight, category, stacking and spawn odds.
+- Nothing else the player sees changes: same rooms, same exits, same labels,
+  same travel times, same map.
+
+**Sections touched**
+
+**WORLD DATA only** — the room builder functions, `makeDefaultWorld()`,
+`ITEM_REGISTRY` and `SPAWN_POOLS`. Content-only in the Project Guide's sense.
+
+**Documentation**
+
+- The EXIT SCHEMA comment needed no edit: it already described the
+  post-#4 bimodal shape.
+- A comment at `outside`'s definition records that its id is historical and
+  why renaming it would strand saves.
+- **Nothing was deferred.** The pass surfaced no new work, so no issues were
+  filed. #33 (the comment and magic-number pass) was already blocked on this
+  one — its audit is expressed in line numbers that Part 3 invalidates — and is
+  now unblocked.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.6"` → `"0.4.7"`
+
+---
+
 ## v0.4.6 — Log: routine lines removed, repeated lines collapsed
 
 Implements #21 and #22 in full, per `handoffs/log-noise-and-collapse.md`. The
