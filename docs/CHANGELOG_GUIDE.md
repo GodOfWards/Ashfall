@@ -89,9 +89,13 @@ when to use them:
   logic, function bodies, content.
 - **Validation performed** — required for any pass claiming "no behavior
   change." State what was actually checked and cite the diff:
-  `git diff vX.Y.Z..HEAD -- ashfall.html` is the proof, alongside a
+  `git diff origin/main...HEAD -- ashfall.html` is the proof, alongside a
   syntax check and a section-header audit. "Tested" on its own is not a
-  validation record.
+  validation record. Diff against the base branch rather than a release
+  tag — tags through `v0.4.3` carry the game at a versioned filename, so
+  `git diff vX.Y.Z..HEAD -- ashfall.html` silently reports the whole file
+  as an addition. See the Project Guide's Validation section for the
+  blob-to-blob form if a tag comparison is genuinely what you need.
 - **Sections touched** — the ARCHITECTURE sections this pass implicates,
   named per the script's own vocabulary. The single most useful line for
   scoping a future request against this entry.

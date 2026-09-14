@@ -122,6 +122,80 @@ entry, named constant) instead. `ITEM_REGISTRY` is the model for this:
 before it existed, item properties were duplicated inline across world
 data; now they're defined once and referenced by id.
 
+### A game rule gets a name, not a literal
+
+The corollary to the rule above, applied to numbers. Any literal that
+encodes a game rule — a duration, threshold, rate, capacity, or quantity —
+should normally be a named constant, in CONFIG/CONSTANTS or beside the
+system that owns it.
+A bare number in a mechanic is a fact with no name, and a fact with no name
+is one that can be silently duplicated.
+
+The file already shows both halves. `doCraft()` and `doCookInContainer()`
+spend `recipe.minutes`, and the buttons that launch them display
+`recipe.minutes` — one fact, one place. `doFish()` spends `advanceTime(20)`
+while its button displays `fmtDuration(20)` — the same fact written twice,
+where changing one makes the button lie to the player.
+
+When a derived value exists, write the derivation rather than the result.
+Three firewood burning for sixty minutes each is `FIRE_BUILD_WOOD *
+FIRE_MINUTES_PER_WOOD`, not `180` — the second form is correct today and
+silently wrong the moment either input is retuned.
+
+**The test is whether the call site reads better, not whether the rule
+applies.** Naming is the default because most game rules are clearer
+named, not because every number must be. If the named form is harder to
+read than the number was, or the name would only restate the digits
+(`TWO = 2`), or the constant would sit so far from its one and only use
+that a reader has to go looking — leave the literal. A rule that makes
+code worse in order to satisfy itself has stopped being useful.
+
+Cases where the literal usually wins:
+
+- **Mathematical identities** — `* 180 / Math.PI`, a loop's `1e-9`
+  epsilon, an easing exponent. These are not game rules and a name
+  obscures them.
+- **Per-instance content** — one building's label offset, one item's
+  weight, one room's capacity. These are data, defined once at their
+  instance; they are not shared facts.
+- **Structurally trivial** — `0`, `1`, array bounds, and the like.
+
+That list is a guide, not a boundary. The question to ask at each literal
+is which form a reader would rather meet, and the honest answer is
+sometimes the number.
+
+### Comments carry intent, not history
+
+`CHANGELOG.md` records how the code got here and `git blame` records when.
+The source describes what is true now. A comment that says *when* something
+arrived ("added in v0.4.1", "(v0.4.6)", "unchanged in this revision") is
+duplicating the changelog into a place where nothing will ever catch it
+drifting — and a comment naming a handoff, a roadmap item number, or a
+version is a reference that goes stale on its own schedule.
+
+Comments that earn their place:
+
+- **Schema blocks.** The language has no types and the project has no
+  build step, so the ROOM/CONTAINER/EXIT/ITEM schema comments are the only
+  specification of those shapes. Keep them whole and keep them current.
+- **Invariants code can't state.** "`_uid` is the stable identity; array
+  indexes are not" is the model — a rule spanning many call sites that no
+  single line can express.
+- **Why, where the what is already obvious.** Why `doSearch()` is
+  deliberately unkeyed; why firearms were left out. A reader can see what
+  the code does and still not know why it was allowed to.
+
+Comments that usually don't: restating the line below, recording when a
+change shipped, pointing at a document outside the repository, or standing
+in for structure a function name would carry better.
+
+**The goal is fewer comments, not none.** Deleting a comment that was
+doing real work is a regression dressed as tidying. Where a comment is
+genuinely the clearest way to convey something — and in a single-file,
+no-build-step, untyped codebase it often is — keep it, whichever list
+above it appears to fall under. Before removing one, say what a reader
+loses; if the answer is anything, it stays.
+
 ### Every "no behavior change" claim gets proven, not asserted
 
 Reorg, doc, and cleanup passes must be verifiable: a syntax check, a diff
@@ -274,11 +348,37 @@ Merging the PR is what ships the version. Tag the merge commit `vX.Y.Z`.
 
 ### Validation
 
-A "no behavior change" claim is now checkable rather than assertable:
-`git diff vX.Y.Z..HEAD` shows exactly what moved. The changelog's
-**Validation performed** and **Explicitly NOT changed** sections should
-cite that diff rather than stand in for one — the point of both sections
-was always to prove the claim, and there's finally a tool that can.
+A "no behavior change" claim is checkable rather than assertable: a diff
+shows exactly what moved. The changelog's **Validation performed** and
+**Explicitly NOT changed** sections should cite that diff rather than
+stand in for one — the point of both sections was always to prove the
+claim, and there is a tool that can.
+
+**Diff against the base branch, not against a tag:**
+
+```
+git diff origin/main...HEAD -- ashfall.html
+```
+
+This is what a coding session actually wants — everything this branch
+changed and nothing else — and it works regardless of the tag situation
+below. Prefer it.
+
+**Diffing against a release tag needs care.** Tags through `v0.4.3`
+predate the filename-normalization pass, so at those tags the game lives
+at a versioned path (`ashfall_0_4_3.html`, and so on). `git diff
+v0.4.3..HEAD -- ashfall.html` therefore matches nothing on the left and
+reports the whole file as a new addition — it looks like a diff and is
+not one. Name both blobs instead:
+
+```
+git diff v0.4.3:ashfall_0_4_3.html HEAD:ashfall.html
+```
+
+From `v0.4.6` onward the tag carries `ashfall.html` and the plain form
+works. Two versions have no tag at all — see the open issue on `v0.4.4`
+and `v0.4.5` — so for those, diff against the merge commit or the base
+branch.
 
 ### Using this at the start of a session
 
