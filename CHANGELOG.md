@@ -7,6 +7,152 @@ owns which behavior.
 
 ---
 
+## v0.4.4 — Exit split: grid travel vs. Here
+
+Implements #18 in full, per `handoffs/exit-move-split.md`. Rendering-only:
+the Move panel now holds street travel alone, ordered by compass, and every
+other exit renders at the top of Here. No WORLD DATA, no PLAYER STATE, no
+mechanics, no save-format change.
+
+**Changed / Reworked** — UI/RENDERING, exit panels
+
+Every exit used to render as a Move button in `exits`-array authoring order,
+so "Climb the stairs", "Enter the pharmacy" and "Climb through the window" all
+sat under a heading that means travel, and a street's four directions came out
+in whatever order the world data happened to list them.
+
+- New `isGridTravel(fromId, toId)` in WORLD INTERACTION, beside
+  `getExitsForRoom()`: an exit is grid travel if and only if both endpoints are
+  street/mid-block nodes, which the ROOM SCHEMA marks by giving such a room its
+  own id as its `locationId`. This is deliberately *not* the cross-Location
+  test (`fromRoom.locationId !== toRoom.locationId`), which sends 706 of the
+  world's 774 exits to Move — 34 too many, among them the stairwells, the
+  apartment-over-shop doors, the `balcony → alley` fire escape and every
+  "Enter the …" building door.
+- `renderMoveActionsPanel()` filters `getExitsForRoom()` to grid travel and
+  sorts it by `MOVE_DIRECTION_RANK` — `north:0, east:1, west:2, south:3` —
+  keyed on `computeDirection()` of the two rooms' `locationId`s. No label
+  parsing and no new exit field: `computeDirection()` already reproduces the
+  compass word in every grid exit's own label.
+- The sort has no secondary key on purpose. `Array.prototype.sort` is stable,
+  which is what keeps each intersection's "Head …" exit ahead of its
+  "Step into the block …" exit — the relationship is authoring order, not
+  something re-derived from label text.
+- `renderHereActionsPanel()` renders the non-grid exits first, above the
+  locked-door notices, in unmodified authoring order, with their existing
+  `fmtDuration(exitMinutes(exit))` cost suffix and `actionButton` styling.
+  Window-climb exits are among them: `getExitsForRoom()` still generates them
+  and they still track window state; only their parent panel changed.
+- `getExitsForRoom()` is untouched — same signature, same one list, same
+  window handling. Each panel filters it.
+
+**UI**
+
+- Indoors the Move group disappears entirely: the static markup's Move
+  `.actions-group` gained `id="moveGroup"`, and the panel hides it when it
+  holds no buttons, mirroring `hereGroup`. 42 of the game's 218 rooms are
+  non-street rooms, so an empty "MOVE" heading was the common case indoors.
+- The game-over branch of `render()` returns before
+  `renderMoveActionsPanel()` runs and puts its "Restart" button in
+  `moveActions`, so it now sets `moveGroup` back to visible — otherwise dying
+  indoors would have left Restart behind a hidden group.
+- On a street, Move holds only travel, ordered North, East, West, South.
+  Nine street rooms with building entrances gain a Here section; the other
+  167 still show none.
+- No button label, cost, or styling changed.
+
+**Sections touched**
+
+- UI/RENDERING — `renderMoveActionsPanel()`, `renderHereActionsPanel()`,
+  `render()`'s game-over branch, and the static Move `.actions-group` markup.
+- WORLD INTERACTION — one added helper, `isGridTravel()`.
+
+**Open questions / decisions resolved**
+
+The handoff left three narrow implementation calls open; all three took its
+recommended default.
+
+- **Where the classification helper lives**: WORLD INTERACTION, beside
+  `getExitsForRoom()`, which already owns "which exits does this room offer".
+  It reads WORLD DATA and is consumed by RENDERING, so RENDERING was the other
+  candidate.
+- **One list or two**: one. `getExitsForRoom()` keeps its signature and each
+  render function filters, which keeps window-exit generation in a single
+  place and makes the change provably additive.
+- **A visual separator for the relocated exits in Here**: none. They are
+  ordinary action buttons and the panel already mixes kinds. If they read as
+  crowded in play, that is a follow-up.
+
+**Notes / assumptions**
+
+- The compass order North/East/West/South comes from the handoff, not from a
+  prior convention in the code — it is the retunable part of this pass.
+- An unknown direction ranks 4, after `south`, rather than resolving to
+  `undefined` and poisoning the comparator. No street node can currently
+  produce `up`/`down` (every one is `z:0`), but the sort no longer depends on
+  that staying true.
+
+**Explicitly NOT changed**
+
+- No `exits` array is reordered, renamed, or given a new field; no exit label,
+  `distanceM`, or duration changed.
+- `getExitsForRoom()`'s body, `doMove()`, `exitMinutes()` and
+  `computeDirection()` are untouched.
+- The Here panel's existing actions (locked doors, Rest, Sleep, Search,
+  windows, vehicle, fishing, stove, fire, tree, container locks) keep their
+  order; the relocated exits are inserted ahead of them.
+- `SAVE_KEY` is unchanged — `versionCompat()` reads `MAJOR.MINOR`, so a PATCH
+  bump keeps existing browser saves loading.
+
+**Validation performed**
+
+Driven in headless Chromium against an instrumented copy of the new file,
+walking all 218 rooms and all 774 exits:
+
+- The split classifies 672 exits as grid travel and 102 as everything else,
+  matching the handoff's verified counts exactly. 176 rooms satisfy
+  `locationId === id`.
+- Every street room's Move buttons match the expected filtered-and-sorted
+  list, label for label; direction ranks are monotonic in all 176 street
+  rooms; the compass word in every grid label agrees with the computed
+  direction. Move-button counts per street room: 2 buttons in 112 rooms, 4 in
+  4, 6 in 24, 8 in 36.
+- All 224 two-exit direction buckets render "Head …"/"Continue …" before
+  "Step into the block …", with no secondary sort key.
+- All 42 non-street rooms hide the Move group; no street room hides it.
+- In the nine street rooms with non-grid exits, the relocated exits render
+  first in Here and in authoring order.
+- Both windows, driven through `closed` and `open` in both of their rooms:
+  the climb exit appears in Here and never in Move when open, and is absent
+  from both when closed.
+- No page errors or console errors during the walk.
+- The diff is the proof of the data claim: `git diff main -- ashfall.html`
+  (equivalently `git diff v0.4.3:ashfall_0_4_3.html`, since the release tags
+  predate the filename-normalization pass) touches only the five sites listed
+  under **Sections touched** and the version constants.
+
+**Explicitly out of scope**
+
+Per the handoff: no reordering of the Here panel's existing actions, no
+compass-rose or spatial button layout (a rose degrades badly in the many rooms
+with no directional exits), no change to `exits` data or labels, no renaming
+of the "Move" and "Here" headings. #4 (vestigial `distanceM` on cross-Location
+exits) is adjacent but not a prerequisite. Phone-viewport layout (#16) and map
+rendering (#19, #20) are untouched.
+
+**Documentation**
+
+- The ARCHITECTURE comment's "Current version" line is bumped to 0.4.4.
+- Filed #26: the `git diff vX.Y.Z -- ashfall.html` recipe in the Project Guide
+  and the changelog guide no longer resolves, because every existing release
+  tag predates the rename to `ashfall.html` and carries a versioned filename
+  instead.
+- Nothing else was deferred out of this pass.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.3"` → `"0.4.4"`
+
+---
+
 ## v0.4.3 — Wide-view map readability
 
 No handoff file — a direct request to make the side-menu map's Wide view
