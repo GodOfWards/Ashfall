@@ -221,12 +221,11 @@
   //   indexes are temporary and must never be treated as stable identity.
   //   doRestart lives in PERSISTENCE, not SIMULATION, since it performs a
   //   full state reset rather than a time-driven update.
-  // Current version: 0.4.6.
   //
   // WORLD DATA also carries LOCATIONS — real integer (x,y,z) coordinates
   // (meters) for every street/mid-block node and building floor, keyed by
-  // `locationId` on every room. As of v0.3.0, LOCATIONS is read by both MAP
-  // rendering and movement: exitMinutes()/locationDistance() compute
+  // `locationId` on every room. LOCATIONS is read by both MAP rendering
+  // and movement: exitMinutes()/locationDistance() compute
   // cross-Location travel distance, and applyComputedDirections() (run once
   // at world-build time) derives compass words for cross-Location exit
   // labels via computeDirection(). See the LOCATIONS comment below for the
@@ -244,23 +243,22 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.4.8" };
+  const GAME_CONFIG = { VERSION: "0.4.9" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Ammunition","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
   const MIN_MOVE_MIN = 1;
   const GAITS = { sneak:{speed:0.6}, walk:{speed:1.2}, fast:{speed:2.0} };
-  // Energy baseline changed in v0.2.1 to 100 -> 0 over 24 game hours (was
-  // 100/960, ~16h) per the Stamina & Fatigue handoff (sec. 14). Hunger/thirst
-  // rates are unchanged.
+  // Points per game minute: hunger empties over 72 game hours, thirst and
+  // energy over 24.
   const DECAY = { hunger:100/4320, thirst:100/1440, energy:100/1440 };
   const CAMPFIRE_KIT_COST = 3;
   // ==================================================
-  // STAMINA / FATIGUE SYSTEM CONSTANTS (v0.2.1)
+  // STAMINA / FATIGUE SYSTEM CONSTANTS
   // ==================================================
-  // See "Ashfall v0.2.1 — Stamina & Fatigue System" handoff for full rules.
+  // See the v0.2.1 entry in CHANGELOG.md for the full rules.
   // Tasks declare Exertion; this system alone decides how Exertion affects
-  // Stamina/Fatigue (sec. 3). Do not duplicate this logic inside tasks.
+  // Stamina/Fatigue. Do not duplicate this logic inside tasks.
   const STAMINA_RECOVERY_DELAY_MIN = 1;    // game minutes of non-exertion before recovery starts
   const BASELINE_STAMINA_RATE = 1;         // Stamina/minute, awake baseline
   const REST_STAMINA_RATE = 0.5;           // Stamina/minute during Rest
@@ -268,9 +266,8 @@
   const REST_DURATION_MIN = 60;
   const SLEEP_ENERGY_RATE = 10/60;         // Energy/minute (10/hour)
   const SLEEP_COOLDOWN_MIN = 8*60;         // must stay awake 8 game hours after waking
-  // No "low hunger/thirst" threshold existed in v0.1.3 to inherit (sec. 24
-  // asks us to follow existing convention if one is defined) — 30 is a
-  // reasonable initial balance value and lives here as a single knob.
+  // 30 is an initial balance value with no prior convention behind it —
+  // retunable, and deliberately one knob per vital.
   const LOW_HUNGER_THRESHOLD = 30;
   const LOW_THIRST_THRESHOLD = 30;
   const JOG_EXERTION_PER_MIN = 0.5;
@@ -327,7 +324,7 @@
   // CONTAINER SCHEMA:
   //   { id, name, capacityKg, items: [] }
   //   Optional: locked, breakTag (tag required to force it open)
-  //   Optional (v0.4.0, spawn pools — see SPAWN_POOLS below):
+  //   Optional (spawn pools — see SPAWN_POOLS below):
   //     spawnPools       string[] of SPAWN_POOLS ids this container draws
   //                      from. Absence means the container is never
   //                      touched by the spawn system (purely hand-authored).
@@ -337,7 +334,7 @@
   //                      doOpenContainer() never overwrites them.
   //     lastRolledMinute state.totalMinutes at the last roll. Not consumed
   //                      by any mechanic yet — reserved for a future
-  //                      respawn cycle (roadmap item 15).
+  //                      respawn cycle (#15).
   //
   // EXIT SCHEMA (one of):
   //   Same-Location:  { to, label, distanceM } — distanceM is hand-authored.
@@ -346,7 +343,7 @@
   //                   by exitMinutes()/locationDistance() (see WORLD
   //                   INTERACTION). Compass words inside `label`, if any,
   //                   are substituted at build time by computeDirection()
-  //                   from the same LOCATIONS data — see v0.3.0 changelog.
+  //                   from the same LOCATIONS data.
   //   Optional (either kind): doorId (exit is gated by a door in `doors`)
   //
   // ITEM DATA SCHEMA:
@@ -470,8 +467,6 @@
     campfire_kit: { name:"Campfire Kit", category:"Materials", unitWeight:2.4 },
     cooked_fish: { name:"Cooked fish", category:"Food", unitWeight:0.35, restores:{hunger:35}, verb:"Eat" },
     raw_fish: { name:"Raw fish", category:"Food", unitWeight:0.3, restores:{hunger:10}, verb:"Eat", illnessChance:35 },
-    // New entries below added in v0.4.0 for SPAWN_POOLS coverage — see the
-    // "Container Spawn Pools & Population System" handoff, Appendix B.
     canned_tuna: { name:"Canned tuna", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat" },
     cereal_box: { name:"Box of cereal", category:"Food", unitWeight:0.5, restores:{hunger:15}, verb:"Eat" },
     crackers: { name:"Crackers", category:"Food", unitWeight:0.2, restores:{hunger:8}, verb:"Eat" },
@@ -509,9 +504,7 @@
     sealed_evidence_box: { name:"Sealed evidence box", category:"Misc", unitWeight:1.5 },
     handcuffs: { name:"Handcuffs", category:"Tool", unitWeight:0.3 },
     police_badge: { name:"Police badge", category:"Misc", unitWeight:0.05 },
-    // New entries below added in v0.4.2 to close the category gaps found by
-    // the post-v0.4.0 audit — see the "Missing Item Category Population"
-    // handoff. Weights are estimates consistent with existing entries for
+    // Weights below are estimates consistent with existing entries for
     // similar real-world items; retunable.
     // Pet supplies
     dry_pet_food: { name:"Bag of dry pet food", category:"Food", unitWeight:1.5 },
@@ -528,7 +521,7 @@
     childrens_book: { name:"Children's book", category:"Literature", unitWeight:0.2 },
     toy_action_figure: { name:"Action figure", category:"Misc", unitWeight:0.1 },
     baby_blanket: { name:"Baby blanket", category:"Misc", unitWeight:0.3 },
-    // Self-defense (no firearms — see the handoff's Design decision 1)
+    // Self-defense (firearms deliberately excluded)
     baseball_bat: { name:"Baseball bat", category:"Tool", unitWeight:0.9, tags:["blunt"] },
     combat_knife: { name:"Combat knife", category:"Tool", unitWeight:0.3, tags:["blade"] },
     pepper_spray: { name:"Pepper spray", category:"Misc", unitWeight:0.15 },
@@ -540,7 +533,7 @@
     rubber_gloves: { name:"Rubber gloves", category:"Misc", unitWeight:0.1 },
     trash_bags: { name:"Roll of trash bags", category:"Misc", unitWeight:0.3 },
     // Documents / lore — generic types only; location-specific written
-    // content is roadmap item 13's job, not this pass's.
+    // content is #7's job.
     dated_newspaper: { name:"Dated newspaper", category:"Literature", unitWeight:0.1 },
     personal_journal: { name:"Personal journal", category:"Literature", unitWeight:0.3 },
     unsent_letter: { name:"Unsent letter", category:"Literature", unitWeight:0.02 },
@@ -581,12 +574,12 @@
     return refs.map(itemFromRegistry);
   }
 
-  // CONTAINER_SLOTS / SLOT_LABELS (v0.4.2): the equipment slots the player
-  // can carry things in, derived from ITEM_REGISTRY rather than listed by
-  // hand, so adding an equippable bag is a registry edit and nothing else —
+  // CONTAINER_SLOTS / SLOT_LABELS: the equipment slots the player can
+  // carry things in, derived from ITEM_REGISTRY rather than listed by hand,
+  // so adding an equippable bag is a registry edit and nothing else —
   // PLAYER STATE, the inventory pools and RENDERING all read these instead
-  // of naming slots individually (they used to hardcode "keychain"/
-  // "backpack"). `keychain` is named explicitly because it is the one slot
+  // of naming slots individually. `keychain` is named explicitly because it
+  // is the one slot
   // that isn't a found item: makeDefaultState() ships it populated, and
   // keychainAllows() restricts it to Key items. That restriction is specific
   // to the keychain and is deliberately not inherited by any other slot.
@@ -603,7 +596,7 @@
     return out;
   })();
 
-  // SPAWN_POOLS (v0.4.0): weighted-RNG loot tables, sibling registry to
+  // SPAWN_POOLS: weighted-RNG loot tables, sibling registry to
   // ITEM_REGISTRY. A container opts in via its `spawnPools` field (see
   // CONTAINER SCHEMA above); doOpenContainer() (WORLD INTERACTION) rolls
   // each pool independently the first time such a container is opened.
@@ -614,8 +607,9 @@
   //   rollCount  [min,max] — how many entries get picked per roll.
   //   emptyChance  0-1 chance the whole roll produces nothing, independent
   //                of rollCount.
-  // See "Ashfall Handoff — Container Spawn Pools & Population System" for
-  // the full design and the per-container assignment table.
+  // See the v0.4.0 entry in CHANGELOG.md for the full design. Which
+  // containers draw from which pools is recorded on the containers
+  // themselves, in their `spawnPools` field.
   const SPAWN_POOLS = {
     kitchen_perishable: { rollCount:[0,1], emptyChance:0.3, entries:[
       { itemId:"rotten_leftovers", weight:8, qtyMin:1, qtyMax:1 },
@@ -792,10 +786,8 @@
       { itemId:"box_of_matches", weight:6, qtyMin:1, qtyMax:1 },
       { itemId:"lighter", weight:5, qtyMin:1, qtyMax:1 },
       { itemId:"campfire_kit", weight:2, qtyMin:1, qtyMax:1 } ]},
-    // Pools added in v0.4.2 for the categories the post-v0.4.0 audit found
-    // uncovered. rollCount/emptyChance are the handoff's; per-entry weights
-    // follow the existing convention (commoner items 5-8, rarer or bulkier
-    // ones 1-3) and are retunable.
+    // Per-entry weights below follow the existing convention (commoner
+    // items 5-8, rarer or bulkier ones 1-3) and are retunable.
     pet_supplies: { rollCount:[1,2], emptyChance:0.2, entries:[
       { itemId:"dry_pet_food", weight:7, qtyMin:1, qtyMax:1 },
       { itemId:"canned_pet_food", weight:7, qtyMin:1, qtyMax:3 },
@@ -828,25 +820,23 @@
   };
 
   // LOCATIONS: real integer (x,y,z) coordinates in meters for every
-  // street/mid-block node and building floor (replaces MAP_NODES /
-  // MAP_ANCHORS as of v0.2.9 — see "Ashfall v0.2.9.md" handoff). Origin
+  // street/mid-block node and building floor. Origin
   // (0,0,0) = maple4th (town SW corner), street level. +X = east, +Y =
   // north, +Z = up. Block size 100m; floor height 3m (no basements/roofs
   // yet — this is the convention for when they're added). Every room
   // carries a `locationId` key into this table (see ROOM SCHEMA above).
   //   Street/mid-block Locations: id = the room id itself, z:0, (x,y) =
   //   the former MAP_NODES {col,row} * 100 (same grid, just scaled to
-  //   real meters). Grid as of the v0.4.1 8x8 expansion:
+  //   real meters). The grid:
   //     col -1..6 = 6th, 4th, 2nd, 1st(center), 3rd, 5th, 7th, 9th St
   //     (west->east; the centered even/odd scheme — evens west of 1st,
   //     odds east, magnitude growing with distance from center).
   //     row -4..3 = Dock, Mill, Cedar, Elm, Maple, Poplar, Main, Water St
-  //     (south->north). Water is still the river / north hard limit; the
-  //     town grew *away* from the water, so the four streets added in
-  //     v0.4.1 all sit south of Maple: Elm/Cedar continue the residential
-  //     tree-name ring, Mill/Dock are the industrial and rail-freight
-  //     edge. Origin (0,0,0) stays maple4th, so no existing coordinate
-  //     moved — the new grid has negative x and y.
+  //     (south->north). Water is the river / north hard limit; the town
+  //     grew *away* from the water, so Elm/Cedar/Mill/Dock all sit south
+  //     of Maple: Elm/Cedar continue the residential tree-name ring,
+  //     Mill/Dock are the industrial and rail-freight edge. Origin
+  //     (0,0,0) is maple4th, which is why the grid has negative x and y.
   //   Building-floor Locations: one per floor, shared by every room on
   //   that floor. (x,y) = the building's former MAP_ANCHORS node. Two
   //   buildings sharing an anchor (Pharmacy/Hardware Store) correctly
@@ -908,9 +898,9 @@
     mid_5th_p_m:    { x:400, y:150, z:0 },
     mid_5th_m_w:    { x:400, y:250, z:0 },
 
-    // Outer grid added in v0.4.1 (8x8 expansion) — 3 new numbered streets
-    // (6th/7th/9th) and 4 new named streets (Dock/Mill/Cedar/Elm), all south
-    // of Maple so Water St stays the river's edge and the town's north limit.
+    // Outer grid — 3 numbered streets (6th/7th/9th) and 4 named streets
+    // (Dock/Mill/Cedar/Elm), all south of Maple so Water St stays the
+    // river's edge and the town's north limit.
     dock6th:        { x:-100, y:-400, z:0 },
     mid_dock_4_6:   { x:-50, y:-400, z:0 },
     dock4th:        { x:0, y:-400, z:0 },
@@ -1037,8 +1027,8 @@
     mid_9th_p_m:    { x:600, y:150, z:0 },
     mid_9th_m_w:    { x:600, y:250, z:0 },
 
-    // Building floors — (x,y) per building's anchor node, per the
-    // "Building -> Location membership" table in "Ashfall v0.2.9.md".
+    // Building floors — one entry per floor: (x,y) is the building's,
+    // z is the floor's.
     acorn_f0:       { x:150, y:100, z:0 },
     acorn_f1:       { x:150, y:100, z:3 },
     cornerstore_f0: { x:100, y:200, z:0 },
@@ -1520,16 +1510,15 @@
 
   // Straight-line distance between two Locations, rounded to the nearest
   // whole meter. Computed on demand, never cached — LOCATIONS is the
-  // single source of truth (v0.3.0).
+  // single source of truth.
   function locationDistance(a, b){
     const A = LOCATIONS[a], B = LOCATIONS[b];
     return Math.round(Math.sqrt((B.x-A.x)**2 + (B.y-A.y)**2 + (B.z-A.z)**2));
   }
   // Compass direction from Location `a` to Location `b`, derived from real
-  // coordinates (v0.3.0). Pure vertical movement resolves to up/down;
-  // otherwise the larger of |dx|/|dy| wins. A true diagonal tie (not
-  // expected on the current rectilinear grid) defaults to the north/south
-  // axis — see the v0.3.0 changelog if one is ever found.
+  // coordinates. Pure vertical movement resolves to up/down; otherwise the
+  // larger of |dx|/|dy| wins. A true diagonal tie (not expected on the
+  // current rectilinear grid) defaults to the north/south axis.
   function computeDirection(a, b){
     const A = LOCATIONS[a], B = LOCATIONS[b];
     const dx = B.x - A.x, dy = B.y - A.y, dz = B.z - A.z;
@@ -1538,11 +1527,10 @@
     if(Math.abs(dx) > Math.abs(dy)) return dx > 0 ? "east" : "west";
     return dy > 0 ? "north" : "south";
   }
-  // Build-time pass (v0.3.0): for every exit that crosses between two
-  // different Locations and whose label already contains an explicit
-  // compass word, replace that word with the one computed from real
-  // coordinates. Runs once, right after the world is assembled — see the
-  // "when the substitution happens" decision in the v0.3.0 handoff.
+  // Build-time pass: for every exit that crosses between two different
+  // Locations and whose label already contains an explicit compass word,
+  // replace that word with the one computed from real coordinates. Runs
+  // once, right after the world is assembled.
   // Labels with no compass word (building entrances, floor transitions,
   // etc.) are left exactly as authored.
   const COMPASS_WORD_RE = /\b(north|south|east|west)\b/i;
@@ -3435,8 +3423,8 @@
         { id:"acorn_apt_2a_key", qty:1 } ])}
     };
     // Every equippable container slot starts empty. Derived from
-    // CONTAINER_SLOTS (v0.4.2) so a new bag type needs only its ITEM_REGISTRY
-    // entry — this used to be a literal `backpack:null`. Keychain is skipped
+    // CONTAINER_SLOTS so a new bag type needs only its ITEM_REGISTRY
+    // entry. Keychain is skipped
     // because it's set above: it's the one slot the player starts carrying.
     CONTAINER_SLOTS.forEach(slot=>{ if(!(slot in s)) s[slot] = null; });
     return s;
@@ -3489,7 +3477,7 @@
     return null;
   }
 
-  // randInt/weightedPick (v0.4.0): small RNG helpers backing SPAWN_POOLS —
+  // randInt/weightedPick: small RNG helpers backing SPAWN_POOLS —
   // see doOpenContainer() in WORLD INTERACTION.
   function randInt(min, max){ return min + Math.floor(Math.random() * (max - min + 1)); }
   function weightedPick(entries){
@@ -3524,7 +3512,7 @@
     if(room.room) return room.building + ", " + room.room;
     return room.building;
   }
-  // Summaries for the tally actions (v0.4.6) — the fixed-text ones, whose
+  // Summaries for the tally actions — the fixed-text ones, whose
   // collapsed run reads as prose rather than as a count. Kept in one table
   // so a future content pass can edit all four sentences in one place
   // instead of hunting through four call sites. A run is always >= 2, so
@@ -3540,7 +3528,7 @@
     chop: t => `You chop down ${numberWord(t.total)} trees.`,
     fuel: t => `You feed ${numberWord(t.total)} more pieces of wood into the fire.`
   };
-  // Consecutive runs of the same action collapse into one line (v0.4.6). A
+  // Consecutive runs of the same action collapse into one line. A
   // call site opts in by passing `key`; `outcome` separates variants that
   // share one key (only doFish() needs it — it defaults to the key itself).
   // A run is broken by any intervening line, warnings included: a string of
@@ -3548,6 +3536,7 @@
   // matching key in `dataset`, the counts in a `_logTally` expando, since
   // dataset values are strings — never in `state`, so the log stays
   // DOM-only and unserialized.
+  const LOG_MAX_ENTRIES = 50;   // oldest lines are dropped past this
   function log(text, cls, key, outcome){
     const logDiv = document.getElementById("log");
     const last = logDiv.lastElementChild;
@@ -3586,7 +3575,7 @@
     }
     logDiv.querySelectorAll("p.fresh").forEach(el=>el.classList.remove("fresh"));
     if(!cls) p.classList.add("fresh");
-    while(logDiv.children.length > 50) logDiv.removeChild(logDiv.firstChild);
+    while(logDiv.children.length > LOG_MAX_ENTRIES) logDiv.removeChild(logDiv.firstChild);
     logDiv.scrollTop = logDiv.scrollHeight;
   }
   // ==================================================
@@ -3737,8 +3726,8 @@
     it.qty -= moveQty;
     if(it.qty <= 0) src.items.splice(index,1);
     // No log line: the item visibly moves between the Here and Inventory
-    // panels, so the line only repeated what the screen already showed
-    // (v0.4.6). The capacity warning above still speaks.
+    // panels, so the line only repeated what the screen already showed.
+    // The capacity warning above still speaks.
     render();
   }
   function doStore(index, qty){
@@ -3756,8 +3745,8 @@
     addToList(dst.items, { ...it, qty:moveQty });
     it.qty -= moveQty;
     if(it.qty <= 0) src.items.splice(index,1);
-    // Silent, as doTake() is: the item visibly moves between the panels
-    // (v0.4.6). The capacity warning above still speaks.
+    // Silent, as doTake() is: the item visibly moves between the panels.
+    // The capacity warning above still speaks.
     render();
   }
   function doConsume(sourceKind, index){
@@ -3771,7 +3760,7 @@
     if(it.qty <= 0) src.items.splice(index,1);
     log(`You ${it.verb.toLowerCase()} the ${it.name.toLowerCase()}.`, "good", "consume:" + (it.itemId || it.name));
     if(it.illnessChance && Math.random()*100 < it.illnessChance && state.illnessMinutesLeft <= 0){
-      state.illnessMinutesLeft = 180;
+      state.illnessMinutesLeft = ILLNESS_DURATION_MIN;
       log("It doesn't sit right. You can feel it already.", "warn");
     }
     render();
@@ -3784,7 +3773,7 @@
     if(state[it.slotType]){ log("You're already carrying something in that slot.", "warn"); return; }
     state[it.slotType] = { name:it.name, unitWeight:it.unitWeight, capacityKg:it.capacityKg, items: it.contents || [] };
     src.items.splice(index,1);
-    // Silent: equipping makes a new inventory tab appear (v0.4.6).
+    // Silent: equipping makes a new inventory tab appear.
     state.invTab = it.slotType;
     render();
   }
@@ -3796,7 +3785,7 @@
     addToList(state.inventory.items, item);
     state[slotKey] = null;
     if(state.invTab === slotKey) state.invTab = "inventory";
-    // Silent: unequipping makes the tab disappear (v0.4.6).
+    // Silent: unequipping makes the tab disappear.
     render();
   }
   // ==================================================
@@ -3837,7 +3826,7 @@
       if(it.hasBatteries !== false){
         actions.push({ label: it.on ? "Turn off" : "Turn on", onClick:()=>{
           it.on = !it.on;
-          // Silent: the detail view already reads "— On" / "— Off" (v0.4.6).
+          // Silent: the detail view already reads "— On" / "— Off".
           render();
         }});
         actions.push({ label:"Remove batteries", onClick:()=>{
@@ -3845,7 +3834,7 @@
           it.on = false;
           giveItem(itemFromRegistry({ id:"spare_batteries", qty:1 }));
           // Silent: the batteries appear in inventory and the detail view
-          // reads "No batteries installed" (v0.4.6).
+          // reads "No batteries installed".
           render();
         }});
       }
@@ -3853,7 +3842,7 @@
         consumeByTag("battery", 1);
         it.durability.current = it.durability.max;
         it.hasBatteries = true;
-        // Silent: the detail view's charge readout jumps to 100% (v0.4.6).
+        // Silent: the detail view's charge readout jumps to 100%.
         render();
       }});
     }
@@ -3885,8 +3874,10 @@
     }
     return null;
   }
+  // The game opens at 08:00 on Day 1; state.totalMinutes counts from there.
+  const DAY_START_MIN = 8*60;
   function getClockText(){
-    const abs = Math.round(8*60 + state.totalMinutes);
+    const abs = Math.round(DAY_START_MIN + state.totalMinutes);
     const day = 1 + Math.floor(abs/1440);
     const tod = ((abs%1440)+1440)%1440;
     return "Day " + day + ", " + String(Math.floor(tod/60)).padStart(2,"0") + ":" + String(tod%60).padStart(2,"0");
@@ -3908,7 +3899,7 @@
   // street/mid-block nodes, which the ROOM SCHEMA marks by giving such a room
   // its own id as its `locationId`. RENDERING splits the two action panels on
   // this: Move holds grid travel, Here holds everything else, window climbs
-  // included (v0.4.4). Deliberately not the cross-Location test — that also
+  // included. Deliberately not the cross-Location test — that also
   // catches stairs, building doors and the fire escape, which are not travel.
   function isGridTravel(fromId, toId){
     const from = world[fromId], to = world[toId];
@@ -3920,7 +3911,7 @@
   function doMove(exit){
     const minutes = exitMinutes(exit);
     advanceTime(minutes);
-    // Walking doesn't directly consume Stamina; jogging does (sec. 8).
+    // Walking doesn't directly consume Stamina; jogging does.
     if(state.gait === "fast") applyExertion(JOG_EXERTION_PER_MIN * minutes);
     state.currentRoom = exit.to;
     state.worldTab = "floor";
@@ -3933,7 +3924,7 @@
   function doRest(){
     // Rest recovers Stamina/Fatigue without the recovery Energy surcharge,
     // but baseline awake Energy consumption still applies and Rest does not
-    // restore Energy itself (sec. 16).
+    // restore Energy itself.
     let remaining = REST_DURATION_MIN;
     while(remaining > 1e-9){
       const dt = Math.min(1, remaining);
@@ -3949,10 +3940,10 @@
   }
   function doSleep(){
     if(!sleepAvailable()) return;
-    // Sleep suspends the entire awake Energy/Stamina/Fatigue system
-    // (sec. 26). Fatigue is snapshotted at sleep start and caps how much
-    // Energy this Sleep can restore; Fatigue itself always fully clears by
-    // the time the player wakes (sec. 28).
+    // Sleep suspends the entire awake Energy/Stamina/Fatigue system.
+    // Fatigue is snapshotted at sleep start and caps how much Energy this
+    // Sleep can restore; Fatigue itself always fully clears by the time the
+    // player wakes.
     const fatigueAtSleep = state.vitals.fatigue;
     const ceiling = clamp(100 - fatigueAtSleep);
     const missingEnergy = Math.max(0, ceiling - state.vitals.energy);
@@ -4007,13 +3998,12 @@
     log("You cut through the lock on the " + c.name.toLowerCase() + ".", "warn");
     render();
   }
-  // doOpenContainer (v0.4.0): fires whenever the player switches the world
+  // doOpenContainer: fires whenever the player switches the world
   // panel to a container's tab. Rolls each of the container's spawnPools
   // independently exactly once (gated by spawnRolled — see CONTAINER
   // SCHEMA), then renders. Containers with no spawnPools, or with
-  // spawnRolled already set (all pre-existing hand-placed containers, set
-  // true at authoring time), are entirely unaffected. See the "Container
-  // Spawn Pools & Population System" handoff for the full rule.
+  // spawnRolled already set (all hand-placed containers, set true at
+  // authoring time), are entirely unaffected.
   function doOpenContainer(room, container){
     state.worldTab = container.id;
     if(container.spawnPools && !container.spawnRolled){
@@ -4036,20 +4026,26 @@
   // ==================================================
   // SURVIVAL / TIME SIMULATION
   // ==================================================
+  // Health drain while a vital sits at zero or an illness is running: game
+  // minutes per point of Health lost. Balance values, all retunable.
+  const STARVATION_MINUTES_PER_HEALTH = 30;
+  const DEHYDRATION_MINUTES_PER_HEALTH = 15;
+  const ILLNESS_MINUTES_PER_HEALTH = 20;
+  const ILLNESS_DURATION_MIN = 180;
   // applyHungerThirst/applyWorldTicking/applyEnergyBaseline are the pieces
   // applyDecay used to do in one shot. They're split out so Sleep (which
-  // suspends the awake Energy/Stamina/Fatigue system, sec. 26) can run
-  // Hunger/Thirst and world ticking without the awake Energy baseline, and
-  // so the Stamina/Fatigue system can drive Energy's *recovery* multiplier
-  // (sec. 15, 19) without duplicating the baseline-depletion math.
+  // suspends the awake Energy/Stamina/Fatigue system) can run Hunger/Thirst
+  // and world ticking without the awake Energy baseline, and so the
+  // Stamina/Fatigue system can drive Energy's *recovery* multiplier without
+  // duplicating the baseline-depletion math.
   function applyHungerThirst(min){
     state.vitals.hunger = clamp(state.vitals.hunger - DECAY.hunger*min);
     state.vitals.thirst = clamp(state.vitals.thirst - DECAY.thirst*min);
-    if(state.vitals.hunger <= 0) state.vitals.health = clamp(state.vitals.health - min/30);
-    if(state.vitals.thirst <= 0) state.vitals.health = clamp(state.vitals.health - min/15);
+    if(state.vitals.hunger <= 0) state.vitals.health = clamp(state.vitals.health - min/STARVATION_MINUTES_PER_HEALTH);
+    if(state.vitals.thirst <= 0) state.vitals.health = clamp(state.vitals.health - min/DEHYDRATION_MINUTES_PER_HEALTH);
     if(state.illnessMinutesLeft > 0){
       const tick = Math.min(min, state.illnessMinutesLeft);
-      state.vitals.health = clamp(state.vitals.health - tick/20);
+      state.vitals.health = clamp(state.vitals.health - tick/ILLNESS_MINUTES_PER_HEALTH);
       state.illnessMinutesLeft -= tick;
     }
   }
@@ -4090,10 +4086,9 @@
   // STAMINA / FATIGUE SYSTEM
   // ==================================================
   // Tasks own their duration/execution/success; they only ever *declare*
-  // Exertion (see CORE ACTIONS below). This module owns every rule about
+  // Exertion. This module owns every rule about
   // what Exertion does to Stamina/Fatigue, and how Energy modifies or is
-  // spent by recovery — keeping Stamina out of the task layer entirely
-  // (handoff sec. 3).
+  // spent by recovery — keeping Stamina out of the task layer entirely.
   function applyExertion(exertion){
     if(exertion <= 0) return;
     const v = state.vitals;
@@ -4121,22 +4116,21 @@
     return 50;
   }
   function hungerThirstRecoveryPenalty(){
-    // Additive 15%-each penalty (sec. 24) — never compounded multiplicatively.
+    // Additive 15%-each penalty — never compounded multiplicatively.
     let penalty = 0;
     if(state.vitals.hunger < LOW_HUNGER_THRESHOLD) penalty += 0.15;
     if(state.vitals.thirst < LOW_THIRST_THRESHOLD) penalty += 0.15;
     return penalty;
   }
   function fatigueRecoveryAllowed(){
-    // Fatigue only recovers once Stamina has reached its *current* cap
-    // (sec. 18) — this is deliberately staminaMaxForEnergy(), not a flat
-    // 100, so a low-Energy Stamina cap can't be worked around.
+    // Fatigue only recovers once Stamina has reached its *current* cap —
+    // this is deliberately staminaMaxForEnergy(), not a flat 100, so a
+    // low-Energy Stamina cap can't be worked around.
     return state.vitals.fatigue > 0 && state.vitals.stamina >= staminaMaxForEnergy();
   }
   // One game-minute (or smaller remainder) of awake Stamina/Fatigue
   // recovery. mode "rest" uses Rest's flat rate and never adds the
-  // recovery Energy surcharge (sec. 16); mode "normal" is the ordinary
-  // awake state (sec. 11-15, 19).
+  // recovery Energy surcharge; mode "normal" is the ordinary awake state.
   function recoveryStep(dt, mode){
     if(isExertionDelayActive()){ applyEnergyBaseline(dt, 1); return; }
     const cap = staminaMaxForEnergy();
@@ -4162,8 +4156,8 @@
     return missing / SLEEP_ENERGY_RATE;
   }
   // Advances awake game time in <=1-minute steps so the Stamina/Fatigue
-  // recovery delay (exactly 1 game minute, sec. 10) and the Energy-driven
-  // recovery bands (sec. 12-13) are evaluated at natural resolution instead
+  // recovery delay (exactly 1 game minute) and the Energy-driven recovery
+  // bands are evaluated at natural resolution instead
   // of being approximated over an arbitrarily long jump.
   function runAwakeStep(min){
     let remaining = min;
@@ -4176,16 +4170,23 @@
       remaining -= dt;
     }
   }
+  // Collapsing at zero Energy. Every COLLAPSE_BLACKOUT_EVERY-th collapse is
+  // the long one; the others are a stumble. Balance values, retunable.
+  const COLLAPSE_BLACKOUT_EVERY = 3;
+  const COLLAPSE_BLACKOUT_MIN = 300;
+  const COLLAPSE_BLACKOUT_ENERGY = 90;    // Energy set to, not added
+  const COLLAPSE_STUMBLE_MIN = 20;
+  const COLLAPSE_STUMBLE_ENERGY = 30;     // Energy added, not set
   function advanceTime(min){
     runAwakeStep(min);
     if(state.vitals.energy <= 0){
       state.collapseCount += 1;
-      if(state.collapseCount % 3 === 0){
+      if(state.collapseCount % COLLAPSE_BLACKOUT_EVERY === 0){
         log("Your body gives out completely. You black out — hours pass before you come to, disoriented and vulnerable.", "warn");
-        runAwakeStep(300); state.vitals.energy = clamp(90);
+        runAwakeStep(COLLAPSE_BLACKOUT_MIN); state.vitals.energy = clamp(COLLAPSE_BLACKOUT_ENERGY);
       } else {
         log("Exhaustion drops you where you stand. A few minutes pass before you can get up.", "warn");
-        runAwakeStep(20); state.vitals.energy = clamp(state.vitals.energy + 30);
+        runAwakeStep(COLLAPSE_STUMBLE_MIN); state.vitals.energy = clamp(state.vitals.energy + COLLAPSE_STUMBLE_ENERGY);
       }
     }
     checkGameOver();
@@ -4213,10 +4214,26 @@
   // ==================================================
   // FIRE / COOKING
   // ==================================================
+  // Action durations in game minutes. ACTIONS spends these and RENDERING
+  // prints them on the buttons, so the two cannot drift apart.
+  const FISH_DURATION_MIN = 20;
+  const LIGHT_STOVE_MIN = 5;
+  const BUILD_FIRE_MIN = 10;
+  const DISMANTLE_CAMPFIRE_MIN = 10;      // shares a value with BUILD_FIRE_MIN; a separate fact
+  const CHOP_TREE_MIN = 30;
+  // Fire fuel. A fresh burn is its wood spent at the per-piece rate, so the
+  // two stay in step when either is retuned. FIRE_MAX_MIN is its own fact —
+  // a cap on banked burn time, not a wood count.
+  const FIRE_BUILD_WOOD = 3;
+  const FIRE_MINUTES_PER_WOOD = 60;
+  const FIRE_MAX_MIN = 360;
+  const HEAT_CONTAINER_CAPACITY_KG = 8;   // stove and campfire alike
+  const CHOP_TREE_FIREWOOD = 6;
+  const FISH_BITE_CHANCE = 0.55;          // balance value, retunable
   function doFish(){
-    advanceTime(20);
+    advanceTime(FISH_DURATION_MIN);
     applyExertion(FISH_EXERTION);
-    if(Math.random() < 0.55){
+    if(Math.random() < FISH_BITE_CHANCE){
       giveItem(itemFromRegistry({ id:"raw_fish", qty:1 }));
       log("Something bites. You reel in a fish.", "good", "fish", "bite");
     } else {
@@ -4232,15 +4249,14 @@
   function doLightStove(){
     if(!consumeMatchUse()) return;
     const room = world[state.currentRoom];
-    ensureHeatContainer(room, "stove", "Stove", 8);
+    ensureHeatContainer(room, "stove", "Stove", HEAT_CONTAINER_CAPACITY_KG);
     room.heatActive = true;
-    advanceTime(5);
+    advanceTime(LIGHT_STOVE_MIN);
     log("You light the stove.", "good");
     render();
   }
-  const FIRE_MAX_MIN = 360;
   function canBuildFire(room){
-    if(room.campfireBuilt) return room.fireMinutesLeft > 0 || countInPools("firewood") >= 3;
+    if(room.campfireBuilt) return room.fireMinutesLeft > 0 || countInPools("firewood") >= FIRE_BUILD_WOOD;
     return countInPools("campfire_kit") >= 1;
   }
   function doBuildFire(){
@@ -4254,12 +4270,12 @@
     }
     const banked = room.fireMinutesLeft > 0;
     if(!banked){
-      consumeFromPools("firewood", 3);
-      room.fireMinutesLeft = 180;
+      consumeFromPools("firewood", FIRE_BUILD_WOOD);
+      room.fireMinutesLeft = FIRE_BUILD_WOOD * FIRE_MINUTES_PER_WOOD;
     }
-    ensureHeatContainer(room, "campfire", "Campfire", 8);
+    ensureHeatContainer(room, "campfire", "Campfire", HEAT_CONTAINER_CAPACITY_KG);
     room.heatActive = true;
-    advanceTime(10);
+    advanceTime(BUILD_FIRE_MIN);
     log(firstTime ? "You set up the campfire kit and get a fire going."
       : (banked ? "You relight the fire from what's left of the wood." : "You get a fire going."), "good");
     render();
@@ -4268,7 +4284,7 @@
     if(countInPools("firewood") < 1) return;
     const room = world[state.currentRoom];
     consumeFromPools("firewood", 1);
-    room.fireMinutesLeft = Math.min((room.fireMinutesLeft || 0) + 60, FIRE_MAX_MIN);
+    room.fireMinutesLeft = Math.min((room.fireMinutesLeft || 0) + FIRE_MINUTES_PER_WOOD, FIRE_MAX_MIN);
     log("You feed the fire more wood.", "good", "fuel");
     render();
   }
@@ -4290,7 +4306,7 @@
     giveItem(itemFromRegistry({ id:"firewood", qty:refund }));
     room.campfireBuilt = false;
     room.fireMinutesLeft = null;
-    advanceTime(10);
+    advanceTime(DISMANTLE_CAMPFIRE_MIN);
     log(`You break down the campfire, salvaging ${refund} firewood from it.`, "good");
     render();
   }
@@ -4315,18 +4331,18 @@
   function doChopTree(){
     if(!hasTool("chopping")) return;
     const room = world[state.currentRoom];
-    advanceTime(30);
+    advanceTime(CHOP_TREE_MIN);
     applyExertion(CHOP_TREE_EXERTION);
     room.hasTree = false;
-    giveItem(itemFromRegistry({ id:"firewood", qty:6 }));
+    giveItem(itemFromRegistry({ id:"firewood", qty:CHOP_TREE_FIREWOOD }));
     log("You chop the tree down. It splits into a good stock of firewood.", "good", "chop");
     render();
   }
   // ==================================================
   // PERSISTENCE
   // ==================================================
-  // Save format is unchanged in 0.1.3 (still { version, state, world, doors,
-  // windows }). _uid is not persisted specially — resyncUidCounter() scans
+  // Save format: { version, state, world, doors, windows }. _uid is not
+  // persisted specially — resyncUidCounter() scans
   // every item location after a load so newly-created items during the next
   // session keep getting unique ids, and ensureUid() lazily assigns one to
   // any loaded item that predates the uid system.
@@ -4570,24 +4586,17 @@
   // ==================================================
   // RENDERING
   // ==================================================
-  // Unchanged in this revision, apart from what INVENTORY/ITEM SYSTEM
-  // changes required (renderCraftPanel already resolved by _uid before
-  // this pass and needed no functional change). Added in v0.2.5: the
-  // In-Game Viewing Map (renderMap() and its helpers below), per the
-  // "Ashfall v0.2.5.md" handoff — ported from map_demo.html, the
-  // reference prototype built and iterated on during planning.
+
   // ==================================================
-  // MAP (In-Game Viewing Map — Tier 1 item 3)
+  // MAP (In-Game Viewing Map)
   // ==================================================
   const MAP_SPACING = 130;
   const MAP_MARGIN = 55;
-  // Grid extents (see LOCATIONS above) — col -1..6, row -4..3 since the
-  // v0.4.1 8x8 expansion. MAP_MIN_COL/MAP_MIN_ROW exist because the new
-  // streets gave the grid negative coordinates: mapToSvg() offsets by
-  // MAP_MIN_COL so col -1 still lands on the left margin. MAP_MAX_ROW is
-  // unchanged (Water St is still the northernmost row), so the river line
-  // and every existing node keep their old SVG positions. Retunable
-  // defaults, scaled from the 5x4 values by the same margin/spacing logic:
+  // Grid extents (see LOCATIONS above) — col -1..6, row -4..3.
+  // MAP_MIN_COL/MAP_MIN_ROW exist because the southern and western streets
+  // give the grid negative coordinates: mapToSvg() offsets by MAP_MIN_COL
+  // so col -1 still lands on the left margin. Retunable defaults, scaled
+  // by the same margin/spacing logic:
   // 8 columns x 8 rows spans ~1020x1020 units including margins.
   const MAP_MIN_COL = -1;
   const MAP_MAX_COL = 6;
@@ -4655,12 +4664,12 @@
   let mapRenderedZoom = null;   // zoom mode the current SVG content was built for
   let mapLastNode = null;       // last resolved player map node
   let mapCurrentViewBox = null; // {x,y,w,h} of the viewBox, animated toward its target
-  let mapStreetLabels = [];     // Wide's label pool: one entry per street (v0.4.5)
+  let mapStreetLabels = [];     // Wide's label pool: one entry per street
 
   function mapToSvg(col, row){
     // row MAP_MIN_ROW (Dock) at bottom, row MAP_MAX_ROW (Water) at top;
     // col MAP_MIN_COL (6th) at the left margin — the offset is what lets the
-    // grid carry negative coordinates without drawing off-canvas (v0.4.1).
+    // grid carry negative coordinates without drawing off-canvas.
     return { x: MAP_MARGIN + (col - MAP_MIN_COL) * MAP_SPACING, y: MAP_MARGIN + (MAP_MAX_ROW - row) * MAP_SPACING };
   }
   function mapPathD(chain){
@@ -4669,9 +4678,9 @@
       return (i===0 ? "M " : "L ") + p.x + " " + p.y;
     }).join(" ");
   }
-  // Street names (Wide view). Since v0.4.5 they are placed against the
-  // portion of each street currently on screen rather than once per block:
-  // the view moves now, so a build-time position stops meaning anything.
+  // Street names (Wide view). They are placed against the portion of each
+  // street currently on screen rather than once per block: the view moves,
+  // so a build-time position would stop meaning anything.
   // Each street owns a fixed pool of MAP_LABELS_PER_STREET <text> nodes,
   // created once by renderMapWide() and thereafter only moved, shown or
   // hidden — never created or destroyed during a pan.
@@ -4896,8 +4905,8 @@
     document.getElementById("mapZoomIn").disabled = mapZoomStep === range.min;
     document.getElementById("mapZoomOut").disabled = mapZoomStep === range.max;
   }
-  // Both modes are a player-centred window on their own span since v0.4.5 —
-  // Wide used to return a constant box, which is why it never panned. The box
+  // Both modes are a player-centred window on their own span. Wide used to
+  // return a constant box, which is why it never panned. The box
   // is deliberately not clamped to the town's bounds: the ask was for Wide to
   // pan the way Close does, and Close shows empty canvas past the edge too.
   function mapTargetViewBox(node){
@@ -4938,8 +4947,8 @@
   // and the active zoom level. Rebuilds the SVG content (and snaps the
   // viewBox) only when the zoom level just changed or on first render;
   // a location change within an already-current zoom level animates the
-  // viewBox rather than rebuilding — in both modes since v0.4.5, Wide
-  // included, now that its target follows the player.
+  // viewBox rather than rebuilding — in both modes, Wide included, now that
+  // its target follows the player.
   function renderMap(){
     const node = (world[state.currentRoom] && world[state.currentRoom].locationId) || mapLastNode || "mid_poplar_1_2";
     const zoomChanged = mapRenderedZoom !== mapZoomMode;
@@ -5085,9 +5094,9 @@
       "Energy: " + Math.round(state.vitals.energy) + "<br>" +
       "Stamina: " + Math.round(state.vitals.stamina) + "<br>" +
       "Health: " + Math.round(state.vitals.health);
-    // Fatigue 100 restricts movement to Sneaking (sec. 22) — Fatigue itself
-    // stays hidden from normal UI (sec. 5, 38); there's no debug panel in
-    // this build to expose it through.
+    // Fatigue 100 restricts movement to Sneaking — Fatigue itself stays
+    // hidden from normal UI; there's no debug panel in this build to
+    // expose it through.
     const fatigueLocked = state.vitals.fatigue >= 100;
     if(fatigueLocked) state.gait = "sneak";
     document.querySelectorAll("#gaitBar button[data-gait]").forEach(btn=>{
@@ -5095,7 +5104,7 @@
       btn.disabled = fatigueLocked && btn.dataset.gait !== "sneak";
     });
   }
-  // Compass order for the Move panel (v0.4.4). An unknown direction ranks
+  // Compass order for the Move panel. An unknown direction ranks
   // after south rather than resolving to `undefined` — no street node can
   // currently produce up/down (every one of them is z:0), but the sort must
   // not depend on that staying true.
@@ -5129,8 +5138,7 @@
     const hereBox = document.getElementById("hereActions");
     hereBox.innerHTML = "";
     // Everything that isn't grid travel — stairs, building doors, the fire
-    // escape, window climbs — renders here, first and in authoring order
-    // (v0.4.4). Same button, same cost suffix; only the parent changed.
+    // escape, window climbs — renders here, first and in authoring order.
     getExitsForRoom(room, state.currentRoom)
       .filter(exit => !isGridTravel(state.currentRoom, exit.to))
       .forEach(exit=>{
@@ -5178,18 +5186,18 @@
       hereBox.appendChild(actionButton("Force the vehicle open", doBreakCar, "locked"));
     }
     if(room.fishable && hasTool("fishing") && hasTool("tackle")){
-      hereBox.appendChild(actionButton("Go fishing " + fmtDuration(20), doFish));
+      hereBox.appendChild(actionButton("Go fishing " + fmtDuration(FISH_DURATION_MIN), doFish));
     }
     if(room.hasStove && !room.heatActive && hasMatchUses()){
-      hereBox.appendChild(actionButton("Light the stove " + fmtDuration(5), doLightStove));
+      hereBox.appendChild(actionButton("Light the stove " + fmtDuration(LIGHT_STOVE_MIN), doLightStove));
     }
     if(!room.cannotHaveFire && !room.heatActive && hasMatchUses() && canBuildFire(room)){
       const label = !room.campfireBuilt ? "Set up the campfire kit"
         : (room.fireMinutesLeft > 0 ? "Relight the fire" : "Build a campfire");
-      hereBox.appendChild(actionButton(label + " " + fmtDuration(10), doBuildFire));
+      hereBox.appendChild(actionButton(label + " " + fmtDuration(BUILD_FIRE_MIN), doBuildFire));
     }
     if(room.campfireBuilt && !room.heatActive){
-      hereBox.appendChild(actionButton("Dismantle the campfire " + fmtDuration(10), doDismantleCampfire, "locked"));
+      hereBox.appendChild(actionButton("Dismantle the campfire " + fmtDuration(DISMANTLE_CAMPFIRE_MIN), doDismantleCampfire, "locked"));
     }
     if(room.heatActive){
       hereBox.appendChild(actionButton(room.hasStove ? "Turn off the stove" : "Put out the fire", doExtinguish));
@@ -5207,7 +5215,7 @@
       }
     }
     if(room.hasTree && hasTool("chopping")){
-      hereBox.appendChild(actionButton("Chop down the tree " + fmtDuration(30), doChopTree));
+      hereBox.appendChild(actionButton("Chop down the tree " + fmtDuration(CHOP_TREE_MIN), doChopTree));
     }
     if(!room.searchLabel || room.searched){
       room.containers.forEach(c=>{
@@ -5222,9 +5230,8 @@
     const invTabsEl = document.getElementById("invTabs");
     invTabsEl.innerHTML = "";
     // One tab per populated container slot, in CONTAINER_SLOTS order
-    // (keychain, then ITEM_REGISTRY order) — generalized in v0.4.2 from the
-    // previous hardcoded keychain/backpack pair so a new equippable bag shows
-    // up here with no RENDERING edit at all.
+    // (keychain, then ITEM_REGISTRY order), so a new equippable bag shows up
+    // here with no RENDERING edit at all.
     const invTabDefs = [["inventory","Inventory"]];
     CONTAINER_SLOTS.forEach(slot=>{
       if(state[slot]) invTabDefs.push([slot, SLOT_LABELS[slot]]);
