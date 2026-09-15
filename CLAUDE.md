@@ -1,7 +1,7 @@
 # Ashfall
 
-A quiet-apocalypse survival game: one self-contained file, `ashfall.html`
-(~4,900 lines, no build step, no dependencies). Open it in a browser to run it.
+A quiet-apocalypse survival game: one self-contained file, `ashfall.html` — no
+build step, no dependencies. Open it in a browser to run it.
 
 ## Read before you change anything
 
@@ -9,7 +9,7 @@ A quiet-apocalypse survival game: one self-contained file, `ashfall.html`
   Read it once per session, before making changes.
 - **`docs/Ashfall_Handoff_Guide.md`** — versioning scheme, and how a plan becomes a spec.
 - **`docs/CHANGELOG_GUIDE.md`** — how to write the changelog entry.
-- **The `ARCHITECTURE` comment** at the top of the script (`ashfall.html:175`) is
+- **The `ARCHITECTURE` comment** at the top of the script is
   the source of truth for section layout. No document restates that list; check
   the comment.
 
@@ -50,7 +50,7 @@ once. If the same fact must hold in two places, it belongs in a shared
 definition.
 
 **New persistent state rotates the save key.** `SAVE_KEY` derives from
-`MAJOR.MINOR` (`ashfall.html:244`). A PATCH bump keeps existing browser saves
+`MAJOR.MINOR` (see `versionCompat()`). A PATCH bump keeps existing browser saves
 loading; a MINOR bump breaks them. So: new state fields mean MINOR, and MINOR is
 a real seam — never a formality.
 
@@ -62,17 +62,24 @@ proof. Assertion is not.
 
 ## Wrap-time checklist (coding sessions)
 
-Every PR carries all four:
+Every PR carries all five:
 
-1. `ashfall.html` with `GAME_CONFIG.VERSION` bumped (`ashfall.html:243`).
+1. `ashfall.html` with `GAME_CONFIG.VERSION` bumped.
 2. A new `CHANGELOG.md` entry at the top, per `docs/CHANGELOG_GUIDE.md`, naming the
    handoff by path.
 3. `Closes #NN` in the PR description for the issue this fulfils. Never close an
    issue by hand.
 4. New issues for anything deferred — cut scope, follow-ups this pass surfaced.
    If nothing was deferred, say so in the changelog's Documentation section.
+5. After the merge, tag it: `git tag vX.Y.Z <commit>`. **Name the commit
+   explicitly.** A bare `git tag vX.Y.Z` tags whatever `HEAD` happens to be, which
+   is how `v0.4.4` and `v0.4.5` ended up on the same commit as `v0.4.7` (#32).
+   Verify with `git show vX.Y.Z:ashfall.html | grep VERSION` — it must print the
+   version you just tagged.
 
-The merge ships the version. Tag the merge commit `vX.Y.Z`.
+The merge ships the version; the tag is what makes it reachable afterwards. A
+version that shipped as a commit inside someone else's PR still gets its own tag,
+on the commit carrying its `GAME_CONFIG.VERSION`.
 
 ## Conventions
 
