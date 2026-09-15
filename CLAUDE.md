@@ -1,7 +1,7 @@
 # Ashfall
 
-A quiet-apocalypse survival game: one self-contained file, `ashfall.html`
-(~4,900 lines, no build step, no dependencies). Open it in a browser to run it.
+A quiet-apocalypse survival game: one self-contained file, `ashfall.html` — no
+build step, no dependencies. Open it in a browser to run it.
 
 ## Read before you change anything
 
