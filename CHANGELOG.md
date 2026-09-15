@@ -7,6 +7,195 @@ owns which behavior.
 
 ---
 
+## v0.4.9 — Self-documenting source: named game rules, comments without history
+
+Implements #33 in full, per `handoffs/source-self-documenting.md`. One pass over
+`ashfall.html` with a single goal: the source should say what is true now,
+without prose propping it up. No mechanic, value, string or save field changed.
+
+**Organization / Structural**
+- **Five action durations that were written twice now have one home.**
+  `FISH_DURATION_MIN` (20), `LIGHT_STOVE_MIN` (5), `BUILD_FIRE_MIN` (10),
+  `DISMANTLE_CAMPFIRE_MIN` (10) and `CHOP_TREE_MIN` (30) are declared once in
+  FIRE/COOKING; `advanceTime()` in ACTIONS and `fmtDuration()` in RENDERING both
+  read them. A button and the action it launches can no longer disagree about
+  what something costs — that was six literals across a section boundary, and is
+  now five constants. `BUILD_FIRE_MIN` and `DISMANTLE_CAMPFIRE_MIN` share a value
+  and are deliberately kept as two constants: they are different facts, and
+  merging them would mean retuning one silently retunes the other.
+- **The fire derivation is written out.** `FIRE_BUILD_WOOD` (3) and
+  `FIRE_MINUTES_PER_WOOD` (60) replace the bare `3` in `canBuildFire()` /
+  `doBuildFire()` and the bare `60` in `doAddFuel()`, and `doBuildFire()` now
+  sets `room.fireMinutesLeft = FIRE_BUILD_WOOD * FIRE_MINUTES_PER_WOOD` instead
+  of a literal `180`. The 3 x 60 = 180 relationship previously existed only as a
+  coincidence between two functions thirteen lines apart; it now holds by
+  construction. `CAMPFIRE_KIT_COST` (also 3) is untouched and deliberately not
+  merged — it is what the kit contains, not the fuel a burn costs.
+- Also named in FIRE/COOKING: `HEAT_CONTAINER_CAPACITY_KG` (8, the stove and the
+  campfire alike, previously two literals), `CHOP_TREE_FIREWOOD` (6) and
+  `FISH_BITE_CHANCE` (0.55). `FIRE_MAX_MIN` (360) moved up from its inline
+  declaration into the same block so FIRE/COOKING's constants have one home.
+- `LOG_MAX_ENTRIES` (50) names the log cap in `log()`. This is the number #29
+  exists to re-judge; naming it is the precondition for that issue, not its
+  fulfilment, and the value is unchanged.
+- SURVIVAL / TIME SIMULATION gained the health-drain rates as named divisors:
+  `STARVATION_MINUTES_PER_HEALTH` (30), `DEHYDRATION_MINUTES_PER_HEALTH` (15),
+  `ILLNESS_MINUTES_PER_HEALTH` (20), plus `ILLNESS_DURATION_MIN` (180), which
+  `doConsume()` sets and `applyHungerThirst()` spends. The divisor form
+  (`min/30`, not `(1/30)*min`) was kept deliberately — see **Validation
+  performed**.
+- `advanceTime()`'s collapse branch had five anonymous numbers in six lines and
+  now has `COLLAPSE_BLACKOUT_EVERY` (3), `COLLAPSE_BLACKOUT_MIN` (300),
+  `COLLAPSE_BLACKOUT_ENERGY` (90), `COLLAPSE_STUMBLE_MIN` (20) and
+  `COLLAPSE_STUMBLE_ENERGY` (30).
+- `DAY_START_MIN` (`8*60`) names the start-of-day offset in `getClockText()`.
+  It shares a value with `SLEEP_COOLDOWN_MIN` and is deliberately separate.
+
+**Documentation**
+- **Version tails stripped, sentences kept** across some 60 comment sites. Where a
+  version was the whole comment it went entirely: `// Current version: 0.4.6.`
+  inside the ARCHITECTURE block (two versions stale, and duplicating
+  `GAME_CONFIG.VERSION` twenty-odd lines below), and the six-line RENDERING
+  preamble whose "Unchanged in this revision" had no referent at `main`. The
+  seven `Silent:` notes in INVENTORY/ITEM SYSTEM kept their sentences — each
+  explains why a `log()` call is *absent*, which is the one thing no reader can
+  see in the code.
+- **A version naming save-data vintage is a live predicate and stayed.**
+  `backfillLocationIds()`'s "Older saves (pre-v0.2.9) predate the locationId
+  field" and `backfillContainerFields()`'s "(pre-v0.4.0)" describe the shape of
+  data still sitting in people's browsers, not when code arrived. Strip the
+  version and the comment stops meaning anything. Both kept verbatim.
+- **All 18 `sec. N` citations stripped, sentences kept.** They cited numbered
+  sections of a Stamina & Fatigue handoff that is not in the repository, and the
+  v0.2.1 changelog entry that carries those rules has no numbered sections to
+  resolve them against. Every sentence stands without the citation.
+- **Dead handoff pointers stripped.** None of the cited names
+  (*"Ashfall v0.2.1 — Stamina & Fatigue System"*, *"Container Spawn Pools &
+  Population System"*, *"Ashfall v0.2.9.md"*, *"Ashfall v0.2.5.md"*, the v0.3.0
+  handoff) resolves to anything in `handoffs/`. Where a pointer carried a
+  provenance clause and nothing else, both went; where it sat beside a live
+  judgment-call flag, the flag stayed — ITEM_REGISTRY keeps *"weights are
+  estimates … retunable"* and SPAWN_POOLS keeps the *"commoner items 5-8, rarer
+  or bulkier ones 1-3"* convention.
+- **Stale references retargeted.** `lastRolledMinute`'s "roadmap item 15" →
+  `#15`; the RENDERING/MAP banner dropped "Tier 1 item 3" (tier is a GitHub
+  label now); the PERSISTENCE comment's "Save format is unchanged in 0.1.3
+  (still {…})" became a plain statement of the format, which is the only place
+  it is written down.
+- **One correction to the handoff.** It directed the documents/lore comment's
+  "roadmap item 13" to `#13`, reasoning from the `#15` coincidence. It does not
+  hold: `#13` is *Hunting with traps*; roadmap item 13 migrated to **`#7` — Lore
+  development**, which its issue body states outright. Retargeted to `#7`.
+- **One dead pointer the handoff's audit did not catch.** The STAMINA/FATIGUE
+  module header said "(see CORE ACTIONS below)". No CORE ACTIONS section exists —
+  ACTIONS is grouped as INVENTORY/ITEM SYSTEM, WORLD INTERACTION, CRAFTING and
+  FIRE/COOKING — and the sections it meant are *above* that line, not below.
+  Pointer stripped; the sentence stands on its own. Every remaining `see X` in
+  the file now resolves to something in the file.
+- **Two whole-comment pointers were repointed rather than deleted**, per the
+  handoff's first design decision — see **Open questions / decisions resolved**.
+- Nothing was deferred that needs a new issue. The Part B4 literals left alone
+  are recorded below as judgment calls, not cut scope.
+
+**Explicitly NOT changed**
+- **No value changed.** Every constant introduced equals the literal it
+  replaced, checkable one by one against the handoff's tables.
+- **No player-visible string changed.** The five duration buttons render the
+  same text; they just read the constant the action spends.
+- Balance constants, `RECIPES`/`HEAT_RECIPES`, the stamina/fatigue rules, and
+  both recovery ladders are untouched.
+- **Save format and `SAVE_KEY` unchanged.** No new or changed state fields, item
+  schema fields, tags, categories, or room/container/exit fields. This is a
+  PATCH, so `versionCompat()` still yields `0.4` and existing browser saves load.
+- **No WORLD DATA content changed** — no room, item, container, exit or
+  description. The pass reached into WORLD DATA's *comments* only.
+- Rendering logic and every function body outside the literal-to-constant
+  substitutions are byte-identical.
+- The ARCHITECTURE block's section list, the ROOM/CONTAINER/EXIT/ITEM schema
+  blocks, and the LOCATIONS coordinate convention all keep their content.
+
+**Validation performed**
+- `git diff origin/main...HEAD -- ashfall.html` is the diff of record.
+- **Part A proof:** with every full-line `//` comment stripped from both sides,
+  the before and after files are identical apart from one trailing comment on a
+  code line (`mapStreetLabels`). No comment edit ran into code.
+- **Part B proof:** every non-comment line in the diff is a literal replaced by a
+  constant of the same value, or the version bump — the full list is short enough
+  to read in one screen of `git diff`. For the five duration pairs, both halves
+  now read the same constant, so button and action cannot disagree by
+  construction.
+- The health-drain constants are divisors (`min/STARVATION_MINUTES_PER_HEALTH`),
+  not per-minute rates (`STARVATION_HEALTH_PER_MIN*min`), specifically so the
+  floating-point arithmetic is bit-identical to what it replaced. The rate form
+  reads marginally better and can differ by an ulp; on a pass whose whole claim
+  is "no behaviour change", the divisor form was the honest choice.
+- Syntax check: the `<script>` body extracted and run through `node --check`.
+- Runtime check: the same body evaluated under a minimal DOM stub, which
+  completes module init and a full first render pass. This catches the one real
+  hazard in Part B — a temporal-dead-zone error from a `const` referenced before
+  its declaration (`ILLNESS_DURATION_MIN` is declared in SURVIVAL and read by
+  `doConsume()` above it; safe because the read happens inside a function body).
+- Section-banner audit: all 19 ARCHITECTURE section and sub-block banners present
+  and well-formed. Deleting the RENDERING preamble briefly collapsed the
+  RENDERING and MAP banners into one; caught and fixed.
+
+**Sections touched**
+CONFIG / CONSTANTS, WORLD DATA (comments only), PLAYER STATE (comments only),
+SURVIVAL / TIME SIMULATION including STAMINA/FATIGUE, ACTIONS — chiefly
+FIRE/COOKING — PERSISTENCE (comments only), and UI / RENDERING including MAP.
+Wide but shallow: outside Part B's constant introductions, no executable line
+changed.
+
+**Open questions / decisions resolved**
+- **Repointing whole-comment pointers: taken, twice.** Where a dead pointer was
+  the comment's entire content *and* the target changelog entry genuinely carries
+  the rules, it was repointed rather than deleted — the STAMINA/FATIGUE header
+  now reads "See the v0.2.1 entry in CHANGELOG.md for the full rules", and
+  SPAWN_POOLS points at the v0.4.0 entry. A reader following either comment wants
+  the rules, and unlike a `sec. N` citation this resolves. The SPAWN_POOLS one
+  was reworded rather than repointed verbatim: the v0.4.0 entry describes the
+  design but has no per-container assignment table, so that half of the sentence
+  now says the assignments live on the containers' own `spawnPools` fields, which
+  is both true and closer to hand.
+- **`FIRE_MAX_MIN` left as 360, not derived.** It is `6 * FIRE_MINUTES_PER_WOOD`,
+  but writing it that way invents a `FIRE_MAX_WOOD` nothing else uses. The cap
+  reads as its own fact — six hours of banked burn, however you got there.
+- **Both recovery ladders left as `if`-chains.** `energyRecoveryMultiplier()`
+  (80/60/40/20 → 1.00/.90/.75/.50/.25) and `staminaMaxForEnergy()`
+  (40/20 → 100/80/50) read perfectly well today; a table of named thresholds
+  would be more machinery for no gain at the call site.
+- **Left literal, read at the call site and judged clearer as numbers:** the
+  sleep-vs-rest energy multipliers (`applyEnergyBaseline(dt, mode === "rest" ? 1
+  : 2)`) — the parameter already names itself; the starting vitals
+  (75/75/85/100/100/0) and starting inventory capacity — per-instance data in an
+  object literal whose keys name each number; and the `-9999` "never happened"
+  sentinels, which the comment directly above them explains better than a name
+  would.
+- **The LOCATIONS coordinate-convention block** is on the handoff's "stays
+  untouched" list, but its stale `"Ashfall v0.2.9.md"` pointer is named in the
+  handoff's own dead-pointer enumeration. It was read as structural protection —
+  don't rewrite the convention — so the block keeps every word of its content and
+  received only the line-level version/pointer strips, on the precedent the
+  handoff itself set for `// Current version: 0.4.6.` inside ARCHITECTURE.
+- **Naming judgment calls, all retunable:** `STARVATION_MINUTES_PER_HEALTH` and
+  its siblings use a `_MINUTES_PER_HEALTH` suffix rather than the file's `_MIN`
+  suffix, because `_MIN` reads as "a duration" everywhere else and these are
+  rates. `COLLAPSE_BLACKOUT_ENERGY` is set-to while `COLLAPSE_STUMBLE_ENERGY` is
+  added-to; the asymmetry is pre-existing behaviour and is flagged in a trailing
+  comment on each rather than hidden behind matching names.
+
+**Explicitly out of scope**
+- **#29** — the log cap's *value*. The 50 is named, not changed.
+- **#23** — the illness system. `ILLNESS_DURATION_MIN` names the existing timer
+  and nothing is built on it.
+- **#39** — `MAP_BUILDINGS` as world data living in RENDERING.
+- **#37, #16** — open map/UI issues, adjacent but not prerequisites.
+- **#32** — the v0.4.4 / v0.4.5 tag correction, which is run locally.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.8"` → `"0.4.9"`
+
+---
+
 ## v0.4.8 — Map zoom ladder, and street names clear of intersections
 
 Implements #27 and #28 in full, per `handoffs/map-zoom-and-label-collisions.md`.
