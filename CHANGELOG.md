@@ -7,6 +7,212 @@ owns which behavior.
 
 ---
 
+## v0.4.10 — Building identity in WORLD DATA, and Close-map labels that fit
+
+Implements #39 and #16 in full, per
+`handoffs/map-building-identity-and-label-fit.md`. Three parts: a building's
+name and anchor move out of RENDERING into WORLD DATA, Close-map building
+labels stop being cut off by the edge of the view, and the two-column layout
+collapses to one column on a phone. No mechanic, no content, no save field and
+no player-facing text changed.
+
+**Organization / Structural**
+- **`MAP_BUILDINGS` is split in two along the line between what a building is
+  and how it is drawn.** `BUILDINGS` (WORLD DATA, immediately after
+  `LOCATIONS`) holds `name` and `anchor` keyed by a stable building id;
+  `MAP_BUILDING_OFFSETS` (RENDERING/MAP) holds the `dx`/`dy` label offset under
+  the same keys. `renderMapClose()` and `mapBindBuildingLabels()` read both.
+  `MAP_BUILDINGS` is gone. A building's name and the Location it sits on are
+  reference data, the same category as `LOCATIONS` itself — the label offset is
+  the only part of the old table that was genuinely about rendering.
+- **Membership of `MAP_BUILDING_OFFSETS` is now what decides which buildings
+  the map names.** A `BUILDINGS` entry with no offsets entry is never reached by
+  `renderMapClose()`. Every building has one today, so exactly the same eleven
+  markers are drawn; the seam exists for #8, where two buildings can sit close
+  enough that only one can carry a label. Both tables carry a comment saying so,
+  since a table whose every key is present cannot show it.
+- The `LOCATIONS` comment on Pharmacy/Hardware Store sharing an anchor now names
+  `MAP_BUILDING_OFFSETS` and says which section it lives in, rather than naming
+  a table that no longer exists.
+
+**Fixed**
+- **Close-map building labels are no longer cut off by the edge of the view.**
+  Root cause: `renderMap()` rebuilds the SVG only when the zoom *mode* changes —
+  a move or a `+`/`−` step animates the viewBox underneath the existing markup
+  instead — so `renderMapClose()` wrote each label's `x`/`y` once, at build
+  time, and the box then slid out from under it. There was no point in the Close
+  path where a label and its live viewBox were both in hand. Fixed by mirroring
+  the split Wide has used since v0.4.5: `mapBindBuildingLabels()` caches the
+  pool once per rebuild, and `mapPositionBuildingLabels(box)` places it from both
+  sites that set the viewBox — the snap branch and every animation frame of
+  `mapUpdateViewBox()`.
+- Measured over all 191 Locations at all three Close steps: **41 / 62 / 117
+  clipped label lines before, 0 / 0 / 0 after**. The original v0.4.0 repro —
+  `Pharmacy` rendering as `Pharm` from the starting location at the default
+  zoom — no longer reproduces.
+- **The page no longer scrolls sideways below 480px.** `main` was
+  `grid-template-columns:1fr 320px` with no `@media` rule anywhere in the
+  stylesheet, giving the document a hard 476px floor: `scrollWidth` was 476 at
+  320, 360, 375 and 414. One breakpoint at 760px collapses it to a single
+  column. `scrollWidth === clientWidth` at 320/360/375/414/480/760, and the
+  grid is unchanged from 761 up.
+
+**New**
+- `mapBindBuildingLabels()` (RENDERING/MAP) caches each marked building's dot
+  position, its one or two `<text>` nodes, half the width of its widest line,
+  and the block's vertical extent. Widths come from `getComputedTextLength()` on
+  the bound node rather than a hand-kept table — a table would need re-measuring
+  on every rename and would not survive #8 adding buildings. Bind runs only on a
+  zoom-mode change, the moment that already rebuilds the SVG, so a pan does no
+  layout reads. It returns early outside Close, which is what keeps Wide
+  untouched.
+- `mapPositionBuildingLabels(box)` (RENDERING/MAP) applies three rules per
+  label. **Suppress** — if the marker circle does not intersect the box at all,
+  every line is hidden. **Clamp horizontally on a shared centre** — `cx` is
+  `dot.x` clamped into `[box.x + PAD + half, box.x + box.w - PAD - half]`, the
+  same `cx` for both lines, so a two-line name stays centred as a block instead
+  of staggering. **Clamp vertically as a unit** — the block's extent is shifted
+  inside `[box.y + PAD, box.y + box.h - PAD]` and that one shift applies to both
+  lines' `y`.
+- Suppression rather than a bigger clamp is what keeps a name near the thing it
+  names. A clamp alone removes all the clipping but can drag a name most of a
+  view away to sit pinned against an edge pointing at a dot that isn't drawn.
+  Every such case is a building whose own marker is off screen, so those are
+  hidden instead — the same call `mapLabelHitsPlayer()` already makes for street
+  names under the player marker, for the same reason: a slide can cascade.
+  Measured max distance from a drawn label's centre to its own dot: **32.7 user
+  units**, against `MAP_BLDG_LABEL_PAD + half` as the bound.
+- `MAP_BLDG_DOT_R` (6), `MAP_BLDG_LINE_H` (11) and `MAP_BLDG_LABEL_PAD` (6) are
+  named in the MAP sub-block. The first two were literals inside
+  `renderMapClose()`'s loop and are now each read from two places — the marker
+  circle and the visibility test, the line spacing and the positioner.
+
+**UI**
+- Close map: no building label is drawn outside the view, and a label whose
+  building marker is off screen is not drawn at all. The set of markers, their
+  coordinates and their offsets are unchanged.
+- Below 760px the sidebar sits under the main column instead of beside it, and
+  `#left`'s `border-right` becomes a `border-bottom` — at full width it would
+  otherwise read as a stray rule down the right edge of the page. Above 760px
+  nothing changes.
+- No label, button, log line or description was reworded.
+
+**Open questions / decisions resolved**
+- **Where the label text is written** — the handoff left this between
+  `renderMapClose()` emitting each `<text>` with its content already set, and
+  the nodes shipping empty for `mapBindBuildingLabels()` to fill the way
+  `mapBindStreetLabels()` does. Took the handoff's recommendation and emit the
+  text in `renderMapClose()`: Wide's pool is generic across streets, whereas
+  each building node belongs to one building, so filling it at bind time buys
+  nothing.
+- **The nodes ship visible, not hidden.** Wide's pool ships
+  `style="display:none"` and this one deliberately does not: a hidden node has
+  no layout, so `getComputedTextLength()` measures every name as zero wide and
+  the clamp silently does nothing — caught in the browser during validation,
+  where every label sat unmoved on its dot. `renderMap()` sets the markup,
+  binds and snaps in one synchronous pass, so nothing is painted at the origin
+  in between.
+
+**Notes / assumptions**
+- **`MAP_BLDG_LABEL_PAD = 6` is a judgment call with no prior convention and is
+  retunable**, flagged as such in the source. Anything from about 4 to 10
+  behaves the same; the bound on how far a name can sit from its dot moves with
+  it.
+- **The 760px breakpoint is retunable.** The measured overflow cliff is between
+  414 and 480, so any value from 480 up removes the overflow. 760 is chosen
+  because the layout stops being *usable* well before it starts overflowing — at
+  375px the room description renders about three words wide — and because it is
+  the value the superseded `handoffs/map-view-ui-fixes.md` proposed, so it has
+  the most thought behind it. Nothing depends on the exact number.
+- **The label block's vertical extent is taken from the line box, not a measured
+  ink band.** `MAP_BLDG_LINE_H` (11) is taller than the 10px face's cap height,
+  so the top edge is conservative, and `MAP_BLDG_LABEL_PAD` covers what a
+  descender reaches past the bottom baseline. Retunable with the face, like
+  `MAP_LABEL_CAP` for street names.
+- **The gaps between a dot and its label (10 above, 16 below) stay literals**
+  and keep their v0.4.9 values, so no unclamped label moved. They are not
+  symmetric because a baseline below the dot has to clear the circle while one
+  above it only has to clear the cap height.
+
+**Explicitly out of scope**
+- **#8** — no building is added, moved or renamed. This pass builds the
+  `MAP_BUILDING_OFFSETS` seam #8 needs; filling it is that pass's job, specced
+  in `handoffs/building-placement-and-elm-st.md`.
+- **#42** — the `building` field meaning a building name on multi-room buildings
+  and a street on single-room ones. Routed around with a separate table; no room
+  definition was edited and `roomLabel()` was not touched.
+- **#43** — `MAP_LABEL_W` as a hand-measured font width. This pass is what
+  establishes whether bind-time measurement reads well.
+- **#37** — Wide-map street names drawn outside the box. Same family of bug in
+  the other mode; its fix is in `mapPositionStreetLabels()`, untouched here.
+- **Label-vs-label overlap between buildings.** No two building label lines
+  overlap at any position today, which is a property of there being eleven
+  buildings rather than of the placement logic, which has no overlap test at
+  all. Left as is.
+- Retuning any `dx`/`dy`; the zoom ladder and `MAP_ZOOM_RANGE`; anything in Wide
+  mode; a mobile-first redesign, touch or gesture support, and `#sideMenu`,
+  which is `position:fixed` with `max-width:92vw` and already behaves at phone
+  widths.
+
+**Explicitly NOT changed**
+- **No room, item, container, exit, door or window definition.** `BUILDINGS` is
+  a new reference table; `makeDefaultWorld()` is untouched.
+- **No balance constant, threshold or duration.**
+- **The save format.** PATCH, so `versionCompat("0.4.10")` still yields `0.4`
+  and `SAVE_KEY` is unchanged — existing browser saves keep loading. `BUILDINGS`
+  is not persisted; saves restore `world`, `doors` and `windows`, and it is none
+  of those. No new `state` field: `mapBuildingLabels` is module-level beside
+  `mapStreetLabels`, deliberately outside `state`, as `mapZoomMode` and
+  `mapZoomStep` already are.
+- **Wide mode.** It draws no building markers, `mapBindBuildingLabels()` returns
+  early outside Close, and `mapPositionStreetLabels()` was not edited.
+- **Marker positions.** All eleven dots are at byte-identical coordinates before
+  and after, and every `name`, `anchor`, `dx` and `dy` survived the table split
+  unchanged.
+- ACTIONS, SIMULATION, PLAYER STATE and PERSISTENCE.
+
+**Validation performed**
+- `git diff origin/main...HEAD -- ashfall.html` is the diff of record.
+- Syntax check on the extracted `<script>` body (`node --check`), clean.
+- **Table split proven entry by entry**, not asserted: both versions loaded in
+  Chromium side by side and all eleven entries compared by name — `anchor`,
+  `dx` and `dy` identical across the split, no `BUILDINGS` entry without an
+  offset and no offset without a `BUILDINGS` entry.
+- **Clipping replayed in Chromium over all 191 Locations at all three Close
+  steps**, on both `origin/main` and this branch, by placing the labels for each
+  Location's target viewBox and reading each visible node's `getBBox()`. Lines
+  crossing a box edge: **41 / 62 / 117 before, 0 / 0 / 0 after**. Every drawn
+  label is fully inside its box, and the set of drawn labels is exactly the set
+  whose own marker circle intersects the box.
+- **No marker moved**: the eleven `circle.map-bldg-dot` coordinates are
+  identical between `origin/main` and this branch.
+- **The real game run in Chromium**, not just the placement replayed: load, open
+  the map, toggle Close → Wide → Close, step the zoom through its range in both
+  directions, and walk to another room. No page errors, no console errors. Wide
+  emits 48 street-name nodes and zero building labels; Close rebinds after the
+  round trip and places its labels with zero clipped.
+- **Widths measured in Chromium at 320/360/375/414/480/760/761/900/1200.**
+  `scrollWidth === clientWidth` at every one; `main` is one column through 760
+  and `1fr 320px` from 761 up. The same measurement on `origin/main` gives
+  `scrollWidth` 476 at 320/360/375/414, which is the overflow being fixed.
+
+**Sections touched**
+- **WORLD DATA** — the new `BUILDINGS` table and one comment retarget on
+  `LOCATIONS`. No room, item, container or exit definition.
+- **RENDERING / MAP** — `MAP_BUILDING_OFFSETS`, `MAP_BLDG_DOT_R`,
+  `MAP_BLDG_LINE_H`, `MAP_BLDG_LABEL_PAD`, `renderMapClose()`,
+  `mapBindBuildingLabels()`, `mapPositionBuildingLabels()`, the two call sites
+  in `mapUpdateViewBox()` and the bind call in `renderMap()`.
+- **The document `<style>` block** — one `@media` rule.
+
+**Documentation**
+- Nothing was deferred and no scope was cut, so this pass files no new issues.
+  #42, #43 and #37 were already open before it started and none was touched.
+- `handoffs/building-placement-and-elm-st.md` is unblocked by this pass: it
+  assumes the `BUILDINGS` / `MAP_BUILDING_OFFSETS` seam has shipped.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.9"` → `"0.4.10"`
+
 ## v0.4.9 — Self-documenting source: named game rules, comments without history
 
 Implements #33 in full, per `handoffs/source-self-documenting.md`. One pass over

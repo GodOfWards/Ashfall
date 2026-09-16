@@ -104,6 +104,19 @@
   button.mini.equip{ border-color:var(--good); color:var(--good); }
   button.mini.step{ padding:4px 6px; }
   button.mini.blocked{ border-color:var(--danger); color:var(--danger); opacity:.45; cursor:not-allowed; }
+  /* The two-column grid has a 476px floor — 320px of sidebar plus the room
+     description's own minimum — so below that the page scrolls sideways.
+     It stops being usable well before that: at 375px the description reads
+     three words wide. One column from 760px down, then. The breakpoint is a
+     judgment call and retunable: anything from 480 up removes the overflow,
+     760 is where the layout starts being cramped rather than broken.
+     #left's border-right would read as a stray rule down the page once it
+     spans the full width, so it becomes the seam between the two stacked
+     columns instead. */
+  @media (max-width:760px){
+    main{ grid-template-columns:1fr; }
+    #left{ border-right:none; border-bottom:1px solid var(--line); }
+  }
 </style>
 </head>
 <body>
@@ -243,7 +256,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.4.9" };
+  const GAME_CONFIG = { VERSION: "0.4.10" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Ammunition","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -840,8 +853,8 @@
   //   Building-floor Locations: one per floor, shared by every room on
   //   that floor. (x,y) = the building's former MAP_ANCHORS node. Two
   //   buildings sharing an anchor (Pharmacy/Hardware Store) correctly
-  //   share the same real (x,y) — MAP_BUILDINGS' dx/dy label-offset
-  //   (below) is what keeps their map markers visually distinct.
+  //   share the same real (x,y) — MAP_BUILDING_OFFSETS' dx/dy label-offset
+  //   (in RENDERING/MAP) is what keeps their map markers visually distinct.
   //   Z is laid down for every Location but not consumed by anything yet
   //   (the map is top-down) — future systems can rely on it without a
   //   retrofit.
@@ -1044,6 +1057,28 @@
     auto_shop_f0:   { x:350, y:200, z:0 },
     police_f0:      { x:300, y:0, z:0 },
     industrial_f0:  { x:100, y:0, z:0 }
+  };
+
+  // Buildings the map can name: a player-visible name and the Location its
+  // marker sits on. Reference data, the same category as LOCATIONS above —
+  // not every building in the world, only the ones a map marker names. A
+  // building that will never carry a marker has no reason to be listed
+  // here; its rooms' own `building` field already carries its name, and a
+  // second copy would be a second source of truth for it.
+  // MAP_BUILDING_OFFSETS (RENDERING/MAP) is what decides which of these
+  // actually get a marker, and where the label sits relative to the dot.
+  const BUILDINGS = {
+    acorn:       { name:"Acorn Apartments",   anchor:"acorn_f0" },
+    alley:       { name:"Alley",              anchor:"acorn_f0" },
+    cornerstore: { name:"Corner Store",       anchor:"cornerstore_f0" },
+    pharmacy:    { name:"Pharmacy",           anchor:"pharmacy_f0" },
+    hardware:    { name:"Hardware Store",     anchor:"hardware_f0" },
+    storage:     { name:"Storage Facility",   anchor:"storage_f0" },
+    riverbank:   { name:"Riverbank",          anchor:"riverbank_f0" },
+    oak:         { name:"Oak Apartments",     anchor:"oak_f0" },
+    auto_shop:   { name:"Auto Workshop",      anchor:"auto_shop_f0" },
+    police:      { name:"Police Station",     anchor:"police_f0" },
+    industrial:  { name:"Riverside Freight",  anchor:"industrial_f0" }
   };
 
   function makeDefaultDoors(){
@@ -4641,23 +4676,28 @@
   // (every such id appears in some chain) rather than hand-duplicated —
   // used by renderMapClose() to draw the node dots.
   const MAP_STREET_NODE_IDS = Array.from(new Set(MAP_STREETS.flatMap(s => s.chain)));
-  // Building markers (Close view only) — anchor node + label-offset in
-  // grid units. Pharmacy/Hardware Store deliberately share an anchor
-  // (both entered from the same mid-block) — the offset, not a second
-  // coordinate, is what keeps them legible as two separate markers.
-  const MAP_BUILDINGS = [
-    { name:"Acorn Apartments", anchor:"acorn_f0",       dx:-0.05, dy:-0.28 },
-    { name:"Alley",            anchor:"acorn_f0",       dx:0.32,  dy:-0.05 },
-    { name:"Corner Store",     anchor:"cornerstore_f0", dx:-0.32, dy:-0.05 },
-    { name:"Pharmacy",         anchor:"pharmacy_f0",    dx:-0.05, dy:-0.28 },
-    { name:"Hardware Store",   anchor:"hardware_f0",    dx:-0.05, dy:0.28 },
-    { name:"Storage Facility", anchor:"storage_f0",     dx:0.32,  dy:0.05 },
-    { name:"Riverbank",        anchor:"riverbank_f0",   dx:0.05,  dy:0.32 },
-    { name:"Oak Apartments",   anchor:"oak_f0",         dx:0.3,   dy:0.05 },
-    { name:"Auto Workshop",    anchor:"auto_shop_f0",   dx:-0.05, dy:0.28 },
-    { name:"Police Station",   anchor:"police_f0",      dx:0.32,  dy:-0.05 },
-    { name:"Riverside Freight",anchor:"industrial_f0",  dx:0.32,  dy:0.05 }
-  ];
+  // Building markers (Close view only) — the label's offset from its
+  // building's anchor, in grid units, keyed by BUILDINGS id. Membership is
+  // the point as much as the numbers: a BUILDINGS entry with no offsets
+  // here is a building the map does not name, and renderMapClose() never
+  // reaches it. Every building has one today, but where two sit close
+  // enough that only one can carry a label, this is where that is said.
+  // Pharmacy/Hardware Store deliberately share an anchor (both entered
+  // from the same mid-block) — the offset, not a second coordinate, is
+  // what keeps them legible as two separate markers.
+  const MAP_BUILDING_OFFSETS = {
+    acorn:       { dx:-0.05, dy:-0.28 },
+    alley:       { dx: 0.32, dy:-0.05 },
+    cornerstore: { dx:-0.32, dy:-0.05 },
+    pharmacy:    { dx:-0.05, dy:-0.28 },
+    hardware:    { dx:-0.05, dy: 0.28 },
+    storage:     { dx: 0.32, dy: 0.05 },
+    riverbank:   { dx: 0.05, dy: 0.32 },
+    oak:         { dx: 0.3,  dy: 0.05 },
+    auto_shop:   { dx:-0.05, dy: 0.28 },
+    police:      { dx: 0.32, dy:-0.05 },
+    industrial:  { dx: 0.32, dy: 0.05 }
+  };
 
   let mapZoomMode = "close";
   let mapZoomStep = MAP_ZOOM_RANGE.close.base; // blocks across; like mapZoomMode, deliberately outside `state`
@@ -4665,6 +4705,7 @@
   let mapLastNode = null;       // last resolved player map node
   let mapCurrentViewBox = null; // {x,y,w,h} of the viewBox, animated toward its target
   let mapStreetLabels = [];     // Wide's label pool: one entry per street
+  let mapBuildingLabels = [];   // Close's label pool: one entry per marked building
 
   function mapToSvg(col, row){
     // row MAP_MIN_ROW (Dock) at bottom, row MAP_MAX_ROW (Water) at top;
@@ -4837,6 +4878,93 @@
       });
     });
   }
+  // Building markers and their names (Close view). The marker circle's
+  // radius is read twice — by the circle itself and by the visibility test
+  // in mapPositionBuildingLabels() — so it is one fact with one name.
+  const MAP_BLDG_DOT_R = 6;
+  const MAP_BLDG_LINE_H = 11;
+  // Breathing room between a clamped name and the edge of the viewBox.
+  // A judgment call with no prior convention behind it; retunable. Anything
+  // from about 4 to 10 behaves the same, and the bound on how far a name can
+  // be dragged from its own dot moves with it.
+  const MAP_BLDG_LABEL_PAD = 6;
+
+  // Caches the Close label pool the way mapBindStreetLabels() caches Wide's:
+  // element references plus the geometry a pan needs, so moving the box
+  // touches no DOM queries and no layout reads. Widths are measured off the
+  // bound nodes rather than tabulated — a table would need re-measuring
+  // every time a building is renamed, and would not survive new buildings
+  // being added. Bind only runs when the zoom mode changed, which is the
+  // moment that already rebuilds the whole SVG. Cleared for Wide, which
+  // draws no building markers at all.
+  function mapBindBuildingLabels(){
+    mapBuildingLabels = [];
+    if(mapZoomMode !== "close") return;
+    const svg = document.getElementById("mapSvg");
+    Object.keys(MAP_BUILDING_OFFSETS).forEach(id=>{
+      const off = MAP_BUILDING_OFFSETS[id];
+      const anchor = LOCATIONS[BUILDINGS[id].anchor];
+      const dot = mapToSvg(anchor.x / 100 + off.dx, anchor.y / 100 + off.dy);
+      const els = Array.prototype.slice.call(svg.querySelectorAll(`text.map-bldg-label[data-bldg="${id}"]`));
+      // A negative dy puts the block above its dot, otherwise below — the
+      // rule renderMapClose() used to apply at build time, with the same
+      // gaps. The two are not symmetric: below the dot a baseline has to
+      // clear the circle, above it only the cap height has to.
+      const first = off.dy < 0 ? -10 - MAP_BLDG_LINE_H : 16;
+      const lines = els.map((el, i)=> ({ el, dy: first + i * MAP_BLDG_LINE_H }));
+      // One centre for the whole block, off the widest line: two lines
+      // sharing a centre read as one name, two lines each centred on their
+      // own width stagger as soon as either is clamped.
+      const half = Math.max.apply(null, els.map(el => el.getComputedTextLength() / 2));
+      mapBuildingLabels.push({
+        dot, lines, half,
+        // The block's vertical extent, relative to the dot. The line box
+        // stands in for the ink band: MAP_BLDG_LINE_H is taller than the
+        // 10px face's cap, and MAP_BLDG_LABEL_PAD covers the descender the
+        // bottom baseline doesn't account for.
+        top: lines[0].dy - MAP_BLDG_LINE_H,
+        bot: lines[lines.length-1].dy
+      });
+    });
+  }
+  // Moves every building name to fit the viewBox `box`, from the same two
+  // call sites as mapPositionStreetLabels() — the snap branch and every
+  // animation frame.
+  //
+  // The clamp is impossible only when a name cannot fit the box at all
+  // (2 * MAP_BLDG_LABEL_PAD + 2 * half > span). The widest line on the map
+  // is "Apartments" at ~66 user units against the narrowest Close span of
+  // 130, so there are ~52 units of slack and it cannot happen today — but
+  // a long enough new name would close that, so the impossible case leaves
+  // the name on its dot and cut, rather than placed somewhere arbitrary.
+  function mapPositionBuildingLabels(box){
+    mapBuildingLabels.forEach(b=>{
+      // A name whose own marker is off screen is suppressed, not slid: the
+      // clamp would otherwise drag it up to half a view away to sit pinned
+      // to an edge, pointing at a dot that isn't drawn. Partial visibility
+      // counts as visible. This is what mapLabelHitsPlayer() does for
+      // street names, for the same reason.
+      const gx = Math.max(box.x - b.dot.x, 0, b.dot.x - (box.x + box.w));
+      const gy = Math.max(box.y - b.dot.y, 0, b.dot.y - (box.y + box.h));
+      if(gx * gx + gy * gy > MAP_BLDG_DOT_R * MAP_BLDG_DOT_R){
+        b.lines.forEach(l=> l.el.style.display = "none");
+        return;
+      }
+      const lo = box.x + MAP_BLDG_LABEL_PAD + b.half;
+      const hi = box.x + box.w - MAP_BLDG_LABEL_PAD - b.half;
+      const cx = lo > hi ? b.dot.x : Math.min(Math.max(b.dot.x, lo), hi);
+      // The block moves as a unit, so the lines keep their spacing.
+      const top = b.dot.y + b.top, bot = b.dot.y + b.bot;
+      let shift = 0;
+      if(top < box.y + MAP_BLDG_LABEL_PAD) shift = box.y + MAP_BLDG_LABEL_PAD - top;
+      else if(bot > box.y + box.h - MAP_BLDG_LABEL_PAD) shift = box.y + box.h - MAP_BLDG_LABEL_PAD - bot;
+      b.lines.forEach(l=>{
+        l.el.setAttribute("x", cx);
+        l.el.setAttribute("y", b.dot.y + l.dy + shift);
+        l.el.style.display = "";
+      });
+    });
+  }
   function renderMapClose(){
     let html = "";
     const wStart = mapToSvg(MAP_MIN_COL, MAP_MAX_ROW), wEnd = mapToSvg(MAP_MAX_COL, MAP_MAX_ROW);
@@ -4848,22 +4976,27 @@
       const p = mapToSvg(LOCATIONS[id].x / 100, LOCATIONS[id].y / 100);
       html += `<circle class="map-node-dot" cx="${p.x}" cy="${p.y}" r="3"/>`;
     });
-    MAP_BUILDINGS.forEach(b=>{
-      const anchor = LOCATIONS[b.anchor];
-      const p = mapToSvg(anchor.x / 100 + b.dx, anchor.y / 100 + b.dy);
-      html += `<circle class="map-bldg-dot" cx="${p.x}" cy="${p.y}" r="6"/>`;
-      const words = b.name.split(" ");
-      const twoLines = words.length > 1;
-      const line1 = twoLines ? words[0] : b.name;
-      const line2 = twoLines ? words.slice(1).join(" ") : null;
-      const LINE_H = 11;
-      let y1, y2;
-      if(b.dy < 0){ y2 = p.y - 10; y1 = y2 - LINE_H; }
-      else { y1 = p.y + 16; y2 = y1 + LINE_H; }
-      html += `<text class="map-bldg-label" x="${p.x}" y="${y1}" text-anchor="middle">${line1}</text>`;
-      if(twoLines){
-        html += `<text class="map-bldg-label" x="${p.x}" y="${y2}" text-anchor="middle">${line2}</text>`;
-      }
+    // A name is written here but not placed here: the viewBox slides under
+    // this markup without rebuilding it, so a build-time position stops
+    // meaning anything the moment the player moves. The nodes ship with
+    // their text and no coordinates; mapBindBuildingLabels() measures them
+    // and mapPositionBuildingLabels() places them against the live box —
+    // the same split renderMapWide() uses for street names.
+    // Unlike Wide's pool these do not ship hidden: a hidden node has no
+    // layout, so getComputedTextLength() would measure every name as zero
+    // wide and the clamp would silently do nothing. renderMap() binds and
+    // snaps in the same synchronous pass as this markup, so nothing is
+    // painted at the origin in between.
+    Object.keys(MAP_BUILDING_OFFSETS).forEach(id=>{
+      const off = MAP_BUILDING_OFFSETS[id];
+      const anchor = LOCATIONS[BUILDINGS[id].anchor];
+      const p = mapToSvg(anchor.x / 100 + off.dx, anchor.y / 100 + off.dy);
+      html += `<circle class="map-bldg-dot" cx="${p.x}" cy="${p.y}" r="${MAP_BLDG_DOT_R}"/>`;
+      const words = BUILDINGS[id].name.split(" ");
+      const lines = words.length > 1 ? [words[0], words.slice(1).join(" ")] : [BUILDINGS[id].name];
+      lines.forEach(line=>{
+        html += `<text class="map-bldg-label" data-bldg="${id}" text-anchor="middle">${line}</text>`;
+      });
     });
     html += `<circle id="mapPlayer" cx="0" cy="0" r="5"/>`;
     return html;
@@ -4922,6 +5055,7 @@
       mapCurrentViewBox = target;
       svg.setAttribute("viewBox", `${target.x} ${target.y} ${target.w} ${target.h}`);
       mapPositionStreetLabels(target, node);
+      mapPositionBuildingLabels(target);
       return;
     }
     const start = mapCurrentViewBox;
@@ -4935,10 +5069,12 @@
       const h = start.h + (target.h - start.h) * ease;
       svg.setAttribute("viewBox", `${x} ${y} ${w} ${h}`);
       mapCurrentViewBox = { x, y, w, h };
-      // Per frame, not on settle: the pool is fixed, so this only writes
-      // `transform` and `display` on at most MAP_LABELS_PER_STREET nodes per
-      // street. Nothing is created or destroyed mid-animation.
+      // Per frame, not on settle: both pools are fixed, so this only writes
+      // position and `display` on at most MAP_LABELS_PER_STREET nodes per
+      // street and one or two per building. Nothing is created or destroyed
+      // mid-animation, and neither positioner reads layout.
       mapPositionStreetLabels(mapCurrentViewBox, node);
+      mapPositionBuildingLabels(mapCurrentViewBox);
       if(t < 1) requestAnimationFrame(step);
     }
     requestAnimationFrame(step);
@@ -4956,6 +5092,7 @@
       document.getElementById("mapSvg").innerHTML = mapZoomMode === "close" ? renderMapClose() : renderMapWide();
       mapRenderedZoom = mapZoomMode;
       mapBindStreetLabels();
+      mapBindBuildingLabels();
       mapPositionPlayer(node);
       mapUpdateViewBox(node, true);
       mapLastNode = node;
