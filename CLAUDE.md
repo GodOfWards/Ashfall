@@ -3,34 +3,49 @@
 A quiet-apocalypse survival game: one self-contained file, `ashfall.html` — no
 build step, no dependencies. Open it in a browser to run it.
 
-## Read before you change anything
-
-- **`docs/Ashfall_Project_Guide.md`** — tone, conventions, and the session workflow.
-  Read it once per session, before making changes.
-- **`docs/Ashfall_Handoff_Guide.md`** — versioning scheme, and how a plan becomes a spec.
-- **`docs/CHANGELOG_GUIDE.md`** — how to write the changelog entry.
-- **The `ARCHITECTURE` comment** at the top of the script is
-  the source of truth for section layout. No document restates that list; check
-  the comment.
-
-The rules below are the ones that bite if you skip those documents. They are a
-summary, not a replacement.
-
-## Which session is this?
+## Start here — which session is this?
 
 Every version moves through two session types. Identify which one you're in
-before starting — they have different inputs and different outputs.
+**before reading anything else**. They have different inputs, different outputs,
+and each one's inputs are the complete list. Reading the other type's inputs
+costs context and buys nothing.
 
-- **Planning session** — designs a feature. Reads the Project Guide,
-  `ashfall.html`, the open issues, and recent `CHANGELOG.md` entries. Files
-  issues as they surface. Produces a handoff in `handoffs/` *only* if it
-  reaches a conclusion; commits it to `main` at the wrap. Never writes game code.
-- **Coding session** — implements one handoff. Reads `ashfall.html` and that
-  handoff, and nothing else. Works on a branch. Output is one pull request.
+### Planning session
 
-Full detail in the Project Guide, Part 3.
+Designs a feature. Never writes game code.
+
+**Read, before starting:**
+- `docs/Ashfall_Project_Guide.md` — tone, conventions, workflow.
+- `ashfall.html`, in full. Claims about what already exists get checked against
+  the file, never recalled.
+- The open issues for the area under discussion.
+- The last few `CHANGELOG.md` entries — not the whole file.
+
+**Output:** issues filed as they surface, and — only if the session reaches a
+conclusion — a handoff at `handoffs/<feature-name>.md`, committed to `main` at
+the wrap. Read `docs/Ashfall_Handoff_Guide.md` **at the wrap, when writing the
+handoff** — it is not needed before then.
+
+### Coding session
+
+Implements one handoff.
+
+**Read, before starting:** `ashfall.html`, and the one file in `handoffs/` that
+specs this work. **Nothing else** — not the changelog, not the backlog, not the
+guides. The rules below are what make that sufficient; they're stated here so
+implementation never has to open a guide to find them.
+
+Work on a branch. Never commit directly to `main`. Output is one pull request —
+see the wrap-time checklist. Read `docs/CHANGELOG_GUIDE.md` **at the wrap, when
+writing the entry** — it is not needed before then.
+
+Full detail on both: Project Guide, Part 3.
 
 ## Rules that bind
+
+**Section layout lives in the source.** The `ARCHITECTURE` comment at the top of
+the script is the source of truth. No document restates that list; check the
+comment.
 
 **Content vs. mechanics stay separated.** A change touches WORLD DATA (content)
 or ACTIONS/SIMULATION (mechanics), not both. Rendering is its own concern — a
@@ -54,19 +69,26 @@ definition.
 loading; a MINOR bump breaks them. So: new state fields mean MINOR, and MINOR is
 a real seam — never a formality.
 
+**Tier maps to version bump.** Issues are labelled `tier-0` through `tier-3`.
+`tier-0`/`tier-1` maps to PATCH, `tier-2`/`tier-3` to MINOR.
+
 **Flag judgment calls.** A threshold, balance number, or naming choice with no
 prior convention gets called out as retunable, not left to read as settled.
 
-**Prove "no behavior change".** `git diff vX.Y.Z..HEAD -- ashfall.html` is the
-proof. Assertion is not.
+**Prove "no behavior change".** A diff is the proof; assertion is not. Use
+`git diff origin/main...HEAD -- ashfall.html` — everything this branch changed
+and nothing else. Don't diff against a tag: tags through `v0.4.3` carry the game
+at a versioned path, so `git diff v0.4.3..HEAD -- ashfall.html` matches nothing
+on the left and reports the whole file as new. It looks like a diff and is not
+one. (Project Guide, Part 3 → Validation, if you need the tag-form workaround.)
 
 ## Wrap-time checklist (coding sessions)
 
 Every PR carries all five:
 
 1. `ashfall.html` with `GAME_CONFIG.VERSION` bumped.
-2. A new `CHANGELOG.md` entry at the top, per `docs/CHANGELOG_GUIDE.md`, naming the
-   handoff by path.
+2. A new `CHANGELOG.md` entry at the top, per `docs/CHANGELOG_GUIDE.md` — read it
+   now, at the wrap. The entry names the handoff by path.
 3. `Closes #NN` in the PR description for the issue this fulfils. Never close an
    issue by hand.
 4. New issues for anything deferred — cut scope, follow-ups this pass surfaced.
@@ -86,14 +108,15 @@ on the commit carrying its `GAME_CONFIG.VERSION`.
 - **Filenames carry no version.** Git tags mark releases. Never rename a file to
   add a version number.
 - **The backlog is GitHub Issues**, labelled `tier-0` through `tier-3`.
-  `tier-0`/`tier-1` maps to PATCH, `tier-2`/`tier-3` to MINOR.
 - **Handoffs are kept**, not deleted once implemented. Their commit date records
   that the spec predated the code. Whether one already **shipped** is derivable —
   `grep -l "handoffs/<name>.md" CHANGELOG.md` — so it never gets marked by hand. A
   handoff that is **superseded** (never shipped, and the code moved) is the one case
   nothing else records: it gets a banner on the file's first line, body untouched,
   because a coding session reads the handoff and nothing else. Never rename or move a
-  handoff to show status — changelog entries cite them by path. Handoff Guide, Part 2.
+  handoff to show status, and never sort them into status subfolders — changelog
+  entries cite them by path, and a moved path breaks every historical reference.
+  Handoff Guide, Part 2.
 - If the issue tracker is unreachable, say so and continue — the repo's files
   stand alone.
 
