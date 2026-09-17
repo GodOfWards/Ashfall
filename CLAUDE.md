@@ -84,7 +84,7 @@ one. (Project Guide, Part 3 → Validation, if you need the tag-form workaround.
 
 ## Wrap-time checklist (coding sessions)
 
-Every PR carries all five:
+Every PR that changes `ashfall.html` carries all five:
 
 1. `ashfall.html` with `GAME_CONFIG.VERSION` bumped.
 2. A new `CHANGELOG.md` entry at the top, per `docs/CHANGELOG_GUIDE.md` — read it
@@ -95,13 +95,21 @@ Every PR carries all five:
    If nothing was deferred, say so in the changelog's Documentation section.
 5. After the merge, tag it: `git tag vX.Y.Z <commit>`. **Name the commit
    explicitly.** A bare `git tag vX.Y.Z` tags whatever `HEAD` happens to be, which
-   is how `v0.4.4` and `v0.4.5` ended up on the same commit as `v0.4.7` (#32).
-   Verify with `git show vX.Y.Z:ashfall.html | grep VERSION` — it must print the
-   version you just tagged.
+   is how `v0.4.4` and `v0.4.5` ended up on the same commit as `v0.4.7` (#32,
+   since corrected). Verify with `git show vX.Y.Z:ashfall.html | grep VERSION` —
+   it must print the version you just tagged.
 
 The merge ships the version; the tag is what makes it reachable afterwards. A
 version that shipped as a commit inside someone else's PR still gets its own tag,
 on the commit carrying its `GAME_CONFIG.VERSION`.
+
+**A pass whose diff is only `CLAUDE.md` and `docs/` is the exception.** No version
+bump, no changelog entry, no tag — the game did not change, and a tag pointing at
+a commit where nothing shipped is a new way to get tagging wrong. Items 3 and 4
+still apply, in the PR body rather than the changelog: `Closes #NN`, and new
+issues for anything deferred, or a line saying nothing was. The diff and the PR
+are the whole record. The test is that the pass touched *only* those files — one
+that touches `ashfall.html` as well ships normally, under all five.
 
 ## Conventions
 
@@ -110,13 +118,13 @@ on the commit carrying its `GAME_CONFIG.VERSION`.
 - **The backlog is GitHub Issues**, labelled `tier-0` through `tier-3`.
 - **Handoffs are kept**, not deleted once implemented. Their commit date records
   that the spec predated the code. Whether one already **shipped** is derivable —
-  `grep -l "handoffs/<name>.md" CHANGELOG.md` — so it never gets marked by hand. A
-  handoff that is **superseded** (never shipped, and the code moved) is the one case
-  nothing else records: it gets a banner on the file's first line, body untouched,
-  because a coding session reads the handoff and nothing else. Never rename or move a
-  handoff to show status, and never sort them into status subfolders — changelog
-  entries cite them by path, and a moved path breaks every historical reference.
-  Handoff Guide, Part 2.
+  `grep -l "Implements: handoffs/<name>.md" CHANGELOG.md` — so it never gets
+  marked by hand. A handoff that is **superseded** (never shipped, and the code
+  moved) is the one case nothing else records: it gets a banner on the file's
+  first line, body untouched, because a coding session reads the handoff and
+  nothing else. Never rename or move a handoff to show status, and never sort
+  them into status subfolders — changelog entries cite them by path, and a moved
+  path breaks every historical reference. Handoff Guide, Part 2.
 - If the issue tracker is unreachable, say so and continue — the repo's files
   stand alone.
 

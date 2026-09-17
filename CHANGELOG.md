@@ -3,11 +3,15 @@
 Reverse-chronological. Each entry covers one version bump. Older entries are
 kept for context but should not need to be re-read for a change scoped to a
 single system — see the ARCHITECTURE comment in the script for which section
-owns which behavior.
+owns which behavior. The file begins at v0.1.3; 0.1.0–0.1.2 predate it and are
+project genesis, not missing entries. The one genuine gap, v0.2.3, is marked in
+place.
 
 ---
 
 ## v0.4.11 — Reproduced defect sweep: Sleep, fire spend, load atomicity, log freshness
+
+Implements: handoffs/reproduced-defect-sweep.md
 
 Implements #61, #62, #63, #64 and #65 in full, per
 `handoffs/reproduced-defect-sweep.md`. Five independent defects, each with a
@@ -278,6 +282,8 @@ Restated from the handoff so this needn't be opened to know what isn't here.
 
 ## v0.4.10 — Building identity in WORLD DATA, and Close-map labels that fit
 
+Implements: handoffs/map-building-identity-and-label-fit.md
+
 Implements #39 and #16 in full, per
 `handoffs/map-building-identity-and-label-fit.md`. Three parts: a building's
 name and anchor move out of RENDERING into WORLD DATA, Close-map building
@@ -484,6 +490,8 @@ no player-facing text changed.
 
 ## v0.4.9 — Self-documenting source: named game rules, comments without history
 
+Implements: handoffs/source-self-documenting.md
+
 Implements #33 in full, per `handoffs/source-self-documenting.md`. One pass over
 `ashfall.html` with a single goal: the source should say what is true now,
 without prose propping it up. No mechanic, value, string or save field changed.
@@ -672,6 +680,8 @@ changed.
 ---
 
 ## v0.4.8 — Map zoom ladder, and street names clear of intersections
+
+Implements: handoffs/map-zoom-and-label-collisions.md
 
 Implements #27 and #28 in full, per `handoffs/map-zoom-and-label-collisions.md`.
 Two changes taken as one pass because they land in the same code: the `+`/`−`
@@ -902,6 +912,8 @@ the boot sequence.
 
 ## v0.4.7 — WORLD DATA cleanup: street/building split, vestigial exit fields, registry duplicate
 
+Implements: handoffs/world-data-cleanup.md
+
 Implements #3, #4 and #5 in full, per `handoffs/world-data-cleanup.md`. Three
 `tier-0` cleanups taken as one pass because they all land in WORLD DATA. No
 mechanics, no rendering, no new state fields, no save-format change —
@@ -1070,6 +1082,8 @@ was built out of the file before and after and compared:
 ---
 
 ## v0.4.6 — Log: routine lines removed, repeated lines collapsed
+
+Implements: handoffs/log-noise-and-collapse.md
 
 Implements #21 and #22 in full, per `handoffs/log-noise-and-collapse.md`. The
 log stops confirming what a panel already shows, and a run of the same action
@@ -1269,6 +1283,8 @@ passes in this pull request: `"0.4.3"` → `"0.4.4"` → `"0.4.5"` → `"0.4.6"`
 
 ## v0.4.5 — Wide map: panning, zoom placeholders, viewport-relative labels
 
+Implements: handoffs/wide-map-panning.md
+
 Implements #19 and #20 in full, per `handoffs/wide-map-panning.md`. The Wide
 map now centres on the player and slides as they move; street names are placed
 against the part of each street on screen; two inert `+` / `−` buttons reserve
@@ -1457,6 +1473,8 @@ Building placement in the outer ring (#8) is unrelated.
 ---
 
 ## v0.4.4 — Exit split: grid travel vs. Here
+
+Implements: handoffs/exit-move-split.md
 
 Implements #18 in full, per `handoffs/exit-move-split.md`. Rendering-only:
 the Move panel now holds street travel alone, ordered by compass, and every
@@ -3029,6 +3047,23 @@ built and iterated on during the planning session.
 
 ---
 
+## v0.2.3 — no entry was written
+
+This version shipped and no entry was written for it. `v0.2.4`'s closing line
+records the bump as `"0.2.3"` → `"0.2.4"`, and two later entries name v0.2.3
+directly, so the gap is an omission rather than a skipped number. Nothing has
+been reconstructed: `git log` is the only surviving record of what it changed,
+and a reconstruction written this long after the fact would not be the record
+this file exists to keep. There is no `v0.2.3` tag either — tagging begins at
+v0.4.0.
+
+This placeholder exists so the gap reads as known rather than as an oversight
+waiting to be found again.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.2.2"` → `"0.2.3"`
+
+---
+
 ## v0.2.2 — Structural reorganization pass
 
 Pure layout/reorg pass. No gameplay, balance, or rendering behavior changed.
@@ -3200,6 +3235,8 @@ EVENTS/UI HELPERS, RENDERING.
   easy to retune later if needed.
 - All existing v0.1.3 systems (tasks, inventory, movement, crafting, fire,
   save/load) are unchanged apart from the specific hooks listed above.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.1.3"` → `"0.2.1"`
 
 ---
 

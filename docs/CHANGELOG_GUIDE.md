@@ -28,10 +28,40 @@ enough to serve that purpose.
   Fatigue System", "Structural reorganization pass", "Fix take-1
   disappearing bug". If the pass is single-purpose, the title can just
   name the fix.
-- If the entry implements a handoff, say so and name it by path (e.g.
-  "Implements #3 in full, per `handoffs/lockpicking.md`") — this links
-  the record of what shipped back to the spec that produced it and to the
-  issue it closed.
+- If the entry implements a handoff, carry the `Implements:` field
+  described below **and** say so in the entry's opening prose (e.g.
+  "Implements #3 in full, per `handoffs/lockpicking.md`"). The field is
+  what a command reads, the prose is what a person reads, and together
+  they link the record of what shipped back to the spec that produced it
+  and to the issue it closed.
+
+## Required implements line
+
+If the entry implements a handoff, the line directly under the entry
+header is:
+
+```
+Implements: handoffs/<name>.md
+```
+
+Plain text — no bold, no backticks, one line, nothing else on it. That is
+deliberate, and it is the one place this guide's "inline code for any
+identifier" convention does not apply: this line is read by a command, not
+only by a person.
+
+```
+grep -l "Implements: handoffs/<name>.md" CHANGELOG.md
+```
+
+is how `CLAUDE.md` and `docs/Ashfall_Handoff_Guide.md` both answer "has
+this handoff shipped?", and bold or backticks would break a grep anyone
+can type from memory. Prose elsewhere in the entry still cites handoff
+paths in backticks as normal — being distinguishable from that prose is
+the entire point of the field.
+
+Omit the line when the entry implements no handoff. An entry that merely
+mentions one — because it unblocked it, or cited it for context — must not
+carry the field for it. That distinction is what the field exists to make.
 
 ## Required closing line
 
@@ -76,10 +106,13 @@ when to use them:
   with a one-line rationale tied to the ARCHITECTURE comment's section
   definitions (why the new location is the correct owner).
 - **Documentation** — changes to the ARCHITECTURE comment or inline
-  schema comments themselves. Also use this section to name any issues
-  this pass filed for deferred or newly-surfaced work (see the Project
-  Guide's Workflow section), with a line stating nothing was deferred if
-  that's the case.
+  schema comments in `ashfall.html` themselves. Also use this section to
+  name any issues this pass filed for deferred or newly-surfaced work (see
+  the Project Guide's Workflow section), with a line stating nothing was
+  deferred if that's the case. Edits to `CLAUDE.md` or the `docs/` set are
+  not this section's subject — a pass whose diff is only those files ships
+  no version and writes no entry at all (see `CLAUDE.md`'s wrap-time
+  checklist).
 - **Explicitly out of scope** — for a pass built from a handoff file,
   restate what the handoff deliberately deferred, so a reader doesn't
   have to open the handoff to know what *isn't* here.
@@ -122,7 +155,8 @@ have appeared and should not be used again: `Explicitly NOT in this pass`
 (use **Function relocation**), `Organization` (use **Organization /
 Structural**), `Content` and `Content review adjustments` (use **New
 content** or **Changed**), `Design decision resolved` (use **Open
-questions / decisions resolved**).
+questions / decisions resolved**), `New constants` (use **New**),
+`Derivations named` (use **Changed / Reworked**).
 
 Per-subsystem subheadings *inside* a **Changed / Reworked** block are a
 different thing and stay free-form — "Stamina recovery", "Exertion

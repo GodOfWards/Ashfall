@@ -88,6 +88,14 @@ state, and MINOR, under another). In that case:
 - Record which type actually applied (and why, if it was the tentative
   case) in the changelog entry's Notes/assumptions section.
 
+### Documentation-only passes
+
+A pass whose entire diff is `CLAUDE.md` and the `docs/` set ships no
+version at all, so it has no change type to state. Write `None —
+documentation only` where the header asks for one, and say in a sentence
+why. `CLAUDE.md`'s wrap-time checklist says what such a pull request
+carries instead of a bump, an entry and a tag.
+
 ---
 
 ## Part 2 — Handoff File Naming
@@ -120,18 +128,21 @@ the only question worth asking.
 There are two ways to fail it, and they are recorded differently.
 
 **Spent** — it shipped. Re-implementing it is redundant at best. This is
-already recorded, because every changelog entry names the handoff it
-implements by path (`CHANGELOG_GUIDE.md`), so status is derivable with no
-new bookkeeping:
+already recorded, because every changelog entry that implements a handoff
+carries an `Implements:` field naming it by path (`CHANGELOG_GUIDE.md`),
+so status is derivable with no new bookkeeping:
 
 ```
-grep -l "handoffs/<name>.md" CHANGELOG.md
+grep -l "Implements: handoffs/<name>.md" CHANGELOG.md
 ```
 
 A hit means spent, and the `## vX.Y.Z` heading above it says which version
-consumed it. **Never banner a spent handoff** — that would hand-maintain a
-copy of the changelog, which is what one-source-of-truth exists to
-prevent, and it would drift.
+consumed it. The field is what makes this reliable. A changelog entry has
+three reasons to name a handoff path — it implemented it, it unblocked
+it, or it cited it as context — and only the first carries the field, so a
+mention can no longer be mistaken for an implementation. **Never banner a
+spent handoff** — that would hand-maintain a copy of the changelog, which
+is what one-source-of-truth exists to prevent, and it would drift.
 
 **Superseded** — it never shipped, or only partly, and the code moved
 underneath it. Implementing it would now be actively wrong. Signs: code it

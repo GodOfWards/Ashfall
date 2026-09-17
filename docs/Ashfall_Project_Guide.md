@@ -104,11 +104,12 @@ existing systems.
   not stable across renders.
 - Item *definitions* are ID-based: `ITEM_REGISTRY` plus
   `itemFromRegistry()` / `itemsFromRegistry()` are the single source of
-  truth for item properties, used throughout `makeDefaultWorld()`. The
-  one remaining gap is tracked as a `tier-0` cleanup issue (a handful of
-  `giveItem()` call sites that still construct a literal item object at
-  runtime instead of resolving through the registry) — check whether that
-  issue is still open rather than assuming it's done.
+  truth for item properties, used throughout `makeDefaultWorld()`, and
+  every `giveItem()` call site resolves through it. Gaps in this rule are
+  tracked in the backlog rather than named here — search the open issues
+  for the current one, rather than assuming either that the rule is fully
+  satisfied or that whichever gap was last written down is still the one
+  that's open.
 - Mechanics check **tags** (`blunt`, `fishing`, `fire-starter`, etc.), not
   item names. A new item that should behave like an existing one gets the
   same tag, not a special-cased name check.
@@ -131,11 +132,20 @@ system that owns it.
 A bare number in a mechanic is a fact with no name, and a fact with no name
 is one that can be silently duplicated.
 
-The file already shows both halves. `doCraft()` and `doCookInContainer()`
-spend `recipe.minutes`, and the buttons that launch them display
-`recipe.minutes` — one fact, one place. `doFish()` spends `advanceTime(20)`
-while its button displays `fmtDuration(20)` — the same fact written twice,
-where changing one makes the button lie to the player.
+The file shows the rule working. `doCraft()` and `doCookInContainer()`
+both spend `recipe.minutes` — the duration is declared once per recipe and
+read wherever it is needed, including the Cook button, which prints
+`fmtDuration(recipe.minutes)` beside its label. Retune a recipe and every
+reader of it follows.
+
+The rule's other half is easier to state than to illustrate, because the
+illustrations keep getting fixed. A duration spent as a literal in one
+place and printed as the same literal in another is two facts that have to
+agree, with nothing making them: whichever call site is edited first, the
+other starts lying to the player. That shape is what to look for, not a
+particular function — a worked example drawn from live code goes stale by
+being acted on, which is exactly what happened to the one this passage
+used to name.
 
 When a derived value exists, write the derivation rather than the result.
 Three firewood burning for sixty minutes each is `FIRE_BUILD_WOOD *
@@ -375,10 +385,10 @@ not one. Name both blobs instead:
 git diff v0.4.3:ashfall_0_4_3.html HEAD:ashfall.html
 ```
 
-From `v0.4.6` onward the tag carries `ashfall.html` and the plain form
-works. Two versions have no tag at all — see the open issue on `v0.4.4`
-and `v0.4.5` — so for those, diff against the merge commit or the base
-branch.
+From `v0.4.4` onward the tag carries `ashfall.html` and the plain form
+works; the versioned-path caveat covers `v0.4.0`–`v0.4.3` only. If a
+version you need has no tag, diff against the merge commit or the base
+branch instead.
 
 ### Using this at the start of a session
 
