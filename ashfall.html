@@ -256,7 +256,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.4.10" };
+  const GAME_CONFIG = { VERSION: "0.4.11" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Ammunition","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -3576,6 +3576,7 @@
     const logDiv = document.getElementById("log");
     const last = logDiv.lastElementChild;
     let p;
+    let summarised = false;
     if(key && last && last.dataset.logKey === key){
       p = last;
       const tally = p._logTally;
@@ -3583,9 +3584,12 @@
       tally[outcome || key] = (tally[outcome || key] || 0) + 1;
       if(LOG_SUMMARIES[key]){
         // A fishing run mixes a `good` bite with an unclassed miss, and the
-        // summary is a neutral report of both, so it renders unclassed.
+        // summary is a neutral report of both, so it renders unclassed —
+        // and therefore always takes `fresh` below, whatever class this
+        // particular call passed.
         p.className = "";
         p.textContent = LOG_SUMMARIES[key](tally);
+        summarised = true;
       } else {
         // A counted run keeps its own sentence and class; only the dim
         // trailing count changes.
@@ -3609,7 +3613,7 @@
       logDiv.appendChild(p);
     }
     logDiv.querySelectorAll("p.fresh").forEach(el=>el.classList.remove("fresh"));
-    if(!cls) p.classList.add("fresh");
+    if(summarised || !cls) p.classList.add("fresh");
     while(logDiv.children.length > LOG_MAX_ENTRIES) logDiv.removeChild(logDiv.firstChild);
     logDiv.scrollTop = logDiv.scrollHeight;
   }
@@ -3978,9 +3982,9 @@
     // Sleep suspends the entire awake Energy/Stamina/Fatigue system.
     // Fatigue is snapshotted at sleep start and caps how much Energy this
     // Sleep can restore; Fatigue itself always fully clears by the time the
-    // player wakes.
-    const fatigueAtSleep = state.vitals.fatigue;
-    const ceiling = clamp(100 - fatigueAtSleep);
+    // player wakes. `ceiling` is that snapshot — read once, before the
+    // loop, and the loop measures against it rather than re-deriving it.
+    const ceiling = sleepEnergyCeiling();
     const missingEnergy = Math.max(0, ceiling - state.vitals.energy);
     let remaining = missingEnergy / SLEEP_ENERGY_RATE;
     while(remaining > 1e-9){
@@ -3991,7 +3995,12 @@
       state.vitals.energy = Math.min(ceiling, state.vitals.energy + SLEEP_ENERGY_RATE*dt);
       remaining -= dt;
     }
-    state.vitals.energy = clamp(ceiling);
+    // The loop lands on the ceiling only approximately — it accumulates
+    // SLEEP_ENERGY_RATE*dt in <=1-minute steps — so this snaps it exact.
+    // Math.max, not a bare assignment: Sleep must never lower Energy.
+    // sleepAvailable() already blocks that case, but doSleep() writes
+    // vitals and should be correct independently of its caller's gate.
+    state.vitals.energy = Math.max(state.vitals.energy, sleepEnergyCeiling());
     state.vitals.fatigue = 0;
     state.lastWakeMinute = state.totalMinutes;
     state.lastExertionMinute = state.totalMinutes;
@@ -4182,12 +4191,20 @@
       applyEnergyBaseline(dt, 1);
     }
   }
-  function sleepAvailable(){
-    return state.totalMinutes >= state.lastWakeMinute + SLEEP_COOLDOWN_MIN;
-  }
+  // The Energy ceiling this Sleep can reach: Fatigue caps how much rest is
+  // worth. Read by doSleep(), estimateSleepMinutes() and sleepRestoresEnergy().
+  function sleepEnergyCeiling(){ return clamp(100 - state.vitals.fatigue); }
+  // Sleep is unavailable for two separate reasons, kept separate so
+  // RENDERING can say which one applies. sleepRestoresEnergy() is false
+  // whenever the Sleep would restore nothing — including at Fatigue 100,
+  // where the ceiling is 0 and no Energy is ever below it. That state is
+  // worked off through recoveryStep() instead, which is the intended price
+  // of never handing out a free Fatigue wipe for a zero-length Sleep.
+  function sleepOffCooldown(){ return state.totalMinutes >= state.lastWakeMinute + SLEEP_COOLDOWN_MIN; }
+  function sleepRestoresEnergy(){ return state.vitals.energy < sleepEnergyCeiling(); }
+  function sleepAvailable(){ return sleepOffCooldown() && sleepRestoresEnergy(); }
   function estimateSleepMinutes(){
-    const ceiling = clamp(100 - state.vitals.fatigue);
-    const missing = Math.max(0, ceiling - state.vitals.energy);
+    const missing = Math.max(0, sleepEnergyCeiling() - state.vitals.energy);
     return missing / SLEEP_ENERGY_RATE;
   }
   // Advances awake game time in <=1-minute steps so the Stamina/Fatigue
@@ -4256,9 +4273,12 @@
   const BUILD_FIRE_MIN = 10;
   const DISMANTLE_CAMPFIRE_MIN = 10;      // shares a value with BUILD_FIRE_MIN; a separate fact
   const CHOP_TREE_MIN = 30;
-  // Fire fuel. A fresh burn is its wood spent at the per-piece rate, so the
-  // two stay in step when either is retuned. FIRE_MAX_MIN is its own fact —
-  // a cap on banked burn time, not a wood count.
+  // Fire fuel. A burn is its wood spent at the per-piece rate, so the two
+  // stay in step when either is retuned. A first fire comes out of the
+  // campfire kit and burns CAMPFIRE_KIT_COST pieces' worth, since that is
+  // the wood the kit was crafted from; a rebuild in an already-built
+  // campfire costs FIRE_BUILD_WOOD loose firewood. FIRE_MAX_MIN is its own
+  // fact — a cap on banked burn time, not a wood count.
   const FIRE_BUILD_WOOD = 3;
   const FIRE_MINUTES_PER_WOOD = 60;
   const FIRE_MAX_MIN = 360;
@@ -4292,6 +4312,7 @@
   }
   function canBuildFire(room){
     if(room.campfireBuilt) return room.fireMinutesLeft > 0 || countInPools("firewood") >= FIRE_BUILD_WOOD;
+    // A kit carries its own first load of wood, so a first fire needs nothing else.
     return countInPools("campfire_kit") >= 1;
   }
   function doBuildFire(){
@@ -4299,12 +4320,17 @@
     if(!canBuildFire(room)) return;
     if(!consumeMatchUse()) return;
     const firstTime = !room.campfireBuilt;
+    // banked is hoisted above the branch because the log ternary below
+    // reads it. Same value as before: on a first build fireMinutesLeft is
+    // undefined, and `undefined > 0` was already false.
+    const banked = !firstTime && room.fireMinutesLeft > 0;
     if(firstTime){
       consumeFromPools("campfire_kit", 1);
       room.campfireBuilt = true;
-    }
-    const banked = room.fireMinutesLeft > 0;
-    if(!banked){
+      // The kit was crafted from CAMPFIRE_KIT_COST firewood and burns that
+      // wood — it costs no loose firewood on top.
+      room.fireMinutesLeft = CAMPFIRE_KIT_COST * FIRE_MINUTES_PER_WOOD;
+    } else if(!banked){
       consumeFromPools("firewood", FIRE_BUILD_WOOD);
       room.fireMinutesLeft = FIRE_BUILD_WOOD * FIRE_MINUTES_PER_WOOD;
     }
@@ -4464,6 +4490,46 @@
       scan(room.carContainers, defaultRoom.carContainers);
     });
   }
+  // validateLoadedWorld(): the shape check a load must pass before anything
+  // is committed. Unlike validateItemRegistry()/validateLocations() below,
+  // which are dev-only console helpers, this is wired into a real code path
+  // and runs on every load — hence its place here in PERSISTENCE beside the
+  // backfills rather than in the dev-helper block.
+  //
+  // It covers exactly the shapes that make resyncUidCounter(), the three
+  // backfills or render() throw, and no more. This is a shape check, not a
+  // schema validator: a save that is merely out of date is the backfills'
+  // problem, and they run only once this has passed. Returns an array of
+  // problem strings, empty on success — the shape its two siblings use.
+  function validateLoadedWorld(nextWorld, nextState){
+    const problems = [];
+    Object.keys(nextWorld).forEach(roomId=>{
+      const room = nextWorld[roomId];
+      if(!room){ problems.push(`${roomId}: room is missing`); return; }
+      if(!Array.isArray(room.floor)) problems.push(`${roomId}: floor is not an array`);
+      if(!Array.isArray(room.exits)) problems.push(`${roomId}: exits is not an array`);
+      if(!Array.isArray(room.containers)) problems.push(`${roomId}: containers is not an array`);
+      // carContainers is optional on a room and stays optional — only a
+      // present one is checked.
+      if(room.carContainers !== undefined && !Array.isArray(room.carContainers)){
+        problems.push(`${roomId}: carContainers is present but not an array`);
+      }
+    });
+    if(!nextState.inventory || !Array.isArray(nextState.inventory.items)){
+      problems.push("state.inventory: no items array");
+    }
+    CONTAINER_SLOTS.forEach(slot=>{
+      const bag = nextState[slot];
+      if(bag && !Array.isArray(bag.items)) problems.push(`state.${slot}: no items array`);
+    });
+    return problems;
+  }
+  // A load is all-or-nothing: the four module bindings are assigned only
+  // once the incoming data has passed validateLoadedWorld(). A save that
+  // fails leaves the running session exactly as it was, so the player can
+  // keep playing — the old order committed `world` first and a throw in a
+  // backfill left a half-loaded world on screen with no way back but
+  // Restart.
   function applyLoadedData(data){
     if(!data || !data.state || !data.world || !data.world[data.state.currentRoom]){
       log("That save doesn't look valid — nothing was loaded.", "warn");
@@ -4475,11 +4541,24 @@
       log(`This save is from v${data.version}, this build is v${GAME_CONFIG.VERSION} — it may not load correctly.`, "warn");
     }
     const base = makeDefaultState();
-    state = { ...base, ...data.state, vitals: { ...base.vitals, ...(data.state.vitals || {}) } };
-    world = data.world;
-    doors = data.doors || doors; windows = data.windows || windows;
+    const nextState = { ...base, ...data.state, vitals: { ...base.vitals, ...(data.state.vitals || {}) } };
+    const nextWorld = data.world;
+    const nextDoors = data.doors || doors;
+    const nextWindows = data.windows || windows;
+    const problems = validateLoadedWorld(nextWorld, nextState);
+    if(problems.length){
+      console.warn("applyLoadedData: save rejected", problems);
+      log("That save doesn't look valid — nothing was loaded.", "warn");
+      return false;
+    }
+    state = nextState;
+    world = nextWorld;
+    doors = nextDoors; windows = nextWindows;
     detailItem = null;
     gameOver = false;
+    // The backfills are repair passes for old-but-well-formed saves. They
+    // run after validation, never before: they are not what makes a
+    // malformed save safe.
     resyncUidCounter();
     backfillItemIds();
     backfillLocationIds();
@@ -5304,7 +5383,9 @@
       } else {
         const note = document.createElement("div");
         note.style.cssText = "color:var(--ink-faint); font-size:12.5px; padding:6px 0;";
-        note.textContent = "You're not tired enough to sleep yet.";
+        note.textContent = sleepOffCooldown()
+          ? "You're not tired enough to sleep yet."
+          : "You've slept too recently to manage it again.";
         hereBox.appendChild(note);
       }
     }
@@ -5338,7 +5419,11 @@
     }
     if(room.heatActive){
       hereBox.appendChild(actionButton(room.hasStove ? "Turn off the stove" : "Put out the fire", doExtinguish));
-      if(room.fireMinutesLeft != null && countInPools("firewood") >= 1 && room.fireMinutesLeft < FIRE_MAX_MIN){
+      // Offered only while a firewood buys its full FIRE_MINUTES_PER_WOOD:
+      // within one piece of the cap, doAddFuel()'s Math.min would clip the
+      // surplus and the wood would be spent for less than it is worth.
+      if(room.fireMinutesLeft != null && countInPools("firewood") >= 1
+         && room.fireMinutesLeft <= FIRE_MAX_MIN - FIRE_MINUTES_PER_WOOD){
         hereBox.appendChild(actionButton("Add fuel to the fire", doAddFuel));
       }
       const heatContainer = getHeatContainer(room);

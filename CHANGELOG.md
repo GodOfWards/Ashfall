@@ -7,6 +7,275 @@ owns which behavior.
 
 ---
 
+## v0.4.11 — Reproduced defect sweep: Sleep, fire spend, load atomicity, log freshness
+
+Implements #61, #62, #63, #64 and #65 in full, per
+`handoffs/reproduced-defect-sweep.md`. Five independent defects, each with a
+deterministic reproduction, bundled into one correctness pass because each is
+small and none needs new state. No new mechanic, no content, no save field.
+`SAVE_KEY` does not rotate — existing browser saves keep loading.
+
+**Fixed**
+- **Sleep could lower Energy (#61).** `doSleep()` ended with
+  `state.vitals.energy = clamp(ceiling)`, an unconditional assignment to the
+  Fatigue-derived ceiling. At `E=70 Fa=40` the ceiling is 60, so a
+  zero-duration Sleep dropped Energy by 10 and still cleared Fatigue; at
+  `E=16.1 Fa=100` the ceiling is 0 and Sleep emptied Energy outright. The
+  assignment is now `Math.max(state.vitals.energy, sleepEnergyCeiling())` — it
+  still snaps the loop's approximate landing exact, but can only raise.
+- **The first campfire cost no firewood, or three too many (#62).**
+  `canBuildFire()` gated a first build on a `campfire_kit` alone, while
+  `doBuildFire()` then called `consumeFromPools("firewood", FIRE_BUILD_WOOD)`
+  unconditionally. `consumeFromPools()` takes what it can and reports nothing,
+  so with no firewood the fire lit free, and with firewood in a pocket it
+  silently ate three pieces the gate never asked for. `doBuildFire()`'s spend is
+  now a three-way branch: a first build consumes the kit only and banks
+  `CAMPFIRE_KIT_COST * FIRE_MINUTES_PER_WOOD`; a rebuild in an existing
+  campfire consumes `FIRE_BUILD_WOOD`; a banked relight consumes nothing.
+- **"Add fuel" at the burn cap wasted a firewood (#64).** The render gate
+  offered the button at any `fireMinutesLeft < FIRE_MAX_MIN`, so at 350 minutes
+  one piece of wood bought 10 minutes and `doAddFuel()`'s `Math.min` discarded
+  the other 50. The gate is now
+  `room.fireMinutesLeft <= FIRE_MAX_MIN - FIRE_MINUTES_PER_WOOD`, so the button
+  is offered only while a piece buys its full value. `doAddFuel()` itself is
+  unchanged; its `Math.min` is simply no longer the binding constraint from the
+  UI path.
+- **A collapsed log summary changed brightness with its last line's class
+  (#65).** `log()` decided `fresh` from the caller's `cls` argument, but a
+  `LOG_SUMMARIES` line renders unclassed regardless of what the call passed.
+  A fishing run ending on a bite (`"good"`) therefore rendered dim while the
+  same run ending on a miss (`null`) rendered bright. A `summarised` local now
+  records that the summary branch ran, and `if(summarised || !cls)` marks the
+  line fresh — freshness follows what was rendered, not what was asked for.
+
+**Hardened**
+- **A rejected load no longer leaves a broken world on screen (#63).**
+  `applyLoadedData()` assigned `world` before running `resyncUidCounter()`, the
+  three backfills and `render()`, any of which throws on a malformed save. Both
+  callers caught the throw and reported "nothing was loaded" — untrue, since the
+  bad world was already committed and the session was unplayable with `doRestart()`
+  the only way out, and nothing surfaced it. The load is now atomic: `nextState`,
+  `nextWorld`, `nextDoors` and `nextWindows` are built as locals, a new
+  `validateLoadedWorld()` checks them, and the four module bindings are assigned
+  only on success. The backfills run after validation, not before — they repair
+  old-but-well-formed saves and are not what makes a malformed one safe.
+- **New `validateLoadedWorld(nextWorld, nextState)` in PERSISTENCE**, returning
+  an array of problem strings the way `validateItemRegistry()` and
+  `validateLocations()` do. It covers exactly the five shapes that throw today —
+  a room's `floor`, `exits` or `containers` not being an array,
+  `state.inventory.items` not being an array, and any populated `CONTAINER_SLOTS`
+  bag whose `items` is not an array — and no more. This is a shape check, not a
+  schema validator. `carContainers` is optional on a room and is checked only
+  when present. It sits in PERSISTENCE beside the backfills rather than in the
+  dev-helper block, because unlike its two siblings it is wired into a real code
+  path and runs on every load.
+
+**Changed / Reworked**
+
+*Sleep availability*
+- **A Sleep that would restore no Energy is no longer offered.**
+  `sleepAvailable()` was purely a cooldown test and is now the conjunction of
+  two named halves: `sleepOffCooldown()` (the old `SLEEP_COOLDOWN_MIN` test,
+  unchanged) and `sleepRestoresEnergy()` (`state.vitals.energy <
+  sleepEnergyCeiling()`). `doSleep()`'s existing `if(!sleepAvailable()) return;`
+  guard now blocks the zero-duration case at the action level, not only in the UI.
+- **At Fatigue 100 the ceiling is 0, so Sleep is never offered.** `energy < 0`
+  is never true. The Sneak lock must be worked off through `recoveryStep()`
+  instead. This is the intended price of the decision, not a side effect — see
+  **Open questions / decisions resolved**.
+
+**New**
+- `sleepEnergyCeiling()` in the STAMINA / FATIGUE sub-block, returning
+  `clamp(100 - state.vitals.fatigue)`. The ceiling was derived independently in
+  `doSleep()` and `estimateSleepMinutes()`; this pass added a third consumer, so
+  it is now defined once and read by all three.
+
+**Removed**
+- `doSleep()`'s `fatigueAtSleep` local. Extracting `sleepEnergyCeiling()` left
+  it with no reader — its only use was the ceiling derivation it no longer
+  performs. The snapshot semantics it carried are unchanged and now belong to
+  `const ceiling`, which is still read once before the loop; the comment above
+  it says so explicitly. See **Notes / assumptions**.
+
+**UI**
+- **The Sleep note names which of the two reasons applies.** The existing
+  string `"You're not tired enough to sleep yet."` moves to the case it was
+  always describing — no Energy deficit — and the cooldown gets
+  `"You've slept too recently to manage it again."` Both are functional UI text,
+  held to clarity rather than the game's prose tone.
+- **The spurious `"Sleep (0:01)"` label is gone**, as a consequence of the gate
+  rather than a change to `fmtDuration()`. The button renders only when the
+  Sleep will really run, so `estimateSleepMinutes()` is never 0 at that point.
+- **"Add fuel to the fire" now disappears from 300 minutes rather than 360.**
+  No new text; `renderLocationPanel()` already prints the fire's remaining fuel,
+  so the button's absence is explicable on screen.
+- **A collapsed `fish` / `rest` / `chop` / `fuel` summary is now consistently
+  the bright (`fresh`) line.** No wording changed.
+- **A rejected save shows the same message as before.** The difference is that
+  the session is still playable afterwards.
+
+**Open questions / decisions resolved**
+The handoff carried two balance calls, both answered by Tom during planning and
+specced as settled. Neither was re-opened during implementation.
+- **A — a Sleep that would restore no Energy is refused.** Sleep exists to
+  recover Energy; when there is none to recover it is not offered, and the free
+  Fatigue wipe goes with it. **The first-proposed predicate was wrong and is not
+  what shipped.** It was `energy < ceiling || fatigue > 0`, and the `|| fatigue > 0`
+  clause is true in exactly the cases the defect lives in — it would have
+  permitted all six tested states, including `E=70 Fa=40` and `E=16.1 Fa=100`,
+  closing nothing. The shipped test is `energy < ceiling` alone, which is true
+  only when the Sleep would actually run.
+- **A's consequence, verified not a trap.** From the state a chop-and-fish grind
+  actually reaches (`E=16.1 St=0.0 Fa=100.0 Hu=51 Th=3`), standing still and
+  doing nothing, Fatigue reaches 0 without plateauing — driving `recoveryStep()`
+  directly it clears at 436 game minutes, and through the real awake path
+  (`advanceTime()`, where collapses fire and each grants Energy) at 733 with
+  three collapses. Recovery never stalls; there is no softlock. The cost of
+  reaching Fatigue 100 is roughly one wasted day, which is the point.
+- **B — a campfire kit contains its own first load of wood.** A first fire costs
+  the kit and nothing else: 3 firewood total, not 6. `canBuildFire()` was already
+  right, so `doBuildFire()` is what changed. This also makes the economy
+  internally consistent — a kit is `CAMPFIRE_KIT_COST` firewood and yields
+  `CAMPFIRE_KIT_COST * FIRE_MINUTES_PER_WOOD` = 180 minutes, and a rebuild is
+  `FIRE_BUILD_WOOD` firewood for `FIRE_BUILD_WOOD * FIRE_MINUTES_PER_WOOD` = 180.
+  Same wood, same burn. What the kit buys over loose wood is the 15 crafting
+  minutes and the permanent `campfireBuilt` structure in that room.
+
+**Notes / assumptions**
+The handoff left four narrow calls to implementation. All four took its
+recommendation, and a fifth arose from the work itself.
+- **`validateLoadedWorld()` returns strings, not booleans**, matching the two
+  existing validators, and `applyLoadedData()` `console.warn`s them on rejection
+  the way `validateLocations()` does. A failed import leaves something
+  diagnosable in the console while the player-facing message stays generic.
+- **The two `catch` messages are unchanged.** Now that the load is atomic,
+  `"Couldn't read a save from this browser."` and `"That file couldn't be read
+  as a save."` are no longer untrue, and the validator's `console.warn` carries
+  the detail. No third message was added for a shape failure.
+- **The `summarised` flag is a local in `log()`**, not a second
+  `LOG_SUMMARIES[key]` test at the bottom of the function. The second test would
+  be a second source of truth for one condition.
+- **The cooldown note reads `"You've slept too recently to manage it again."`** —
+  the handoff's proposed string, taken as-is. Retunable: anything equally plain
+  would do.
+- **`doSleep()`'s `fatigueAtSleep` local was removed rather than kept.** The
+  handoff asked for it to be kept, on the grounds that its snapshot semantics
+  are load-bearing. Extracting `sleepEnergyCeiling()` left it with no reader at
+  all, and the semantics the handoff was protecting are carried by `const
+  ceiling` — read once, before the loop, with the loop measuring against it. An
+  unused local would have been dead code standing in for a comment, so the
+  comment now states the snapshot directly. This is the one place the pass
+  departs from the handoff's letter.
+- **Decision A raises the value of #49** (player condition UI). Fatigue is
+  displayed nowhere, which is why #61 arrived without warning, and A makes the
+  Fatigue-100 state more costly without making it more legible. Not this pass's
+  job; worth stating.
+
+**Explicitly out of scope**
+Restated from the handoff so this needn't be opened to know what isn't here.
+- **`consumeFromPools()` gaining a return value.** It is the root hazard behind
+  both #62 and #64 — five call sites can all silently under-pay the same way —
+  and it is a different pass, because it touches `doCraft()` and
+  `doDismantleCampfire()`, which are otherwise untouched here. Nothing in this
+  pass forced it.
+- **`fmtDuration()`'s `MIN_MOVE_MIN` floor (#75).** The Sleep gate removed the
+  symptom that made it visible; the floor itself is untouched.
+- **Whether "Add fuel", "Put out the fire" and Eat/Drink should cost game time.**
+  All three are free while every other action charges. A balance question
+  spanning three subsystems; #64 notes it and this pass does not answer it.
+- **#66** (ten spawn pools never roll) and **#67** (single-copy tool gates).
+  Both bear on the firewood economy and neither is touched.
+- **#29** (the log's size and 50-entry cap). This pass edits `log()` and leaves
+  `LOG_MAX_ENTRIES` and `#log`'s `max-height` alone.
+- **#78** (accessibility). The new cooldown note inherits `var(--ink-faint)` at
+  12.5px, matching the existing note's styling and its WCAG AA failure. #78
+  fixes both together or neither.
+- **The `", Riverbank"` location label.** Real and reproduced, but it belongs to
+  #42's decision about what the `building` field means.
+
+**Explicitly NOT changed**
+- **WORLD DATA.** No room, item, container, exit, door, window or description.
+  `ITEM_REGISTRY`, `LOCATIONS`, `BUILDINGS` and every `build*()` function show
+  zero diff.
+- **The save format.** No new or changed PLAYER STATE field, ITEM DATA SCHEMA
+  field, tag or category, and no room/container/exit schema change. `SAVE_KEY`
+  does not rotate. Fix #63 does make some previously-loadable saves refuse to
+  load — the malformed ones that currently load halfway and break the session.
+  That is the point, and it is not a format change.
+- **Balance constants.** `CAMPFIRE_KIT_COST`, `FIRE_BUILD_WOOD`,
+  `FIRE_MINUTES_PER_WOOD`, `FIRE_MAX_MIN`, `SLEEP_ENERGY_RATE`,
+  `SLEEP_COOLDOWN_MIN` and every recovery rate are untouched — only the
+  comment above `FIRE_BUILD_WOOD` changed, to stop reading as though every
+  fresh burn costs it.
+- **`doAddFuel()`, `canBuildFire()` and `consumeFromPools()` bodies.**
+  `canBuildFire()` gained a comment and nothing else; it was already correct
+  under decision B.
+- **`recoveryStep()` and the Stamina/Fatigue recovery rules.** The no-softlock
+  result above is a measurement of existing behavior, not a change to it.
+
+**Validation performed**
+- **The handoff's acceptance tests were run as written**, against the real file
+  in headless Chromium, on `origin/main` and on this branch, with the internals
+  exposed by a test-only shim rather than by editing the shipped file.
+- **#61:** all five table rows match. `E=70 Fa=40` and `E=16.1 Fa=100` — button
+  absent, note "not tired enough", vitals untouched (was: `"Sleep (0:01)"`,
+  Energy → 60 and → 0 respectively). `E=50 Fa=40` still runs 60 minutes to
+  Energy 60; `E=85 Fa=0` still runs 90 minutes to Energy 100. Cooldown-not-elapsed
+  now reads "slept too recently". No-softlock measured as recorded above.
+- **#62:** a first build carrying 5 firewood leaves all 5 (was: 2), banks 170
+  minutes after `BUILD_FIRE_MIN`, and consumes the kit. With 0 firewood,
+  `canBuildFire()` is still true and the fire still lights. Relight with
+  `campfireBuilt`, `fireMinutesLeft = 0` and 0 firewood is still refused; with 3
+  firewood it builds, firewood → 0, `fireMinutesLeft = 170`. A banked relight
+  spends nothing. All three log strings still reach their cases.
+- **#64:** at 350 the button is absent (was: shown, one wood for 10 minutes); at
+  301 absent; at 300 shown, and one wood takes it to 360.
+- **#63:** eight save shapes. The four that previously threw — missing `floor`,
+  missing `containers`, missing `exits`, non-array `inventory.items` — now
+  return `false` cleanly with `state`, `world` and `totalMinutes` provably
+  unchanged. The three already rejected (empty object, missing `world`, unknown
+  `currentRoom`) still return `false`. A well-formed save still round-trips
+  byte-identically through `serializeGame()`.
+- **#65:** three casts ending on a bite and three ending on a miss both render
+  `[fresh]` (was: `[(none)]` and `[fresh]` for the same text). Regression guards
+  hold — a `warn` line still breaks a tally run into separate lines, a `craft:`
+  run still keeps its `good` class and its `×3` counter and is still not fresh,
+  and the 50-entry cap still trims from the front.
+- **No page errors** on load or during any test run.
+- **Diff discipline:** `git diff origin/main...HEAD -- ashfall.html` is 14 hunks
+  and 127 changed lines, the lowest at line 256 (the version bump) and the next
+  at 3576 — past the whole of WORLD DATA. No `build*()` function appears in the
+  diff.
+
+**Sections touched**
+- **SURVIVAL / TIME SIMULATION**, STAMINA / FATIGUE sub-block — `doSleep()`,
+  `sleepAvailable()` and its two new halves, `sleepEnergyCeiling()`,
+  `estimateSleepMinutes()`.
+- **FIRE / COOKING** — `doBuildFire()`, `canBuildFire()`'s comment, the
+  `FIRE_BUILD_WOOD` constants comment.
+- **PERSISTENCE** — `applyLoadedData()`, new `validateLoadedWorld()`.
+- **CORE UTILITIES** — `log()`.
+- **RENDERING** — the sleep gate and the "Add fuel" gate in
+  `renderHereActionsPanel()`.
+
+**Documentation**
+- Comments added or rewritten at each changed site: the `FIRE_BUILD_WOOD` block
+  (a first fire comes from the kit, a rebuild costs `FIRE_BUILD_WOOD`),
+  `canBuildFire()`'s first-build branch, `doBuildFire()`'s hoisted `banked` and
+  its kit-burn derivation, `doSleep()`'s ceiling snapshot and its `Math.max`
+  rationale, the Sleep-gate halves including the Fatigue-100 consequence,
+  `log()`'s summary branch (unclassed *and therefore* fresh), the "Add fuel"
+  gate, and `validateLoadedWorld()`/`applyLoadedData()`'s atomicity contract.
+  The ARCHITECTURE comment needed no change — no section gained or lost a
+  responsibility.
+- **Nothing was deferred and no new issues were filed.** The pass surfaced
+  nothing beyond what the handoff already listed as out of scope; every item in
+  that list has an existing issue or is named there.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.10"` → `"0.4.11"`
+
+---
+
 ## v0.4.10 — Building identity in WORLD DATA, and Close-map labels that fit
 
 Implements #39 and #16 in full, per
