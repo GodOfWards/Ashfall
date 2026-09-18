@@ -9,6 +9,236 @@ place.
 
 ---
 
+## v0.4.12 — A room's address, its building, and whether it is under cover
+
+Implements: handoffs/room-address-and-shelter.md
+
+Implements #42 and #82 in full, per `handoffs/room-address-and-shelter.md`, and
+discharges #88 by bannering the handoff both changes invalidate. Two ROOM SCHEMA
+changes settled in one pass because both require editing all 218 room
+definitions: `building` is split into `address` (where the room is) and
+`building` (what building it is inside), and a new `shelter` field is laid down
+on every room with no consumer, ahead of #58 and #6. Content and one utility
+function only — no new mechanic. `SAVE_KEY` does not rotate; existing browser
+saves keep loading and are repaired by a new backfill.
+
+**Changed / Reworked**
+
+*Room identity fields*
+- **`address` is new and mandatory on all 218 rooms** — the street or
+  intersection the room is at, as a display string, never empty. The rule, now
+  in the ROOM SCHEMA comment: *a room's address is the street it is on, and a
+  building fronts a street, never a corner.* A street or mid-block node's
+  address is its own location, intersection nodes included (`"Dock St & 6th
+  St"`); a room inside a building takes the named street that building fronts,
+  so the Police Station is entered from `maple3rd` but addresses as
+  `"Maple St"`. Four of the six single-room buildings were already authored this
+  way — the pass extends the convention rather than inventing it.
+- **`building` narrows to a building's name, or absent.** It held a building
+  name on 33 rooms, a street or intersection on 184, and `""` on one. It now
+  holds a name and nothing else, ever. The six rooms that carried their
+  building's name in `room` (`cornerstore`, `pharmacy`, `hardware`, `storage`,
+  `riverbank`) moved it into `building` and set `room: null`.
+- **`shelter` is new and mandatory on all 218 rooms** — `"none"` or `"full"`,
+  178 and 40 respectively. `"partial"` is documented as a reserved third value
+  and used by no room: classifying covered porches and open garages is content
+  for the pass that gives `shelter` a consumer. **Nothing reads `shelter`
+  today.** It ships unread on purpose, the way LOCATIONS' `z` does, so #58
+  (weather) and #6 (rooftops) need no retrofit across every room — and, more to
+  the point, so #8's ~300 new rooms author it from the start.
+- **`shelter` is not `cannotHaveFire`, and is not derived from it.** The two are
+  coextensive across all 218 rooms today; that is a measured coincidence of the
+  current content, not an invariant, and the implementation does not exploit it.
+  They are different facts, and content that breaks the correlation is already
+  specced (`handoffs/building-placement-and-elm-st.md`'s unfinished house is
+  outdoors and fire-capable). Deriving from `locationId === roomId` was likewise
+  rejected — it is wrong for exactly the two interesting rooms, `alley` and
+  `riverbank`, both of which are `"none"` while carrying no `cannotHaveFire`.
+- Field order in a room literal is now `locationId, address, building, area,
+  room, shelter, desc, …`. `shelter` sits with the identity block rather than
+  with the optional environmental flags below `desc`, because like `locationId`
+  it is mandatory and those flags are not.
+- `doors[id].building` and `master_key.building` are a **different field**
+  holding a building *id* (`"acorn"`), read by `getItemActions()` and
+  `findKeyForDoor()`. Untouched, and now called out as distinct in the schema
+  comment.
+
+*`roomLabel()`*
+- The four-branch function is replaced by an outward-in composition:
+  `[address, building, area].filter(Boolean).join(", ")`, then `room` joined
+  with `" - "` when there is an `area` and `", "` otherwise. Every room has an
+  address; the other three are optional. The old four branches could not tell
+  `"Oak Apartments, Stairwell"` from `"Main St, Corner Store"` — identical field
+  shapes, opposite meanings — which is the two-facts-in-one-field problem #42
+  was filed for.
+
+**UI**
+- **34 of 218 location-bar labels change**, all by gaining the street they are
+  on as a prefix, plus `riverbank` losing the leading `", "` it rendered from
+  `building: ""`. `#locLabel` is the only thing on screen that differs; no new
+  element, no button, no rewritten wording. The alternative composition (drop
+  the address when a building name is present) was considered and rejected:
+  it would have lost the address for the six single-room buildings that carry
+  one today.
+
+| room | before | after |
+|---|---|---|
+| `living` | `"Acorn Apartments, 2A - Living Room"` | `"Poplar St, Acorn Apartments, 2A - Living Room"` |
+| `kitchen` | `"Acorn Apartments, 2A - Kitchen"` | `"Poplar St, Acorn Apartments, 2A - Kitchen"` |
+| `bathroom` | `"Acorn Apartments, 2A - Bathroom"` | `"Poplar St, Acorn Apartments, 2A - Bathroom"` |
+| `bedroom` | `"Acorn Apartments, 2A - Bedroom"` | `"Poplar St, Acorn Apartments, 2A - Bedroom"` |
+| `balcony` | `"Acorn Apartments, 2A - Balcony"` | `"Poplar St, Acorn Apartments, 2A - Balcony"` |
+| `hallway2` | `"Acorn Apartments, 2nd Floor - Hallway"` | `"Poplar St, Acorn Apartments, 2nd Floor - Hallway"` |
+| `twobee` | `"Acorn Apartments, 2B - Living Room"` | `"Poplar St, Acorn Apartments, 2B - Living Room"` |
+| `twobee_kitchen` | `"Acorn Apartments, 2B - Kitchen"` | `"Poplar St, Acorn Apartments, 2B - Kitchen"` |
+| `twobee_bathroom` | `"Acorn Apartments, 2B - Bathroom"` | `"Poplar St, Acorn Apartments, 2B - Bathroom"` |
+| `twobee_bedroom` | `"Acorn Apartments, 2B - Bedroom"` | `"Poplar St, Acorn Apartments, 2B - Bedroom"` |
+| `twobee_balcony` | `"Acorn Apartments, 2B - Balcony"` | `"Poplar St, Acorn Apartments, 2B - Balcony"` |
+| `stairs2` | `"Acorn Apartments, 2nd Floor - Stairs"` | `"Poplar St, Acorn Apartments, 2nd Floor - Stairs"` |
+| `stairs1` | `"Acorn Apartments, 1st Floor - Stairs"` | `"Poplar St, Acorn Apartments, 1st Floor - Stairs"` |
+| `hallway1` | `"Acorn Apartments, 1st Floor - Hallway"` | `"Poplar St, Acorn Apartments, 1st Floor - Hallway"` |
+| `onea` | `"Acorn Apartments, 1A - Living Room"` | `"Poplar St, Acorn Apartments, 1A - Living Room"` |
+| `onea_kitchen` | `"Acorn Apartments, 1A - Kitchen"` | `"Poplar St, Acorn Apartments, 1A - Kitchen"` |
+| `onea_bathroom` | `"Acorn Apartments, 1A - Bathroom"` | `"Poplar St, Acorn Apartments, 1A - Bathroom"` |
+| `onea_bedroom` | `"Acorn Apartments, 1A - Bedroom"` | `"Poplar St, Acorn Apartments, 1A - Bedroom"` |
+| `onea_patio` | `"Acorn Apartments, 1A - Patio"` | `"Poplar St, Acorn Apartments, 1A - Patio"` |
+| `onebee` | `"Acorn Apartments, 1B"` | `"Poplar St, Acorn Apartments, 1B"` |
+| `oak_hallway1` | `"Oak Apartments, 1st Floor - Hallway"` | `"Poplar St, Oak Apartments, 1st Floor - Hallway"` |
+| `oak_stairs` | `"Oak Apartments, Stairwell"` | `"Poplar St, Oak Apartments, Stairwell"` |
+| `oak_hallway2` | `"Oak Apartments, 2nd Floor - Hallway"` | `"Poplar St, Oak Apartments, 2nd Floor - Hallway"` |
+| `oak_1a` | `"Oak Apartments, 1A"` | `"Poplar St, Oak Apartments, 1A"` |
+| `oak_1b` | `"Oak Apartments, 1B"` | `"Poplar St, Oak Apartments, 1B"` |
+| `oak_2a` | `"Oak Apartments, 2A"` | `"Poplar St, Oak Apartments, 2A"` |
+| `oak_2b` | `"Oak Apartments, 2B"` | `"Poplar St, Oak Apartments, 2B"` |
+| `auto_shop` | `"Auto Workshop, Main Bay"` | `"Main St, Auto Workshop, Main Bay"` |
+| `auto_shop_back` | `"Auto Workshop, Back Office"` | `"Main St, Auto Workshop, Back Office"` |
+| `police_lobby` | `"Police Station, Lobby"` | `"Maple St, Police Station, Lobby"` |
+| `police_evidence` | `"Police Station, Evidence & Holding"` | `"Maple St, Police Station, Evidence & Holding"` |
+| `industrial_floor` | `"Riverside Freight, Warehouse Floor"` | `"Maple St, Riverside Freight, Warehouse Floor"` |
+| `industrial_office` | `"Riverside Freight, Office"` | `"Maple St, Riverside Freight, Office"` |
+| `riverbank` | `", Riverbank"` | `"Water St, Riverbank"` |
+
+  The other 184 labels are byte-identical — including all 64 intersection
+  nodes, all 117 street and mid-block nodes, `alley`, and the three flats above
+  the Main St shops.
+
+**New**
+- **`backfillRoomAddresses()`** (PERSISTENCE), the fourth backfill beside
+  `backfillItemIds()` / `backfillLocationIds()` / `backfillContainerFields()`,
+  called from `applyLoadedData()` after the other three. `applyLoadedData()`
+  takes the incoming world wholesale, so a save made before this ships carries
+  rooms with the old `building` and no `address` — every one of its 218 labels
+  would render `"undefined, …"`. It keys off `address === undefined`, not
+  falsiness, and copies all four label fields rather than just `address`:
+  `building`'s meaning changed and `room` moved for six rooms, so restoring
+  `address` alone would leave `cornerstore` reading
+  `"Main St, Corner Store, Corner Store"`. All four are static content with
+  `roomLabel()` as their only reader, which is what makes taking them wholesale
+  from the defaults safe. **`shelter` gets no backfill** — nothing reads it, so
+  an old save's rooms lacking it changes nothing; the pass that adds the first
+  consumer inherits that backfill, and the schema comment says so.
+- **`validateRoomSchema()`** (PERSISTENCE), a dev-only console helper beside
+  `validateLocations()`, wired to nothing. Reports a room with no `address`, a
+  missing `shelter`, or a `shelter` outside `"none"`/`"partial"`/`"full"`.
+  A helper rather than a build-time warning because both failures are loud: a
+  missing `address` renders `"undefined"` in the location bar of the room you
+  are standing in, on the first frame.
+
+**Open questions / decisions resolved**
+- **`building: null` is omitted, not written, on the 176 street nodes** (and on
+  `alley` and the three flats). `address` is what those rooms have, and
+  `filter(Boolean)` treats absent and `null` identically; the schema comment
+  states that `building` is absent when the room is not inside a named building.
+- **`shelter` is a bare string**, not a `SHELTER` frozen constant set. The three
+  legal values are named in the ROOM SCHEMA comment and in
+  `validateRoomSchema()`. The file's other enumerated room fields (`sleepSpot`,
+  `searchLabel`) are bare strings too, and a constant set read by one validator
+  is not yet earning its name.
+- **`backfillRoomAddresses()` runs last** in `applyLoadedData()`'s backfill
+  block. It is independent of the other three; the position is for reading
+  order only.
+
+**Notes / assumptions**
+- **The three flats above the Main St shops get `building: null`, not the
+  shop's name** — a flat over the Corner Store is not inside the Corner Store;
+  the shop is downstairs and the residence is reached by its own stair. This is
+  a judgment call with no prior convention, and it is **retunable**: it also
+  happens to preserve those three labels exactly, which is convenient but is not
+  the argument for it.
+- The 40 `"full"` rooms are **exactly** the 40 carrying `cannotHaveFire`. Stated
+  here as a measured fact about today's content, not as an invariant anything
+  may rely on.
+
+**Explicitly out of scope**
+- **The remaining `BUILDINGS[].name` ↔ `room.building` duplication.** This pass
+  removed the `room.room` half of it — all eleven `BUILDINGS` names now live in
+  some room's `building` field — but not the rest. Deriving from
+  `BUILDINGS[id].name` needs a stable `buildingId` on rooms to join on, since
+  matching by name string is what the project avoids. Filed as **#89**.
+- **`cannotHaveFire`** — not replaced, not derived, not removed.
+- **Giving `shelter` a consumer** (#58, #6), and **#8 itself**: no room was
+  added.
+- **#68** (`computeDirection()`'s zero vector), specced separately in
+  `handoffs/direction-zero-vector-guard.md`; **#87** and **#37**, both
+  RENDERING.
+- The 64 intersection nodes' `"<Street> St & <N>th St"` strings, which read
+  correctly and stay as authored.
+
+**Documentation**
+- The ROOM SCHEMA comment documents `address` (with the address rule),
+  `building`'s narrowed meaning and its distinctness from `doors[].building`,
+  and `shelter` (legal values, the reserved `"partial"`, the LOCATIONS-`z`
+  precedent for shipping a field unread, the not-`cannotHaveFire` rule, and the
+  inherited backfill).
+- **`handoffs/building-placement-and-elm-st.md` carries a supersession banner**
+  as of this PR — it authors `building:"214 Elm St"`, a meaning the field no
+  longer has, and specs no `shelter` at all. Body untouched; the banner names
+  what changed, notes that its label *output* is unaffected, and points at #88.
+  This closes #88.
+- **Deferred and filed: #89** (the `buildingId` question above). Nothing else
+  was deferred.
+
+**Sections touched**
+- **WORLD DATA** — the ROOM SCHEMA comment and all 218 room definitions, across
+  the ten building builders and the sixteen street builders.
+- **CORE UTILITIES** — `roomLabel()`.
+- **PERSISTENCE** — `applyLoadedData()`'s backfill block, new
+  `backfillRoomAddresses()`, new `validateRoomSchema()` in the dev-helper block.
+- Nothing in ACTIONS, SIMULATION or the STAMINA/FATIGUE sub-block. RENDERING is
+  reached only through `renderLocationPanel()`'s existing, unedited call to
+  `roomLabel()`. The ARCHITECTURE comment needs no change — no section gains or
+  loses a responsibility.
+
+**Validation performed**
+- **Full before/after label table for all 218 rooms**, built on `origin/main`
+  and on the branch and diffed: **exactly 34 rows differ**, each exactly as the
+  handoff's table specifies. The 184 unchanged labels are proven, not asserted.
+- **No label starts or ends with `", "`, is empty, or contains `undefined`.**
+- `validateRoomSchema()` returns `[]`. Counts: **178 `"none"`, 40 `"full"`, 0
+  `"partial"`**, 0 rooms without an address. `validateLocations()` still returns
+  `[]`.
+- **`shelter` vs. `cannotHaveFire`:** the two sets are identical (40 = 40) and
+  `alley` / `riverbank` are `"none"` with no `cannotHaveFire`, as expected.
+- **Old-save round trip:** a `serializeGame()` output produced on `origin/main`
+  at v0.4.11, loaded into the branch build, renders all 218 labels identically
+  to a fresh world — and leaves `shelter` undefined on all 218, which is the
+  specified behavior. A well-formed new save still round-trips byte-identically
+  through `serializeGame()`.
+- **Master key regression:** `findKeyForDoor()` resolves the Acorn master key
+  for all four Acorn doors (`1a`, `1b`, `2a`, `2b`) — the guard on
+  `doors[].building` / `master_key.building` not having been caught by the
+  field sweep.
+- **Page load in Chromium: zero console errors or warnings**, `#locLabel` reads
+  `"Poplar St, Acorn Apartments, 2A - Living Room"`.
+- **Diff discipline:** `git diff origin/main...HEAD -- ashfall.html` — the
+  version bump, the ROOM SCHEMA comment, 218 single-line room definitions,
+  `roomLabel()`, and two additions in PERSISTENCE. Nothing in ACTIONS,
+  SIMULATION or RENDERING.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.11"` → `"0.4.12"`
+
+---
+
 ## v0.4.11 — Reproduced defect sweep: Sleep, fire spend, load atomicity, log freshness
 
 Implements: handoffs/reproduced-defect-sweep.md

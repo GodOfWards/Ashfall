@@ -1,3 +1,26 @@
+> **SUPERSEDED — the room schema it authors against no longer exists.**
+>
+> Written against v0.4.9. `handoffs/room-address-and-shelter.md` shipped in
+> v0.4.12 and split the `building` field in two, so this file's room
+> definitions would now author into the wrong one:
+>
+> - A house is `address:"214 Elm St"`, `building:null` (omitted) — not
+>   `building:"214 Elm St"`. `building` now holds a building's *name* and
+>   nothing else; a street address is `address`.
+> - The unfinished-house set-piece in Part 1f is `address:"Elm St"`,
+>   `building:"Unfinished House"`, `room:null` — the single-room convention
+>   moved the name out of `room` and into `building`.
+> - **Every room now needs `shelter`** (`"none"` or `"full"`), which this file
+>   specs nowhere. The field order is `locationId, address, building, area,
+>   room, shelter, desc, …`.
+>
+> **The label output this file describes is unaffected** — `roomLabel()`
+> composes the same strings from the new fields. Only where the values are
+> written changed. Everything else below — the placement grid, the street
+> descriptions, the per-house contents — still stands.
+>
+> **#88 carries the live truth.** Read it before implementing any of this.
+
 # Ashfall Handoff — Building placement, and the houses on Elm St
 
 Current shipped version: v0.4.9
