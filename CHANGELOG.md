@@ -5,7 +5,16 @@ kept for context but should not need to be re-read for a change scoped to a
 single system — see the ARCHITECTURE comment in the script for which section
 owns which behavior. The file begins at v0.1.3; 0.1.0–0.1.2 predate it and are
 project genesis, not missing entries. The one genuine gap, v0.2.3, is marked in
-place.
+place. v0.2.0 is not a second one — it is a skipped number, and v0.2.1's own
+closing line records the bump as `"0.1.3"` → `"0.2.1"`.
+
+Eleven versions below this line are absent from the tag list, and that is
+correct. v0.1.3 through v0.3.0 shipped before this repository existed: its root
+commit holds only the process guides, the game file first appears at v0.4.0, and
+no commit anywhere carries a pre-0.4 `GAME_CONFIG.VERSION`. Their entries were
+imported as history. So tags begin at v0.4.0 by fact rather than by oversight,
+and there is no commit those eleven tags could correctly point at — the
+wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
