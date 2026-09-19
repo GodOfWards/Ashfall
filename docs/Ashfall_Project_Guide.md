@@ -264,6 +264,10 @@ bump.
   nothing a session needs at runtime.
 - `handoffs/<feature-name>.md` — one file per handoff, kept after it
   ships. Its commit date says when it was written; nothing needs deleting.
+- `handoffs/archive/` — the same files once they are no longer live, spent
+  and superseded alike. The top level of `handoffs/` therefore holds only
+  what a coding session could still be handed, which is usually nothing or
+  one file. See `Ashfall_Handoff_Guide.md`, Part 2.
 - The backlog is GitHub Issues, not a file. Tier is a label
   (`tier-0`…`tier-3`).
 - Every shipped version is tagged `vX.Y.Z` on the merge commit.
@@ -276,6 +280,11 @@ bump.
   handoff file per `Ashfall_Handoff_Guide.md`, including its rule that
   genuinely open design questions (as opposed to narrow implementation
   choices) get resolved with Tom before the handoff is considered ready.
+- A handoff that stops being live is moved to `handoffs/archive/` by
+  whoever is already there — the coding session's own pull request when it
+  ships it, or the session that finds it superseded, at the moment it
+  finds it. Not at some later tidying pass: the gap between going stale
+  and being shelved is exactly when someone implements it.
 - An issue is closed by the pull request that fulfils it (`Closes #NN`),
   never by hand and never by a session tidying up after itself. If an
   issue's scope has been partly overtaken by shipped work, edit it down to
@@ -349,9 +358,11 @@ handing over.
 
 **Inputs — read before starting:**
 - `ashfall.html` — implementation happens directly against this file.
-- The **handoff file** in `handoffs/` that specs this work. The handoff is
-  used for exactly this — it is not referenced again once implementation
-  starts, and it is not a living document.
+- The **handoff file** at the top level of `handoffs/` that specs this
+  work. The handoff is used for exactly this — it is not referenced again
+  once implementation starts, and it is not a living document. Anything
+  under `handoffs/archive/` is out: those have shipped or been superseded,
+  and implementing one is the failure the folder exists to prevent.
 
 Nothing else. Not the changelog, not the issue backlog — implementation
 never needs either, and the changelog is long enough that reading it up
@@ -378,6 +389,10 @@ validated:
 - **New issues for anything deferred**: cut scope, a follow-up this pass
   surfaced but didn't build, anything that now belongs in the backlog and
   didn't before. File them, and reference them in the PR.
+- **The handoff moved** to `handoffs/archive/`, in this same pull request.
+  It is spent the moment this merges, and leaving it at the top level
+  leaves an instruction standing for a session that has been told to read
+  exactly that directory and nothing else.
 
 Do **not** file an issue to record what this session *shipped*, and don't
 close the fulfilled issue by hand — `Closes #NN` does it on merge.
