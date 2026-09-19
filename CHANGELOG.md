@@ -18,6 +18,222 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.4.17 — The mid-block toll, and three unstated facts
+
+Implements: handoffs/mid-block-toll-and-three-unstated-facts.md
+
+Implements #92, #97, #98 and #99 in full, per
+`handoffs/mid-block-toll-and-three-unstated-facts.md`. Four `tier-1` items that
+are one complaint applied four times: a fact the game acts on that the source
+never states. A movement cost nobody chose, a log line promising a tool the gate
+does not require, a save carrying UI state under a convention the file had
+already decided the other way three times, and an exact arithmetic relationship
+between three constants declared in two sections.
+
+Mechanics and plumbing only. **No WORLD DATA was touched** — no room, item,
+container, exit or description changed, and `ITEM_REGISTRY` was not edited.
+#92 is the one player-facing balance change in the pass.
+
+**New**
+- `BLOCK_M` (`100`), in CONFIG / CONSTANTS beside `MIN_MOVE_MIN`. The grid pitch
+  in metres — the same figure the `LOCATIONS` comment gives as "Block size
+  100m" and that every street coordinate embodies, named where movement now
+  reads it. It earns a name because a formula, not a table, depends on it.
+
+**Changed / Reworked**
+
+*Movement floor (#92)*
+- `moveMinutes(distanceM, gridTravel)` takes a second argument and floors grid
+  travel in proportion to distance — `MIN_MOVE_MIN * distanceM / BLOCK_M` —
+  while everything else keeps the flat `MIN_MOVE_MIN`. `exitMinutes()`, its only
+  caller, passes `isGridTravel(state.currentRoom, exit.to)`.
+- The flat branch is load-bearing and is deliberately not collapsed into the
+  proportional one: the 22 building entrances have `locationDistance() === 0`,
+  so a proportional floor would floor them at zero and make them free. They are
+  non-grid exits, so `isGridTravel()` already routes them to the flat branch;
+  the rewritten `MIN_MOVE_MIN` comment now says so, because the two branches
+  otherwise read as a redundancy waiting to be tidied away.
+- Effect: a full block's two routes — one 100 m move, or two 50 m moves through
+  the mid-block node — now cost exactly the same at every gait. Before, stopping
+  mid-block cost +44% at Walk and +100% at Jog, and the mid-block nodes are
+  where the trees, the parked cars, the building entrances and the loose floor
+  items hang, so the toll fell on looking around. Nothing got more expensive:
+  the only values that changed are the 448 fifty-metre grid exits, at Walk
+  (1.000 → 0.694) and Jog (1.000 → 0.500). The 224 hundred-metre grid exits,
+  all 102 non-grid exits, and all of Sneak are unchanged.
+
+*Exertion constants (#99)*
+- `CHOP_TREE_EXERTION` and `FISH_EXERTION` moved from the STAMINA / FATIGUE
+  block to FIRE / COOKING, each immediately after its own duration.
+  `CHOP_TREE_EXERTION` is now written as `CHOP_TREE_MIN * BASELINE_STAMINA_RATE`
+  rather than the literal `30`, so the relationship survives a retune of either
+  input — chopping is deliberately break-even on Stamina at full Energy, and the
+  relationship is the rule, not the number. `FISH_EXERTION` stays a literal `8`:
+  fishing's margin (20 minutes recovered against 8 spent, net +12) is the point,
+  and the number is a balance value retunable on its own.
+- Values are unchanged and the behaviour is bit-identical — `30 × 1 = 30`. The
+  diff is the proof; see Validation.
+
+**Removed**
+- `invTab` and `worldTab` are gone from `makeDefaultState()` and therefore from
+  the serialised save (#98). They are now module-level bindings beside
+  `gameOver` and `detailItem`, the same call already made for `mapZoomMode` /
+  `mapZoomStep`. All 33 references across INVENTORY / ITEM SYSTEM, WORLD
+  INTERACTION and RENDERING dropped the `state.` prefix; the two that also read
+  a slot out of `state` keep that lookup
+  (`if(invTab !== "inventory" && !state[invTab])`). Both reset to their defaults
+  in `doRestart()` and `applyLoadedData()`.
+- The three task Exertion constants left the STAMINA / FATIGUE block — see
+  **Function relocation** and **Changed / Reworked** above. Nothing replaced
+  them there; the block's header comment now states that it owns only what
+  Exertion *does*.
+
+**Function relocation**
+- `JOG_EXERTION_PER_MIN` moved from CONFIG / CONSTANTS to WORLD INTERACTION,
+  immediately above `doMove()`, its only reader. With that move no task's
+  Exertion is left orphaned in the STAMINA / FATIGUE block and the
+  "declared beside the task" rule holds without exception. No function body
+  moved between sections in this pass.
+
+**UI**
+- Mid-block travel is cheaper at Walk and Jog. The Move buttons' printed costs
+  do not visibly change: `fmtDuration()` floors display at `MIN_DISPLAY_MIN`, so
+  a sub-minute half-move still reads `(0:01)` — see **Explicitly out of scope**.
+- Forcing a vehicle logs "You force the door. The lock gives with a crack."
+  instead of "You pry the door open. …" (#97). The old line promised a crowbar
+  the gate never required; "force" matches the button's own label. The second
+  sentence is unchanged, and the gate stays `hasTool("blunt")`.
+- The Inventory and Here panels open on Inventory and Floor after a load or a
+  restart, rather than on whichever tab was showing when the game was saved.
+  That is what "the save carries no record of the panels" means in practice, and
+  it is what `mapZoomMode` already does.
+
+**Documentation**
+- `MIN_MOVE_MIN`'s comment rewritten: the two branches and why they differ, that
+  the flat branch is what stops the 22 zero-distance entrances being free, and
+  that the per-move flat floor is what produced the +44% / +100% toll — so the
+  next reader sees the proportional form as chosen rather than stumbled into.
+  The "over a 50 m block the two are identical" clause is deleted; this pass
+  makes it false. The pace paragraph stays: a 100 m block at Jog still costs
+  1.00 against Walk's 1.39.
+- A comment above the vehicle gate in `renderHereActionsPanel()` records that
+  any `blunt` item qualifies and that gating on `prying` was declined, since the
+  crowbar alone carries it and early vehicle access would depend on one item.
+  `prying` remains in `ITEM_REGISTRY` and remains in the ITEM DATA SCHEMA
+  comment's "declared, with no consumer yet" group.
+- Comments on `invTab` / `worldTab`, on both new FIRE / COOKING constants, on
+  `JOG_EXERTION_PER_MIN`'s new home, and on the inert keys an old save leaves in
+  `state`.
+- Two issues filed for work this pass deferred: the sub-minute display gap in
+  `fmtDuration()` / `MIN_DISPLAY_MIN` that #92 made worth an opinion (`tier-1`),
+  and revisiting the `prying` gate once #66 makes the crowbar reachable outside
+  `onebee/toolcabinet` and `hardware/toolwall` (`tier-2`, blocked on #66). Both
+  were judged worth filing. The ARCHITECTURE comment needs no change: no section
+  gains or loses a responsibility.
+
+**Open questions / decisions resolved**
+The handoff left three narrow implementation calls open. All three took the
+recommended option:
+- **`JOG_EXERTION_PER_MIN`'s home** — moved to WORLD INTERACTION above
+  `doMove()`, rather than left in place with the block comment naming movement
+  as an exception. Consistency won: after this pass the block holds no task
+  constant at all.
+- **Inert `invTab` / `worldTab` keys in loaded saves** — left in `state` rather
+  than `delete`d in `applyLoadedData()`. They arrive through the
+  `{ ...base, ...data.state }` spread, nothing reads them, and deleting two
+  named keys would imply a schema check this load path deliberately does not
+  perform: `validateLoadedWorld()` validates only the shapes that would throw.
+  No behavioural difference either way.
+- **`moveMinutes()`'s floor** — the ternary is inlined rather than extracted
+  into a `moveFloorMinutes()` helper. There is exactly one caller, and the
+  two-line body reads as well inline.
+
+**Notes / assumptions**
+- #92 is the pass's only balance change and is retunable. The proportional floor
+  asserts that one 50 m half-move should cost half a block, which is a design
+  position, not arithmetic; `MIN_MOVE_MIN` and `BLOCK_M` are both knobs on it.
+  No `GAITS` speed, `MIN_MOVE_MIN`, `FISH_EXERTION`, `CHOP_TREE_MIN` or
+  `BASELINE_STAMINA_RATE` value changed.
+- #99's half is bit-identical: only where two constants live, and how one is
+  written, changed.
+
+**Explicitly out of scope**
+- **The sub-minute display gap.** `fmtDuration()` floors display at
+  `MIN_DISPLAY_MIN`, so a 50 m half-move at Jog now costs 0.500 and still reads
+  `(0:01)` — the button claims twice what it charges. That is the display
+  floor's own question; `MIN_DISPLAY_MIN` was split out from `MIN_MOVE_MIN`
+  precisely so the two could move independently. Filed, not fixed.
+- **Gating anything on `prying`.** #97 is settled as a prose fix; the tag stays
+  unconsumed.
+- **#66 / #67** — spawn reachability and the single-matchbox fire problem. #97's
+  decision leans on them being open; neither is touched here.
+- **#8** — map expansion. It adds roughly 300 rooms reached through mid-block
+  nodes, which is why #92 was worth settling first, but no map work happens
+  here.
+- **#43, #87** — map label measurement and splitting. Unrelated.
+
+**Explicitly NOT changed**
+- No room, item, container, exit or description. No `LOCATIONS` entry, no
+  `build*()` function, no `ITEM_REGISTRY` edit. No item-schema field, tag or
+  category.
+- No new state field anywhere — #98 *removes* two and adds none. `SAVE_KEY` does
+  not rotate: a PATCH bump keeps `versionCompat()` at `0.4`, so existing browser
+  saves keep loading, and an old save's `invTab` / `worldTab` survive the spread
+  as inert keys nothing reads.
+- `MIN_DISPLAY_MIN`, `fmtDuration()`, `GAITS`, `effectiveGait()`,
+  `gaitLocked()`, `isGridTravel()` and `locationDistance()` are all untouched.
+- `applyExertion()`, `recoveryStep()` and `runAwakeStep()` are untouched: this
+  pass moved two Exertion figures and rewrote one as a product, and changed
+  nothing about what Exertion does.
+- Sneak, 100 m grid moves and every non-grid exit cost exactly what they cost
+  before.
+
+**Validation performed**
+- **The exit census is unchanged**, re-run through `isGridTravel()` /
+  `locationDistance()` under a Node harness that loads the script body behind a
+  DOM stub: **448** grid exits at 50 m, **224** at 100 m, **102** non-grid, of
+  which **22** are zero-distance, **774** total.
+- `2 × moveMinutes(50, true) === moveMinutes(100, true)` holds exactly at all
+  three gaits (Sneak 2.778, Walk 1.389, Jog 1.000), and
+  `moveMinutes(0, false) === MIN_MOVE_MIN`. A real `doMove()` across a 50 m grid
+  exit at Walk charges 0.694 — exactly what `exitMinutes()` priced it at — and a
+  zero-distance building entrance still costs `MIN_MOVE_MIN`.
+- `grep -c "state\.invTab\|state\.worldTab" ashfall.html` reports **0**, and a
+  fresh `serializeGame()` contains neither key. A save carrying both keys and a
+  non-default tab loads successfully, the two bindings reset to `"inventory"` /
+  `"floor"`, and the inert keys are left in `state` untouched. `doRestart()`
+  resets both.
+- `CHOP_TREE_EXERTION` still evaluates to **30** and `FISH_EXERTION` to **8**. A
+  chop at full Energy leaves Stamina exactly where it started; a fish leaves it
+  **+12**. The "no behaviour change" claim for #99 is proven by
+  `git diff origin/main...HEAD -- ashfall.html`, which shows the two constants
+  moved and one rewritten as a product, and nothing else in the chop or fish
+  paths.
+- `validateItemRegistry()`, `validateLocations()` and `validateRoomSchema()` all
+  report clean, and a fresh `makeDefaultWorld()` emits no
+  `applyComputedDirections` warnings.
+
+**Sections touched**
+- **CONFIG / CONSTANTS** — `BLOCK_M` added; `MIN_MOVE_MIN` comment rewritten;
+  `JOG_EXERTION_PER_MIN`, `CHOP_TREE_EXERTION` and `FISH_EXERTION` removed from
+  the STAMINA / FATIGUE block, whose header comment narrows.
+- **CORE UTILITIES** — `moveMinutes()`, `exitMinutes()`.
+- **PLAYER STATE** — `makeDefaultState()` loses two fields; two module-level
+  bindings added.
+- **INVENTORY / ITEM SYSTEM** — `addToDestination()`, `doTake()`, `doStore()`,
+  `doConsume()`, `doEquip()`, `doUnequip()`, `getItemActions()`: tab references
+  only.
+- **WORLD INTERACTION** — `doMove()`, `doOpenContainer()`, `doBreakCar()`;
+  `JOG_EXERTION_PER_MIN`'s new home.
+- **FIRE / COOKING** — `FISH_EXERTION` and `CHOP_TREE_EXERTION` arrive.
+- **PERSISTENCE** — `applyLoadedData()` resets the two bindings.
+- **RENDERING** — `renderInventoryPanel()`, `renderWorldItemsPanel()`,
+  `renderHereActionsPanel()` (the gate comment only).
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.16"` → `"0.4.17"`
+
+---
+
 ## v0.4.16 — computeDirection()'s zero vector, and a build-time guard
 
 Implements: handoffs/direction-zero-vector-guard.md

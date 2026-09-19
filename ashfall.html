@@ -255,23 +255,41 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.4.16" };
+  const GAME_CONFIG = { VERSION: "0.4.17" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
-  // Floor on the cost of one movement, in game minutes. Load-bearing: 22 of
-  // the 774 exits are building entrances whose two Locations sit at identical
-  // coordinates, so their computed distance is 0 and this is the only thing
-  // stopping them being free.
+  // Floor on the cost of one movement, in game minutes — applied two ways,
+  // and the two branches are not a redundancy to be tidied away.
   //
-  // It also settles the pace question: pace is a journey-scale choice, not a
-  // per-block one. With the floor at 1 minute, one 100 m block costs 1.00
-  // minute at Jog against Walk's 1.39 — a 28% saving, not the 40% that Jog's
-  // 67%-higher speed implies — and over a 50 m block the two are identical,
-  // both floored to 1 minute. That is the intended behaviour: the gait
-  // selector is meant to pay off over a route, not over one step, which is why
-  // the floor is not lowered to make short hops differentiate.
+  // Grid travel (street/mid-block nodes, what isGridTravel() marks) is
+  // floored in proportion to distance: MIN_MOVE_MIN per BLOCK_M. A flat
+  // per-move floor priced the two routes across one block differently —
+  // stopping at the mid-block node cost +44% at Walk and +100% at Jog against
+  // the single 100 m move with the same endpoints — and the mid-block nodes
+  // are where the trees, the parked cars, the building entrances and the
+  // loose floor items hang, so the toll fell on looking around. The
+  // proportional form was chosen, not stumbled into: both routes now cost the
+  // same at every gait.
+  //
+  // Everything else keeps the flat floor, and that branch is load-bearing:
+  // 22 of the 774 exits are building entrances whose two Locations sit at
+  // identical coordinates, so their computed distance is 0. A proportional
+  // floor would floor them at zero and make them free. They are non-grid
+  // exits, so isGridTravel() already routes them to the flat branch.
+  //
+  // The floor also settles the pace question: pace is a journey-scale choice,
+  // not a per-block one. With the floor at 1 minute per block, one 100 m
+  // block costs 1.00 minute at Jog against Walk's 1.39 — a 28% saving, not
+  // the 40% that Jog's 67%-higher speed implies. That is the intended
+  // behaviour: the gait selector is meant to pay off over a route, not over
+  // one step, which is why the floor is not lowered further.
   const MIN_MOVE_MIN = 1;
+  // The grid pitch in metres, which moveMinutes() divides by to scale the
+  // grid floor. A second statement of the figure the LOCATIONS comment gives
+  // as "Block size 100m" and that every street coordinate embodies; it earns
+  // a name because a formula, not a table, now depends on it.
+  const BLOCK_M = 100;
   // Floor on any duration the UI prints, in game minutes. Equal to
   // MIN_MOVE_MIN today and a separate constant on purpose: retuning the
   // movement floor must not silently re-round Rest, Sleep, Search, fishing,
@@ -291,6 +309,10 @@
   // See the v0.2.1 entry in CHANGELOG.md for the full rules.
   // Tasks declare Exertion; this system alone decides how Exertion affects
   // Stamina/Fatigue. Do not duplicate this logic inside tasks.
+  // Each task's own Exertion figure is declared beside that task, not here —
+  // chopping and fishing in FIRE / COOKING, jogging above doMove(). This
+  // block owns only what Exertion *does*, which is why no task constant is
+  // left in it.
   const STAMINA_RECOVERY_DELAY_MIN = 1;    // game minutes of non-exertion before recovery starts
   const BASELINE_STAMINA_RATE = 1;         // Stamina/minute, awake baseline
   const REST_STAMINA_RATE = 0.5;           // Stamina/minute during Rest
@@ -308,9 +330,6 @@
   // was previously a bare 100 written at two call sites, neither of which
   // owns Fatigue.
   const FATIGUE_GAIT_LOCK = 100;
-  const JOG_EXERTION_PER_MIN = 0.5;
-  const CHOP_TREE_EXERTION = 30;
-  const FISH_EXERTION = 8;
   const RECIPES = [
     { id:"bandage", label:"Craft a bandage",
       inputs:[ {id:"cloth",qty:2}, {id:"duct_tape",qty:1} ], minutes:5,
@@ -3527,7 +3546,7 @@
   // ==================================================
   function makeDefaultState(){
     const s = {
-      currentRoom:"living", gait:"walk", invTab:"inventory", worldTab:"floor",
+      currentRoom:"living", gait:"walk",
       totalMinutes:0, collapseCount:0, illnessMinutesLeft:0,
       // lastExertionMinute/lastWakeMinute start far in the past so recovery
       // and Sleep are both available immediately at game start.
@@ -3547,6 +3566,15 @@
   let state = makeDefaultState();
   let gameOver = false; // UI-only: never saved — a loaded save always resumes alive
   let detailItem = null; // UI-only: { uid, side } — resolved fresh via findItemByUid(), safe against list mutation
+  // Which tab each item panel is showing. UI-only and deliberately outside
+  // `state`, the same call already made for mapZoomMode/mapZoomStep, gameOver
+  // and detailItem: serializeGame() writes `state` wholesale, so anything left
+  // in it lands in every save and every export. The consequence is that a save
+  // carries no record of what the panels looked like — both reset to their
+  // defaults on load and on restart, and the panels open on Inventory and
+  // Floor.
+  let invTab = "inventory";
+  let worldTab = "floor";
 
   // ==================================================
   // CORE UTILITIES
@@ -3614,12 +3642,17 @@
   // game's prose already follows. Used by the collapsed log summaries.
   const NUMBER_WORDS = ["zero","one","two","three","four","five","six","seven","eight","nine","ten"];
   function numberWord(n){ return n >= 0 && n < NUMBER_WORDS.length ? NUMBER_WORDS[n] : String(n); }
-  function moveMinutes(distanceM){ return Math.max(MIN_MOVE_MIN, distanceM / GAITS[effectiveGait()].speed / 60); }
+  // See MIN_MOVE_MIN for why the floor has two forms and why the flat one
+  // must stay.
+  function moveMinutes(distanceM, gridTravel){
+    const floor = gridTravel ? MIN_MOVE_MIN * distanceM / BLOCK_M : MIN_MOVE_MIN;
+    return Math.max(floor, distanceM / GAITS[effectiveGait()].speed / 60);
+  }
   function exitMinutes(exit){
     const fromLoc = world[state.currentRoom].locationId;
     const toLoc = world[exit.to].locationId;
     const d = (fromLoc === toLoc) ? exit.distanceM : locationDistance(fromLoc, toLoc);
-    return moveMinutes(d);
+    return moveMinutes(d, isGridTravel(state.currentRoom, exit.to));
   }
   // A room's label reads outward-in: the address, then the building it is in,
   // then the area within that building, then the room. `area` and `room` join
@@ -3780,9 +3813,9 @@
   }
   function roomHasHeat(room){ return !!room.heatActive || hasTool("heat"); }
   function addToDestination(item){
-    const dst = invSlot(state.invTab);
+    const dst = invSlot(invTab);
     if(!dst) return { ok:false, reason:"no-destination" };
-    if(state.invTab === "keychain" && !keychainAllows(item)) return { ok:false, reason:"keychain" };
+    if(invTab === "keychain" && !keychainAllows(item)) return { ok:false, reason:"keychain" };
     const weight = item.qty * item.unitWeight;
     if(dst.capacityKg && totalWeight(dst.items) + weight > dst.capacityKg) return { ok:false, reason:"capacity" };
     addToList(dst.items, item);
@@ -3843,7 +3876,7 @@
   }
   function doTake(index, qty){
     const room = world[state.currentRoom];
-    const src = worldSlot(room, state.worldTab);
+    const src = worldSlot(room, worldTab);
     const it = getItemAt(src && src.items, index);
     if(!it) return; // stale reference — nothing to take, fail silently and let render() resync
     const moveQty = normalizeQty(qty, it.qty);
@@ -3862,8 +3895,8 @@
   }
   function doStore(index, qty){
     const room = world[state.currentRoom];
-    const dst = worldSlot(room, state.worldTab);
-    const src = invSlot(state.invTab);
+    const dst = worldSlot(room, worldTab);
+    const src = invSlot(invTab);
     const it = getItemAt(src && src.items, index);
     if(!it || !dst) return;
     const moveQty = normalizeQty(qty, it.qty);
@@ -3881,7 +3914,7 @@
   }
   function doConsume(sourceKind, index){
     const room = world[state.currentRoom];
-    const src = sourceKind === "world" ? worldSlot(room, state.worldTab) : invSlot(state.invTab);
+    const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
     const it = getItemAt(src && src.items, index);
     if(!it || !it.restores) return;
     if(it.restores.hunger) state.vitals.hunger = clamp(state.vitals.hunger + it.restores.hunger);
@@ -3897,7 +3930,7 @@
   }
   function doEquip(sourceKind, index){
     const room = world[state.currentRoom];
-    const src = sourceKind === "world" ? worldSlot(room, state.worldTab) : invSlot(state.invTab);
+    const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
     const it = getItemAt(src && src.items, index);
     if(!it || !it.slotType) return;
     if(state[it.slotType]){ log("You're already carrying something in that slot.", "warn"); return; }
@@ -3908,7 +3941,7 @@
       capacityKg:it.capacityKg, items: it.contents || [] };
     src.items.splice(index,1);
     // Silent: equipping makes a new inventory tab appear.
-    state.invTab = it.slotType;
+    invTab = it.slotType;
     render();
   }
   function doUnequip(slotKey){
@@ -3926,7 +3959,7 @@
           slotType:slotKey, capacityKg:slot.capacityKg, contents:slot.items };
     addToList(state.inventory.items, item);
     state[slotKey] = null;
-    if(state.invTab === slotKey) state.invTab = "inventory";
+    if(invTab === slotKey) invTab = "inventory";
     // Silent: unequipping makes the tab disappear.
     render();
   }
@@ -3952,14 +3985,14 @@
     // are judgment calls and retunable.
     const splittable = STACKABLE.has(it.category) && !it.durability;
     if(side === "world"){
-      const keychainBlocked = state.invTab==="keychain" && !keychainAllows(it);
+      const keychainBlocked = invTab==="keychain" && !keychainAllows(it);
       actions.push({ label:"Take All", disabled: keychainBlocked, onClick:()=>doTake(index) });
       if(splittable && it.qty>=3)
         actions.push({ label:"Take Half", disabled: keychainBlocked, onClick:()=>doTake(index, Math.ceil(it.qty/2)) });
       if(splittable && it.qty>1)
         actions.push({ label:"Take 1", disabled: keychainBlocked, onClick:()=>doTake(index,1) });
     } else {
-      const verb = state.worldTab==="floor" ? "Place" : "Store";
+      const verb = worldTab==="floor" ? "Place" : "Store";
       actions.push({ label: verb + " All", onClick:()=>doStore(index) });
       if(splittable && it.qty>=3)
         actions.push({ label: verb + " Half", onClick:()=>doStore(index, Math.ceil(it.qty/2)) });
@@ -4094,6 +4127,11 @@
   // ==================================================
   // WORLD INTERACTION (continued) — movement, doors, windows, containers
   // ==================================================
+  // Jogging's Exertion, per game minute spent moving. Declared beside its one
+  // reader rather than in the STAMINA / FATIGUE block: movement is a task like
+  // chopping or fishing, and its rate sits with it. Per-minute because
+  // movement, unlike those two, has no fixed duration to scale from.
+  const JOG_EXERTION_PER_MIN = 0.5;
   function doMove(exit){
     const minutes = exitMinutes(exit);
     // The gait this move is actually made at — the effective one, not the
@@ -4108,7 +4146,7 @@
     // Walking doesn't directly consume Stamina; jogging does.
     if(gait === "fast") applyExertion(JOG_EXERTION_PER_MIN * minutes);
     state.currentRoom = exit.to;
-    state.worldTab = "floor";
+    worldTab = "floor";
     detailItem = null;
     render();
   }
@@ -4171,7 +4209,7 @@
   function doBreakCar(){
     const room = world[state.currentRoom];
     room.carLocked = false;
-    log("You pry the door open. The lock gives with a crack.", "warn");
+    log("You force the door. The lock gives with a crack.", "warn");
     render();
   }
   function doOpenWindow(id){ windows[id].state = "open"; log("You pull the " + windows[id].label + " open."); render(); }
@@ -4201,7 +4239,7 @@
   // spawnRolled already set (all hand-placed containers, set true at
   // authoring time), are entirely unaffected.
   function doOpenContainer(room, container){
-    state.worldTab = container.id;
+    worldTab = container.id;
     if(container.spawnPools && !container.spawnRolled){
       container.spawnPools.forEach(poolId=>{
         const pool = SPAWN_POOLS[poolId];
@@ -4436,10 +4474,22 @@
   // Action durations in game minutes. ACTIONS spends these and RENDERING
   // prints them on the buttons, so the two cannot drift apart.
   const FISH_DURATION_MIN = 20;
+  // Fishing is deliberately net positive on Stamina at full Energy: 20 minutes
+  // of baseline recovery against 8 spent. Not derived from its duration the
+  // way chopping is — the margin is the point, and the number is a balance
+  // value retunable on its own.
+  const FISH_EXERTION = 8;
   const LIGHT_STOVE_MIN = 5;
   const BUILD_FIRE_MIN = 10;
   const DISMANTLE_CAMPFIRE_MIN = 10;      // shares a value with BUILD_FIRE_MIN; a separate fact
   const CHOP_TREE_MIN = 30;
+  // Chopping is deliberately break-even on Stamina at full Energy: a chop
+  // spends exactly what its own duration recovers at the awake baseline rate,
+  // so it is sustainable while rested and bites only once low Energy or low
+  // Hunger/Thirst pull the recovery multiplier down. Written as the product
+  // rather than as a literal so the relationship survives a retune of either
+  // input — the relationship is the rule, not the number.
+  const CHOP_TREE_EXERTION = CHOP_TREE_MIN * BASELINE_STAMINA_RATE;
   // Fire fuel. A burn is its wood spent at the per-piece rate, so the two
   // stay in step when either is retuned. A first fire comes out of the
   // campfire kit and burns CAMPFIRE_KIT_COST pieces' worth, since that is
@@ -4770,6 +4820,13 @@
     doors = nextDoors; windows = nextWindows;
     detailItem = null;
     gameOver = false;
+    invTab = "inventory";
+    worldTab = "floor";
+    // An old save's own invTab/worldTab arrive in `state` through the spread
+    // above and are left there: nothing reads them, and deleting two named
+    // keys would imply a schema check this load path deliberately does not
+    // perform — validateLoadedWorld() validates only the shapes that would
+    // throw.
     // The backfills are repair passes for old-but-well-formed saves. They
     // run after validation, never before: they are not what makes a
     // malformed save safe.
@@ -4843,6 +4900,8 @@
     doors = makeDefaultDoors();
     windows = makeDefaultWindows();
     detailItem = null;
+    invTab = "inventory";
+    worldTab = "floor";
     _uidCounter = 1;
     document.getElementById("log").innerHTML = "";
     log("You wake up in your apartment. Everything's exactly where you left it — for now.");
@@ -5634,6 +5693,10 @@
         hereBox.appendChild(actionButton("Close the " + w.label, ()=> doCloseWindow(w.id)));
       }
     });
+    // Forcing a vehicle asks for leverage, not one specific tool: any `blunt`
+    // item qualifies, and the log line is worded to match. Deliberately not
+    // gated on `prying`, which is carried by the crowbar alone and would make
+    // early vehicle access depend on a single item.
     if(room.carContainers && room.carLocked && hasTool("blunt")){
       hereBox.appendChild(actionButton("Force the vehicle open", doBreakCar, "locked"));
     }
@@ -5692,24 +5755,24 @@
     CONTAINER_SLOTS.forEach(slot=>{
       if(state[slot]) invTabDefs.push([slot, SLOT_LABELS[slot]]);
     });
-    if(state.invTab !== "inventory" && !state[state.invTab]) state.invTab = "inventory";
+    if(invTab !== "inventory" && !state[invTab]) invTab = "inventory";
     invTabDefs.forEach(([key,label])=>{
       const btn = document.createElement("button");
       btn.textContent = label;
-      if(state.invTab === key) btn.classList.add("active");
-      btn.addEventListener("click", ()=>{ state.invTab = key; render(); });
+      if(invTab === key) btn.classList.add("active");
+      btn.addEventListener("click", ()=>{ invTab = key; render(); });
       invTabsEl.appendChild(btn);
     });
-    const currentInv = invSlot(state.invTab);
+    const currentInv = invSlot(invTab);
     document.getElementById("invWeight").textContent =
       totalWeight(currentInv.items).toFixed(2) + (currentInv.capacityKg ? " / " + currentInv.capacityKg + " kg" : " kg");
     const unequipBtn = document.getElementById("unequipBtn");
-    if(CONTAINER_SLOTS.indexOf(state.invTab) >= 0){
+    if(CONTAINER_SLOTS.indexOf(invTab) >= 0){
       unequipBtn.style.display = "";
-      unequipBtn.onclick = ()=> doUnequip(state.invTab);
+      unequipBtn.onclick = ()=> doUnequip(invTab);
     } else { unequipBtn.style.display = "none"; }
     renderItemList(document.getElementById("invList"), currentInv.items, [
-      { label: state.worldTab === "floor" ? "Place" : "Store", onClick:(i)=> doStore(i) }
+      { label: worldTab === "floor" ? "Place" : "Store", onClick:(i)=> doStore(i) }
     ], "inv");
   }
   function renderWorldItemsPanel(){
@@ -5724,20 +5787,20 @@
     worldTabDefs.forEach(([key,label])=>{
       const btn = document.createElement("button");
       btn.textContent = label;
-      if(state.worldTab === key) btn.classList.add("active");
+      if(worldTab === key) btn.classList.add("active");
       btn.addEventListener("click", ()=>{
         const c = room.containers.find(x=>x.id===key) || (room.carContainers && room.carContainers.find(x=>x.id===key));
         if(c) doOpenContainer(room, c);
-        else { state.worldTab = key; render(); }
+        else { worldTab = key; render(); }
       });
       worldTabsEl.appendChild(btn);
     });
-    if(!worldTabDefs.find(d=>d[0]===state.worldTab)) state.worldTab = "floor";
-    const currentWorld = worldSlot(room, state.worldTab);
+    if(!worldTabDefs.find(d=>d[0]===worldTab)) worldTab = "floor";
+    const currentWorld = worldSlot(room, worldTab);
     document.getElementById("worldWeight").textContent =
       totalWeight(currentWorld.items).toFixed(2) + " / " + currentWorld.capacityKg + " kg";
     renderItemList(document.getElementById("worldList"), currentWorld.items, [
-      { label:"Take", disabled:(it)=> state.invTab === "keychain" && !keychainAllows(it), onClick:(i)=> doTake(i) }
+      { label:"Take", disabled:(it)=> invTab === "keychain" && !keychainAllows(it), onClick:(i)=> doTake(i) }
     ], "world");
   }
   function render(){
