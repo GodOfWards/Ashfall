@@ -48,9 +48,19 @@ the script is the source of truth. No document restates that list; check the
 comment.
 
 **Content vs. mechanics stay separated.** A change touches WORLD DATA (content)
-or ACTIONS/SIMULATION (mechanics), not both. Rendering is its own concern — a
-new way of displaying existing state is neither. If a content request seems to
-need a mechanics change, stop and confirm it's genuinely a new mechanic.
+or ACTIONS/SIMULATION (mechanics), and normally not both. Rendering is its own
+concern — a new way of displaying existing state is neither. If a content
+request seems to need a mechanics change, stop and confirm it's genuinely a new
+mechanic.
+
+The one case that legitimately touches both is **data that is the mechanic's own
+definition** — a schema field the new rule reads, the way `restores` and `verb`
+ship on the items eating acts on. A mechanic that does nothing until some item
+carries its property is not two passes; splitting it ships a rule that
+demonstrably does nothing, then the data that switches it on. Data that is an
+*instance* — a room, a placement, a description — never rides along with a
+mechanics change. That bound is the protection worth having: it stops the world
+being rewritten to fit one feature, which is what the rule was always for.
 
 **Mechanics check tags, never names.** A new item that should behave like an
 existing one gets the same tag (`blunt`, `fishing`, `fire-starter`, …). Never
@@ -103,13 +113,14 @@ The merge ships the version; the tag is what makes it reachable afterwards. A
 version that shipped as a commit inside someone else's PR still gets its own tag,
 on the commit carrying its `GAME_CONFIG.VERSION`.
 
-**A pass whose diff is only `CLAUDE.md` and `docs/` is the exception.** No version
-bump, no changelog entry, no tag — the game did not change, and a tag pointing at
-a commit where nothing shipped is a new way to get tagging wrong. Items 3 and 4
-still apply, in the PR body rather than the changelog: `Closes #NN`, and new
-issues for anything deferred, or a line saying nothing was. The diff and the PR
-are the whole record. The test is that the pass touched *only* those files — one
-that touches `ashfall.html` as well ships normally, under all five.
+**A pass whose diff is only `CLAUDE.md`, `docs/` and `handoffs/` is the
+exception.** No version bump, no changelog entry, no tag — the game did not
+change, and a tag pointing at a commit where nothing shipped is a new way to get
+tagging wrong. Items 3 and 4 still apply, in the PR body rather than the
+changelog: `Closes #NN`, and new issues for anything deferred, or a line saying
+nothing was. The diff and the PR are the whole record. The test is that the pass
+touched *only* those files — one that touches `ashfall.html` as well ships
+normally, under all five.
 
 ## Conventions
 
