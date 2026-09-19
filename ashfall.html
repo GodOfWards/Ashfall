@@ -255,7 +255,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.4.17" };
+  const GAME_CONFIG = { VERSION: "0.4.18" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -5082,6 +5082,20 @@
   let mapStreetLabels = [];     // Wide's label pool: one entry per street
   let mapBuildingLabels = [];   // Close's label pool: one entry per marked building
 
+  // The one way this file measures rendered text. Both label pools bind by
+  // measuring rather than by consulting a table, so both read through here
+  // and both degrade the same way: a node with no layout, or a browser that
+  // refuses the call, reads as zero and the caller decides what zero means.
+  // A measurement failure must never throw out of a bind — a bind that
+  // throws leaves the map half-placed, which is worse than a map placed on
+  // stale numbers. With `from` given it measures that substring instead of
+  // the whole string, which is how a name is split without text thrash.
+  function mapTextWidth(el, from, count){
+    try {
+      return from === undefined ? el.getComputedTextLength() : el.getSubStringLength(from, count);
+    } catch(e){ return 0; }
+  }
+
   function mapToSvg(col, row){
     // row MAP_MIN_ROW (Dock) at bottom, row MAP_MAX_ROW (Water) at top;
     // col MAP_MIN_COL (6th) at the left margin — the offset is what lets the
@@ -5106,56 +5120,89 @@
   const MAP_LABEL_OFFSET = 5;
   const MAP_LABELS_PER_STREET = 3;
   // The rendered size of a street name at the 15px .map-street-name face, in
-  // user units: the widest name on the map ("POPLAR ST") and the cap height.
-  // Both are measured against the font rather than chosen, and every name is
-  // upper case with no descender, so the cap height is the whole ink band.
-  // The inset, the label tiers and the crossing clearance below all derive
-  // from them, so retuning the face or the names retunes the three together.
-  const MAP_LABEL_W = 99.1;
+  // user units: the width of the widest name on the map, and the cap height.
+  // Every name is upper case with no descender, so the cap height is the
+  // whole ink band. The inset, the label tiers and the crossing clearance
+  // below all derive from them, so retuning the face or the names retunes
+  // the three together.
+  //
+  // The width is measured at bind time off a real pooled node rather than
+  // written down here: `system-ui` is not one font, so a literal is only
+  // correct on the machine it was measured on — it resolves to Segoe UI, SF
+  // Pro, Roboto or Cantarell depending on where the page is opened, and those
+  // differ by more than the placement arithmetic tolerates. The constant
+  // below is the last known good Chromium measurement of "POPLAR ST", kept
+  // only as the value the game starts with and the value it keeps if a
+  // measurement ever fails. It is not the live width; mapLabelW is.
+  const MAP_LABEL_W_FALLBACK = 99.1;
+  // The cap height is deliberately *not* measured. getComputedTextLength()
+  // gives width only, and getBBox().height reports the em box — 17.83 at this
+  // face, against a cap band nearer 11 — so there is no cheap correct reading
+  // to take. This stays a chosen number until there is one.
   const MAP_LABEL_CAP = 12;
   // Breathing room between a name and the end of the stretch it is inset
   // from. Retunable.
   const MAP_LABEL_EDGE_GAP = 5;
-  const MAP_LABEL_INSET = MAP_LABEL_W / 2 + MAP_LABEL_EDGE_GAP;
-  // How many names one street gets, by the length of it currently visible,
-  // in multiples of one name's width — longest tier first. Under a single
-  // width the street gets none, since a name wider than its visible stretch
-  // would read as floating loose. This is a crowding rule, not a legibility
-  // one: a name's width in user units is the same at every span, so what the
-  // tiers measure is how many fit, and the zoom ladder's ranges are what keep
-  // them readable. The multipliers are retunable.
-  const MAP_LABEL_TIERS = [
-    { minVisible: 6 * MAP_LABEL_W, count: 3 },
-    { minVisible: 3 * MAP_LABEL_W, count: 2 },
-    { minVisible: 1 * MAP_LABEL_W, count: 1 }
-  ];
-  // How close to a crossing a name may sit before it can touch that
-  // crossing's own name. A name reaches MAP_LABEL_W/2 along its street, and
-  // the crossing's name occupies a band from MAP_LABEL_OFFSET to
-  // MAP_LABEL_OFFSET + MAP_LABEL_CAP off the crossing line, so this is how
-  // far past an intersection a name's box can still reach one.
-  // A mid-block sits MAP_SPACING/2 away, which clears this on the side a name
-  // is slid away from and comes within about a unit of it at the crossing
-  // beyond. Closing that last unit needs the two names meeting there to both
-  // be within ~3 units of the widest: only "POPLAR ST" is, and it runs
-  // east-west, so it never meets another. A north-south street named wider
-  // than MAP_SPACING - 2 * (MAP_LABEL_OFFSET + MAP_LABEL_CAP) would.
-  const MAP_LABEL_CLEARANCE = MAP_LABEL_W / 2 + MAP_LABEL_OFFSET + MAP_LABEL_CAP;
+  // The measured width and the three values derived from it. They are `let`s
+  // rather than `const`s because the measurement cannot happen at parse time:
+  // there is no DOM node to measure until renderMapWide() has built the pool.
+  // Module-level map-view state is this file's idiom for exactly this
+  // (mapZoomMode, mapZoomStep, mapRenderedZoom), and it keeps the per-frame
+  // placement readers free of a width parameter they would thread through
+  // three signatures for a value that is constant between binds.
+  let mapLabelW, mapLabelInset, mapLabelTiers, mapLabelClearance;
+  // Recomputes all four from one width. Called once below so the game has
+  // valid values before the first Wide bind ever runs, and again at the end
+  // of every mapBindStreetLabels().
+  function mapSetLabelWidth(w){
+    // A failed measurement — a detached node, a pool that never got layout, a
+    // browser that throws — leaves the previous width in place rather than
+    // taking a zero. Zero collapses every tier to `hi - lo >= 0`, which is
+    // always true, so every street would silently jump to three names.
+    if(!Number.isFinite(w) || w <= 0) return;
+    mapLabelW = w;
+    mapLabelInset = w / 2 + MAP_LABEL_EDGE_GAP;
+    // How many names one street gets, by the length of it currently visible,
+    // in multiples of one name's width — longest tier first. Under a single
+    // width the street gets none, since a name wider than its visible stretch
+    // would read as floating loose. This is a crowding rule, not a legibility
+    // one: a name's width in user units is the same at every span, so what the
+    // tiers measure is how many fit, and the zoom ladder's ranges are what keep
+    // them readable. The multipliers are retunable.
+    mapLabelTiers = [
+      { minVisible: 6 * w, count: 3 },
+      { minVisible: 3 * w, count: 2 },
+      { minVisible: 1 * w, count: 1 }
+    ];
+    // How close to a crossing a name may sit before it can touch that
+    // crossing's own name. A name reaches mapLabelW/2 along its street, and
+    // the crossing's name occupies a band from MAP_LABEL_OFFSET to
+    // MAP_LABEL_OFFSET + MAP_LABEL_CAP off the crossing line, so this is how
+    // far past an intersection a name's box can still reach one.
+    // A mid-block sits MAP_SPACING/2 away, which clears this on the side a name
+    // is slid away from and comes within about a unit of it at the crossing
+    // beyond. Closing that last unit needs the two names meeting there to both
+    // be within ~3 units of the widest: only "POPLAR ST" is, and it runs
+    // east-west, so it never meets another. A north-south street named wider
+    // than MAP_SPACING - 2 * (MAP_LABEL_OFFSET + MAP_LABEL_CAP) would.
+    mapLabelClearance = w / 2 + MAP_LABEL_OFFSET + MAP_LABEL_CAP;
+  }
+  mapSetLabelWidth(MAP_LABEL_W_FALLBACK);
   // Positions along a street's visible stretch [lo, hi], in that street's
-  // own axis. Two or three labels sit MAP_LABEL_INSET in from each end; one
+  // own axis. Two or three labels sit mapLabelInset in from each end; one
   // sits at the midpoint. Whatever the tier, a position that would land on a
   // crossing is slid clear of it before it is returned.
   function mapLabelPositions(lo, hi){
-    const tier = MAP_LABEL_TIERS.find(t => hi - lo >= t.minVisible);
+    const tier = mapLabelTiers.find(t => hi - lo >= t.minVisible);
     if(!tier) return [];
     if(tier.count === 1) return mapClearCrossings([(lo + hi) / 2], lo, hi);
-    if(tier.count === 2) return mapClearCrossings([lo + MAP_LABEL_INSET, hi - MAP_LABEL_INSET], lo, hi);
-    return mapClearCrossings([lo + MAP_LABEL_INSET, (lo + hi) / 2, hi - MAP_LABEL_INSET], lo, hi);
+    if(tier.count === 2) return mapClearCrossings([lo + mapLabelInset, hi - mapLabelInset], lo, hi);
+    return mapClearCrossings([lo + mapLabelInset, (lo + hi) / 2, hi - mapLabelInset], lo, hi);
   }
   // Intersections fall on the grid pitch along both axes, since mapToSvg()
   // offsets every coordinate by MAP_MARGIN — so where a position sits
   // relative to one is arithmetic, not a walk through the street's chain.
-  // A position within MAP_LABEL_CLEARANCE of a crossing slides to the
+  // A position within mapLabelClearance of a crossing slides to the
   // mid-block beside it, toward the centre of the visible stretch: sliding
   // outward risks leaving the stretch. A name with no mid-block left inside
   // the stretch is dropped rather than slid again — a second slide can
@@ -5164,11 +5211,11 @@
   // nearer the centre of the stretch keeps it.
   function mapClearCrossings(positions, lo, hi){
     const mid = (lo + hi) / 2;
-    const room = MAP_LABEL_W / 2;  // a slid name still has to fit inside the stretch
+    const room = mapLabelW / 2;  // a slid name still has to fit inside the stretch
     const cleared = [];
     positions.forEach(p=>{
       const cross = MAP_MARGIN + Math.round((p - MAP_MARGIN) / MAP_SPACING) * MAP_SPACING;
-      if(Math.abs(p - cross) >= MAP_LABEL_CLEARANCE){ cleared.push(p); return; }
+      if(Math.abs(p - cross) >= mapLabelClearance){ cleared.push(p); return; }
       const inward = p <= mid ? 1 : -1;
       const slid = [cross + inward * MAP_SPACING / 2, cross - inward * MAP_SPACING / 2]
         .find(q => q >= lo + room && q <= hi - room);
@@ -5176,7 +5223,7 @@
     });
     const kept = [];
     cleared.slice().sort((q, r) => Math.abs(q - mid) - Math.abs(r - mid)).forEach(p=>{
-      if(kept.every(q => Math.abs(p - q) >= MAP_LABEL_W)) kept.push(p);
+      if(kept.every(q => Math.abs(p - q) >= mapLabelW)) kept.push(p);
     });
     return kept.sort((q, r) => q - r);
   }
@@ -5184,10 +5231,17 @@
   // fixed geometry, so a pan touches no DOM queries — mirrors how
   // mapPositionPlayer() resolves #mapPlayer. Cleared for Close, which emits
   // no street names at all.
+  //
+  // This is also where the street-name width is measured, for the same
+  // reason the widths in mapBindBuildingLabels() are: bind is the one moment
+  // the names are in the DOM and are about to be placed. The widest of the
+  // sixteen is what the placement wants, so one reading per street — the
+  // three pooled nodes of a street all carry the same string.
   function mapBindStreetLabels(){
     mapStreetLabels = [];
     if(mapZoomMode !== "wide") return;
     const svg = document.getElementById("mapSvg");
+    let widest = 0;
     MAP_STREETS.forEach((street, i)=>{
       const first = LOCATIONS[street.chain[0]], last = LOCATIONS[street.chain[street.chain.length-1]];
       const a = mapToSvg(first.x / 100, first.y / 100);
@@ -5197,18 +5251,31 @@
       else if(angle <= -90) angle += 180;
       const els = Array.prototype.slice.call(svg.querySelectorAll(`text.map-street-name[data-street="${i}"]`));
       els.forEach(el=> el.textContent = street.name);
+      // The pool ships hidden and a hidden node has no layout, so it would
+      // measure zero. Show the one node being read and leave it shown: the
+      // snap that follows this bind sets `display` on every pooled node
+      // anyway, and shipping the whole pool visible instead would paint
+      // sixteen names at the origin first — the flash Close's build-order
+      // comment exists to avoid.
+      if(els.length){
+        els[0].style.display = "";
+        widest = Math.max(widest, mapTextWidth(els[0]));
+      }
       mapStreetLabels.push({ a, b, angle, horizontal: a.y === b.y, els });
     });
+    mapSetLabelWidth(widest);
   }
-  // The box a name occupies: MAP_LABEL_W along its own street and
+  // The box a name occupies: mapLabelW along its own street and
   // MAP_LABEL_CAP across, sitting MAP_LABEL_OFFSET off the street line —
   // above a horizontal street, right of a vertical one, which is where the
   // rotation in mapBindStreetLabels() puts it. Centre and extents, so a hit
-  // test reads the same for either heading.
+  // test reads the same for either heading. The width is the widest name's,
+  // not this street's own, so a short name's box is wider than its ink — the
+  // crowding rule the tiers state, applied to one box.
   function mapLabelBox(street, p){
     const band = MAP_LABEL_OFFSET + MAP_LABEL_CAP / 2;
-    if(street.horizontal) return { x: p, y: street.a.y - band, w: MAP_LABEL_W, h: MAP_LABEL_CAP };
-    return { x: street.a.x + band, y: p, w: MAP_LABEL_CAP, h: MAP_LABEL_W };
+    if(street.horizontal) return { x: p, y: street.a.y - band, w: mapLabelW, h: MAP_LABEL_CAP };
+    return { x: street.a.x + band, y: p, w: MAP_LABEL_CAP, h: mapLabelW };
   }
   // The player marker is drawn over the same streets and nothing else in the
   // placement knows it is there, so a name that would sit under it is dropped
@@ -5216,7 +5283,7 @@
   // the street's only name, #locBar already says where the player is.
   function mapLabelHitsPlayer(street, p, player){
     const box = mapLabelBox(street, p);
-    const reach = MAP_PLAYER_R_WIDE + MAP_LABEL_CLEARANCE;
+    const reach = MAP_PLAYER_R_WIDE + mapLabelClearance;
     const dx = Math.max(Math.abs(player.x - box.x) - box.w / 2, 0);
     const dy = Math.max(Math.abs(player.y - box.y) - box.h / 2, 0);
     return dx * dx + dy * dy < reach * reach;
@@ -5264,6 +5331,30 @@
   // be dragged from its own dot moves with it.
   const MAP_BLDG_LABEL_PAD = 6;
 
+  // Which space in a two-line name is the line break: the one that leaves
+  // the two sides closest in rendered width. The widest line is what `half`
+  // feeds to the edge clamp below, so the balanced break is the one that
+  // keeps the block narrowest and least able to drag itself off its own dot.
+  // `el` carries the whole name, so every candidate is one getSubStringLength
+  // against a layout that already exists — no text is written and re-read.
+  //
+  // Measured rather than character-counted: the two agree on most names and
+  // disagree where letter widths do. "Sunoco Gas Station" balances by
+  // characters at the second space and by width at the first, and the width
+  // answer has the narrower widest line — 65.25 against 65.42, so the margin
+  // is a hair, and the case for measuring is that it is already being
+  // measured for `half`, not that it wins big. On an exact tie the earliest
+  // space wins, so the choice never depends on iteration order. If
+  // measurement fails every score is zero, the earliest space wins, and the
+  // split degrades to the first-space rule this replaced.
+  function mapSplitName(el, name){
+    let best = -1, bestScore = Infinity;
+    for(let i = name.indexOf(" "); i !== -1; i = name.indexOf(" ", i + 1)){
+      const score = Math.abs(mapTextWidth(el, 0, i) - mapTextWidth(el, i + 1, name.length - i - 1));
+      if(score < bestScore){ bestScore = score; best = i; }
+    }
+    return best === -1 ? [name] : [name.slice(0, best), name.slice(best + 1)];
+  }
   // Caches the Close label pool the way mapBindStreetLabels() caches Wide's:
   // element references plus the geometry a pan needs, so moving the box
   // touches no DOM queries and no layout reads. Widths are measured off the
@@ -5281,6 +5372,11 @@
       const anchor = LOCATIONS[BUILDINGS[id].anchor];
       const dot = mapToSvg(anchor.x / 100 + off.dx, anchor.y / 100 + off.dy);
       const els = Array.prototype.slice.call(svg.querySelectorAll(`text.map-bldg-label[data-bldg="${id}"]`));
+      // Split first: `half` below reads the nodes, so it has to run against
+      // the text they finally carry, not the whole name sitting in the first
+      // one. A one-node pool is a one-word name and needs no split.
+      const parts = els.length > 1 ? mapSplitName(els[0], BUILDINGS[id].name) : [BUILDINGS[id].name];
+      els.forEach((el, i)=> el.textContent = parts[i] || "");
       // A negative dy puts the block above its dot, otherwise below — the
       // rule renderMapClose() used to apply at build time, with the same
       // gaps. The two are not symmetric: below the dot a baseline has to
@@ -5290,7 +5386,7 @@
       // One centre for the whole block, off the widest line: two lines
       // sharing a centre read as one name, two lines each centred on their
       // own width stagger as soon as either is clamped.
-      const half = Math.max.apply(null, els.map(el => el.getComputedTextLength() / 2));
+      const half = Math.max.apply(null, els.map(el => mapTextWidth(el) / 2));
       mapBuildingLabels.push({
         dot, lines, half,
         // The block's vertical extent, relative to the dot. The line box
@@ -5362,16 +5458,22 @@
     // wide and the clamp would silently do nothing. renderMap() binds and
     // snaps in the same synchronous pass as this markup, so nothing is
     // painted at the origin in between.
+    // How many lines a name gets is decided here — two if it contains a
+    // space, one if it does not — but *where* it breaks is not. The whole
+    // name ships in the first node and the second ships empty, so bind can
+    // measure the name as one string and choose the break against the real
+    // font; a break chosen here would have to be chosen by counting
+    // characters, which is not what the layout reads.
     Object.keys(MAP_BUILDING_OFFSETS).forEach(id=>{
       const off = MAP_BUILDING_OFFSETS[id];
       const anchor = LOCATIONS[BUILDINGS[id].anchor];
       const p = mapToSvg(anchor.x / 100 + off.dx, anchor.y / 100 + off.dy);
       html += `<circle class="map-bldg-dot" cx="${p.x}" cy="${p.y}" r="${MAP_BLDG_DOT_R}"/>`;
-      const words = BUILDINGS[id].name.split(" ");
-      const lines = words.length > 1 ? [words[0], words.slice(1).join(" ")] : [BUILDINGS[id].name];
-      lines.forEach(line=>{
-        html += `<text class="map-bldg-label" data-bldg="${id}" text-anchor="middle">${line}</text>`;
-      });
+      const name = BUILDINGS[id].name;
+      const lineCount = name.indexOf(" ") === -1 ? 1 : 2;
+      for(let k = 0; k < lineCount; k++){
+        html += `<text class="map-bldg-label" data-bldg="${id}" text-anchor="middle">${k === 0 ? name : ""}</text>`;
+      }
     });
     html += `<circle id="mapPlayer" cx="0" cy="0" r="5"/>`;
     return html;
@@ -5384,7 +5486,9 @@
     });
     // The label pool goes after every street line so no run is drawn over
     // its own names. The nodes ship empty and hidden; mapBindStreetLabels()
-    // fills in the names and mapPositionStreetLabels() places them.
+    // fills in the names, measures the widest of them and leaves the one
+    // node per street it measured shown, and mapPositionStreetLabels() then
+    // places or hides every node in the pool.
     MAP_STREETS.forEach((s, i)=>{
       for(let k = 0; k < MAP_LABELS_PER_STREET; k++){
         html += `<text class="map-street-name" data-street="${i}" y="${-MAP_LABEL_OFFSET}" text-anchor="middle" style="display:none"></text>`;
