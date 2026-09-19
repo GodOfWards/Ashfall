@@ -9,6 +9,224 @@ place.
 
 ---
 
+## v0.4.13 — Partial stacks, a vague clock, and a display floor
+
+Implements: handoffs/partial-stacks-vague-clock-and-display-floor.md
+
+Implements #81, #59 and #75 in full, per
+`handoffs/partial-stacks-vague-clock-and-display-floor.md`. Three independent
+`tier-1` items bundled into one pass, each giving an existing system a surface
+it was missing: a quantity `doTake()`/`doStore()` already accepted, a time the
+clock already derived, and a floor already being applied to every duration
+label. No new mechanic, no new content, no new persistent state — `SAVE_KEY`
+does not rotate and existing browser saves keep loading.
+
+**New**
+
+- **`MIN_DISPLAY_MIN`** — the floor `fmtDuration()` applies to any duration the
+  UI prints, in game minutes. It is `1`, the same value `MIN_MOVE_MIN` has, so
+  the split changes no pixel; the point is that retuning the movement floor no
+  longer silently re-rounds Rest, Sleep, Search, fishing, every craft recipe and
+  the fire's fuel readout along with it. `moveMinutes()` keeps reading
+  `MIN_MOVE_MIN`.
+- **`MINUTES_PER_DAY`** — `1440`, now the single definition of a game day's
+  length. Replaces both literals in `getClockText()` and both in `DECAY`; the
+  file contains exactly one `1440` after this pass.
+- **`TIME_OF_DAY_BANDS`** — a seven-entry table mapping a minute of the day to a
+  band label: `late night` (00:00), `dawn` (05:00), `morning` (07:00), `midday`
+  (12:00), `afternoon` (14:00), `evening` (18:00), `night` (21:00). Entries are
+  sorted ascending by `from`, the first is `from: 0`, and each band runs until
+  the next one's `from` — stated as invariants in the comment. It is the single
+  place in the game that says what part of the day a minute falls in, laid down
+  deliberately ahead of #58's light layer so that layer reads this table instead
+  of forming a second opinion about when evening starts.
+- **`absoluteMinute()`, `dayNumber()`, `minutesIntoDay()`** — the clock's
+  arithmetic, extracted so there is one of it. `getClockText()` is now composed
+  from them and `getVagueClockText()` reuses `dayNumber()` rather than
+  re-deriving it; #60's playthrough stats can call `dayNumber()` directly.
+- **`timeOfDayBand()`** and **`getVagueClockText()`** — the band lookup and the
+  watchless reading, `"Day 3, evening"`.
+
+**UI**
+
+- **`#clockLabel` is never empty during play.** Without a watch it reads
+  `"Day 3, evening"` where it previously rendered the empty string: the day
+  number always shows, and precision is what the watch buys rather than all
+  sense of time. With a watch the reading is unchanged (`"Day 3, 14:22"`), and
+  `render()`'s game-over branch still blanks the label without routing through
+  either function. Band labels are lowercase so both forms compose identically
+  after `"Day N, "`. This is functional UI text held to clarity, not to the
+  prose tone.
+- **The item detail view offers `Take All` / `Take Half` / `Take 1`**, and the
+  mirror on the inventory side: `Place All`/`Store All`, `Place Half`/`Store
+  Half`, `Place 1`/`Store 1`, on the existing destination-dependent label.
+  `Take Half` (and its mirror) appears for a stackable of 3 or more and moves
+  `Math.ceil(it.qty/2)` — half of 7 takes 4 and leaves 3. Moving 7 of 12 is
+  still inexpressible; All / Half / 1 is the settled set.
+- **"Take" and "Place"/"Store" in the detail view are renamed to "… All"**,
+  because "Take" beside "Take Half" no longer says which it is. The inline list
+  rows in `renderItemList()` are unchanged and keep the bare
+  `Take`/`Place`/`Store` label — one button in the row, nothing to distinguish
+  it from.
+
+**Changed / Reworked**
+
+- `getItemActions()` computes the split gate once as `splittable`
+  (`STACKABLE.has(it.category) && !it.durability`, the gate the single-unit
+  button already used) and the keychain predicate once as `keychainBlocked`,
+  which now applies to all three world-side buttons unchanged. `doTake()`,
+  `doStore()` and `normalizeQty()` are untouched — they already accepted and
+  validated any quantity, including the capacity check that makes a too-heavy
+  Half fail without moving anything.
+- `DECAY` is expressed in terms of `MINUTES_PER_DAY`
+  (`hunger:100/(3*MINUTES_PER_DAY)`, `thirst`/`energy` `100/MINUTES_PER_DAY`).
+  The three rates are bit-identical to v0.4.12's; the comment above them now
+  reads in days rather than hours to match.
+
+**Removed**
+
+- **The dead `button.mini.step` CSS rule.** No revision in the repository's
+  history ever set a `.step` class on a button — `git log -S` over every commit
+  finds none — so it has been inert since v0.4.0. This pass settles that the
+  quantity picker is a button set in the detail view, so nothing will apply it;
+  removing it stops it implying a stepper control that was decided against.
+
+**Documentation**
+
+- `MIN_MOVE_MIN` gains a comment recording two things the constant could not
+  show: that it is load-bearing (22 of the 774 exits are building entrances
+  whose two Locations share coordinates, so their distance is 0 and this floor
+  is all that stops them being free), and the pace decision #75 settles — **pace
+  is a journey-scale choice, not a per-block one.** With the floor at 1 minute,
+  one 100 m block costs 1.00 minute at Jog against Walk's 1.39 — a 28% saving,
+  not the 40% that Jog's 67%-higher speed implies — and over a 50 m block the
+  two gaits are identical, both floored to 1 minute. That is intended, not a
+  defect.
+- **Nothing was deferred and no new issues were filed.** The one finding this
+  area has produced that is not fixed here, #92 (a mid-block stop costing more
+  than the block it sits inside), was filed during the planning session that
+  wrote the handoff and is explicitly out of scope below.
+
+**Open questions / decisions resolved**
+
+The handoff left five choices to implementation; all five took the recommended
+option.
+
+- **Comments name no issue numbers.** Both the band table and `MIN_MOVE_MIN`
+  explain themselves as rules ("a later light-and-darkness layer reads these
+  bands") rather than by ticket, since a roadmap number goes stale on its own
+  schedule. v0.4.12's `shelter` comment does cite issue numbers; this pass
+  deliberately does not follow that precedent.
+- **The inline row button keeps its bare label.** `Take`/`Place`/`Store`
+  unchanged in `renderItemList()`; "All" is only meaningful where there is an
+  alternative to distinguish it from. It reads consistently beside the detail
+  view on screen.
+- **Half rounds up** — `Math.ceil`, which keeps the gate at qty 3 rather than 4
+  and lets repeated halving converge downward without stranding a 1.
+- **`MINUTES_PER_DAY` and `MIN_DISPLAY_MIN` both sit in CONFIG / CONSTANTS**
+  with the other top-level constants, not beside `DAY_START_MIN`.
+- **The band boundaries are the handoff's recommended table**, unchanged after
+  seeing them on screen.
+
+**Notes / assumptions**
+
+- **The seven band boundaries are a judgment call with no prior convention and
+  are retunable.** They are set to be plausible as *light* boundaries because
+  #58's layer is meant to read them. The number of bands is fixed at seven by
+  #59; the boundaries are not.
+- **Half rounding up, and the `qty >= 3` gate on Half, are both retunable.** The
+  gate is written inline with a comment rather than as a named constant: at qty
+  2 half is 1 and the button would duplicate "… 1", which is a rule, not a magic
+  number — a constant there would only restate the digit.
+- **The watch stays worth carrying.** Bands are 2–5 hours wide, and the two
+  readouts a player plans against — `room.fireMinutesLeft` and
+  `estimateSleepMinutes()` — print minutes either way. Confirmed on screen: a
+  watchless run reads `"Day 1, morning"` beside `Rest (1:00)` and
+  `Sleep (1:30)`.
+- **`MIN_DISPLAY_MIN` is deliberately equal to `MIN_MOVE_MIN`.** The two
+  sub-minute readouts that can reach the floor (`"Sleep (0:01)"` and the fire's
+  `"roughly 0:01 of fuel left"`) read exactly as they did at v0.4.12.
+
+**Explicitly NOT changed**
+
+- No gait speed, no floor value, and no arithmetic in `moveMinutes()` or
+  `exitMinutes()`. Every movement cost in the game is unchanged.
+- No balance constant, no `DECAY` rate, no `ITEM_REGISTRY` entry, no WORLD DATA.
+- No PLAYER STATE field, no ITEM DATA SCHEMA or ROOM SCHEMA change, no save
+  format change and no backfill. `SAVE_KEY` is unchanged at `ashfall_save_v0.4`.
+- `doTake()`, `doStore()`, `normalizeQty()`, `addToDestination()` and
+  `renderItemList()` keep their bodies. The detail view's behaviour after a
+  partial take is unchanged and intentional: the source stack keeps its `_uid`
+  and the panel stays open on it, while `Take All` splices it and the panel
+  falls back to the recipe list.
+- `hasWatch()` and `isWatch` are untouched, and `shelter` stays unread — a
+  reading gated on being able to see outside needs a flag that does not exist
+  yet, and `shelter` is not it.
+
+**Validation performed**
+
+- `git diff origin/main...HEAD -- ashfall.html` is the proof of the "no other
+  visible change" claim: the `MIN_DISPLAY_MIN` split shows as the new constant
+  plus one word changed in `fmtDuration()`, and nothing else in the diff touches
+  a duration.
+- Both builds (v0.4.12 from `origin/main` and this one) were loaded into a Node
+  harness against a stub DOM and compared directly, 65 checks, all passing:
+  `getClockText()` byte-identical over 65,001 consecutive minutes plus
+  fractional and negative inputs; `fmtDuration()` identical over −10 to 2000
+  minutes in 0.1 steps; all three `DECAY` rates identical; **all 774 exits × 3
+  gaits identical in both minutes and rendered label**, with the minimum still
+  exactly `1`; `timeOfDayBand()` matching the table for all 1440 minutes of the
+  day with all seven bands reachable; both clock readings agreeing on the day
+  number over 14 game days; and the button sets for stack sizes 1, 2, 3 and 12,
+  for a non-stackable, for a durability-bearing item, and under the keychain
+  gate.
+- Driven in Chromium: `"Day 1, morning"` without a watch, `"Day 1, 08:00"` after
+  picking one up, `Take All | Take Half | Take 1` on a stack of 7, the
+  `Place`/`Store` mirror on both world tabs, half of 7 leaving 3 with the detail
+  view still open on the shrinking stack, and an over-capacity `Take Half`
+  failing without moving anything. No console errors. The longest label,
+  `"Day 1, late night"`, introduces no horizontal overflow at 375px, 760px or
+  1280px — relevant to #49, which is not otherwise touched.
+
+**Sections touched**
+
+- **CONFIG / CONSTANTS** — `MIN_DISPLAY_MIN`, `MINUTES_PER_DAY`, the comments on
+  `MIN_MOVE_MIN` and `DECAY`.
+- **CORE UTILITIES** — `fmtDuration()`.
+- **WORLD INTERACTION** — the `DAY_START_MIN` neighbourhood: `absoluteMinute()`,
+  `dayNumber()`, `minutesIntoDay()`, `TIME_OF_DAY_BANDS`, `timeOfDayBand()`,
+  `getClockText()`, `getVagueClockText()`.
+- **INVENTORY / ITEM SYSTEM** — `getItemActions()` only.
+- **RENDERING** — `renderLocationPanel()`.
+- The `<style>` block — one deleted rule.
+
+Neither a content pass nor a mechanics pass: WORLD DATA is untouched and no rule
+in ACTIONS or SIMULATION changed. All three items are new surfaces onto state
+and behaviour that already existed.
+
+**Explicitly out of scope**
+
+- **#92** — that a mid-block stop costs more than the block it sits inside. It
+  is the same constant seen from the route side and is a real balance change;
+  #75's pace question is settled here, that one is not.
+- **#75's options 2, 3 and 4** — lowering or removing the movement floor,
+  retuning gait speeds, rescaling the grid. Option 1 only.
+- **Sub-minute duration display**, which would follow from dropping the floor.
+- **Any arbitrary quantity** — no stepper, no free-text field, no prompt. #47
+  (fluid transfer) will need more than this if it ever lands.
+- **The inline list rows** — no new control there.
+- **#58's weather and light model**, beyond laying the band table down as its
+  seam and reading it for one label. No darkness, no temperature.
+- **Reading `shelter`** — the see-outside refinement needs a flag that does not
+  exist yet.
+- **#70** (the empty `Ammunition` STACKABLE category), **#49** (`#rightBar`
+  crowding), **#60** (playthrough stats), **#47**. None is a prerequisite and
+  none is touched.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.12"` → `"0.4.13"`
+
+---
+
 ## v0.4.12 — A room's address, its building, and whether it is under cover
 
 Implements: handoffs/room-address-and-shelter.md

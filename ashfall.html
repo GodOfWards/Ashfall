@@ -102,7 +102,6 @@
     padding:4px 7px; border-radius:3px; cursor:pointer; white-space:nowrap; }
   button.mini:hover{ border-color:var(--accent-dim); }
   button.mini.equip{ border-color:var(--good); color:var(--good); }
-  button.mini.step{ padding:4px 6px; }
   button.mini.blocked{ border-color:var(--danger); color:var(--danger); opacity:.45; cursor:not-allowed; }
   /* The two-column grid has a 476px floor — 320px of sidebar plus the room
      description's own minimum — so below that the page scrolls sideways.
@@ -256,15 +255,35 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.4.12" };
+  const GAME_CONFIG = { VERSION: "0.4.13" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Ammunition","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
+  // Floor on the cost of one movement, in game minutes. Load-bearing: 22 of
+  // the 774 exits are building entrances whose two Locations sit at identical
+  // coordinates, so their computed distance is 0 and this is the only thing
+  // stopping them being free.
+  //
+  // It also settles the pace question: pace is a journey-scale choice, not a
+  // per-block one. With the floor at 1 minute, one 100 m block costs 1.00
+  // minute at Jog against Walk's 1.39 — a 28% saving, not the 40% that Jog's
+  // 67%-higher speed implies — and over a 50 m block the two are identical,
+  // both floored to 1 minute. That is the intended behaviour: the gait
+  // selector is meant to pay off over a route, not over one step, which is why
+  // the floor is not lowered to make short hops differentiate.
   const MIN_MOVE_MIN = 1;
+  // Floor on any duration the UI prints, in game minutes. Equal to
+  // MIN_MOVE_MIN today and a separate constant on purpose: retuning the
+  // movement floor must not silently re-round Rest, Sleep, Search, fishing,
+  // craft times and the fire's fuel readout along with it.
+  const MIN_DISPLAY_MIN = 1;
   const GAITS = { sneak:{speed:0.6}, walk:{speed:1.2}, fast:{speed:2.0} };
-  // Points per game minute: hunger empties over 72 game hours, thirst and
-  // energy over 24.
-  const DECAY = { hunger:100/4320, thirst:100/1440, energy:100/1440 };
+  // The length of a game day, in minutes. The clock, the day number and the
+  // vital decay rates all derive from this one figure.
+  const MINUTES_PER_DAY = 1440;
+  // Points per game minute: hunger empties over three game days, thirst and
+  // energy over one.
+  const DECAY = { hunger:100/(3*MINUTES_PER_DAY), thirst:100/MINUTES_PER_DAY, energy:100/MINUTES_PER_DAY };
   const CAMPFIRE_KIT_COST = 3;
   // ==================================================
   // STAMINA / FATIGUE SYSTEM CONSTANTS
@@ -3561,7 +3580,7 @@
   }
   function keychainAllows(item){ return item.category === "Key"; }
   function fmtDuration(min){
-    min = Math.max(MIN_MOVE_MIN, Math.round(min));
+    min = Math.max(MIN_DISPLAY_MIN, Math.round(min));
     const h = Math.floor(min/60), m = min%60;
     return "(" + h + ":" + String(m).padStart(2,"0") + ")";
   }
@@ -3877,14 +3896,29 @@
     const it = getItemAt(list, index);
     if(!it) return [];
     const actions = [];
+    // A stack can be transferred in parts when it merges by itemId and
+    // carries no per-unit state — the same gate the single-unit button
+    // already used. doTake()/doStore() accept and validate any quantity; All
+    // / Half / 1 is the settled set of quantities the UI offers.
+    //
+    // Half rounds up (half of 7 takes 4 and leaves 3) and only appears from
+    // qty 3: at qty 2 half is 1 and the button would duplicate "… 1". Both
+    // are judgment calls and retunable.
+    const splittable = STACKABLE.has(it.category) && !it.durability;
     if(side === "world"){
-      actions.push({ label:"Take", disabled: state.invTab==="keychain" && !keychainAllows(it), onClick:()=>doTake(index) });
-      if(STACKABLE.has(it.category) && it.qty>1 && !it.durability)
-        actions.push({ label:"Take 1", disabled: state.invTab==="keychain" && !keychainAllows(it), onClick:()=>doTake(index,1) });
+      const keychainBlocked = state.invTab==="keychain" && !keychainAllows(it);
+      actions.push({ label:"Take All", disabled: keychainBlocked, onClick:()=>doTake(index) });
+      if(splittable && it.qty>=3)
+        actions.push({ label:"Take Half", disabled: keychainBlocked, onClick:()=>doTake(index, Math.ceil(it.qty/2)) });
+      if(splittable && it.qty>1)
+        actions.push({ label:"Take 1", disabled: keychainBlocked, onClick:()=>doTake(index,1) });
     } else {
-      actions.push({ label: state.worldTab==="floor" ? "Place" : "Store", onClick:()=>doStore(index) });
-      if(STACKABLE.has(it.category) && it.qty>1 && !it.durability)
-        actions.push({ label: state.worldTab==="floor" ? "Place 1" : "Store 1", onClick:()=>doStore(index,1) });
+      const verb = state.worldTab==="floor" ? "Place" : "Store";
+      actions.push({ label: verb + " All", onClick:()=>doStore(index) });
+      if(splittable && it.qty>=3)
+        actions.push({ label: verb + " Half", onClick:()=>doStore(index, Math.ceil(it.qty/2)) });
+      if(splittable && it.qty>1)
+        actions.push({ label: verb + " 1", onClick:()=>doStore(index,1) });
     }
     if(it.restores) actions.push({ label: it.verb || "Use", onClick:()=>doConsume(side, index) });
     if(it.category==="Container" && it.slotType && !state[it.slotType])
@@ -3953,12 +3987,41 @@
   }
   // The game opens at 08:00 on Day 1; state.totalMinutes counts from there.
   const DAY_START_MIN = 8*60;
-  function getClockText(){
-    const abs = Math.round(DAY_START_MIN + state.totalMinutes);
-    const day = 1 + Math.floor(abs/1440);
-    const tod = ((abs%1440)+1440)%1440;
-    return "Day " + day + ", " + String(Math.floor(tod/60)).padStart(2,"0") + ":" + String(tod%60).padStart(2,"0");
+  // Where the game is in time, derived in one place. Everything that wants a
+  // day number or a time of day composes from these three rather than
+  // repeating the arithmetic.
+  function absoluteMinute(){ return Math.round(DAY_START_MIN + state.totalMinutes); }
+  function dayNumber(){ return 1 + Math.floor(absoluteMinute()/MINUTES_PER_DAY); }
+  function minutesIntoDay(){ const a = absoluteMinute(); return ((a % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY; }
+  // The single place in the game that says what part of the day a minute
+  // falls in. Invariants: entries are sorted ascending by `from`, the first
+  // is `from: 0`, and each band runs until the next one's `from`.
+  //
+  // The boundaries are a judgment call with nothing behind them yet and are
+  // retunable. They are set to be plausible as *light* boundaries, because a
+  // later light-and-darkness layer is meant to read this table rather than
+  // pick its own: two opinions about when evening starts is exactly the
+  // duplicated fact this table exists to prevent.
+  const TIME_OF_DAY_BANDS = [
+    { from: 0,     label:"late night" },
+    { from: 5*60,  label:"dawn" },
+    { from: 7*60,  label:"morning" },
+    { from: 12*60, label:"midday" },
+    { from: 14*60, label:"afternoon" },
+    { from: 18*60, label:"evening" },
+    { from: 21*60, label:"night" }
+  ];
+  function timeOfDayBand(){
+    const tod = minutesIntoDay();
+    return TIME_OF_DAY_BANDS.filter(b => tod >= b.from).pop().label;
   }
+  function getClockText(){
+    const tod = minutesIntoDay();
+    return "Day " + dayNumber() + ", " + String(Math.floor(tod/60)).padStart(2,"0") + ":" + String(tod%60).padStart(2,"0");
+  }
+  // What you know without a watch: the day, and roughly where in it you are.
+  // Precision is what the watch buys, not all sense of time.
+  function getVagueClockText(){ return "Day " + dayNumber() + ", " + timeOfDayBand(); }
   function getWindowsInRoom(roomId){
     return Object.keys(windows).filter(id=>windows[id].rooms.includes(roomId)).map(id=>Object.assign({id}, windows[id]));
   }
@@ -5386,7 +5449,7 @@
         : " A fire is burning here.";
     }
     document.getElementById("roomDesc").textContent = room.desc + heatNote;
-    document.getElementById("clockLabel").textContent = hasWatch() ? getClockText() : "";
+    document.getElementById("clockLabel").textContent = hasWatch() ? getClockText() : getVagueClockText();
   }
   function renderStatsPanel(){
     document.getElementById("statsBox").innerHTML =
