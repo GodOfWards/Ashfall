@@ -255,7 +255,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.4.14" };
+  const GAME_CONFIG = { VERSION: "0.4.15" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -302,6 +302,12 @@
   // retunable, and deliberately one knob per vital.
   const LOW_HUNGER_THRESHOLD = 30;
   const LOW_THIRST_THRESHOLD = 30;
+  // The Fatigue at which the pace bar locks to Sneak. Not a balance knob in
+  // the way the two above are — it is the top of the Fatigue scale, and
+  // gaitLocked() is its only reader. Named here because the rule it states
+  // was previously a bare 100 written at two call sites, neither of which
+  // owns Fatigue.
+  const FATIGUE_GAIT_LOCK = 100;
   const JOG_EXERTION_PER_MIN = 0.5;
   const CHOP_TREE_EXERTION = 30;
   const FISH_EXERTION = 8;
@@ -3593,7 +3599,7 @@
   // game's prose already follows. Used by the collapsed log summaries.
   const NUMBER_WORDS = ["zero","one","two","three","four","five","six","seven","eight","nine","ten"];
   function numberWord(n){ return n >= 0 && n < NUMBER_WORDS.length ? NUMBER_WORDS[n] : String(n); }
-  function moveMinutes(distanceM){ return Math.max(MIN_MOVE_MIN, distanceM / GAITS[state.gait].speed / 60); }
+  function moveMinutes(distanceM){ return Math.max(MIN_MOVE_MIN, distanceM / GAITS[effectiveGait()].speed / 60); }
   function exitMinutes(exit){
     const fromLoc = world[state.currentRoom].locationId;
     const toLoc = world[exit.to].locationId;
@@ -3699,7 +3705,15 @@
     // the item actually still on screen. Stripping _uid here guarantees a
     // fresh, unique id is assigned (via ensureUid) the next time this new
     // stack is shown in a detail view.
-    const copy = { ...item };
+    // The clone is deep for the same reason itemFromRegistry()'s is: a
+    // shallow spread leaves the new entry sharing its source's mutable
+    // objects (`tags`, `durability`), so mutating one would silently mutate
+    // the other. No aliased pair is reachable today — getItemActions()'s
+    // `splittable` gate is `STACKABLE.has(it.category) && !it.durability`,
+    // so a durability-bearing stack never splits and the source is always
+    // spliced out whole — but that guard lives in another function, which is
+    // exactly why the copy shouldn't depend on it.
+    const copy = JSON.parse(JSON.stringify(item));
     delete copy._uid;
     list.push(copy);
   }
@@ -3872,7 +3886,11 @@
     const it = getItemAt(src && src.items, index);
     if(!it || !it.slotType) return;
     if(state[it.slotType]){ log("You're already carrying something in that slot.", "warn"); return; }
-    state[it.slotType] = { name:it.name, unitWeight:it.unitWeight, capacityKg:it.capacityKg, items: it.contents || [] };
+    // itemId rides along so the slot stays traceable to its registry entry:
+    // countInPools() can see a stowed bag by id, and doUnequip() rebuilds
+    // the item from the registry rather than by hand.
+    state[it.slotType] = { itemId: it.itemId, name:it.name, unitWeight:it.unitWeight,
+      capacityKg:it.capacityKg, items: it.contents || [] };
     src.items.splice(index,1);
     // Silent: equipping makes a new inventory tab appear.
     state.invTab = it.slotType;
@@ -3881,8 +3899,16 @@
   function doUnequip(slotKey){
     const slot = state[slotKey];
     if(!slot) return;
-    const item = { name:slot.name, category:"Container", qty:1, unitWeight:slot.unitWeight,
-      slotType:slotKey, capacityKg:slot.capacityKg, contents:slot.items };
+    // Every equippable bag takes the first branch — ITEM_REGISTRY owns what
+    // a bag is, so category/slotType/capacityKg are never restated here.
+    // The fallback is reached by exactly two things and is not dead code:
+    // the keychain, which has no registry entry by design (see
+    // CONTAINER_SLOTS), and a slot loaded from a save written before slots
+    // carried itemId and not yet repaired by backfillSlotItemIds().
+    const item = slot.itemId
+      ? Object.assign(itemFromRegistry({ id: slot.itemId, qty:1 }), { contents: slot.items })
+      : { name:slot.name, category:"Container", qty:1, unitWeight:slot.unitWeight,
+          slotType:slotKey, capacityKg:slot.capacityKg, contents:slot.items };
     addToList(state.inventory.items, item);
     state[slotKey] = null;
     if(state.invTab === slotKey) state.invTab = "inventory";
@@ -4055,9 +4081,17 @@
   // ==================================================
   function doMove(exit){
     const minutes = exitMinutes(exit);
+    // The gait this move is actually made at — the effective one, not the
+    // preference, so a locked player isn't charged for a pace they aren't
+    // keeping. Sampled here, before advanceTime(), because it must be the
+    // same gait exitMinutes() just priced the move with: advanceTime() runs
+    // recovery, which can drop Fatigue below FATIGUE_GAIT_LOCK part-way
+    // through, and reading it afterwards would charge Jog exertion for a
+    // distance covered at Sneak speed.
+    const gait = effectiveGait();
     advanceTime(minutes);
     // Walking doesn't directly consume Stamina; jogging does.
-    if(state.gait === "fast") applyExertion(JOG_EXERTION_PER_MIN * minutes);
+    if(gait === "fast") applyExertion(JOG_EXERTION_PER_MIN * minutes);
     state.currentRoom = exit.to;
     state.worldTab = "floor";
     detailItem = null;
@@ -4275,6 +4309,18 @@
     // low-Energy Stamina cap can't be worked around.
     return state.vitals.fatigue > 0 && state.vitals.stamina >= staminaMaxForEnergy();
   }
+  // The Fatigue gait lock. `state.gait` is the player's chosen pace and is
+  // written in exactly one place — the pace-bar click handler. It is never
+  // coerced: at FATIGUE_GAIT_LOCK the lock supplies an *effective* gait
+  // instead, so the preference survives the lock and lights up again by
+  // itself once Fatigue falls. Two predicates rather than one because they
+  // answer different questions: gaitLocked() is what the click guard and the
+  // button-disabling want, effectiveGait() is what movement pricing wants.
+  // Everything that prices or charges movement must read effectiveGait() —
+  // moveMinutes() and doMove()'s jog surcharge both do, which is what keeps
+  // the two from disagreeing whatever order RENDERING happens to run in.
+  function gaitLocked(){ return state.vitals.fatigue >= FATIGUE_GAIT_LOCK; }
+  function effectiveGait(){ return gaitLocked() ? "sneak" : state.gait; }
   // One game-minute (or smaller remainder) of awake Stamina/Fatigue
   // recovery. mode "rest" uses Rest's flat rate and never adds the
   // recovery Energy surcharge; mode "normal" is the ordinary awake state.
@@ -4665,6 +4711,24 @@
       }
     });
   }
+  // backfillSlotItemIds(): fourth companion to backfillItemIds(), run
+  // alongside it on every load. Saves written before equipment slots carried
+  // itemId hold a slot object built by hand from an item's fields — so
+  // countInPools() cannot see the equipped bag by id, and unequipping it
+  // would take doUnequip()'s fallback branch and rebuild it by hand again.
+  // This assigns itemId by reverse name match against ITEM_REGISTRY, the way
+  // backfillItemIds() does for items and sound for the same reason: current
+  // registry names are unique. The keychain matches nothing and is left
+  // alone, which is correct — it is not a found item and has no registry
+  // entry to point at.
+  function backfillSlotItemIds(){
+    const nameToId = {};
+    Object.keys(ITEM_REGISTRY).forEach(id=>{ nameToId[ITEM_REGISTRY[id].name] = id; });
+    CONTAINER_SLOTS.forEach(slotKey=>{
+      const slot = state[slotKey];
+      if(slot && !slot.itemId && nameToId[slot.name]) slot.itemId = nameToId[slot.name];
+    });
+  }
   function applyLoadedData(data){
     if(!data || !data.state || !data.world || !data.world[data.state.currentRoom]){
       log("That save doesn't look valid — nothing was loaded.", "warn");
@@ -4696,6 +4760,7 @@
     // malformed save safe.
     resyncUidCounter();
     backfillItemIds();
+    backfillSlotItemIds();
     backfillLocationIds();
     backfillContainerFields();
     backfillRoomAddresses();
@@ -4821,9 +4886,10 @@
   menuBackdrop.addEventListener("click", closeMenu);
   document.querySelectorAll("#gaitBar button[data-gait]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
-      if(state.vitals.fatigue >= 100 && btn.dataset.gait !== "sneak") return;
-      document.querySelectorAll("#gaitBar button[data-gait]").forEach(b=>b.classList.remove("active"));
-      btn.classList.add("active");
+      if(gaitLocked() && btn.dataset.gait !== "sneak") return;
+      // The only write to state.gait in the file: the player's preference,
+      // set by the player. Which button is lit is renderStatsPanel()'s to
+      // decide, from effectiveGait() — render() runs on the next line.
       state.gait = btn.dataset.gait;
       render();
     });
@@ -5466,14 +5532,14 @@
       "Energy: " + Math.round(state.vitals.energy) + "<br>" +
       "Stamina: " + Math.round(state.vitals.stamina) + "<br>" +
       "Health: " + Math.round(state.vitals.health);
-    // Fatigue 100 restricts movement to Sneaking — Fatigue itself stays
-    // hidden from normal UI; there's no debug panel in this build to
-    // expose it through.
-    const fatigueLocked = state.vitals.fatigue >= 100;
-    if(fatigueLocked) state.gait = "sneak";
+    // The Fatigue gait lock restricts movement to Sneaking — Fatigue itself
+    // stays hidden from normal UI; there's no debug panel in this build to
+    // expose it through. Both lines below read a predicate and write nothing:
+    // the rule lives in STAMINA / FATIGUE, and this only shows its answer.
+    const locked = gaitLocked();
     document.querySelectorAll("#gaitBar button[data-gait]").forEach(btn=>{
-      btn.classList.toggle("active", state.gait === btn.dataset.gait);
-      btn.disabled = fatigueLocked && btn.dataset.gait !== "sneak";
+      btn.classList.toggle("active", effectiveGait() === btn.dataset.gait);
+      btn.disabled = locked && btn.dataset.gait !== "sneak";
     });
   }
   // Compass order for the Move panel. An unknown direction ranks
