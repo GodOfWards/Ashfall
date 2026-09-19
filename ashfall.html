@@ -255,9 +255,9 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.4.13" };
+  const GAME_CONFIG = { VERSION: "0.4.14" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
-  const STACKABLE = new Set(["Food","Medical","Ammunition","Materials"]);
+  const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
   // Floor on the cost of one movement, in game minutes. Load-bearing: 22 of
   // the 774 exits are building entrances whose two Locations sit at identical
@@ -425,8 +425,15 @@
   //   Basic item: { name, category, qty, unitWeight }
   //   Optional properties:
   //     tags          capability tags used by mechanics instead of name
-  //                   checks — current tags: blunt, blade, prying, cutting,
-  //                   chopping, fishing, tackle, heat, fire-starter, battery
+  //                   checks. Read by a mechanic today: blunt, cutting,
+  //                   chopping, fishing, tackle, fire-starter, battery.
+  //                   Declared, with no consumer yet: blade, prying,
+  //                   can-opening, heat — an item carrying one of these
+  //                   makes a claim nothing currently acts on, which is
+  //                   correct to write and not yet load-bearing. `heat`
+  //                   sits in that second group despite having a reader:
+  //                   roomHasHeat() exists, but its only caller is
+  //                   canCraft()'s needsHeat branch, which no recipe sets.
   //     durability    { current, max, mode } — mode is "uses" or "time"
   //     restores      { hunger, thirst } — consumable effect
   //     verb          display/use verb, e.g. "Eat", "Drink"
@@ -481,7 +488,6 @@
     cloth: { name:"Cloth", category:"Materials", unitWeight:0.1 },
     dead_potted_plant: { name:"Dead potted plant", category:"Misc", unitWeight:2.0 },
     duct_tape: { name:"Duct tape", category:"Materials", unitWeight:0.3 },
-    length_of_rope: { name:"Length of rope", category:"Materials", unitWeight:1.5 },
     canned_beans: { name:"Canned beans", category:"Food", unitWeight:0.4, restores:{hunger:22}, verb:"Eat" },
     board_games: { name:"Board games", category:"Misc", unitWeight:1.0 },
     burnt_saucepan: { name:"Burnt saucepan", category:"Misc", unitWeight:0.6 },
@@ -768,8 +774,7 @@
     tools_general: { rollCount:[1,2], emptyChance:0.15, entries:[
       { itemId:"duct_tape", weight:8, qtyMin:1, qtyMax:1 },
       { itemId:"nails", weight:6, qtyMin:1, qtyMax:3 },
-      { itemId:"rope", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"length_of_rope", weight:5, qtyMin:1, qtyMax:1 },
+      { itemId:"rope", weight:11, qtyMin:1, qtyMax:1 },
       { itemId:"wrench", weight:5, qtyMin:1, qtyMax:1 },
       { itemId:"crowbar", weight:2, qtyMin:1, qtyMax:1 } ]},
     tools_workshop: { rollCount:[1,2], emptyChance:0.2, entries:[
@@ -1243,7 +1248,7 @@
       containers:[
         { id:"storagebin", name:"Storage bin", capacityKg:15, spawnPools:["fuel_fire","tools_general"], spawnRolled:true, items:itemsFromRegistry([
           { id:"duct_tape", qty:1 },
-          { id:"length_of_rope", qty:1 } ])}
+          { id:"rope", qty:1 } ])}
       ],
       exits:[
         { to:"living", label:"Go to the living room", distanceM:3 },
@@ -4058,9 +4063,6 @@
     detailItem = null;
     render();
   }
-  function doTryDoor(label){
-    log(label.replace("Try the door","You try the door") + ". It's locked tight, and you've got no way through it yet.", "warn");
-  }
   function doRest(){
     // Rest recovers Stamina/Fatigue without the recovery Energy surcharge,
     // but baseline awake Energy consumption still applies and Rest does not
@@ -4350,6 +4352,9 @@
   function canCraft(recipe){
     const hasAll = recipe.inputs.every(inp => countInPools(inp.id) >= inp.qty);
     if(!hasAll) return false;
+    // Two gates no recipe sets today. They stay because they are the
+    // declared shape a recipe uses to demand a tool or a heat source —
+    // drop them and the next recipe that needs one has to re-add them.
     if(recipe.tool && !hasTool(recipe.tool)) return false;
     if(recipe.needsHeat && !roomHasHeat(world[state.currentRoom])) return false;
     return true;
@@ -4588,6 +4593,9 @@
         });
       };
       scan(room.containers, defaultRoom.containers);
+      // No car container carries spawnPools today, so this second scan
+      // can copy nothing — kept for a car container that gains one later,
+      // since scan() already returns early when there is nothing to copy.
       scan(room.carContainers, defaultRoom.carContainers);
     });
   }
@@ -5508,9 +5516,6 @@
       .forEach(exit=>{
         hereBox.appendChild(actionButton(exit.label, ()=> doMove(exit), { cost: fmtDuration(exitMinutes(exit)) }));
       });
-    if(room.lockedDoors) room.lockedDoors.forEach(d=>{
-      hereBox.appendChild(actionButton(d.label, ()=> doTryDoor(d.label), "locked"));
-    });
     doorsForRoom(state.currentRoom).forEach(doorId=>{
       if(!doors[doorId].locked) return;
       const label = DOOR_LABELS[doorId] || doorId;

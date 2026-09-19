@@ -18,6 +18,206 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.4.14 — Vestigial surface, and the rope duplicate
+
+Implements: handoffs/vestigial-surface-and-the-rope-duplicate.md
+
+Implements #70 and #76 in full, per
+`handoffs/vestigial-surface-and-the-rope-duplicate.md`. Two `tier-1` items that
+are one complaint applied to two layers: surface that reads as live and is not.
+#70 is code and constants — an unreachable action path, a `STACKABLE` member
+matching no item, capability tags nothing consumes. #76 is content — one object
+under two registry ids, which the stacking rule then refuses to merge. A
+deletion pass throughout: no mechanic changes, no new state, `SAVE_KEY` stays
+`ashfall_save_v0.4` and existing browser saves keep loading.
+
+Some of this is deliberately *kept* and annotated rather than deleted. Keeping
+a thing is a decision this pass made, not an omission — the comment is what
+stops it being re-filed.
+
+**Removed**
+
+- **`doTryDoor()` and the `room.lockedDoors` block in
+  `renderHereActionsPanel()`** — an unreachable path. `room.lockedDoors` was
+  read in exactly one place and set in none: no room in any of the 26
+  `build*()` functions defines it, and it is absent from the ROOM SCHEMA
+  comment. `doTryDoor()` was reachable only from that block, and its
+  `label.replace("Try the door", …)` expected a label shape no data produces.
+  The surviving locked-door implementation — the `doors` table plus
+  `findKeyForDoor()`, rendered a few lines below — is the replacement, and was
+  already doing the whole job.
+- **`"Ammunition"` from `STACKABLE`**, leaving
+  `new Set(["Food","Medical","Materials"])`. Zero registry entries carry
+  `category:"Ammunition"`; the ten categories actually present are Clothing,
+  Container, Electronics, Food, Key, Literature, Materials, Medical, Misc and
+  Tool. A set member matching no item's category can never be consulted, so
+  this changes no behavior. The hint it carried — that ammunition was once
+  considered — is redundant with the registry's own
+  `// Self-defense (firearms deliberately excluded)` comment, which says it
+  more clearly.
+- **The `length_of_rope` registry entry** — see **Changed / Reworked** below.
+
+**Changed / Reworked**
+
+*The rope merge (content)*
+
+- `length_of_rope` (`"Length of rope"`) and `rope` (`"Rope"`) were one object
+  under two ids — identical `category:"Materials"` and `unitWeight:1.5`,
+  differing only in display string, with no mechanic referencing either id: no
+  recipe input, no tag, no world check. Because `Materials` is in `STACKABLE`
+  and `addToList()` merges on `itemId`, a player holding both carried two
+  inventory rows for one object, and a container drawing `tools_general` twice
+  could roll one of each.
+- `rope` is the survivor — three placements to `length_of_rope`'s one, two
+  spawn pools to its one. Three edits: the registry entry deleted, the
+  `balcony`/`storagebin` placement repointed from `{ id:"length_of_rope" }` to
+  `{ id:"rope" }`, and `tools_general`'s two entries collapsed into one at
+  weight `11`. `hardware_store`'s `rope` at weight `7` and `hardware`/`bins`'
+  hand placement of `qty:2` are untouched.
+
+**Documentation**
+
+- **The ITEM DATA SCHEMA `tags` entry rewritten.** It listed ten tags and the
+  registry carries eleven — `can-opening`, on `can_opener`, was never listed.
+  An incomplete specification of the tag system is exactly what that omission
+  cost, so the list is now complete and split by state: read by a mechanic
+  today (`blunt`, `cutting`, `chopping`, `fishing`, `tackle`, `fire-starter`,
+  `battery`), and declared with no consumer yet (`blade`, `prying`,
+  `can-opening`, `heat`). The tag *set* is unchanged — no tag was added or
+  removed from any item. All four unconsumed tags stay in `ITEM_REGISTRY`:
+  they are content-facing, they are how a future item says "I behave like a
+  knife", and deleting then re-adding them is churn paid in registry edits.
+- `heat` is documented into the second group with its reason stated:
+  `roomHasHeat()` exists and reads it, but `roomHasHeat()`'s only caller is
+  `canCraft()`'s `needsHeat` branch, which no recipe sets. It is reachable code
+  on an unreachable path.
+- **`canCraft()`'s two unset gates annotated.** `recipe.tool` and
+  `recipe.needsHeat` are gated and printed by `renderCraftPanel()`'s "needs …"
+  string, and neither `RECIPES` entry (`bandage`, `campfire_kit`) sets either;
+  `HEAT_RECIPES` does not route through `canCraft()` at all. Both branches stay
+  — `canCraft()` reads as a small complete crafting gate *because* they are
+  there, and deleting them means the next recipe needing a tool re-adds them.
+  The comment says that, so the next reader does not re-file #70.
+- **`backfillContainerFields()`'s second `scan()` annotated.** `scan()` returns
+  early unless the *default* container has `spawnPools`; three rooms carry
+  `carContainers` (`poplar2nd`, `mid_poplar_1_2`, `mid_main_1_3`) and none of
+  their containers has `spawnPools`, so the call can copy nothing today. It
+  stays — it costs one line and covers a car container gaining `spawnPools`
+  later — and the comment records that, so the next audit does not re-derive it.
+- Per the handoff's comment-wording constraint, none of the three new comments
+  names an issue number, a version or a handoff path: each explains itself as a
+  rule.
+- **Nothing further was deferred.** The three items this pass defers — #95, #96
+  and #97 — were filed by the planning session that wrote the handoff, and
+  implementation surfaced nothing new to file.
+
+**Open questions / decisions resolved**
+
+- **No `validateRegistryDuplicates()` dev helper was added**, and the
+  measurement behind that is recorded so it is not re-proposed. Signature =
+  the registry entry with `name` removed: across 154 entries that yields 28
+  colliding groups covering 82 entries, 53% of the registry, with
+  `rope`/`length_of_rope` landing in a six-member group beside `plank`,
+  `spare_parts_box`, `spare_machine_parts` and `paint_can`, none of which is a
+  duplicate of anything. Narrowing to "same signature *and* both in one spawn
+  pool" still returns 13 groups, including every medical item that weighs
+  0.05 kg. `canned_corn` and `canned_tuna` are identical in every modelled
+  property and are *not* a duplicate — corn and tuna are two foods a later
+  spoilage or nutrition layer would separate. What made the rope pair a
+  duplicate is that the two names denote the same object, which is semantic and
+  invisible to any signature comparison.
+- The handoff left nothing else open; every keep/delete call was settled in
+  planning and taken as written.
+
+**Notes / assumptions**
+
+- **`tools_general`'s rope weight of `11` is retunable**, and was chosen to be
+  provably rate-neutral rather than balanced. The pool's entry weights totalled
+  8+6+6+5+5+2 = 32, of which rope in either form was 6+5 = 11. After the merge
+  the total is 8+6+11+5+2 = 32 and rope is 11. Any rope, before or after, is
+  11/32 of a pick. The status quo it preserves was itself an accident of two
+  ids existing, so 11 is a starting point, not a considered balance number.
+- **Save compatibility, stated rather than left to be discovered:** an existing
+  save holding a `length_of_rope` item keeps working. Items carry their own
+  `name`, `category` and `unitWeight` in the save, and `backfillItemIds()` only
+  *adds* a missing `itemId` — it never rewrites one. The orphaned item simply
+  stops stacking with `rope`, which is exactly the status quo. No backfill was
+  added and none is wanted.
+- This pass touches both WORLD DATA and non-content sections, which is not the
+  both-buckets case the Project Guide bounds — nothing here is a new mechanic
+  shipping with its defining data. It is a deletion pass that happens to delete
+  in two places, so there is no **New content** section to pair with a **New**
+  one.
+
+**UI**
+
+- The one visible change: the `balcony` storage bin's rope now displays as
+  "Rope" rather than "Length of rope", and a second inventory row that could
+  previously appear for the same object no longer can. Everything else is
+  invisible by construction — `room.lockedDoors` was never set so its button
+  never rendered, `Ammunition` matched no item's category, and the tag and
+  recipe-gate changes are comments.
+
+**Explicitly out of scope**
+
+- **Wiring `can-opening` to a consumer — #95.** The one dead tag whose absence
+  is player-visible. A genuine new mechanic, `tier-2`. This pass keeps the tag
+  in place precisely so #95 has something to consume.
+- **Making `heat` live — #96.** Gating the Cook action on `roomHasHeat()`
+  rather than `room.heatActive` would make `propane_torch` functional. A new
+  mechanic, not cleanup.
+- **Retagging `doBreakCar()` — #97.** It is gated on `hasTool("blunt")` while
+  its log line reads "You pry the door open", and `prying` sits unconsumed on
+  the crowbar. Retagging narrows the tool set from eight items to one, which is
+  a balance change and does not belong in a deletion pass.
+- **Deleting `recipe.tool` / `needsHeat`** — considered and rejected above.
+- **The `canned_corn`/`canned_tuna` signature collision** — not a duplicate, no
+  action.
+
+**Explicitly NOT changed**
+
+- No balance constant, threshold or formula, other than the `tools_general`
+  rope weight documented above as rate-neutral.
+- No save format change. `SAVE_KEY` still derives to `ashfall_save_v0.4`; no
+  persistent state field was added, removed or renamed, and no backfill was
+  added.
+- No mechanic. `hasTool()`, `countByTag()`, `consumeByTag()`,
+  `findFireStarter()` and `roomHasHeat()` are untouched, as are every
+  `breakTag` call site and the `doors`/`findKeyForDoor()` locked-door path that
+  survives the `doTryDoor()` deletion.
+- No room, exit, container, door, window or description. The only WORLD DATA
+  touched is one registry entry deleted, one placement repointed and one spawn
+  pool edited.
+- No tag added to or removed from any item; no function moved between sections.
+
+**Validation performed**
+
+- `git diff origin/main...HEAD -- ashfall.html` reviewed in full: seven hunks,
+  and nothing outside the six scoped edits plus the version bump. The two
+  deletions remove only the lines named above; the three annotations add
+  comment lines and no statements.
+- Residue check — `grep -n "length_of_rope\|lockedDoors\|doTryDoor\|Ammunition" ashfall.html`
+  returns nothing, confirming no dangling reference to either deleted path or
+  the removed registry id.
+- Tag audit — every `tags:[…]` value in `ITEM_REGISTRY` enumerated and counted:
+  eleven distinct tags, matching the rewritten schema comment exactly.
+- `tools_general` weight arithmetic checked against the pool as it now stands:
+  8+6+11+5+2 = 32, rope 11/32, identical to the pre-merge rate.
+- Syntax check — the `<script>` body extracted and run through `node --check`,
+  clean.
+
+**Sections touched**
+
+CONFIG / CONSTANTS (`STACKABLE`, `GAME_CONFIG.VERSION`), WORLD DATA
+(`ITEM_REGISTRY`, `SPAWN_POOLS`, one `balcony` placement, the ITEM DATA SCHEMA
+comment), WORLD INTERACTION (`doTryDoor()` deleted), CRAFTING (`canCraft()`
+comment), PERSISTENCE (`backfillContainerFields()` comment), UI/RENDERING
+(`renderHereActionsPanel()`).
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.13"` → `"0.4.14"`
+
+---
+
 ## v0.4.13 — Partial stacks, a vague clock, and a display floor
 
 Implements: handoffs/partial-stacks-vague-clock-and-display-floor.md
