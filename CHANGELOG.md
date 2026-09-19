@@ -18,6 +18,202 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.4.18 — Map labels measured, not tabulated
+
+Implements: handoffs/map-label-measurement.md
+
+Implements #43 and #87 in full, per `handoffs/map-label-measurement.md`. Two
+`tier-1` items that are one move: two hand-kept facts about rendered text, both
+replaced by a measurement taken at bind time against the font the browser
+actually resolved. The precedent is already in the file — v0.4.10 chose
+`getComputedTextLength()` over a width table for Close's building labels, and
+this applies that to the two places that still tabulated.
+
+RENDERING only, MAP sub-block. No WORLD DATA, no mechanic, no new state: no
+room, item, container, exit or description changed, `ITEM_REGISTRY` and
+`BUILDINGS` were not edited, and `SAVE_KEY` does not rotate — `versionCompat()`
+stays at `0.4` under a PATCH bump, so existing browser saves keep loading.
+
+**New**
+- `mapTextWidth(el, from, count)` — the one way this file measures rendered
+  text. Wraps `getComputedTextLength()`, or `getSubStringLength()` when `from`
+  is given, and returns `0` rather than throwing, so a measurement failure can
+  never throw out of a bind and leave the map half-placed. Both label pools now
+  read through it.
+- `mapSetLabelWidth(w)` — recomputes `mapLabelW` and the three values derived
+  from it from a single width. Rejects anything not finite or not `> 0` and
+  leaves the previous width in place: a zero would collapse every tier to
+  `hi - lo >= 0`, which is always true, and every street would silently jump to
+  three names.
+- `mapSplitName(el, name)` — chooses which space in a building name is the line
+  break.
+- `MAP_LABEL_W_FALLBACK` (`99.1`) — the last known good Chromium measurement of
+  `"POPLAR ST"`, kept as the value the game starts with and the value it keeps
+  if a measurement fails. It is no longer the live width.
+
+**Removed**
+- `MAP_LABEL_W`, `MAP_LABEL_INSET`, `MAP_LABEL_TIERS` and `MAP_LABEL_CLEARANCE`
+  as module-level `const`s. Replaced by `mapLabelW`, `mapLabelInset`,
+  `mapLabelTiers` and `mapLabelClearance`, all `let`s recomputed by
+  `mapSetLabelWidth()`. They could not stay `const`s: they were evaluated at
+  script-parse time, before any DOM node existed to measure.
+
+**Changed / Reworked**
+
+*Street-name width (#43)*
+- `mapBindStreetLabels()` now measures each of the sixteen names once after
+  setting `textContent` and calls `mapSetLabelWidth()` with the largest. One
+  reading per street, not per pooled node — a street's three nodes carry the
+  same string.
+- Wide's pool ships `display:none` and a hidden SVG text node measures zero
+  (re-probed on this build: `0` hidden, `98.163` shown). The node being read is
+  shown before the reading and left shown; the snap that follows every bind sets
+  `display` on every pooled node anyway. The pool is deliberately *not* shipped
+  visible instead — that would paint sixteen names at the origin before the
+  first position pass, which is the flash Close's build-order comment exists to
+  avoid.
+- All six derivation sites read the new binding. Every multiplier is unchanged:
+  `6 *`, `3 *`, `1 *` for the tiers, `/ 2` for the inset and the clearance,
+  `MAP_LABEL_EDGE_GAP` and `MAP_LABEL_OFFSET` as they were. Only the width they
+  multiply changed source.
+- `MAP_LABEL_CAP` stays the literal `12`. It is deliberately not measured:
+  `getComputedTextLength()` gives width only, and `getBBox().height` reports the
+  em box — `17.83` at this face, against a cap band nearer 11 — so there is no
+  cheap correct reading to take. Its comment now says so.
+
+**Fixed**
+- **#87** — `renderMapClose()` broke a building name on its **first space**, so
+  a three-word name rendered `["Main", "St Pharmacy"]` rather than the
+  `["Main St", "Pharmacy"]` a reader expects. Root cause: the break was chosen
+  at markup time, where the only thing available to choose it by is character
+  position, and the layout reads width. The markup now ships the whole name in
+  the first `<text>` node with the second empty, and `mapBindBuildingLabels()`
+  chooses the break — the space that leaves the two sides closest in rendered
+  width, measured with `getSubStringLength()` against the node that already
+  carries the name, earliest space on an exact tie. `half` is computed after the
+  split, since it reads the nodes.
+- Line count stays decided at markup time — two nodes when the name contains a
+  space, one when it does not — so nothing about the markup became
+  measurement-dependent. If measurement fails every score is zero, the earliest
+  space wins, and the split degrades to exactly the first-space rule it replaced.
+
+**UI**
+- **On the measuring machine, none — and that is proved below rather than
+  asserted.** On other machines street-label placement may differ, correctly.
+  `system-ui` is not one font: it resolves to Segoe UI, SF Pro, Roboto or
+  Cantarell depending on where the page is opened, and those differ by more than
+  the 3.66-unit band inside which placement is invariant. The trade this pass
+  makes is deliberate and worth stating plainly: *before*, placement was
+  identical on every machine and correct only on the one where `99.1` was
+  measured; *after*, it is correct on every machine and identical on none. The
+  literal had already drifted — `"POPLAR ST"` measures `98.163` here, a
+  0.94-unit error sitting in the source.
+- Building labels: all eleven current names split identically under the old and
+  the new rule, so no marker changed.
+
+**Validation performed**
+- **Street-label sweep (#43).** Drove the shipped `mapLabelPositions()` /
+  `mapClearCrossings()` / `mapLabelBox()` / `mapLabelHitsPlayer()` arithmetic —
+  lifted verbatim out of `ashfall.html`, not reimplemented — over every view a
+  player can occupy: 176 street/mid-block nodes × 4 Wide spans × 16 streets =
+  **11,264 street-views**, under the old literal `99.1` and under this machine's
+  measured maximum `98.16267395019531`. Result: **0 street-views with a
+  different label count, 0 labels that moved**, 11,428 labels placed under each.
+- **Neutrality band.** Re-derived on this build by bisecting the placement
+  arithmetic: any single width in **[97.5000, 101.1572]** produces identical
+  placement everywhere. Both `99.1` and the measured `98.163` fall inside it, so
+  this machine is placement-neutral. (Planning found `[97.55, 101.15]`; the
+  edges agree to the precision each scan resolved.)
+- **The measurement is live, not incidental.** Since both widths place
+  identically, a passing sweep alone would not prove the measured value reached
+  the placement. Enlarging `.map-street-name` to 30px before the Wide bind makes
+  the widest name measure `191.802`; the build then rendered **3** labels,
+  matching the arithmetic at the measured width and not the **10** the `99.1`
+  fallback predicts.
+- **Building names (#87).** Ran the shipped `mapSplitName()` in-page against a
+  real `.map-bldg-label` node: all **11** current `BUILDINGS` names split
+  identically under the old and new rules. On three-word names the fix does what
+  it claims — `"Main St Pharmacy"` goes `["Main", "St Pharmacy"]` →
+  `["Main St", "Pharmacy"]` (widest line 71.13 → 55.68) and
+  `"St Anne Medical Center"` goes `["St", "Anne Medical Center"]` →
+  `["St Anne", "Medical Center"]` (116.75 → 84.54). `"Sunoco Gas Station"` and
+  `"Riverside Freight Depot"` are unchanged by it.
+- **Fallback guard (A5).** `mapSetLabelWidth()` called with `0`, `NaN`,
+  `Infinity`, `-1`, `undefined` and `null` leaves the width where it was.
+- **End to end.** Loaded the file in Chromium, opened the map in both modes and
+  panned: no page errors, and Wide's rendered label transforms match the shipped
+  arithmetic at the measured width exactly.
+- Diff: `git diff origin/main...HEAD -- ashfall.html`.
+
+**Open questions / decisions resolved**
+
+The handoff left four narrow calls to implementation. All four took the
+recommended option:
+- **How the measured width reaches its six consumers** — option (a): module-level
+  `let`s beside `mapZoomMode` / `mapZoomStep`, recomputed by one function at the
+  end of `mapBindStreetLabels()`. Threading the width through
+  `mapLabelPositions()` / `mapClearCrossings()` / `mapLabelBox()` would widen
+  three signatures that run on every animation frame of a pan, for a value that
+  is constant between binds. The factory form was left to #113 if it wants it.
+- **Where the measurement lives inside bind** — folded into the existing loop,
+  accumulating the maximum as it goes, rather than a separate first pass.
+- **`getSubStringLength()` vs. re-reading each candidate** — `getSubStringLength()`:
+  one layout per name rather than one per candidate split, and no text thrash.
+- **Whether the fallback keeps the name `MAP_LABEL_W`** — it does not.
+  `MAP_LABEL_W_FALLBACK` costs a rename at six sites and stops a reader taking
+  the literal for the live width.
+
+**Documentation**
+- Comment rewrites at the three sites the handoff named: the label-size block
+  (what is measured, what is not, and why `system-ui` makes a literal wrong),
+  the crossing-clearance derivation (now inside `mapSetLabelWidth()` with the
+  values it explains), and Close's build-order comment (line *count* is decided
+  at markup time, the line *break* is not). `mapLabelBox()` gained a line saying
+  its width is the widest name's and not this street's own — the crowding rule
+  the tiers state, applied to one box.
+- **Nothing was deferred by this pass, and no new issues were filed.** No
+  seventh consumer of the width and no second measurement hazard turned up.
+  #113 (per-street widths) was filed during the planning session, not by this
+  pass, and this pass deliberately leaves it: its measured street table was
+  re-derived here and matches to the hundredth of a unit.
+
+**Explicitly out of scope**
+- **#113 — per-street measured widths.** The deliberate remainder of #43. It
+  moves 2,159 of 11,264 street-views and is a visible densification of the two
+  lower Wide spans; this pass takes the **maximum** precisely so it can prove
+  zero change. This pass unblocks it.
+- **#37 — labels drawn outside the viewBox.** Same functions, different fault.
+  Its measured table survives this pass intact, since placement does not change.
+- **#108 — the duplicated `viewBox` literal** in the markup. Map-adjacent, but
+  it belongs to that issue's pass.
+- **Three-line building labels.** `MAP_BLDG_LINE_H` and the `first` / `lines`
+  maths generalise, but a third line makes the block taller against
+  `MAP_BLDG_LABEL_PAD` at the narrowest Close span. Two lines stay the maximum.
+- Measuring `MAP_LABEL_CAP` — settled as "stays a literal", not deferred.
+- Renaming any street or building, and any change to `MAP_STREETS`, `BUILDINGS`
+  or `MAP_BUILDING_OFFSETS`.
+
+**Notes / assumptions**
+- The neutrality band is a property of this font and these sixteen names, not a
+  guarantee. A future street name wider than the current maximum, or a face
+  change, moves it — which is the point of measuring rather than tabulating.
+- `MAP_LABEL_W_FALLBACK` is only reachable if a measurement fails or before the
+  first Wide bind runs. The game opens in Close (`mapZoomMode = "close"`), so
+  every session runs on the fallback until the player first switches to Wide —
+  which is also the moment the first placement is computed, so nothing is
+  displayed under it.
+- `MAP_LABEL_CAP`'s `12` remains a chosen number against a measured cap band
+  nearer 11, and stays retunable.
+
+**Sections touched**
+- RENDERING → MAP (In-Game Viewing Map) only. Nothing in WORLD DATA, PLAYER
+  STATE, CORE UTILITIES, INVENTORY / ITEM SYSTEM, WORLD INTERACTION, SURVIVAL /
+  TIME SIMULATION, CRAFTING, FIRE / COOKING or PERSISTENCE.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.17"` → `"0.4.18"`
+
+---
+
 ## v0.4.17 — The mid-block toll, and three unstated facts
 
 Implements: handoffs/mid-block-toll-and-three-unstated-facts.md
