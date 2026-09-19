@@ -18,6 +18,230 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.4.15 — Rules written twice: the gait lock and the equipment round trip
+
+Implements: handoffs/rules-written-twice.md
+
+Implements #69 and #71 in full, per `handoffs/rules-written-twice.md`. Two
+`tier-1` items that are one complaint: a fact the file already owns, restated at
+a call site. #69 is a game rule — Fatigue 100 deciding what the player may do,
+written as a bare `100` in two sections, neither of which owns Fatigue, and
+enforced by a write to PLAYER STATE from inside RENDERING. #71 is an item
+definition — `ITEM_REGISTRY` owns what a bag is, and `doUnequip()` rebuilt one by
+hand. Both resolve the same way: name the fact once, give it a predicate or a
+constructor, and have the call sites ask rather than restate.
+
+One player-visible behavior change, in the gait lock. Everything else in this
+pass is behavior-neutral.
+
+**New**
+
+- `FATIGUE_GAIT_LOCK` (`100`) in the STAMINA / FATIGUE SYSTEM CONSTANTS block:
+  the Fatigue at which the pace bar locks to Sneak, previously a bare literal at
+  two call sites. Value unchanged from v0.4.14.
+- `gaitLocked()` and `effectiveGait()` in the STAMINA / FATIGUE SYSTEM section,
+  beside `fatigueRecoveryAllowed()` — the predicate pattern that section already
+  uses. `gaitLocked()` is `state.vitals.fatigue >= FATIGUE_GAIT_LOCK`;
+  `effectiveGait()` returns `"sneak"` while locked and `state.gait` otherwise.
+- `backfillSlotItemIds()` in PERSISTENCE, wired into `applyLoadedData()` beside
+  the four existing backfills. Gives a loaded equipment slot its `itemId` by
+  reverse name match against `ITEM_REGISTRY` — sound for the same reason
+  `backfillItemIds()` is, registry names being unique. Skips slots that already
+  carry one, and slots that match nothing: `state.keychain` is not a found item
+  and has no registry entry, so it is correctly left alone.
+
+**Changed / Reworked**
+
+*The gait lock*
+
+- `state.gait` is now the player's *preference* and is written in exactly one
+  place: the pace-bar click handler, from the player's click. The lock no longer
+  overwrites it. Previously, reaching Fatigue 100 coerced `state.gait` to
+  `"sneak"` and the chosen pace was destroyed — the player had to re-pick it
+  after recovering. Now the lock supplies an effective gait while it holds, and
+  the preference lights up again by itself once Fatigue falls below
+  `FATIGUE_GAIT_LOCK`. This is the pass's one player-visible change.
+- `moveMinutes()` prices movement through `GAITS[effectiveGait()].speed` rather
+  than `GAITS[state.gait].speed`. This is what removes a load-bearing call order
+  nothing in the file documented: pricing and charging previously agreed only
+  because `render()` happened to call `renderStatsPanel()` (which coerced the
+  gait) before `renderMoveActionsPanel()` (which priced the exits). Both now
+  derive from the same predicate whenever they run.
+- `doMove()` charges the Jog surcharge on the effective gait, not the
+  preference, so a locked player is not billed `JOG_EXERTION_PER_MIN` for a
+  distance covered at Sneak speed. It is sampled *before* `advanceTime()`: that
+  call runs recovery, which can drop Fatigue below the lock part-way through the
+  move, and reading the gait afterwards would charge Jog exertion for a move
+  already priced at Sneak. Net effect is identical to v0.4.14, which got the
+  same answer only because the coercion had already run.
+
+*The equipment round trip*
+
+- `doEquip()` carries `itemId` onto the slot object it builds. `doUnequip()`
+  reconstructs the item through `itemFromRegistry({ id: slot.itemId, qty:1 })`
+  and attaches `contents`, deleting the hand-written
+  `category`/`slotType`/`capacityKg` triple for all five equippable bags. The
+  hand-built object survives as a commented fallback reached by exactly two
+  things — `state.keychain`, which has no registry entry by design, and a slot
+  from a save written before this pass and not yet repaired by
+  `backfillSlotItemIds()`.
+
+**Fixed**
+
+- Round-tripping an equipped bag through `doUnequip()` dropped its `itemId`,
+  because the item was hand-built rather than taken from the registry. Observable
+  effect: `countInPools("worn_backpack")` returned 0 while the bag sat in
+  inventory. Latent rather than live — nothing reads a bag's id today, and
+  `backfillItemIds()` restored it on the next save/load — but the gap is now
+  closed at the source rather than repaired after the fact.
+- `addToList()` copied with `{ ...item }`, a shallow spread, so a new stack entry
+  shared its source's `tags` array and `durability` object. Behavior-neutral
+  today: `getItemActions()`'s `splittable` gate is
+  `STACKABLE.has(it.category) && !it.durability`, so a durability-bearing stack
+  never splits and the source is always spliced out whole — the two stackable
+  items that carry durability (`box_of_matches`, `lighter`) are excluded by that
+  guard. The guard lives in a different function from the copy, which is why the
+  copy is now `JSON.parse(JSON.stringify(item))` — matching
+  `itemFromRegistry()`, so both item-creating paths agree — rather than relying
+  on it. The `delete copy._uid` comment is extended, not replaced: it documents
+  a different hazard and is still the only thing that does.
+
+**UI**
+
+- The pace bar. While Fatigue is at `FATIGUE_GAIT_LOCK` it disables everything
+  but Sneak and shows Sneak lit, exactly as before. The difference is
+  afterwards: the player's previously chosen pace becomes active again on its
+  own instead of the bar being left on Sneak with the choice discarded.
+- The click handler no longer toggles `active` by hand before calling
+  `render()`. `renderStatsPanel()` sets it from `effectiveGait()`, so one place
+  decides which button is lit instead of two.
+- Nothing else moves: the Move panel's durations, the equipment tabs and the
+  inventory rows render as before.
+
+**Documentation**
+
+- `renderStatsPanel()` no longer writes to PLAYER STATE during a render,
+  restoring the ARCHITECTURE comment's "UI/RENDERING ... should never contain
+  rules" for the gait lock. Two more such writes remain — `state.invTab` in
+  `renderInventoryPanel()` and `state.worldTab` in `renderWorldItemsPanel()` —
+  and are deliberately untouched here; they are UI-state normalisation rather
+  than game rules, and are #98's subject.
+- Nothing further was deferred. Both items this pass sets aside were filed
+  during the planning session that wrote the handoff — **#98** (`invTab` /
+  `worldTab` as PLAYER STATE) and **#99** (the chop break-even knife-edge) — and
+  no new issues surfaced during implementation.
+
+**Open questions / decisions resolved**
+
+- *Where `gaitLocked()` and `effectiveGait()` live.* Placed in the STAMINA /
+  FATIGUE SYSTEM section beside `fatigueRecoveryAllowed()`, the handoff's
+  recommendation, over CORE UTILITIES beside `moveMinutes()`: the rule is about
+  Fatigue, so it belongs where a reader retuning `FATIGUE_GAIT_LOCK` will look.
+- *One function or two.* Kept as two, the handoff's recommendation. They answer
+  different questions — `gaitLocked()` is what the click guard and the
+  button-disabling want, `effectiveGait()` is what pricing wants — and
+  collapsing them would make one call site derive the other's answer.
+- *Sampling the gait in `doMove()`.* Not a question the handoff raised; it
+  surfaced under test. The handoff specified `if(effectiveGait() === "fast")` in
+  place of the old check, which left the read after `advanceTime()` and so
+  charged Jog exertion whenever recovery lifted the lock mid-move — the exact
+  bug the handoff's rule 1 warned the fix could introduce, reached by a
+  different route. Resolved by sampling `effectiveGait()` into a local before
+  `advanceTime()`, which also matches v0.4.14's behavior exactly.
+
+**Data / schema changes**
+
+- No new PLAYER STATE field. `state[slotType]` gains an `itemId` property on the
+  existing slot object, written by `doEquip()` and backfilled on load. The ITEM
+  DATA SCHEMA is unchanged and WORLD DATA is untouched.
+- Save format is additive and backward-compatible: old saves load,
+  `backfillSlotItemIds()` and `doUnequip()`'s fallback both handle a slot
+  without `itemId`, and `SAVE_KEY` stays `ashfall_save_v0.4`. Hence PATCH.
+- `state.gait` keeps its shape and meaning. A v0.4.14 save written while locked
+  holds `"sneak"` — the coercion had already destroyed the preference before the
+  save — so it loads as a Sneak preference rather than the pace the player
+  originally chose. There is nothing to recover; noted so the difference is not
+  silent.
+
+**Explicitly out of scope**
+
+- #71's option 3, the un-projected slot (`state[slotType]` holding the item
+  object rather than a projection). It changes the persisted shape of every
+  slot, making it MINOR.
+- Giving `state.keychain` an `ITEM_REGISTRY` entry to avoid the fallback branch.
+  The comment at `CONTAINER_SLOTS` records a deliberate decision that the
+  keychain is not a found item, and an entry would make it placeable and
+  spawnable.
+- `state.invTab` / `state.worldTab` as PLAYER STATE — #98. Both render-time
+  writes are left exactly as they are.
+- The chop break-even knife-edge — #99.
+- Showing Fatigue anywhere in the UI. It remains invisible, which is why the
+  lock still arrives without warning; that is #49's job.
+
+**Validation performed**
+
+- `git diff origin/main...HEAD -- ashfall.html` reviewed in full: 83 insertions,
+  17 deletions, all within the eight sections listed below and no others.
+- Syntax check on the extracted script (`node --check`), clean.
+- Driven in headless Chromium against an instrumented copy of the build (the
+  instrumentation is scratch, not shipped). The gait lock: at Fatigue 100,
+  `gaitLocked()` holds, `effectiveGait()` returns `"sneak"`, `state.gait`
+  retains the player's `"fast"`, `moveMinutes()` prices at Sneak speed, the bar
+  shows Sneak lit with Walk and Jog disabled, a click on a disabled pace is
+  refused, and `doMove()` spends no Stamina; below 100 the `"fast"` preference
+  is lit again with nothing disabled and no re-pick, and the Jog surcharge is
+  charged as before. `renderStatsPanel()` leaves `state.gait` untouched.
+- **Call-order fix proved, not asserted.** Exit durations were priced before
+  `renderStatsPanel()`, after it, and with the lock toggled between — identical
+  to six decimal places across all three, on a room whose exits price above
+  `MIN_MOVE_MIN` so the floor could not mask a difference.
+  `renderStatsPanel()` and `renderMoveActionsPanel()` may now run in either
+  order with the same result.
+- All five equippable bags (`worn_backpack`, `duffel_bag`, `purse`,
+  `fanny_pack`, `tote_bag`) round-tripped with contents through equip → store →
+  unequip → re-equip: each came back carrying its `itemId`, with `category`,
+  `slotType`, `capacityKg`, `unitWeight` and `name` matching its registry entry,
+  contents byte-identical, no stale `_uid`, and `countInPools(id)` returning 1
+  while stowed.
+- `state.keychain` round-tripped through the fallback branch: unequips as a
+  `Container` with `slotType:"keychain"` and no `itemId`, contents intact, tab
+  reset, and re-equips.
+- A genuine v0.4.13 save — generated by running the v0.4.13 build and confirming
+  its slot object carried only `name`/`unitWeight`/`capacityKg`/`items` — loaded
+  into this build: `backfillSlotItemIds()` assigned `worn_backpack`, the
+  keychain was left without one, bag contents and the gait preference survived,
+  and the repaired slot then took the registry branch on unequip.
+- `addToList()`: a stackable durability-bearing item (`box_of_matches`) copied
+  through it no longer shares its source's `durability` object or `tags` array,
+  mutating the copy leaves the source unchanged, `_uid` is still stripped, and
+  stackables still merge. A `_uid` uniqueness sweep across every inventory pool,
+  floor and container after a partial `doTake()` found no duplicates.
+- Current-version save/load round trip, a full `render()` under both lock
+  states, and a click-through of every enabled button on screen — no page errors
+  and no console errors in any run.
+
+**Sections touched**
+
+CONFIG / CONSTANTS (`FATIGUE_GAIT_LOCK`), CORE UTILITIES (`moveMinutes`),
+INVENTORY / ITEM SYSTEM (`addToList`, `doEquip`, `doUnequip`), WORLD INTERACTION
+(`doMove`), SURVIVAL / TIME SIMULATION → STAMINA / FATIGUE (`gaitLocked`,
+`effectiveGait`), PERSISTENCE (`backfillSlotItemIds`, `applyLoadedData`), EVENTS
+/ UI HELPERS (the pace-bar click handler), RENDERING (`renderStatsPanel`). No
+WORLD DATA — this is a mechanics-and-rendering pass.
+
+**Notes / assumptions**
+
+- `FATIGUE_GAIT_LOCK` is named, not retuned: `100` is v0.4.14's value and the
+  top of the Fatigue scale. It is now a single knob should a future pass want
+  the lock to bite earlier.
+- The lock's *effect* is unchanged — Sneak only, at Fatigue 100. Only the
+  preference's survival is new. A player who never reaches Fatigue 100 sees no
+  difference at all.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.14"` → `"0.4.15"`
+
+---
+
 ## v0.4.14 — Vestigial surface, and the rope duplicate
 
 Implements: handoffs/vestigial-surface-and-the-rope-duplicate.md
