@@ -103,19 +103,22 @@ carries instead of a bump, an entry and a tag.
 Every handoff file is named:
 
 ```
-handoffs/<feature-name>.md
+handoffs/<feature-name>.md          while it is live
+handoffs/archive/<feature-name>.md  once it is not
 ```
 
-Feature name, not version — the handoff doesn't lock a target version
-(see Part 1), so it can't be named by one. Traceability runs through
-GitHub: the handoff names its issue, the pull request implementing it
-says `Closes #NN`, and the changelog entry names the handoff path. Issue
+The name never changes; only the directory does. Feature name, not
+version — the handoff doesn't lock a target version (see Part 1), so it
+can't be named by one. Traceability runs through GitHub: the handoff names
+its issue, the pull request implementing it says `Closes #NN`, and the
+changelog entry names the handoff path. Issue
 → PR → commits → changelog entry → handoff is then walkable in either
 direction without a hand-maintained cross-reference anywhere in it.
 
 The handoff is committed to `main` when the planning session wraps, and
-kept after it ships. Its commit date is the record that the spec predated
-the code; there's no delete-when-consumed step.
+kept after it ships — moved to `handoffs/archive/`, never deleted. Its
+commit date is the record that the spec predated the code; there's no
+delete-when-consumed step.
 
 ### When a handoff is no longer live
 
@@ -125,7 +128,15 @@ test is one question: **would a coding session handed this file and
 it is not live. That is the coding session's literal contract, so it is
 the only question worth asking.
 
-There are two ways to fail it, and they are recorded differently.
+A handoff that fails it moves to `handoffs/archive/`, and the move is the
+answer to that question: a coding session opens the top level of
+`handoffs/` and everything it finds there is an instruction. That is the
+whole purpose of the folder, and it is deliberately the *only* thing the
+folder claims. Which version consumed a handoff, and whether its body can
+still be trusted, are separate questions answered separately — below.
+
+There are two ways to fail the live test, and they are recorded
+differently.
 
 **Spent** — it shipped. Re-implementing it is redundant at best. This is
 already recorded, because every changelog entry that implements a handoff
@@ -137,12 +148,29 @@ grep -l "Implements: handoffs/<name>.md" CHANGELOG.md
 ```
 
 A hit means spent, and the `## vX.Y.Z` heading above it says which version
-consumed it. The field is what makes this reliable. A changelog entry has
-three reasons to name a handoff path — it implemented it, it unblocked
-it, or it cited it as context — and only the first carries the field, so a
-mention can no longer be mistaken for an implementation. **Never banner a
-spent handoff** — that would hand-maintain a copy of the changelog, which
-is what one-source-of-truth exists to prevent, and it would drift.
+consumed it. The path in that field is where the handoff was read from —
+the top level, since that is where a live handoff sits — so an
+`Implements:` line that no longer resolves resolves under
+`handoffs/archive/`. Entries are history and are not rewritten when a
+handoff is archived; the grep matches changelog text, not the filesystem,
+so archiving never breaks it.
+
+The field is what makes this reliable. A changelog entry has three reasons
+to name a handoff path — it implemented it, it unblocked it, or it cited
+it as context — and only the first carries the field, so a mention can no
+longer be mistaken for an implementation. **Never banner a spent
+handoff** — that would hand-maintain a copy of the changelog, which is
+what one-source-of-truth exists to prevent, and it would drift. Moving
+it to `handoffs/archive/` is not that: the folder records only that the
+file is no longer an instruction, which is the one fact the changelog
+cannot be consulted for by a session that has been told not to open it.
+
+One class of handoff has no changelog entry to grep at all. A
+documentation-only pass ships no version and writes no entry (Part 1,
+"Documentation-only passes"), so its handoff can never register as spent
+by the test above — `handoffs/archive/documentation-drift.md` is the first
+instance. For that class the archive move is the whole record, which is
+why the wrap-time checklist asks for it on a documentation-only pass too.
 
 **Superseded** — it never shipped, or only partly, and the code moved
 underneath it. Implementing it would now be actively wrong. Signs: code it
@@ -157,9 +185,13 @@ and it is written **in the handoff itself**. Marking it in the issue does
 not reach anyone: a coding session opens the handoff and `ashfall.html`
 and nothing else, which is the workflow working as intended.
 
+- The move to `handoffs/archive/`, same as any inert handoff — being
+  superseded is one way of not being live, not a separate shelf.
 - A blockquote at the very top, above the title, saying it is superseded
-  and must not be implemented. First line, so `head -1 handoffs/*.md`
-  reports the whole directory without opening a file.
+  and must not be implemented. First line, so `head -1
+  handoffs/archive/*.md` reports the whole shelf without opening a file.
+  The folder already says it is not live; the banner is what says the body
+  is wrong, which matters the moment anyone reads the file for history.
 - What is true now, finding by finding where the handoff had several —
   including which parts shipped and which code it names no longer exists.
 - Where the live truth lives: the issue carrying the re-verified findings.
@@ -167,15 +199,34 @@ and nothing else, which is the workflow working as intended.
 Nothing below the banner is edited or deleted. The point of keeping a
 handoff is that it records what was known when it was written; correcting
 the body destroys exactly that, and the banner is what lets the stale text
-stand without misleading anyone. `handoffs/map-view-ui-fixes.md` is the
-worked example.
+stand without misleading anyone. `handoffs/archive/map-view-ui-fixes.md`
+is the worked example.
 
-Mark it when it is found stale, not at the next wrap — the gap is when
-someone implements it.
+### Where the move happens
 
-Status is never put in the filename or in a subdirectory. Changelog
-entries cite handoffs by path, so moving or renaming one breaks every
-historical reference to it.
+An inert handoff is moved the moment it goes inert, by whoever is already
+there:
+
+- **Spent** — the coding session's own pull request moves it, alongside
+  the changelog entry that names it. Item 3 of the wrap-time checklist in
+  `CLAUDE.md`. `git mv handoffs/<name>.md handoffs/archive/<name>.md`;
+  never a delete-and-recreate, which would lose the commit date that
+  proves the spec predated the code.
+- **Superseded** — moved and bannered together, when it is found stale,
+  not at the next wrap. The gap is when someone implements it.
+
+Status is still never put in the *filename*. The name is what the
+changelog cites, and renaming one would break every historical reference
+to it; the directory carries the status instead, and the name survives the
+move intact. A changelog entry written before the archive convention cites
+the path the handoff had then, and one written after cites the top-level
+path it was read at — both resolve the same way, under
+`handoffs/archive/`, which is where every handoff a changelog entry can
+name has since arrived.
+
+Nothing moves back. A handoff that fails the live test does not start
+passing it again; a new pass on the same ground is a new planning session
+and a new handoff.
 
 ---
 

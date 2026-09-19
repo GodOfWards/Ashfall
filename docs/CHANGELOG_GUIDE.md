@@ -59,6 +59,16 @@ can type from memory. Prose elsewhere in the entry still cites handoff
 paths in backticks as normal — being distinguishable from that prose is
 the entire point of the field.
 
+The path is the one the handoff was read at — `handoffs/<name>.md`, the
+top level, where every live handoff sits. The same pull request moves it
+to `handoffs/archive/<name>.md` (`CLAUDE.md`'s wrap-time checklist, item
+3), so the field records where the spec was when it was implemented and
+the file itself is one directory deeper by the time anyone follows it.
+That is deliberate: the grep above matches changelog text, not the
+filesystem, so it keeps working, and entries are never rewritten to chase
+a file that moved. A cited path that doesn't resolve resolves under
+`handoffs/archive/`.
+
 Omit the line when the entry implements no handoff. An entry that merely
 mentions one — because it unblocked it, or cited it for context — must not
 carry the field for it. That distinction is what the field exists to make.
