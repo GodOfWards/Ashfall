@@ -18,6 +18,129 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.4.16 — computeDirection()'s zero vector, and a build-time guard
+
+Implements: handoffs/direction-zero-vector-guard.md
+
+Implements #68 in full, per `handoffs/direction-zero-vector-guard.md`.
+`computeDirection()` treated "no movement" as "pure vertical movement" and
+answered `"down"` for it. Every building entrance in the game is such a pair —
+a building floor's Location shares its street node's `(x,y)` *and* its `z`, by
+design, because that sharing is what makes an entrance cost `MIN_MOVE_MIN`.
+Nothing was visibly wrong only because none of those 22 exit labels happens to
+contain a compass word: `applyComputedDirections()` rewrites a label only when
+one is present, so it rewrote none of them. The next content pass to add
+buildings with hand-written entrance labels would have had the perfectly
+natural `"Head east into the pharmacy"` silently rewritten to `"Head down into
+the pharmacy"` at world-build time, with no error and no warning.
+
+WORLD DATA only, and no world data was edited — two functions changed, no room
+definition.
+
+**Fixed**
+- `computeDirection()` returns `null` when `dx`, `dy` and `dz` are all zero,
+  ahead of the vertical branch. Root cause: the vertical branch
+  (`if(dx === 0 && dy === 0) return dz > 0 ? "up" : "down";`) was reached by the
+  zero vector, where `dz > 0` is false, so "the same point" and "directly below"
+  gave the same answer. The two are now distinct cases and are deliberately not
+  collapsed — two Locations differing only in `z` still answer `"up"` /
+  `"down"`, which #6 (rooftops) depends on.
+- `applyComputedDirections()` skips substitution when `computeDirection()`
+  returns `null`, leaving `exit.label` exactly as authored rather than splicing
+  the string `"null"` into it. The `slice`/`slice` substitution is unchanged for
+  every non-null direction.
+
+**Hardened**
+- `applyComputedDirections()` emits one `console.warn` when a label matches
+  `COMPASS_WORD_RE` **and** its two Locations are the same point, naming the
+  room, the destination, the authored label, both Location ids, and the fact
+  that the label was left alone. The conjunction is the whole condition: a
+  same-point exit with no compass word is the ordinary building entrance, all 22
+  of them, and stays silent. A wrong compass word reads as plausible English, so
+  the moment it is produced is the only moment it can be caught —
+  `applyComputedDirections()` already walks every exit at build time and is the
+  one place where both the same-point pair and the compass word are in hand.
+  `validateLoadedWorld()` is the precedent for a check earning a real code path
+  rather than sitting in the dev-helper block like `validateLocations()`.
+
+**Open questions / decisions resolved**
+- **`null` rather than a sentinel string** for the zero vector. `"here"` would
+  also have worked and would have let `MOVE_DIRECTION_RANK` name it explicitly,
+  but `moveDirectionRank()`'s existing `rank == null ? 4 : rank` already handles
+  `null` with no edit, and a sentinel string invites a caller to print it.
+- **The warning carries both the room ids and the Location ids.** The room ids
+  say which exit to go and fix; the Location ids are what a reader needs to
+  check `LOCATIONS` and confirm the two really do share a point.
+
+**Documentation**
+- The comment above `computeDirection()` now states the zero-vector case and why
+  it is not the vertical case — a building floor shares its street node's `z`,
+  while a rooftop or upper floor differs in it.
+- The comment above `applyComputedDirections()` states the same-point skip and
+  why only the compass-word case warns.
+- Nothing was deferred, and no new issues were filed. The ARCHITECTURE comment
+  needs no change: no section gains or loses a responsibility.
+
+**Explicitly out of scope**
+- **#87** — the building-name line split in `renderMapClose()`. Raised in #68's
+  body as a second trap in the same area, split out during planning; it is
+  RENDERING, not WORLD DATA, already filed, and carries its own before/after
+  obligation.
+- **Changing any exit label.** None was rewritten, and proving that is a
+  validation step below.
+- **Changing `LOCATIONS` so building floors stop sharing their street node's
+  point.** The sharing is deliberate.
+- **#75** (`MIN_MOVE_MIN` flattening the gait ladder) and **#8** itself, which
+  this pass unblocks without implementing.
+
+**Explicitly NOT changed**
+- No exit label, no room definition, no `LOCATIONS` entry, no `build*()`
+  function. No PLAYER STATE, ITEM DATA SCHEMA, room, container or exit schema
+  field. `SAVE_KEY` does not rotate — a PATCH bump keeps `versionCompat()` at
+  `0.4`, so existing browser saves keep loading.
+- `moveDirectionRank()` and `MOVE_DIRECTION_RANK` are untouched. The existing
+  `rank == null ? 4 : rank` is what absorbs the new `null`; it is unreached by a
+  zero vector today, since grid travel requires both rooms to use their own id
+  as their `locationId` and no two street nodes share a point.
+- Genuine vertical movement, the four compass cases, and the `|dx| === |dy|`
+  diagonal tie all answer exactly as before.
+
+**Validation performed**
+- **Every exit label in the built world is byte-identical before and after.**
+  `makeDefaultWorld()` was built from `origin/main` and from this branch under a
+  Node harness that loads the script body behind a DOM stub, and
+  `{roomId, exit.to, exit.label}` was collected for all **774** exits across all
+  **218** rooms and diffed. Zero differences — that is the proof of "no
+  player-visible change", not an assertion of it.
+- The before-state the handoff measured still holds: **22** cross-Location exits
+  connect two Locations at the same point, and **zero** of them carry a compass
+  word.
+- `computeDirection()` truth table, 11 cases: zero vector → `null`; same
+  `(x,y)` with greater `z` → `"up"`, with lesser `z` → `"down"`; the four
+  compass cases; both diagonal ties; and `|dx| > |dy|`. All pass.
+- `moveDirectionRank()` ranks a zero-vector pair **4** and still ranks north
+  **0**.
+- A fresh `makeDefaultWorld()` prints **zero** warnings.
+- Injecting a test exit carrying a compass word between two Locations at the
+  same point (`mid_poplar_1_2` → `hallway1`, labelled
+  `"Head east into Acorn Apartments"`) prints **exactly one** warning and leaves
+  the label unchanged, while the real same-point entrance beside it
+  (`"Enter Acorn Apartments"`) stays silent and unedited. Done in a test-only
+  shim; the shipped file was not edited for it.
+- 17 assertions, 17 passing. No page errors on load.
+- `git diff origin/main...HEAD -- ashfall.html` is the version bump plus four
+  hunks spanning lines 1619–1661 — the two functions and their comments. No
+  `build*()` function and no room definition appears in the diff.
+
+**Sections touched**
+- **WORLD DATA** only — `computeDirection()` and `applyComputedDirections()`,
+  which live there per the ARCHITECTURE comment. Nothing in ACTIONS, SIMULATION,
+  PERSISTENCE, CORE UTILITIES or RENDERING.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.15"` → `"0.4.16"`
+
+---
+
 ## v0.4.15 — Rules written twice: the gait lock and the equipment round trip
 
 Implements: handoffs/rules-written-twice.md

@@ -255,7 +255,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.4.15" };
+  const GAME_CONFIG = { VERSION: "0.4.16" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -1616,12 +1616,17 @@
     return Math.round(Math.sqrt((B.x-A.x)**2 + (B.y-A.y)**2 + (B.z-A.z)**2));
   }
   // Compass direction from Location `a` to Location `b`, derived from real
-  // coordinates. Pure vertical movement resolves to up/down; otherwise the
-  // larger of |dx|/|dy| wins. A true diagonal tie (not expected on the
-  // current rectilinear grid) defaults to the north/south axis.
+  // coordinates. Two Locations at the same point have no direction between
+  // them and resolve to `null` — that is a different case from pure vertical
+  // movement, which resolves to up/down, and the two must not be collapsed:
+  // a building floor shares its street node's (x,y) *and* its z, while a
+  // rooftop or an upper floor differs in z and is genuinely above. Otherwise
+  // the larger of |dx|/|dy| wins, and a true diagonal tie (not expected on
+  // the current rectilinear grid) defaults to the north/south axis.
   function computeDirection(a, b){
     const A = LOCATIONS[a], B = LOCATIONS[b];
     const dx = B.x - A.x, dy = B.y - A.y, dz = B.z - A.z;
+    if(dx === 0 && dy === 0 && dz === 0) return null;
     if(dx === 0 && dy === 0) return dz > 0 ? "up" : "down";
     if(Math.abs(dx) === Math.abs(dy)) return dy > 0 ? "north" : "south";
     if(Math.abs(dx) > Math.abs(dy)) return dx > 0 ? "east" : "west";
@@ -1633,6 +1638,12 @@
   // once, right after the world is assembled.
   // Labels with no compass word (building entrances, floor transitions,
   // etc.) are left exactly as authored.
+  // When the two Locations sit at the same point there is no direction to
+  // substitute, so the label is left as authored there too — and because a
+  // compass word on such an exit is an authoring mistake that reads as
+  // perfectly good English ("Head east into the pharmacy"), that one case
+  // warns. A same-point exit with no compass word is the ordinary building
+  // entrance and stays silent.
   const COMPASS_WORD_RE = /\b(north|south|east|west)\b/i;
   function applyComputedDirections(world){
     for(const roomId in world){
@@ -1644,6 +1655,10 @@
         const match = exit.label.match(COMPASS_WORD_RE);
         if(!match) continue;
         const dir = computeDirection(room.locationId, toRoom.locationId);
+        if(dir === null){
+          console.warn(`applyComputedDirections: ${roomId} -> ${exit.to} label "${exit.label}" contains a compass word, but Locations ${room.locationId} and ${toRoom.locationId} are the same point — there is no direction between them. Label left as authored; rewrite it without the compass word.`);
+          continue;
+        }
         exit.label = exit.label.slice(0, match.index) + dir + exit.label.slice(match.index + match[0].length);
       }
     }
