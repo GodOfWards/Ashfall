@@ -85,8 +85,11 @@ when to use them:
   (e.g. exact recovery formulas).
 - **New content** — rooms, items, containers, exits, descriptions: WORLD
   DATA additions only. Kept separate from **New** on purpose, so the
-  content-vs-mechanics split the Project Guide requires is visible at a
-  glance in the changelog rather than inferred from the bullets.
+  content-vs-mechanics split the Project Guide describes is visible at a
+  glance in the changelog rather than inferred from the bullets. An entry
+  carrying both sections is the both-buckets case the Project Guide bounds
+  — a mechanic shipped with the schema field that defines it — and the two
+  sections are what make that legible rather than something to hide.
 - **Fixed** — bug fixes. State the root cause, not just the symptom, and
   name the fix mechanism (e.g. "stripping `_uid` whenever `addToList()`
   creates a new stack entry").

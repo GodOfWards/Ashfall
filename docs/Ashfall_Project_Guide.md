@@ -83,7 +83,7 @@ once.
 
 ### Content vs. mechanics stay separated
 
-A change should touch exactly one of:
+A change should normally touch one of:
 - **WORLD DATA** (rooms, items, containers, exits, descriptions, and
   static positional/reference data like map coordinates) — for content
   passes.
@@ -97,6 +97,34 @@ a new mechanic, and shouldn't be forced into either bucket.
 If a content request seems to need a mechanics change, that's a signal to
 pause and confirm it's actually a new mechanic, not a shortcut around
 existing systems.
+
+### The one case that touches both
+
+"Normally" rather than "exactly", because a new mechanic and the data that
+*defines* it are one change, not two. `doConsume()` is the precedent: the
+eating mechanic lives in ACTIONS and does nothing at all until items in
+`ITEM_REGISTRY` carry `restores` and `verb`. Shipping those halves in
+separate passes means shipping a rule that demonstrably does nothing,
+followed by the data that switches it on — worse to review, worse to
+bisect, and worse in the changelog.
+
+The bound, so the softened rule still bites:
+
+- **Definition data may ride along.** A schema field the new rule reads,
+  added to the items or rooms the rule acts on, is part of the mechanic.
+- **Instance data may not.** A room, a placement, a description, a map
+  coordinate — content that is an *example* of a system rather than part
+  of its definition — belongs to a content pass, whatever mechanic
+  prompted it.
+
+That line preserves the protection actually worth having: a feature never
+gets to rewrite the world to suit itself, and a content request never gets
+satisfied by special-casing a mechanic. Neither of those needed the word
+"exactly".
+
+`CHANGELOG_GUIDE.md`'s separate **New** and **New content** sections are
+what keep the split visible when one entry carries both halves — the
+changelog format already assumed this case.
 
 ### Identity is explicit, never positional
 
