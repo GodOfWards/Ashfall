@@ -249,6 +249,38 @@ a coordinate scheme, a pick between two options a handoff left open),
 say so explicitly and mark it as retunable. Don't let an arbitrary first
 guess read as an authoritative design decision.
 
+### Design decisions are consulted; implementation choices aren't
+
+The rule above is about disclosure — saying that a choice was arbitrary.
+This one is about entitlement: who gets to make it at all.
+
+A **design decision** is Tom's. Anything that changes scope, changes
+what the player sees or does, sets tone, or moves the versioning tier is
+asked and waited on, not resolved by whoever happens to be typing. The
+wait is the point. A design decision made unilaterally and flagged as
+retunable is still a design decision made unilaterally; the flag records
+it, it doesn't license it.
+
+An **implementation choice** is not. A data-structure shape, a helper's
+name, which of two equivalent renderings to use, where in a function a
+guard goes — these get made on the spot, because stopping to ask about
+each one is how a session stops being useful. They get *named*, in the
+changelog's Notes/assumptions or the pull request, rather than made
+silently. That is what the rule above is for.
+
+The two are not always distinguishable from the outside, so the tie goes
+to asking: **when it isn't obvious which kind a choice is, it's a design
+decision.** A question costs one exchange. A design decision made
+quietly and discovered three versions later costs a pass to undo.
+
+This is the general form of a rule `Ashfall_Handoff_Guide.md` already
+states for handoffs specifically — its split between "Design decisions
+to make during implementation" (narrow, the coding session's to resolve
+and record) and "Open questions for Tom" (real, and the handoff isn't
+ready until they're answered) is this same line drawn at handoff time.
+The line holds in live conversation too, where most decisions actually
+get made.
+
 ### File layout
 
 Filenames are stable and carry no version. Git tags mark releases, and
@@ -306,6 +338,23 @@ files. "Input" below means *read this before starting*, not *paste this
 into the conversation* — the session has the repo and can open anything
 in it. What hasn't changed is the obligation: a claim about what the code
 already does gets checked against the file, never recalled from memory.
+
+Having the repo is not permission to write to it. **Nothing is edited,
+committed, or pushed without being asked** — in either session type, and
+whichever file it is. A question about a file is a question: "how could
+we clarify this?" asks for an answer, and answering it by editing the
+file skips the only step that made it a conversation. Propose the
+wording and wait. This is the rule the coding session's own output does
+not violate, because being handed a handoff to implement *is* the
+instruction — the approval covers the scope that was approved, and the
+pull request stops at that boundary. What it doesn't cover is the next
+thing that seemed like a good idea along the way; that gets asked, or it
+gets filed.
+
+**GitHub Issues are the one standing exception.** Filing, labelling, and
+editing issues as work surfaces is authorized outright — a planning
+session that holds an issue back to ask about it is breaking the rule
+below about filing them as they come up, not obeying this one.
 
 ### 1. Planning session
 

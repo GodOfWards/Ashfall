@@ -88,6 +88,29 @@ a real seam — never a formality.
 **Flag judgment calls.** A threshold, balance number, or naming choice with no
 prior convention gets called out as retunable, not left to read as settled.
 
+**Design decisions are consulted, never assumed.** A choice that changes scope,
+player-facing behavior, tone, or the versioning tier is Tom's — ask, and wait
+for the answer. A choice that is purely technical or implementational (a
+data-structure shape, a helper's name, which of two equivalent renderings to
+use) gets made on the spot so the work keeps moving, and named in the changelog
+or the pull request rather than made silently. When it isn't obvious which kind
+a choice is, it is a design decision. The Handoff Guide's split between "Design
+decisions to make during implementation" and "Open questions for Tom" is this
+same rule at handoff time. (Project Guide, Part 2.)
+
+**Nothing is edited or pushed without being asked.** A question about a file —
+"how could we clarify this?", "does this rule cover X?" — is a question, not an
+instruction to go change it. Propose the wording and wait for the word. This
+covers every file in the repo, `ashfall.html`, `docs/` and this file alike, and
+every commit, push, tag and pull request. **GitHub Issues are the one
+exception**: filing, labelling and editing them as work surfaces is standing
+authorization, per the Project Guide's Workflow — a session that holds an issue
+back to ask about it has broken a different rule.
+
+Once a change *is* asked for, it is asked for. A coding session told to
+implement a handoff does not re-ask per edit — the approval covers the scope
+that was approved, and the work stops at that boundary.
+
 **Prove "no behavior change".** A diff is the proof; assertion is not. Use
 `git diff origin/main...HEAD -- ashfall.html` — everything this branch changed
 and nothing else. Don't diff against a tag: tags through `v0.4.3` carry the game
