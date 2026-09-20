@@ -18,6 +18,190 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.5.0 — Sealed food
+
+Implements: handoffs/sealed-food.md
+
+Implements #95 in full, per `handoffs/sealed-food.md`. The game shipped canned
+food, a can opener, and no relationship between them — `can-opening` was a tag
+nothing read, while five items were eaten straight out of `doConsume()` with no
+tool required.
+
+#95 frames the gap as a tool gate on eating: you may not eat a can without an
+opener. Planning settled on a different shape, and that reframing is the whole
+pass: opening is **an action that transforms the item**. A sealed can is not
+food you cannot eat yet — it is not food. Open it and it becomes food. That
+covers packaged food generally rather than cans specifically, and it leaves a
+`sealed` flag behind that spoilage (#48) and rationing (#121) both want.
+
+MINOR, and a real seam: `sealed` lands on item instances, which are serialized,
+so `versionCompat()` goes `0.4` → `0.5` and `SAVE_KEY` rotates. Existing browser
+saves stop auto-loading. No backfill is needed or wanted — every item's sealed
+state comes from `ITEM_REGISTRY` on a fresh world.
+
+**New**
+- `doOpen(sourceKind, index)` — splits one unit off a sealed stack and opens it.
+  `Canned soup ×3` becomes `×2` sealed plus `×1` opened, in the same list. Bails
+  silently if the item is not sealed or if `opensWith` names a tag `hasTool()`
+  cannot find. No capacity check, deliberately: the opened unit returns to the
+  list the sealed one came from at the same `unitWeight`, so the list's total is
+  unchanged. Points `detailItem` at the opened unit, so opening the *last* sealed
+  unit doesn't close the detail view when the source stack is spliced out.
+- The `can-opening` tag gets its first consumer. It is read through `hasTool()`,
+  inventory-only — `hasTool()` was deliberately **not** widened to reach room
+  containers, since reachability is #119's to define.
+
+**New content**
+- `sealed` / `opensWith` on nine items — `canned_soup`, `canned_beans`,
+  `canned_corn`, `canned_tuna`, `canned_pet_food` and `baby_formula` open with
+  `can-opening`; `cereal_box`, `peanut_butter` and `dry_pet_food` open by hand.
+- `can-opening` added as a second tag to `kitchen_knife`, `box_cutter`,
+  `combat_knife` and `hand_axe`, joining `can_opener`. Per `CLAUDE.md`'s rule
+  that an item which should behave like an existing one gets the same tag, so
+  the gate is one `hasTool()` call with no lookup table.
+- `restores` on three items that were `category:"Food"` and inedible:
+  `canned_pet_food` `{hunger:15}`, `baby_formula` `{hunger:18}`,
+  `dry_pet_food` `{hunger:25}`, all `verb:"Eat"`. No `illnessChance` on any of
+  them — they are sealed and safe, grim rather than spoiled.
+
+This section and **New** appearing together is the both-buckets case the Project
+Guide bounds: `sealed` and `opensWith` are the new mechanic's own definition, not
+instance content. No room, container, exit, placement or description changed.
+
+**Changed / Reworked**
+
+*`addToList()`*
+- The merge predicate gained `!!i.sealed === !!item.sealed`, so opened stacks
+  merge with opened and sealed with sealed, and the two never merge. `!!` on both
+  sides makes `undefined` and `false` the same state. Without this an opened can
+  merges straight back into the stack it was split out of, which either opens all
+  of them or loses the unit.
+- The function now returns the entry the item ended up in — the stack it merged
+  into, or the new one pushed. `doOpen()` is the only reader; no existing caller
+  reads a return value, so this is additive.
+
+*Actions on an inspected item*
+- New rule, applied across `getItemActions()`: **an action offered on an item you
+  are inspecting appears only if you can perform it.** Eat is absent while sealed,
+  Open is absent when the required tool is not carried, and `Replace batteries` is
+  now conditional on `countByTag("battery") >= 1` rather than pushed with
+  `disabled: true`.
+- Two sites that look like the same case are deliberately excluded, and now carry
+  comments saying why: the keychain-blocked Take (both the detail view's family
+  and the world panel's row button) stays disabled, because hiding it would read
+  as "this item cannot be taken" when the truth is it cannot go *there*; and
+  `renderCraftPanel()`'s recipe list stays a catalogue, because filtering it to
+  what is craftable now would make crafting undiscoverable.
+
+**Hardened**
+- `doConsume()`'s guard is now `if(!it || !it.restores || it.sealed) return;` —
+  defensive, matching the transfer block's convention that a function validates
+  independently of whatever gate its caller applied. The Eat button is already
+  withheld on a sealed item; this makes eating one unreachable rather than merely
+  unoffered.
+
+**UI**
+- Sealed food shows an `Open` button and no Eat button; once opened, the reverse.
+- `Open` is absent entirely when the required tool is not held, not greyed out.
+- The detail box gained a `Sealed` / `Opened` line for packaged items, beside the
+  existing `durability` line. Tested with `!== undefined` so an opened item reads
+  "Opened" and an item that was never packaged reads nothing.
+- `Replace batteries` disappears when no `battery`-tagged item is carried.
+- Two new log lines, both collapsing on a repeat key of `"open:" + itemId`:
+  `You work the lid off the <item>.` when `opensWith` is present, and
+  `You break the seal on the <item>.` when it is not. Neither takes a CSS class —
+  opening is neutral, so the line takes `fresh` in `log()`. "Break the seal"
+  rather than "tear open" because the no-tool group spans a box, a bag and a jar,
+  and only one of them tears.
+
+**Documentation**
+- ITEM DATA SCHEMA: `sealed` and `opensWith` documented; `can-opening` moved out
+  of "Declared, with no consumer yet" into the list of tags read by a mechanic,
+  with a note that it means "can get a can open", not "is a can opener". `prying`
+  stays in the no-consumer list — a crowbar does not open a can, and #111 has
+  already designated prying's future consumer.
+- Issues filed for deferred work: #123 (a screwdriver, as a content-only addition
+  that gets `can-opening` and changes nothing else) and #124 (the item list has
+  nowhere to show item state, so a sealed and an opened can read identically —
+  confirmed in play, and it will bite #121 too).
+
+**Open questions / decisions resolved**
+
+The handoff left two implementational choices open and no design questions.
+
+- **Where `doOpen()` lives** — INVENTORY / ITEM SYSTEM, in the quantity-changing
+  transfers sub-block beside `doConsume()`, taking the handoff's recommendation.
+  It is a stack-splitting mutation, so it inherits that block's six safety rules;
+  putting it in WORLD INTERACTION with the other `do*` actions would separate it
+  from the rules it must follow.
+- **How `doOpen()` finds the opened entry** — `addToList()` returns it, rather
+  than `doOpen()` re-scanning `src.items`. The return is correct in both branches
+  (the merged stack or the pushed copy), no existing caller reads one, and the
+  alternative would have to re-derive a fact the function already knew.
+
+**Notes / assumptions**
+- The three new `restores` figures (15 / 18 / 25) have no prior convention behind
+  them and are retunable. `canned_pet_food` is pegged just under `canned_tuna`'s
+  20 at the same can size; `baby_formula` is dry powder and gets no thirst value,
+  since fluids are #47/#52's ground; `dry_pet_food` is set on the assumption that
+  one unit is the whole 1.5 kg bag — substantial, and far worse per kg than
+  anything else.
+- `dry_pet_food` carries a known awkwardness: without rationing, eating a whole
+  bag is one click. That is #121's to fix, not this pass's.
+- `hand_axe` carrying `can-opening` is a judgment call — an axe opens a can
+  brutally, but it opens it. Retunable.
+- Opening a can with a blade costs nothing: no reduced yield, no time, no injury
+  risk. Settled during planning. The blade path gets its cost from #116 when tool
+  wear ships.
+
+**Explicitly out of scope**
+- A screwdriver item (now #123) — a new registry entry plus pool placements is
+  instance content, which may not ride along with a mechanics change.
+- Tool wear (#116). Nothing here decrements anything.
+- `rice_bag` and `coffee_grounds` are deliberately not sealed: neither has
+  `restores`, so sealing them would yield an Open button producing something still
+  inedible. They get sealed by #120.
+- Individually-wrapped snacks are deliberately not sealed — `granola_bars`,
+  `candy_bar`, `crackers`, `potato_chips`, `chewing_gum`. The wrapper is part of
+  eating, and an Open click there buys a second click and no decision.
+- The three spoiled Food items stay inedible. That is #48's ground.
+- Rationing (#121) — Eat is still one whole unit. Spoilage (#48) — `sealed` is
+  laid down here, but nothing decays. Reachable crafting (#119), two-stage
+  cooking (#120), the propane torch (#96).
+
+**Validation performed**
+- `git diff origin/main...HEAD -- ashfall.html` reviewed in full: the diff is the
+  version bump, the schema comment, 13 `ITEM_REGISTRY` lines, `addToList()`,
+  `doConsume()`'s guard, the new `doOpen()`, four hunks in `getItemActions()`, and
+  two in RENDERING. Nothing else.
+- Syntax check: the inline script extracted and passed through `node --check`.
+- Played headless in Chromium via Playwright, from a fresh world, asserting:
+  Eat withheld and `Sealed` shown on `canned_soup` with no opener carried; `Open`
+  absent until a `can-opening` item is picked up, then offered; opening splits
+  `×3` into `×2` sealed and `×1` opened in the same container; the detail view
+  follows the opened unit and offers Eat; the two stacks stay separate when both
+  are taken into inventory; eating consumes the opened unit whole. Separately, on
+  a scratch copy with a hand-placed `cereal_box ×1`: `Open` offered with no tool,
+  the no-tool log line, and the detail view surviving the splice when the last
+  sealed unit is opened. A save/load round-trip preserves `sealed:false`, and
+  `localStorage` carries `ashfall_save_v0.5`. No page or console errors in either
+  run.
+
+**Sections touched**
+- **WORLD DATA** — `ITEM_REGISTRY` and the ITEM DATA SCHEMA comment.
+- **INVENTORY / ITEM SYSTEM** — `addToList()`; the quantity-changing transfers
+  sub-block (`doConsume()`, new `doOpen()`); the item-detail action list
+  sub-block (`getItemActions()`).
+- **RENDERING** — `renderCraftPanel()`'s detail box and its recipe-list comment;
+  `renderWorldItemsPanel()`'s row-button comment.
+
+Nothing in PLAYER STATE, CORE UTILITIES, WORLD INTERACTION, SURVIVAL / TIME
+SIMULATION, STAMINA / FATIGUE, CRAFTING, FIRE / COOKING, PERSISTENCE or MAP.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.4.18"` → `"0.5.0"`
+
+---
+
 ## v0.4.18 — Map labels measured, not tabulated
 
 Implements: handoffs/map-label-measurement.md

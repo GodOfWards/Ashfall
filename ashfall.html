@@ -255,7 +255,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.4.18" };
+  const GAME_CONFIG = { VERSION: "0.5.0" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -451,17 +451,33 @@
   //   Optional properties:
   //     tags          capability tags used by mechanics instead of name
   //                   checks. Read by a mechanic today: blunt, cutting,
-  //                   chopping, fishing, tackle, fire-starter, battery.
-  //                   Declared, with no consumer yet: blade, prying,
-  //                   can-opening, heat — an item carrying one of these
-  //                   makes a claim nothing currently acts on, which is
-  //                   correct to write and not yet load-bearing. `heat`
+  //                   chopping, fishing, tackle, fire-starter, battery,
+  //                   can-opening. `can-opening` means "can get a can
+  //                   open", not "is a can opener" — doOpen() asks
+  //                   hasTool() for it, so every item that could work a lid
+  //                   off carries it, not just the dedicated tool.
+  //                   Declared, with no consumer yet: blade, prying, heat
+  //                   — an item carrying one of these makes a claim nothing
+  //                   currently acts on, which is correct to write and not
+  //                   yet load-bearing. `heat`
   //                   sits in that second group despite having a reader:
   //                   roomHasHeat() exists, but its only caller is
   //                   canCraft()'s needsHeat branch, which no recipe sets.
   //     durability    { current, max, mode } — mode is "uses" or "time"
   //     restores      { hunger, thirst } — consumable effect
   //     verb          display/use verb, e.g. "Eat", "Drink"
+  //     sealed        packaged-item state. `true` on a registry entry means
+  //                   every instance starts sealed; doOpen() flips it to
+  //                   false on the one instance it opens. Absence is the
+  //                   common case and means the item is not a packaged
+  //                   thing at all, so all three states — undefined, true,
+  //                   false — are distinguishable and meaningful. A sealed
+  //                   item is not food yet: Eat is withheld until it is
+  //                   opened, and addToList() will not merge a sealed stack
+  //                   with an opened one.
+  //     opensWith     capability tag required to open a sealed item (see
+  //                   `tags`). Absent on a sealed item means it opens by
+  //                   hand.
   //     slotType      equipment/container slot key, e.g. "backpack"
   //     slotLabel     inventory-tab label for that slot, when capitalizing
   //                   the slot key isn't good enough (e.g. "Fanny Pack")
@@ -490,10 +506,10 @@
     box_of_matches: { name:"Box of matches", category:"Materials", unitWeight:0.05, tags:["fire-starter"], durability:{ current:50, max:50, mode:"uses" } },
     photo_album: { name:"Photo album", category:"Literature", unitWeight:0.4 },
     pot_of_spoiled_stew: { name:"Pot of spoiled stew", category:"Misc", unitWeight:1.2 },
-    canned_soup: { name:"Canned soup", category:"Food", unitWeight:0.4, restores:{hunger:25,thirst:5}, verb:"Eat" },
+    canned_soup: { name:"Canned soup", category:"Food", unitWeight:0.4, restores:{hunger:25,thirst:5}, verb:"Eat", sealed:true, opensWith:"can-opening" },
     pasta: { name:"Pasta", category:"Food", unitWeight:0.5, restores:{hunger:30}, verb:"Eat" },
     frying_pan: { name:"Frying pan", category:"Tool", unitWeight:0.9, tags:["blunt"] },
-    kitchen_knife: { name:"Kitchen knife", category:"Tool", unitWeight:0.15, tags:["blade"] },
+    kitchen_knife: { name:"Kitchen knife", category:"Tool", unitWeight:0.15, tags:["blade","can-opening"] },
     can_opener: { name:"Can opener", category:"Tool", unitWeight:0.1, tags:["can-opening"] },
     rotten_leftovers: { name:"Rotten leftovers", category:"Misc", unitWeight:0.8 },
     bottled_water: { name:"Bottled water", category:"Food", unitWeight:0.5, restores:{thirst:30}, verb:"Drink" },
@@ -513,10 +529,10 @@
     cloth: { name:"Cloth", category:"Materials", unitWeight:0.1 },
     dead_potted_plant: { name:"Dead potted plant", category:"Misc", unitWeight:2.0 },
     duct_tape: { name:"Duct tape", category:"Materials", unitWeight:0.3 },
-    canned_beans: { name:"Canned beans", category:"Food", unitWeight:0.4, restores:{hunger:22}, verb:"Eat" },
+    canned_beans: { name:"Canned beans", category:"Food", unitWeight:0.4, restores:{hunger:22}, verb:"Eat", sealed:true, opensWith:"can-opening" },
     board_games: { name:"Board games", category:"Misc", unitWeight:1.0 },
     burnt_saucepan: { name:"Burnt saucepan", category:"Misc", unitWeight:0.6 },
-    canned_corn: { name:"Canned corn", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat" },
+    canned_corn: { name:"Canned corn", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat", sealed:true, opensWith:"can-opening" },
     aspirin: { name:"Aspirin", category:"Medical", unitWeight:0.05 },
     work_gloves: { name:"Work gloves", category:"Clothing", unitWeight:0.2 },
     handwritten_note: { name:"Handwritten note", category:"Literature", unitWeight:0.02 },
@@ -539,7 +555,7 @@
     owners_manual: { name:"Owner's manual", category:"Literature", unitWeight:0.2 },
     potato_chips: { name:"Potato chips", category:"Food", unitWeight:0.15, restores:{hunger:10}, verb:"Eat" },
     loose_change: { name:"Loose change", category:"Misc", unitWeight:0.3 },
-    box_cutter: { name:"Box cutter", category:"Tool", unitWeight:0.1, tags:["blade"] },
+    box_cutter: { name:"Box cutter", category:"Tool", unitWeight:0.1, tags:["blade","can-opening"] },
     old_photographs: { name:"Old photographs", category:"Misc", unitWeight:0.1 },
     reading_lamp: { name:"Reading lamp", category:"Electronics", unitWeight:0.8 },
     prescription_bottles: { name:"Prescription bottles", category:"Medical", unitWeight:0.05 },
@@ -553,7 +569,7 @@
     fishing_rod: { name:"Fishing rod", category:"Tool", unitWeight:0.8, tags:["fishing"] },
     tackle_box: { name:"Tackle box", category:"Materials", unitWeight:1.2, tags:["tackle"] },
     bolt_cutters: { name:"Bolt cutters", category:"Tool", unitWeight:1.2, tags:["cutting"] },
-    hand_axe: { name:"Hand axe", category:"Tool", unitWeight:1.4, tags:["blunt","blade","chopping"] },
+    hand_axe: { name:"Hand axe", category:"Tool", unitWeight:1.4, tags:["blunt","blade","chopping","can-opening"] },
     plank: { name:"Plank", category:"Materials", unitWeight:1.5 },
     propane_torch: { name:"Propane torch", category:"Tool", unitWeight:0.9, tags:["heat"] },
     work_boots: { name:"Work boots", category:"Clothing", unitWeight:1.1 },
@@ -565,10 +581,10 @@
     campfire_kit: { name:"Campfire Kit", category:"Materials", unitWeight:2.4 },
     cooked_fish: { name:"Cooked fish", category:"Food", unitWeight:0.35, restores:{hunger:35}, verb:"Eat" },
     raw_fish: { name:"Raw fish", category:"Food", unitWeight:0.3, restores:{hunger:10}, verb:"Eat", illnessChance:35 },
-    canned_tuna: { name:"Canned tuna", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat" },
-    cereal_box: { name:"Box of cereal", category:"Food", unitWeight:0.5, restores:{hunger:15}, verb:"Eat" },
+    canned_tuna: { name:"Canned tuna", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat", sealed:true, opensWith:"can-opening" },
+    cereal_box: { name:"Box of cereal", category:"Food", unitWeight:0.5, restores:{hunger:15}, verb:"Eat", sealed:true },
     crackers: { name:"Crackers", category:"Food", unitWeight:0.2, restores:{hunger:8}, verb:"Eat" },
-    peanut_butter: { name:"Peanut butter", category:"Food", unitWeight:0.5, restores:{hunger:20}, verb:"Eat" },
+    peanut_butter: { name:"Peanut butter", category:"Food", unitWeight:0.5, restores:{hunger:20}, verb:"Eat", sealed:true },
     candy_bar: { name:"Candy bar", category:"Food", unitWeight:0.05, restores:{hunger:5}, verb:"Eat" },
     rice_bag: { name:"Bag of rice", category:"Food", unitWeight:1.0 },
     coffee_grounds: { name:"Coffee grounds", category:"Food", unitWeight:0.3 },
@@ -605,8 +621,8 @@
     // Weights below are estimates consistent with existing entries for
     // similar real-world items; retunable.
     // Pet supplies
-    dry_pet_food: { name:"Bag of dry pet food", category:"Food", unitWeight:1.5 },
-    canned_pet_food: { name:"Can of pet food", category:"Food", unitWeight:0.4 },
+    dry_pet_food: { name:"Bag of dry pet food", category:"Food", unitWeight:1.5, restores:{hunger:25}, verb:"Eat", sealed:true },
+    canned_pet_food: { name:"Can of pet food", category:"Food", unitWeight:0.4, restores:{hunger:15}, verb:"Eat", sealed:true, opensWith:"can-opening" },
     pet_leash: { name:"Leash", category:"Misc", unitWeight:0.2 },
     pet_collar: { name:"Pet collar", category:"Misc", unitWeight:0.1 },
     pet_toy: { name:"Chewed-up pet toy", category:"Misc", unitWeight:0.2 },
@@ -614,14 +630,14 @@
     pet_carrier: { name:"Pet carrier", category:"Misc", unitWeight:2.0 },
     // Baby / child items
     diapers: { name:"Pack of diapers", category:"Misc", unitWeight:0.8 },
-    baby_formula: { name:"Can of baby formula", category:"Food", unitWeight:0.6 },
+    baby_formula: { name:"Can of baby formula", category:"Food", unitWeight:0.6, restores:{hunger:18}, verb:"Eat", sealed:true, opensWith:"can-opening" },
     pacifier: { name:"Pacifier", category:"Misc", unitWeight:0.02 },
     childrens_book: { name:"Children's book", category:"Literature", unitWeight:0.2 },
     toy_action_figure: { name:"Action figure", category:"Misc", unitWeight:0.1 },
     baby_blanket: { name:"Baby blanket", category:"Misc", unitWeight:0.3 },
     // Self-defense (firearms deliberately excluded)
     baseball_bat: { name:"Baseball bat", category:"Tool", unitWeight:0.9, tags:["blunt"] },
-    combat_knife: { name:"Combat knife", category:"Tool", unitWeight:0.3, tags:["blade"] },
+    combat_knife: { name:"Combat knife", category:"Tool", unitWeight:0.3, tags:["blade","can-opening"] },
     pepper_spray: { name:"Pepper spray", category:"Misc", unitWeight:0.15 },
     stun_gun: { name:"Stun gun", category:"Tool", unitWeight:0.3 },
     riot_baton: { name:"Riot baton", category:"Tool", unitWeight:0.7, tags:["blunt"] },
@@ -3737,10 +3753,20 @@
   // INVENTORY / ITEM SYSTEM
   // ==================================================
   function totalWeight(list){ return list.reduce((s,it)=> s + it.qty*it.unitWeight, 0); }
+  // Returns the list entry the item ended up in — the stack it merged into,
+  // or the new one pushed. doOpen() is the only caller that reads it, to
+  // point the detail view at the unit it just opened; every other caller
+  // ignores it, so the return is additive.
   function addToList(list, item){
     if(STACKABLE.has(item.category) && !item.durability){
-      const existing = list.find(i=> i.itemId===item.itemId && i.category===item.category && !i.durability);
-      if(existing){ existing.qty += item.qty; return; }
+      // `sealed` is compared through `!!` on both sides so undefined and
+      // false count as the same state: an item that was never packaged and
+      // one that has been opened both stack as "not sealed". Without this
+      // clause an opened can merges straight back into the sealed stack it
+      // was split out of, which either opens all of them or loses the unit.
+      const existing = list.find(i=> i.itemId===item.itemId && i.category===item.category
+                                  && !i.durability && !!i.sealed === !!item.sealed);
+      if(existing){ existing.qty += item.qty; return existing; }
     }
     // A new stack entry must get its own identity. `item` here is often a
     // shallow copy of a source item (see doTake/doStore/giveItem) made with
@@ -3764,6 +3790,7 @@
     const copy = JSON.parse(JSON.stringify(item));
     delete copy._uid;
     list.push(copy);
+    return copy;
   }
   function invPools(){
     return [state.inventory.items].concat(
@@ -3916,7 +3943,7 @@
     const room = world[state.currentRoom];
     const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
     const it = getItemAt(src && src.items, index);
-    if(!it || !it.restores) return;
+    if(!it || !it.restores || it.sealed) return;
     if(it.restores.hunger) state.vitals.hunger = clamp(state.vitals.hunger + it.restores.hunger);
     if(it.restores.thirst) state.vitals.thirst = clamp(state.vitals.thirst + it.restores.thirst);
     it.qty -= 1;
@@ -3926,6 +3953,34 @@
       state.illnessMinutesLeft = ILLNESS_DURATION_MIN;
       log("It doesn't sit right. You can feel it already.", "warn");
     }
+    render();
+  }
+  // Opening is a transformation, not a gate on eating: a sealed can is not
+  // food you may not eat yet, it is not food. Exactly one unit opens, so a
+  // stack splits — `Canned soup x3` becomes x2 sealed plus x1 opened. No
+  // capacity check is needed or wanted: the opened unit goes back into the
+  // list the sealed one came from at the same unitWeight, so the list's
+  // total is unchanged.
+  function doOpen(sourceKind, index){
+    const room = world[state.currentRoom];
+    const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
+    const it = getItemAt(src && src.items, index);
+    if(!it || !it.sealed) return;
+    if(it.opensWith && !hasTool(it.opensWith)) return;
+    it.qty -= 1;
+    if(it.qty <= 0) src.items.splice(index, 1);
+    // Through addToList() rather than a direct push: the spread copies
+    // `_uid`, and addToList() is what deep-clones and strips it so the
+    // opened unit gets a fresh identity.
+    const opened = addToList(src.items, { ...it, qty:1, sealed:false });
+    // Follow the opened unit. Without this the detail view closes whenever
+    // the last sealed unit is opened, since detailItem would still point at
+    // a uid that was just spliced out.
+    detailItem = { uid: ensureUid(opened), side: sourceKind };
+    log(it.opensWith
+      ? `You work the lid off the ${it.name.toLowerCase()}.`
+      : `You break the seal on the ${it.name.toLowerCase()}.`,
+      null, "open:" + (it.itemId || it.name));
     render();
   }
   function doEquip(sourceKind, index){
@@ -3985,6 +4040,11 @@
     // are judgment calls and retunable.
     const splittable = STACKABLE.has(it.category) && !it.durability;
     if(side === "world"){
+      // The Take family is disabled rather than hidden, and is a deliberate
+      // exception to the rule below that an unperformable action is not
+      // offered at all. Hiding Take with the keychain tab open would read as
+      // "this item cannot be taken", which is false — it just cannot go
+      // *there*. The greyed button says which of the two it is.
       const keychainBlocked = invTab==="keychain" && !keychainAllows(it);
       actions.push({ label:"Take All", disabled: keychainBlocked, onClick:()=>doTake(index) });
       if(splittable && it.qty>=3)
@@ -3999,7 +4059,14 @@
       if(splittable && it.qty>1)
         actions.push({ label: verb + " 1", onClick:()=>doStore(index,1) });
     }
-    if(it.restores) actions.push({ label: it.verb || "Use", onClick:()=>doConsume(side, index) });
+    // An action offered on an item you are inspecting appears only if you can
+    // perform it — so Eat is absent while the item is still sealed, and Open
+    // is absent when the tool it needs is not carried. The two exceptions are
+    // the keychain-blocked Take above and renderCraftPanel()'s recipe list,
+    // which is a catalogue and would become undiscoverable if filtered.
+    if(it.restores && !it.sealed) actions.push({ label: it.verb || "Use", onClick:()=>doConsume(side, index) });
+    if(it.sealed && (!it.opensWith || hasTool(it.opensWith)))
+      actions.push({ label:"Open", onClick:()=>doOpen(side, index) });
     if(it.category==="Container" && it.slotType && !state[it.slotType])
       actions.push({ label:"Equip", onClick:()=>doEquip(side, index) });
     if(it.category === "Key"){
@@ -4028,7 +4095,7 @@
           render();
         }});
       }
-      actions.push({ label:"Replace batteries", disabled: countByTag("battery")<1, onClick:()=>{
+      if(countByTag("battery") >= 1) actions.push({ label:"Replace batteries", onClick:()=>{
         consumeByTag("battery", 1);
         it.durability.current = it.durability.max;
         it.hasBatteries = true;
@@ -5666,6 +5733,11 @@
             : `${Math.round(100*it.durability.current/it.durability.max)}% charge${it.on ? " — On" : " — Off"}`;
         box.appendChild(durLine);
       }
+      if(it.sealed !== undefined){
+        const sealLine = document.createElement("div");
+        sealLine.textContent = it.sealed ? "Sealed" : "Opened";
+        box.appendChild(sealLine);
+      }
       body.appendChild(box);
       getItemActions(found.list, found.index, detailItem.side).forEach(a=>{
         const btn = document.createElement("button");
@@ -5678,6 +5750,11 @@
       });
     } else {
       backBtn.style.display = "none";
+      // Unavailable recipes stay visible and disabled, with their `(needs
+      // ...)` string. This is a catalogue, not an action list: filtering it
+      // to what is currently craftable would make crafting undiscoverable.
+      // The rule that an unperformable action is hidden (see
+      // getItemActions()) governs actions on a specific item, not this.
       RECIPES.forEach(r=>{
         const ok = canCraft(r);
         const need = r.inputs.map(inp=>`${ITEM_REGISTRY[inp.id].name} x${inp.qty}`).join(", ")
@@ -5904,6 +5981,9 @@
     document.getElementById("worldWeight").textContent =
       totalWeight(currentWorld.items).toFixed(2) + " / " + currentWorld.capacityKg + " kg";
     renderItemList(document.getElementById("worldList"), currentWorld.items, [
+      // Disabled rather than hidden, for the reason given at the detail
+      // view's Take family in getItemActions(): the item can be taken, just
+      // not into the keychain.
       { label:"Take", disabled:(it)=> invTab === "keychain" && !keychainAllows(it), onClick:(i)=> doTake(i) }
     ], "world");
   }
