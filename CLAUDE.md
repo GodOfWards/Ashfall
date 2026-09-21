@@ -22,9 +22,10 @@ Designs a feature. Never writes game code.
 - The last few `CHANGELOG.md` entries — not the whole file.
 
 **Output:** issues filed as they surface, and — only if the session reaches a
-conclusion — a handoff at `handoffs/<feature-name>.md`, committed to `main` at
-the wrap. Read `docs/Ashfall_Handoff_Guide.md` **at the wrap, when writing the
-handoff** — it is not needed before then.
+conclusion — a handoff at `handoffs/<feature-name>.md`, landed on `main` at the
+wrap (directly or by pull request — Project Guide, Part 3). Read
+`docs/Ashfall_Handoff_Guide.md` **at the wrap, when writing the handoff** — it
+is not needed before then.
 
 ### Coding session
 
@@ -142,17 +143,23 @@ The merge ships the version; the tag is what makes it reachable afterwards. A
 version that shipped as a commit inside someone else's PR still gets its own tag,
 on the commit carrying its `GAME_CONFIG.VERSION`.
 
-**A pass whose diff is only `CLAUDE.md`, `docs/` and `handoffs/` is the
-exception.** No version bump, no changelog entry, no tag — the game did not
-change, and a tag pointing at a commit where nothing shipped is a new way to get
-tagging wrong. Items 3, 4 and 5 still apply — the archive move in the diff,
-`Closes #NN` and the new issues in the PR body rather than the changelog, or a
-line saying nothing was deferred. The archive move carries more weight here than
-anywhere else: a documentation-only pass writes no changelog entry, so its
-handoff can never register as spent by grep, and the folder is the only record
-that it shipped. The diff and the PR are the whole record. The test is that the
-pass touched *only* those files — one that touches `ashfall.html` as well ships
-normally, under all six.
+**A pass that does not touch `ashfall.html` is the exception.** No version bump,
+no changelog entry, no tag — the game did not change, and a tag pointing at a
+commit where nothing shipped is a new way to get tagging wrong. Items 3, 4 and 5
+still apply — the archive move in the diff, `Closes #NN` and the new issues in
+the PR body rather than the changelog, or a line saying nothing was deferred.
+The archive move carries more weight here than anywhere else: a
+documentation-only pass writes no changelog entry, so its handoff can never
+register as spent by grep, and the folder is the only record that it shipped.
+The diff and the PR are the whole record.
+
+The test is one question — **did `ashfall.html` change?** — and it is
+deliberately not a list of exempt paths. A list has to be maintained, and the
+one that stood here named `CLAUDE.md`, `docs/` and `handoffs/` but not
+`README.md`, so a one-line fix to the README nominally required a version bump
+for a pass that changed no line of the game. The CI check in
+`.github/workflows/version-changelog.yml` has always gated on exactly this
+question and nothing else; the rule now says what the check already enforced.
 
 ## Conventions
 

@@ -90,11 +90,11 @@ state, and MINOR, under another). In that case:
 
 ### Documentation-only passes
 
-A pass whose entire diff is `CLAUDE.md` and the `docs/` set ships no
-version at all, so it has no change type to state. Write `None —
-documentation only` where the header asks for one, and say in a sentence
-why. `CLAUDE.md`'s wrap-time checklist says what such a pull request
-carries instead of a bump, an entry and a tag.
+A pass that leaves `ashfall.html` untouched ships no version at all, so it
+has no change type to state. Write `None — documentation only` where the
+header asks for one, and say in a sentence why. `CLAUDE.md`'s wrap-time
+checklist owns that test and says what such a pull request carries instead
+of a bump, an entry and a tag.
 
 ---
 
@@ -115,10 +115,10 @@ changelog entry names the handoff path. Issue
 → PR → commits → changelog entry → handoff is then walkable in either
 direction without a hand-maintained cross-reference anywhere in it.
 
-The handoff is committed to `main` when the planning session wraps, and
-kept after it ships — moved to `handoffs/archive/`, never deleted. Its
-commit date is the record that the spec predated the code; there's no
-delete-when-consumed step.
+The handoff lands on `main` when the planning session wraps (by whichever
+route — Project Guide, Part 3), and is kept after it ships — moved to
+`handoffs/archive/`, never deleted. Its commit date is the record that the
+spec predated the code; there's no delete-when-consumed step.
 
 ### When a handoff is no longer live
 
@@ -344,7 +344,8 @@ resolutions in it, and closing this handoff's issue with `Closes #NN`.
    Don't pick an `X.Y.Z`; the coding session computes that from whatever
    is current when it runs (see Part 1).
 3. Fill out the template in Part 3, omitting sections that don't apply.
-4. Save it as `handoffs/<feature-name>.md` and commit it to `main`.
+4. Save it as `handoffs/<feature-name>.md` and get it onto `main` — see
+   the Project Guide's Workflow section for the route.
 5. That's the whole handover. A coding session reads the handoff and
    `ashfall.html` and needs nothing else to start — per the Project
    Guide's Workflow section, the changelog and the backlog come into play

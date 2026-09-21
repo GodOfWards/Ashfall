@@ -33,14 +33,15 @@ in the mundane detail — what people left behind, never explained.
 | `ashfall.html` | The whole game. Script sections are mapped by the `ARCHITECTURE` comment at the top. |
 | `CHANGELOG.md` | One entry per version, reverse-chronological. |
 | `docs/` | Project, handoff and changelog guides. |
-| `handoffs/` | Feature specs, one per implemented change. Kept after shipping. |
+| `handoffs/` | Feature specs. The top level holds only live ones — usually nothing or one file. |
+| `handoffs/archive/` | Spent and superseded specs. Kept, never deleted; never implemented from. |
 | `CLAUDE.md` | Working conventions for contributors. |
 
 ## Contributing
 
 Read `CLAUDE.md` first — it's short and it's binding. The essentials:
 
-- Work on a branch; never commit to `main`.
+- Work on a branch; changes reach `main` through a pull request.
 - Content (world data) and mechanics (actions/simulation) change separately.
 - Mechanics check item tags, never item names.
 - Every change bumps `GAME_CONFIG.VERSION` and adds a `CHANGELOG.md` entry.
