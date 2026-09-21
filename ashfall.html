@@ -255,7 +255,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.5.0" };
+  const GAME_CONFIG = { VERSION: "0.5.1" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -422,8 +422,10 @@
   //                      touched by the spawn system (purely hand-authored).
   //     spawnRolled      whether the initial roll has happened. Set true
   //                      at authoring time on any container that already
-  //                      ships with hand-placed contents, so
-  //                      doOpenContainer() never overwrites them.
+  //                      ships with hand-placed contents. The roll appends
+  //                      (addToList), so it would never overwrite them —
+  //                      what the flag prevents is hand-placed contents
+  //                      being topped up with rolled loot.
   //     lastRolledMinute state.totalMinutes at the last roll. Not consumed
   //                      by any mechanic yet — reserved for a future
   //                      respawn cycle (#15).
@@ -710,226 +712,235 @@
     return out;
   })();
 
-  // SPAWN_POOLS: weighted-RNG loot tables, sibling registry to
+  // SPAWN_POOLS: per-entry-chance loot tables, sibling registry to
   // ITEM_REGISTRY. A container opts in via its `spawnPools` field (see
   // CONTAINER SCHEMA above); doOpenContainer() (WORLD INTERACTION) rolls
   // each pool independently the first time such a container is opened.
-  //   entries    [{ itemId, weight, qtyMin, qtyMax }] — `weight` picks
-  //              which entries are selected (plain relative integer, no
-  //              sum constraint); `qtyMin`/`qtyMax` decides how many of
-  //              that item spawn once picked.
-  //   rollCount  [min,max] — how many entries get picked per roll.
-  //   emptyChance  0-1 chance the whole roll produces nothing, independent
-  //                of rollCount.
-  // See the v0.4.0 entry in CHANGELOG.md for the full design. Which
-  // containers draw from which pools is recorded on the containers
-  // themselves, in their `spawnPools` field.
+  //   emptyChance  0-1 chance the whole pool produces nothing. Rolled once,
+  //                ahead of the entries, and gates all of them.
+  //   entries    [{ itemId, chance, qtyMin, qtyMax }] — every entry is
+  //              rolled once, independently of every other, in declaration
+  //              order, so an entry contributes at most one stack per roll
+  //              and items land in the order the pool lists them.
+  //              `chance` is a number in (0,1] and is CONDITIONAL: it is
+  //              the probability this entry appears given the pool did not
+  //              come up empty. The unconditional probability of the item
+  //              being in the container is therefore
+  //                  P(appears) = (1 - emptyChance) * chance
+  //              so `chance:0.55` in a pool with `emptyChance:0.25` means
+  //              41% of containers, not 55%. `qtyMin`/`qtyMax` decides how
+  //              many of that item spawn once the entry hits.
+  // Every `chance` below is derived, not chosen. The v0.5.1 conversion
+  // computed each one from the weight/rollCount lottery it replaced, so
+  // that P(appears) carried across entry by entry; that is why they read
+  // 0.245069 rather than 0.25. An ugly number here is the signal that
+  // nobody has picked it yet. See the v0.5.1 entry in CHANGELOG.md for the
+  // model and the formula. Which containers draw from which pools is
+  // recorded on the containers themselves, in their `spawnPools` field.
   const SPAWN_POOLS = {
-    kitchen_perishable: { rollCount:[0,1], emptyChance:0.3, entries:[
-      { itemId:"rotten_leftovers", weight:8, qtyMin:1, qtyMax:1 },
-      { itemId:"spoiled_milk", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"moldy_bread", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"rotten_produce", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"pot_of_spoiled_stew", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"raw_fish", weight:1, qtyMin:1, qtyMax:1 },
-      { itemId:"cooked_fish", weight:1, qtyMin:1, qtyMax:1 } ]},
-    kitchen_nonperishable: { rollCount:[1,3], emptyChance:0.1, entries:[
-      { itemId:"canned_soup", weight:8, qtyMin:1, qtyMax:2 },
-      { itemId:"bottled_water", weight:8, qtyMin:1, qtyMax:3 },
-      { itemId:"canned_beans", weight:7, qtyMin:1, qtyMax:2 },
-      { itemId:"canned_corn", weight:7, qtyMin:1, qtyMax:2 },
-      { itemId:"canned_tuna", weight:6, qtyMin:1, qtyMax:2 },
-      { itemId:"crackers", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"pasta", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"granola_bars", weight:6, qtyMin:1, qtyMax:3 },
-      { itemId:"potato_chips", weight:5, qtyMin:1, qtyMax:2 },
-      { itemId:"rice_bag", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"cereal_box", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"peanut_butter", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"coffee_grounds", weight:4, qtyMin:1, qtyMax:1 } ]},
-    kitchen_tools: { rollCount:[0,2], emptyChance:0.25, entries:[
-      { itemId:"can_opener", weight:7, qtyMin:1, qtyMax:1 },
-      { itemId:"frying_pan", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"kitchen_knife", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"dented_saucepan", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"burnt_saucepan", weight:3, qtyMin:1, qtyMax:1 } ]},
-    hygiene: { rollCount:[1,2], emptyChance:0.15, entries:[
-      { itemId:"toilet_paper", weight:8, qtyMin:1, qtyMax:2 },
-      { itemId:"bar_soap", weight:7, qtyMin:1, qtyMax:1 },
-      { itemId:"toothpaste", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"shampoo", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"bleach", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"hand_sanitizer", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"rubber_gloves", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"trash_bags", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"dish_soap", weight:3, qtyMin:1, qtyMax:1 },
-      { itemId:"laundry_detergent", weight:3, qtyMin:1, qtyMax:1 } ]},
-    medical_otc: { rollCount:[1,2], emptyChance:0.2, entries:[
-      { itemId:"bandage", weight:8, qtyMin:1, qtyMax:3 },
-      { itemId:"painkillers", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"aspirin", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"cold_medicine", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"antiseptic_wipes", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"gauze_rolls", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"childrens_medicine", weight:2, qtyMin:1, qtyMax:1 } ]},
-    medical_pharmacy: { rollCount:[1,2], emptyChance:0.15, entries:[
-      { itemId:"prescription_bottles", weight:7, qtyMin:1, qtyMax:1 },
-      { itemId:"strong_painkillers", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"antibiotics", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"vitamins", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"cough_syrup", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"rubbing_alcohol", weight:5, qtyMin:1, qtyMax:1 } ]},
-    residential_personal: { rollCount:[1,2], emptyChance:0.2, entries:[
-      { itemId:"crumpled_cash", weight:7, qtyMin:1, qtyMax:1 },
-      { itemId:"spare_batteries", weight:6, qtyMin:1, qtyMax:2 },
-      { itemId:"loose_change", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"wristwatch", weight:3, qtyMin:1, qtyMax:1 },
-      { itemId:"dead_cellphone", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"disposable_camera", weight:3, qtyMin:1, qtyMax:1 },
-      { itemId:"jewelry_piece", weight:2, qtyMin:1, qtyMax:1 } ]},
-    clothing: { rollCount:[1,2], emptyChance:0.15, entries:[
-      { itemId:"folded_clothes", weight:8, qtyMin:1, qtyMax:2 },
-      { itemId:"t_shirt", weight:7, qtyMin:1, qtyMax:1 },
-      { itemId:"jeans", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"work_gloves", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"winter_jacket", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"sturdy_boots", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"work_boots", weight:4, qtyMin:1, qtyMax:1 } ]},
-    documents_lore: { rollCount:[0,2], emptyChance:0.3, entries:[
-      { itemId:"handwritten_note", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"old_photographs", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"photo_album", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"registration_papers", weight:3, qtyMin:1, qtyMax:1 },
-      { itemId:"owners_manual", weight:3, qtyMin:1, qtyMax:1 },
-      { itemId:"dated_newspaper", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"utility_bill", weight:5, qtyMin:1, qtyMax:2 },
-      { itemId:"unsent_letter", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"personal_journal", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"missing_person_flyer", weight:3, qtyMin:1, qtyMax:1 },
-      { itemId:"building_ledger", weight:2, qtyMin:1, qtyMax:1 } ]},
-    recreation: { rollCount:[0,2], emptyChance:0.25, entries:[
-      { itemId:"board_games", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"paperback_novel", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"playing_cards", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"comic_book", weight:4, qtyMin:1, qtyMax:1 } ]},
-    tools_general: { rollCount:[1,2], emptyChance:0.15, entries:[
-      { itemId:"duct_tape", weight:8, qtyMin:1, qtyMax:1 },
-      { itemId:"nails", weight:6, qtyMin:1, qtyMax:3 },
-      { itemId:"rope", weight:11, qtyMin:1, qtyMax:1 },
-      { itemId:"wrench", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"crowbar", weight:2, qtyMin:1, qtyMax:1 } ]},
-    tools_workshop: { rollCount:[1,2], emptyChance:0.2, entries:[
-      { itemId:"wrench", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"metal_pipe", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"box_cutter", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"spare_parts_box", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"motor_oil", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"tire_iron", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"bolt_cutters", weight:2, qtyMin:1, qtyMax:1 },
-      { itemId:"hand_axe", weight:2, qtyMin:1, qtyMax:1 },
-      { itemId:"propane_torch", weight:1, qtyMin:1, qtyMax:1 } ]},
-    office_supplies: { rollCount:[0,2], emptyChance:0.25, entries:[
-      { itemId:"building_ledger", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"registration_papers", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"reading_lamp", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"owners_manual", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"dead_cellphone", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"disposable_camera", weight:3, qtyMin:1, qtyMax:1 },
-      { itemId:"walkie_talkie", weight:2, qtyMin:1, qtyMax:1 },
-      { itemId:"portable_radio", weight:2, qtyMin:1, qtyMax:1 } ]},
-    retail_stock_food: { rollCount:[1,3], emptyChance:0.1, entries:[
-      { itemId:"bottled_water", weight:8, qtyMin:1, qtyMax:3 },
-      { itemId:"candy_bar", weight:7, qtyMin:1, qtyMax:2 },
-      { itemId:"potato_chips", weight:7, qtyMin:1, qtyMax:2 },
-      { itemId:"canned_corn", weight:6, qtyMin:1, qtyMax:2 },
-      { itemId:"canned_soup", weight:6, qtyMin:1, qtyMax:2 },
-      { itemId:"granola_bars", weight:6, qtyMin:1, qtyMax:2 },
-      { itemId:"chewing_gum", weight:6, qtyMin:1, qtyMax:1 } ]},
-    retail_stock_general: { rollCount:[1,2], emptyChance:0.15, entries:[
-      { itemId:"candy_bar", weight:7, qtyMin:1, qtyMax:1 },
-      { itemId:"chewing_gum", weight:7, qtyMin:1, qtyMax:1 },
-      { itemId:"loose_change", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"lighter", weight:4, qtyMin:1, qtyMax:1 } ]},
-    hardware_store: { rollCount:[1,3], emptyChance:0.1, entries:[
-      { itemId:"nails", weight:8, qtyMin:1, qtyMax:3 },
-      { itemId:"duct_tape", weight:8, qtyMin:1, qtyMax:2 },
-      { itemId:"rope", weight:7, qtyMin:1, qtyMax:1 },
-      { itemId:"plank", weight:6, qtyMin:1, qtyMax:2 },
-      { itemId:"paint_can", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"wrench", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"crowbar", weight:3, qtyMin:1, qtyMax:1 },
-      { itemId:"bolt_cutters", weight:2, qtyMin:1, qtyMax:1 },
-      { itemId:"hand_axe", weight:2, qtyMin:1, qtyMax:1 },
-      { itemId:"propane_torch", weight:2, qtyMin:1, qtyMax:1 } ]},
-    outdoor_camping: { rollCount:[1,2], emptyChance:0.2, entries:[
-      { itemId:"sleeping_bag", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"tackle_box", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"water_purification_tablets", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"camping_tent", weight:3, qtyMin:1, qtyMax:1 },
-      { itemId:"fishing_rod", weight:3, qtyMin:1, qtyMax:1 },
-      { itemId:"compass", weight:3, qtyMin:1, qtyMax:1 } ]},
-    valuables: { rollCount:[0,1], emptyChance:0.35, entries:[
-      { itemId:"crumpled_cash", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"jewelry_piece", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"cash_bundle", weight:3, qtyMin:1, qtyMax:1 },
-      { itemId:"wristwatch", weight:3, qtyMin:1, qtyMax:1 },
-      { itemId:"gift_card", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"checkbook", weight:4, qtyMin:1, qtyMax:1 } ]},
-    police_evidence: { rollCount:[0,1], emptyChance:0.4, entries:[
-      { itemId:"evidence_bag", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"sealed_evidence_box", weight:3, qtyMin:1, qtyMax:1 } ]},
-    police_gear: { rollCount:[1,2], emptyChance:0.2, entries:[
-      { itemId:"police_uniform", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"handcuffs", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"riot_baton", weight:4, qtyMin:1, qtyMax:1 },
-      { itemId:"police_badge", weight:2, qtyMin:1, qtyMax:1 } ]},
-    warehouse_goods: { rollCount:[1,2], emptyChance:0.2, entries:[
-      { itemId:"scrap_metal", weight:6, qtyMin:1, qtyMax:2 },
-      { itemId:"metal_pipe", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"plank", weight:6, qtyMin:1, qtyMax:2 },
-      { itemId:"spare_machine_parts", weight:5, qtyMin:1, qtyMax:1 } ]},
-    trash: { rollCount:[0,2], emptyChance:0.4, entries:[
-      { itemId:"empty_soda_can", weight:7, qtyMin:1, qtyMax:1 },
-      { itemId:"scrap_metal", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"metal_pipe", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"rotten_leftovers", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"dead_potted_plant", weight:3, qtyMin:1, qtyMax:1 } ]},
-    fuel_fire: { rollCount:[1,2], emptyChance:0.15, entries:[
-      { itemId:"firewood", weight:8, qtyMin:1, qtyMax:3 },
-      { itemId:"box_of_matches", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"lighter", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"campfire_kit", weight:2, qtyMin:1, qtyMax:1 } ]},
-    // Per-entry weights below follow the existing convention (commoner
-    // items 5-8, rarer or bulkier ones 1-3) and are retunable.
-    pet_supplies: { rollCount:[1,2], emptyChance:0.2, entries:[
-      { itemId:"dry_pet_food", weight:7, qtyMin:1, qtyMax:1 },
-      { itemId:"canned_pet_food", weight:7, qtyMin:1, qtyMax:3 },
-      { itemId:"pet_leash", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"pet_collar", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"pet_toy", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"cat_litter", weight:2, qtyMin:1, qtyMax:1 },
-      { itemId:"pet_carrier", weight:2, qtyMin:1, qtyMax:1 } ]},
-    baby_items: { rollCount:[0,2], emptyChance:0.3, entries:[
-      { itemId:"diapers", weight:7, qtyMin:1, qtyMax:1 },
-      { itemId:"baby_formula", weight:6, qtyMin:1, qtyMax:2 },
-      { itemId:"pacifier", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"childrens_book", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"toy_action_figure", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"baby_blanket", weight:5, qtyMin:1, qtyMax:1 } ]},
-    self_defense: { rollCount:[0,1], emptyChance:0.35, entries:[
-      { itemId:"pepper_spray", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"baseball_bat", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"combat_knife", weight:3, qtyMin:1, qtyMax:1 },
-      { itemId:"stun_gun", weight:3, qtyMin:1, qtyMax:1 } ]},
-    cleaning_supplies: { rollCount:[1,2], emptyChance:0.15, entries:[
-      { itemId:"dish_soap", weight:7, qtyMin:1, qtyMax:1 },
-      { itemId:"trash_bags", weight:7, qtyMin:1, qtyMax:1 },
-      { itemId:"rubber_gloves", weight:6, qtyMin:1, qtyMax:1 },
-      { itemId:"laundry_detergent", weight:5, qtyMin:1, qtyMax:1 } ]},
-    electronics: { rollCount:[0,1], emptyChance:0.3, entries:[
-      { itemId:"dead_cellphone", weight:7, qtyMin:1, qtyMax:1 },
-      { itemId:"disposable_camera", weight:5, qtyMin:1, qtyMax:1 },
-      { itemId:"walkie_talkie", weight:3, qtyMin:1, qtyMax:1 } ]}
+    kitchen_perishable: { emptyChance:0.3, entries:[
+      { itemId:"rotten_leftovers", chance:0.129032, qtyMin:1, qtyMax:1 },
+      { itemId:"spoiled_milk", chance:0.096774, qtyMin:1, qtyMax:1 },
+      { itemId:"moldy_bread", chance:0.096774, qtyMin:1, qtyMax:1 },
+      { itemId:"rotten_produce", chance:0.080645, qtyMin:1, qtyMax:1 },
+      { itemId:"pot_of_spoiled_stew", chance:0.064516, qtyMin:1, qtyMax:1 },
+      { itemId:"raw_fish", chance:0.016129, qtyMin:1, qtyMax:1 },
+      { itemId:"cooked_fish", chance:0.016129, qtyMin:1, qtyMax:1 } ]},
+    kitchen_nonperishable: { emptyChance:0.1, entries:[
+      { itemId:"canned_soup", chance:0.193774, qtyMin:1, qtyMax:2 },
+      { itemId:"bottled_water", chance:0.193774, qtyMin:1, qtyMax:3 },
+      { itemId:"canned_beans", chance:0.171049, qtyMin:1, qtyMax:2 },
+      { itemId:"canned_corn", chance:0.171049, qtyMin:1, qtyMax:2 },
+      { itemId:"canned_tuna", chance:0.147906, qtyMin:1, qtyMax:2 },
+      { itemId:"crackers", chance:0.147906, qtyMin:1, qtyMax:1 },
+      { itemId:"pasta", chance:0.147906, qtyMin:1, qtyMax:1 },
+      { itemId:"granola_bars", chance:0.147906, qtyMin:1, qtyMax:3 },
+      { itemId:"potato_chips", chance:0.124339, qtyMin:1, qtyMax:2 },
+      { itemId:"rice_bag", chance:0.124339, qtyMin:1, qtyMax:1 },
+      { itemId:"cereal_box", chance:0.124339, qtyMin:1, qtyMax:1 },
+      { itemId:"peanut_butter", chance:0.100345, qtyMin:1, qtyMax:1 },
+      { itemId:"coffee_grounds", chance:0.100345, qtyMin:1, qtyMax:1 } ]},
+    kitchen_tools: { emptyChance:0.25, entries:[
+      { itemId:"can_opener", chance:0.245069, qtyMin:1, qtyMax:1 },
+      { itemId:"frying_pan", chance:0.213018, qtyMin:1, qtyMax:1 },
+      { itemId:"kitchen_knife", chance:0.213018, qtyMin:1, qtyMax:1 },
+      { itemId:"dented_saucepan", chance:0.145957, qtyMin:1, qtyMax:1 },
+      { itemId:"burnt_saucepan", chance:0.110947, qtyMin:1, qtyMax:1 } ]},
+    hygiene: { emptyChance:0.15, entries:[
+      { itemId:"toilet_paper", chance:0.236111, qtyMin:1, qtyMax:2 },
+      { itemId:"bar_soap", chance:0.208116, qtyMin:1, qtyMax:1 },
+      { itemId:"toothpaste", chance:0.179688, qtyMin:1, qtyMax:1 },
+      { itemId:"shampoo", chance:0.150825, qtyMin:1, qtyMax:1 },
+      { itemId:"bleach", chance:0.121528, qtyMin:1, qtyMax:1 },
+      { itemId:"hand_sanitizer", chance:0.121528, qtyMin:1, qtyMax:1 },
+      { itemId:"rubber_gloves", chance:0.121528, qtyMin:1, qtyMax:1 },
+      { itemId:"trash_bags", chance:0.121528, qtyMin:1, qtyMax:1 },
+      { itemId:"dish_soap", chance:0.091797, qtyMin:1, qtyMax:1 },
+      { itemId:"laundry_detergent", chance:0.091797, qtyMin:1, qtyMax:1 } ]},
+    medical_otc: { emptyChance:0.2, entries:[
+      { itemId:"bandage", chance:0.308642, qtyMin:1, qtyMax:3 },
+      { itemId:"painkillers", chance:0.236111, qtyMin:1, qtyMax:1 },
+      { itemId:"aspirin", chance:0.236111, qtyMin:1, qtyMax:1 },
+      { itemId:"cold_medicine", chance:0.198688, qtyMin:1, qtyMax:1 },
+      { itemId:"antiseptic_wipes", chance:0.198688, qtyMin:1, qtyMax:1 },
+      { itemId:"gauze_rolls", chance:0.160494, qtyMin:1, qtyMax:1 },
+      { itemId:"childrens_medicine", chance:0.081790, qtyMin:1, qtyMax:1 } ]},
+    medical_pharmacy: { emptyChance:0.15, entries:[
+      { itemId:"prescription_bottles", chance:0.287630, qtyMin:1, qtyMax:1 },
+      { itemId:"strong_painkillers", chance:0.249135, qtyMin:1, qtyMax:1 },
+      { itemId:"antibiotics", chance:0.249135, qtyMin:1, qtyMax:1 },
+      { itemId:"vitamins", chance:0.209775, qtyMin:1, qtyMax:1 },
+      { itemId:"cough_syrup", chance:0.209775, qtyMin:1, qtyMax:1 },
+      { itemId:"rubbing_alcohol", chance:0.209775, qtyMin:1, qtyMax:1 } ]},
+    residential_personal: { emptyChance:0.2, entries:[
+      { itemId:"crumpled_cash", chance:0.304199, qtyMin:1, qtyMax:1 },
+      { itemId:"spare_batteries", chance:0.263672, qtyMin:1, qtyMax:2 },
+      { itemId:"loose_change", chance:0.263672, qtyMin:1, qtyMax:1 },
+      { itemId:"wristwatch", chance:0.136230, qtyMin:1, qtyMax:1 },
+      { itemId:"dead_cellphone", chance:0.222168, qtyMin:1, qtyMax:1 },
+      { itemId:"disposable_camera", chance:0.136230, qtyMin:1, qtyMax:1 },
+      { itemId:"jewelry_piece", chance:0.091797, qtyMin:1, qtyMax:1 } ]},
+    clothing: { emptyChance:0.15, entries:[
+      { itemId:"folded_clothes", chance:0.293629, qtyMin:1, qtyMax:2 },
+      { itemId:"t_shirt", chance:0.259349, qtyMin:1, qtyMax:1 },
+      { itemId:"jeans", chance:0.224377, qtyMin:1, qtyMax:1 },
+      { itemId:"work_gloves", chance:0.188712, qtyMin:1, qtyMax:1 },
+      { itemId:"winter_jacket", chance:0.152355, qtyMin:1, qtyMax:1 },
+      { itemId:"sturdy_boots", chance:0.152355, qtyMin:1, qtyMax:1 },
+      { itemId:"work_boots", chance:0.152355, qtyMin:1, qtyMax:1 } ]},
+    documents_lore: { emptyChance:0.3, entries:[
+      { itemId:"handwritten_note", chance:0.127407, qtyMin:1, qtyMax:1 },
+      { itemId:"old_photographs", chance:0.106996, qtyMin:1, qtyMax:1 },
+      { itemId:"photo_album", chance:0.086255, qtyMin:1, qtyMax:1 },
+      { itemId:"registration_papers", chance:0.065185, qtyMin:1, qtyMax:1 },
+      { itemId:"owners_manual", chance:0.065185, qtyMin:1, qtyMax:1 },
+      { itemId:"dated_newspaper", chance:0.127407, qtyMin:1, qtyMax:1 },
+      { itemId:"utility_bill", chance:0.106996, qtyMin:1, qtyMax:2 },
+      { itemId:"unsent_letter", chance:0.086255, qtyMin:1, qtyMax:1 },
+      { itemId:"personal_journal", chance:0.086255, qtyMin:1, qtyMax:1 },
+      { itemId:"missing_person_flyer", chance:0.065185, qtyMin:1, qtyMax:1 },
+      { itemId:"building_ledger", chance:0.043786, qtyMin:1, qtyMax:1 } ]},
+    recreation: { emptyChance:0.25, entries:[
+      { itemId:"board_games", chance:0.258503, qtyMin:1, qtyMax:1 },
+      { itemId:"paperback_novel", chance:0.258503, qtyMin:1, qtyMax:1 },
+      { itemId:"playing_cards", chance:0.219199, qtyMin:1, qtyMax:1 },
+      { itemId:"comic_book", chance:0.178382, qtyMin:1, qtyMax:1 } ]},
+    tools_general: { emptyChance:0.15, entries:[
+      { itemId:"duct_tape", chance:0.343750, qtyMin:1, qtyMax:1 },
+      { itemId:"nails", chance:0.263672, qtyMin:1, qtyMax:3 },
+      { itemId:"rope", chance:0.456543, qtyMin:1, qtyMax:1 },
+      { itemId:"wrench", chance:0.222168, qtyMin:1, qtyMax:1 },
+      { itemId:"crowbar", chance:0.091797, qtyMin:1, qtyMax:1 } ]},
+    tools_workshop: { emptyChance:0.2, entries:[
+      { itemId:"wrench", chance:0.242449, qtyMin:1, qtyMax:1 },
+      { itemId:"metal_pipe", chance:0.204082, qtyMin:1, qtyMax:1 },
+      { itemId:"box_cutter", chance:0.204082, qtyMin:1, qtyMax:1 },
+      { itemId:"spare_parts_box", chance:0.204082, qtyMin:1, qtyMax:1 },
+      { itemId:"motor_oil", chance:0.204082, qtyMin:1, qtyMax:1 },
+      { itemId:"tire_iron", chance:0.164898, qtyMin:1, qtyMax:1 },
+      { itemId:"bolt_cutters", chance:0.084082, qtyMin:1, qtyMax:1 },
+      { itemId:"hand_axe", chance:0.084082, qtyMin:1, qtyMax:1 },
+      { itemId:"propane_torch", chance:0.042449, qtyMin:1, qtyMax:1 } ]},
+    office_supplies: { emptyChance:0.25, entries:[
+      { itemId:"building_ledger", chance:0.167942, qtyMin:1, qtyMax:1 },
+      { itemId:"registration_papers", chance:0.136054, qtyMin:1, qtyMax:1 },
+      { itemId:"reading_lamp", chance:0.136054, qtyMin:1, qtyMax:1 },
+      { itemId:"owners_manual", chance:0.136054, qtyMin:1, qtyMax:1 },
+      { itemId:"dead_cellphone", chance:0.136054, qtyMin:1, qtyMax:1 },
+      { itemId:"disposable_camera", chance:0.103316, qtyMin:1, qtyMax:1 },
+      { itemId:"walkie_talkie", chance:0.069728, qtyMin:1, qtyMax:1 },
+      { itemId:"portable_radio", chance:0.069728, qtyMin:1, qtyMax:1 } ]},
+    retail_stock_food: { emptyChance:0.1, entries:[
+      { itemId:"bottled_water", chance:0.309252, qtyMin:1, qtyMax:3 },
+      { itemId:"candy_bar", chance:0.274647, qtyMin:1, qtyMax:2 },
+      { itemId:"potato_chips", chance:0.274647, qtyMin:1, qtyMax:2 },
+      { itemId:"canned_corn", chance:0.238925, qtyMin:1, qtyMax:2 },
+      { itemId:"canned_soup", chance:0.238925, qtyMin:1, qtyMax:2 },
+      { itemId:"granola_bars", chance:0.238925, qtyMin:1, qtyMax:2 },
+      { itemId:"chewing_gum", chance:0.238925, qtyMin:1, qtyMax:1 } ]},
+    retail_stock_general: { emptyChance:0.15, entries:[
+      { itemId:"candy_bar", chance:0.394965, qtyMin:1, qtyMax:1 },
+      { itemId:"chewing_gum", chance:0.394965, qtyMin:1, qtyMax:1 },
+      { itemId:"loose_change", chance:0.343750, qtyMin:1, qtyMax:1 },
+      { itemId:"lighter", chance:0.236111, qtyMin:1, qtyMax:1 } ]},
+    hardware_store: { emptyChance:0.1, entries:[
+      { itemId:"nails", chance:0.297840, qtyMin:1, qtyMax:3 },
+      { itemId:"duct_tape", chance:0.297840, qtyMin:1, qtyMax:2 },
+      { itemId:"rope", chance:0.264344, qtyMin:1, qtyMax:1 },
+      { itemId:"plank", chance:0.229818, qtyMin:1, qtyMax:2 },
+      { itemId:"paint_can", chance:0.194243, qtyMin:1, qtyMax:1 },
+      { itemId:"wrench", chance:0.194243, qtyMin:1, qtyMax:1 },
+      { itemId:"crowbar", chance:0.119873, qtyMin:1, qtyMax:1 },
+      { itemId:"bolt_cutters", chance:0.081043, qtyMin:1, qtyMax:1 },
+      { itemId:"hand_axe", chance:0.081043, qtyMin:1, qtyMax:1 },
+      { itemId:"propane_torch", chance:0.081043, qtyMin:1, qtyMax:1 } ]},
+    outdoor_camping: { emptyChance:0.2, entries:[
+      { itemId:"sleeping_bag", chance:0.267574, qtyMin:1, qtyMax:1 },
+      { itemId:"tackle_box", chance:0.267574, qtyMin:1, qtyMax:1 },
+      { itemId:"water_purification_tablets", chance:0.267574, qtyMin:1, qtyMax:1 },
+      { itemId:"camping_tent", chance:0.204082, qtyMin:1, qtyMax:1 },
+      { itemId:"fishing_rod", chance:0.204082, qtyMin:1, qtyMax:1 },
+      { itemId:"compass", chance:0.204082, qtyMin:1, qtyMax:1 } ]},
+    valuables: { emptyChance:0.35, entries:[
+      { itemId:"crumpled_cash", chance:0.120000, qtyMin:1, qtyMax:1 },
+      { itemId:"jewelry_piece", chance:0.080000, qtyMin:1, qtyMax:1 },
+      { itemId:"cash_bundle", chance:0.060000, qtyMin:1, qtyMax:1 },
+      { itemId:"wristwatch", chance:0.060000, qtyMin:1, qtyMax:1 },
+      { itemId:"gift_card", chance:0.100000, qtyMin:1, qtyMax:1 },
+      { itemId:"checkbook", chance:0.080000, qtyMin:1, qtyMax:1 } ]},
+    police_evidence: { emptyChance:0.4, entries:[
+      { itemId:"evidence_bag", chance:0.333333, qtyMin:1, qtyMax:1 },
+      { itemId:"sealed_evidence_box", chance:0.166667, qtyMin:1, qtyMax:1 } ]},
+    police_gear: { emptyChance:0.2, entries:[
+      { itemId:"police_uniform", chance:0.444444, qtyMin:1, qtyMax:1 },
+      { itemId:"handcuffs", chance:0.364444, qtyMin:1, qtyMax:1 },
+      { itemId:"riot_baton", chance:0.364444, qtyMin:1, qtyMax:1 },
+      { itemId:"police_badge", chance:0.191111, qtyMin:1, qtyMax:1 } ]},
+    warehouse_goods: { emptyChance:0.2, entries:[
+      { itemId:"scrap_metal", chance:0.357278, qtyMin:1, qtyMax:2 },
+      { itemId:"metal_pipe", chance:0.357278, qtyMin:1, qtyMax:1 },
+      { itemId:"plank", chance:0.357278, qtyMin:1, qtyMax:2 },
+      { itemId:"spare_machine_parts", chance:0.302457, qtyMin:1, qtyMax:1 } ]},
+    trash: { emptyChance:0.4, entries:[
+      { itemId:"empty_soda_can", chance:0.245069, qtyMin:1, qtyMax:1 },
+      { itemId:"scrap_metal", chance:0.213018, qtyMin:1, qtyMax:1 },
+      { itemId:"metal_pipe", chance:0.179980, qtyMin:1, qtyMax:1 },
+      { itemId:"rotten_leftovers", chance:0.179980, qtyMin:1, qtyMax:1 },
+      { itemId:"dead_potted_plant", chance:0.110947, qtyMin:1, qtyMax:1 } ]},
+    fuel_fire: { emptyChance:0.15, entries:[
+      { itemId:"firewood", chance:0.498866, qtyMin:1, qtyMax:3 },
+      { itemId:"box_of_matches", chance:0.387755, qtyMin:1, qtyMax:1 },
+      { itemId:"lighter", chance:0.328798, qtyMin:1, qtyMax:1 },
+      { itemId:"campfire_kit", chance:0.138322, qtyMin:1, qtyMax:1 } ]},
+    pet_supplies: { emptyChance:0.2, entries:[
+      { itemId:"dry_pet_food", chance:0.272762, qtyMin:1, qtyMax:1 },
+      { itemId:"canned_pet_food", chance:0.272762, qtyMin:1, qtyMax:3 },
+      { itemId:"pet_leash", chance:0.236111, qtyMin:1, qtyMax:1 },
+      { itemId:"pet_collar", chance:0.236111, qtyMin:1, qtyMax:1 },
+      { itemId:"pet_toy", chance:0.236111, qtyMin:1, qtyMax:1 },
+      { itemId:"cat_litter", chance:0.081790, qtyMin:1, qtyMax:1 },
+      { itemId:"pet_carrier", chance:0.081790, qtyMin:1, qtyMax:1 } ]},
+    baby_items: { emptyChance:0.3, entries:[
+      { itemId:"diapers", chance:0.191753, qtyMin:1, qtyMax:1 },
+      { itemId:"baby_formula", chance:0.166090, qtyMin:1, qtyMax:2 },
+      { itemId:"pacifier", chance:0.166090, qtyMin:1, qtyMax:1 },
+      { itemId:"childrens_book", chance:0.139850, qtyMin:1, qtyMax:1 },
+      { itemId:"toy_action_figure", chance:0.139850, qtyMin:1, qtyMax:1 },
+      { itemId:"baby_blanket", chance:0.139850, qtyMin:1, qtyMax:1 } ]},
+    self_defense: { emptyChance:0.35, entries:[
+      { itemId:"pepper_spray", chance:0.176471, qtyMin:1, qtyMax:1 },
+      { itemId:"baseball_bat", chance:0.147059, qtyMin:1, qtyMax:1 },
+      { itemId:"combat_knife", chance:0.088235, qtyMin:1, qtyMax:1 },
+      { itemId:"stun_gun", chance:0.088235, qtyMin:1, qtyMax:1 } ]},
+    cleaning_supplies: { emptyChance:0.15, entries:[
+      { itemId:"dish_soap", chance:0.380800, qtyMin:1, qtyMax:1 },
+      { itemId:"trash_bags", chance:0.380800, qtyMin:1, qtyMax:1 },
+      { itemId:"rubber_gloves", chance:0.331200, qtyMin:1, qtyMax:1 },
+      { itemId:"laundry_detergent", chance:0.280000, qtyMin:1, qtyMax:1 } ]},
+    electronics: { emptyChance:0.3, entries:[
+      { itemId:"dead_cellphone", chance:0.233333, qtyMin:1, qtyMax:1 },
+      { itemId:"disposable_camera", chance:0.166667, qtyMin:1, qtyMax:1 },
+      { itemId:"walkie_talkie", chance:0.100000, qtyMin:1, qtyMax:1 } ]}
   };
 
   // LOCATIONS: real integer (x,y,z) coordinates in meters for every
@@ -3636,18 +3647,11 @@
     return null;
   }
 
-  // randInt/weightedPick: small RNG helpers backing SPAWN_POOLS —
-  // see doOpenContainer() in WORLD INTERACTION.
+  // randInt: small RNG helper backing SPAWN_POOLS — the quantity draw in
+  // doOpenContainer() (WORLD INTERACTION). The entry draw beside it is a
+  // plain Math.random() against the entry's own `chance`, so there is no
+  // second helper here any more.
   function randInt(min, max){ return min + Math.floor(Math.random() * (max - min + 1)); }
-  function weightedPick(entries){
-    const totalWeight = entries.reduce((s,e)=> s + e.weight, 0);
-    let roll = Math.random() * totalWeight;
-    for(const entry of entries){
-      roll -= entry.weight;
-      if(roll <= 0) return entry;
-    }
-    return entries[entries.length - 1];
-  }
   function keychainAllows(item){ return item.category === "Key"; }
   function fmtDuration(min){
     min = Math.max(MIN_DISPLAY_MIN, Math.round(min));
@@ -4305,6 +4309,11 @@
   // SCHEMA), then renders. Containers with no spawnPools, or with
   // spawnRolled already set (all hand-placed containers, set true at
   // authoring time), are entirely unaffected.
+  //
+  // Within a pool, emptyChance gates the whole pool and then every entry is
+  // rolled once against its own `chance` — no entry can be drawn twice, so a
+  // roll yields at most one stack per entry. Entries are walked in
+  // declaration order, which is the order they land in the container.
   function doOpenContainer(room, container){
     worldTab = container.id;
     if(container.spawnPools && !container.spawnRolled){
@@ -4312,12 +4321,11 @@
         const pool = SPAWN_POOLS[poolId];
         if(!pool) return; // defensive — an unknown pool id contributes nothing
         if(Math.random() < pool.emptyChance) return;
-        const rollCount = randInt(pool.rollCount[0], pool.rollCount[1]);
-        for(let i=0; i<rollCount; i++){
-          const entry = weightedPick(pool.entries);
+        pool.entries.forEach(entry=>{
+          if(Math.random() >= entry.chance) return;
           const qty = randInt(entry.qtyMin, entry.qtyMax);
           addToList(container.items, itemFromRegistry({ id:entry.itemId, qty }));
-        }
+        });
       });
       container.spawnRolled = true;
       container.lastRolledMinute = state.totalMinutes;
@@ -4959,6 +4967,95 @@
     if(problems.length) console.warn("validateRoomSchema: rooms with schema problems", problems);
     else console.log("validateRoomSchema: every room has an address and a legal shelter");
     return problems;
+  }
+  // Items an action produces rather than a container holding them. Written
+  // down because validateReachability() cannot derive it: each grant lives
+  // inside an action's body, not in any table the helper could walk.
+  //   firewood         doChopTree(), doDismantleCampfire(), and the campfire
+  //                    kit's Disassemble
+  //   raw_fish         doFish()
+  //   spare_batteries  the powered-equipment "Remove batteries" action
+  const ACTION_GRANTED_ITEM_IDS = ["firewood", "raw_fish", "spare_batteries"];
+  // The tool tags validateReachability() counts, written down for the same
+  // reason. The first seven are what hasTool()/hasMatchUses() actually gate
+  // an action on, and they include the `breakTag` values windows (blunt) and
+  // locked storage units (cutting) carry. `heat` is listed because
+  // roomHasHeat() reads it, though its only caller is canCraft()'s needsHeat
+  // branch and no recipe sets that. `prying` gates nothing at all and is
+  // counted precisely for that reason: renderHereActionsPanel() records that
+  // forcing a vehicle was deliberately NOT gated on it because one item
+  // carries it, and #111 is the standing question of whether to gate on it
+  // once that stops being true. The count is the evidence that question wants.
+  const REPORTED_TOOL_TAGS = ["fire-starter", "fishing", "tackle", "chopping",
+    "cutting", "blunt", "can-opening", "heat", "prying"];
+  // validateReachability(): dev-only console helper (not wired to any button
+  // or UI, runs nothing automatically), sibling to the three above. Reports
+  // what a fresh world can actually hand the player:
+  //   1. dead pools — a SPAWN_POOLS id no container that still rolls draws
+  //      from, so nothing it lists can ever spawn;
+  //   2. unreachable items — an ITEM_REGISTRY id that is not hand-placed, not
+  //      an entry in a live pool, not a RECIPES/HEAT_RECIPES output and not
+  //      in ACTION_GRANTED_ITEM_IDS;
+  //   3. per tag in REPORTED_TOOL_TAGS, how many hand-placed instances carry
+  //      it and which live pools can yield one, so a content pass can see
+  //      when a verb is down to a single item.
+  // It also flags any pool entry whose `chance` is outside (0,1] — an
+  // authoring guard the old integer `weight` could not have, since any
+  // positive integer was legal there.
+  //
+  // It reports the current state; it does not assert the state is good. Ten
+  // dead pools and twelve unreachable items are the expected output at
+  // v0.5.1, and driving them to zero is the balance pass's job (#66, #67).
+  // Call manually from the browser console when auditing.
+  function validateReachability(){
+    const report = [];
+    Object.keys(SPAWN_POOLS).forEach(poolId=>{
+      SPAWN_POOLS[poolId].entries.forEach(entry=>{
+        if(!(Number.isFinite(entry.chance) && entry.chance > 0 && entry.chance <= 1))
+          report.push(`illegal chance: SPAWN_POOLS.${poolId} entry ${entry.itemId} has chance ${entry.chance}, which is not a number in (0,1]`);
+      });
+    });
+    const badChances = report.length;
+    // Walk a freshly-built default world, never the live one: a loaded save
+    // has already flipped spawnRolled on every container the player opened,
+    // so `world` would report those containers' pools as dead.
+    const fresh = makeDefaultWorld();
+    const freshState = makeDefaultState();
+    const livePools = new Set();
+    const placed = {}; // itemId -> how many hand-placed instances exist
+    const place = (it)=>{ placed[it.itemId] = (placed[it.itemId] || 0) + 1; };
+    Object.keys(fresh).forEach(roomId=>{
+      const room = fresh[roomId];
+      (room.floor || []).forEach(place);
+      (room.containers || []).concat(room.carContainers || []).forEach(c=>{
+        (c.items || []).forEach(place);
+        if(c.spawnPools && !c.spawnRolled) c.spawnPools.forEach(id=> livePools.add(id));
+      });
+    });
+    [freshState.inventory].concat(CONTAINER_SLOTS.map(slot=> freshState[slot])).forEach(slot=>{
+      if(slot && slot.items) slot.items.forEach(place);
+    });
+    Object.keys(SPAWN_POOLS).forEach(poolId=>{
+      if(!livePools.has(poolId)) report.push(`dead pool: ${poolId} — no container that still rolls draws from it`);
+    });
+    const reachable = new Set(Object.keys(placed));
+    livePools.forEach(poolId=> SPAWN_POOLS[poolId].entries.forEach(e=> reachable.add(e.itemId)));
+    RECIPES.forEach(r=> reachable.add(r.output.id));
+    HEAT_RECIPES.forEach(r=> reachable.add(r.output.id));
+    ACTION_GRANTED_ITEM_IDS.forEach(id=> reachable.add(id));
+    Object.keys(ITEM_REGISTRY).forEach(id=>{
+      if(!reachable.has(id)) report.push(`unreachable item: ${id} — not hand-placed, not in a live pool, not crafted, not action-granted`);
+    });
+    REPORTED_TOOL_TAGS.forEach(tag=>{
+      const carries = (id)=>{ const def = ITEM_REGISTRY[id]; return !!(def && def.tags && def.tags.includes(tag)); };
+      const hand = Object.keys(placed).filter(carries).reduce((s,id)=> s + placed[id], 0);
+      const pools = Array.from(livePools).filter(id=> SPAWN_POOLS[id].entries.some(e=> carries(e.itemId))).sort();
+      report.push(`tool tag "${tag}": ${hand} hand-placed instance${hand === 1 ? "" : "s"}, `
+        + (pools.length ? `live pools: ${pools.join(", ")}` : "no live pool"));
+    });
+    if(badChances) console.warn("validateReachability: pool entries with an illegal chance", report.slice(0, badChances));
+    console.log(`validateReachability: ${report.length} lines`, report);
+    return report;
   }
   function doRestart(){
     gameOver = false;
