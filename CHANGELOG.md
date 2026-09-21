@@ -18,6 +18,203 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.5.2 — Reachable tools & content corrections
+
+Implements: handoffs/reachable-tools-and-content-corrections.md
+
+Implements #67, #77, #123 and #135 in full, per
+`handoffs/reachable-tools-and-content-corrections.md`. A **pure WORLD DATA
+pass** — no rule was added, changed, or read from a new field. Four findings
+share one property, which is why they ship together: every one of them is
+instance content. The sibling handoff
+`handoffs/presentation-and-signal-pass.md` carries the same planning session's
+mechanics half and is deliberately a separate pass, because `CLAUDE.md`'s bound
+is that instance data never rides along with a mechanics change.
+
+PATCH: no field was added to anything serialized, so `versionCompat()` does not
+move and `SAVE_KEY` stays `ashfall_save_v0.5`. Existing browser saves keep
+loading.
+
+**New content**
+
+*Second copies of the load-bearing tools (#67)*
+- Five of the six tool tags that gate an action had exactly **one** reachable
+  copy — the whole game's fire was one `box_of_matches` in the room the player
+  wakes up in, and `fishing_rod` and `tackle_box`, which
+  `renderHereActionsPanel()` requires **together**, sat in the same container.
+  Each now has a second copy, hand-placed somewhere the first is not:
+  `lighter` in the Corner Store `register`, `hand_axe` on `poplar6th`'s floor
+  under the FIREWOOD sign, `bolt_cutters` in `onebee/toolcabinet`,
+  `fishing_rod` on `mid_water_7_9`'s floor, `tackle_box` on `water9th`'s. The
+  fishing pair is split across two rooms so no single loss removes fishing.
+- Every placement went into an already-frozen container (`spawnRolled:true`), a
+  `carContainer` (which has no pools), or a room floor. **No `spawnRolled` value
+  changed anywhere in this pass**, so no live pool draw was killed — 24 of 80
+  containers still roll, exactly as before.
+
+*The screwdriver (#123)*
+- `screwdriver` added to `ITEM_REGISTRY` — `Tool`, `0.15 kg`,
+  `tags:["can-opening"]` and nothing else: a screwdriver is not a blade and not
+  blunt. Placed beside `box_cutter`, which it is nearest in kind and weight.
+- Hand-placed in the `cab` carContainer of the parked work truck on
+  `mid_main_1_3`, beside the work gloves and thermos.
+- Added to two pools: `tools_workshop` (after `box_cutter`) and `hardware_store`
+  (after `plank`). **`hardware_store` is a dead pool (#133)** — no container
+  that still rolls draws from it — so that entry spawns nothing today. It is
+  written anyway so the pool is correct when #133 unfreezes it; it is not a live
+  placement.
+
+**Changed**
+
+*`outside`'s description (#77)*
+- The clause claiming the block to the west "feels like it goes on longer than
+  the one to the east" is gone. `poplar2nd` is at `x:100` and `poplar3rd` at
+  `x:300` with `outside` between them — both blocks are 100 m and cost the same
+  at every gait, so the room was describing an asymmetry the grid does not have.
+  236 characters to 153. The stoop sentence is verified correct against
+  `mid_poplar_1_2`/`acorn_f0` and survives verbatim.
+
+*The patio gate and the patio door (#77)*
+- `onea_patio -> alley` was the world's only unexplained one-way exit. `alley`
+  gains the return exit `{ to:"onea_patio", label:"Go through the gate",
+  distanceM:6 }` — same-Location (both are `acorn_f0`), so `distanceM` is
+  hand-authored and matches the reverse exit; no compass word, so
+  `applyComputedDirections()` leaves it alone; not grid travel, so it renders in
+  the **Here** panel.
+- 1A's interior stays gated. A fifth door,
+  `"1a-patio": { locked:true, sides:["onea_patio","onea"], building:"acorn" }`,
+  is added to `makeDefaultDoors()`, and both existing exits between `onea` and
+  `onea_patio` carry its `doorId`. `building:"acorn"` means `master_key` opens
+  it, the same as `"1a"`; `acorn_apt_2a_key` does not.
+- `DOOR_LABELS` gains `"1a-patio":"the patio"` — **not** `"1A"`.
+  `doorsForRoom("onea")` now returns both doors and `getItemActions()`'s
+  master-key branch pushes one action per door, so two doors sharing a label
+  would render two identical `Unlock 1A` buttons. With "the patio" they read
+  `Unlock the door to 1A` and `Unlock the door to the patio`.
+- **The patio's storage bin becomes reachable on day one.** `storagebin1a` holds
+  firewood ×3 and nails ×1 and was behind 1A's locked front door; it is now
+  reachable through the alley — which is open from turn one — with no key and no
+  tool. That is the point of opening the gate, but it is an early-game supply
+  change and is recorded here rather than left to be discovered.
+- **The patio is not a trap.** While `"1a-patio"` is locked, `getExitsForRoom()`
+  drops the `onea` exit and leaves the alley gate, so a player who walks in
+  through the gate can always walk back out.
+- **1A's interior is no better protected and no worse.** Reaching it still needs
+  `master_key` in `onebee/desk`, behind either door `"1b"` or the breakable
+  `1b-alley` window.
+
+*Movement labels (#135)*
+- Every mid-block node has exactly two exits, and they were worded
+  asymmetrically: `Head <dir> toward <Street>` one way, `Continue <dir> toward
+  <Street>` the other. "Continue" encodes a direction of travel the room does
+  not know — it reads as a lie to a player who just arrived from the other end.
+  112 labels change `Continue` to `Head`; both exits of every mid-block now
+  differ only in direction and destination. Nothing else in any label changed —
+  not `to`, not `distanceM`, not `doorId`, not the compass word. Intersections,
+  which use `Head <dir> on <Street>` and `Step into the block (<dir>)`, are
+  untouched.
+
+**Documentation**
+- The `SPAWN_POOLS` block comment said "Every `chance` below is derived, not
+  chosen [...] An ugly number here is the signal that nobody has picked it yet."
+  That is now false, so it is rewritten: every `chance` **except the two
+  `screwdriver` entries** is derived, those two are chosen and retunable, and an
+  ugly six-decimal number still marks a derived one. The derivation note is kept
+  in full — it is what makes the other 175 entries re-checkable.
+- `DOOR_LABELS` gains a comment recording that it is read from **both** sides of
+  a door, which is why the new door is labelled by its own name rather than its
+  destination, and pointing at #136.
+- **Nothing was deferred and no new issue was filed.** Everything this pass cut
+  was already an open issue and is named under **Explicitly out of scope**
+  below. Nothing new surfaced during implementation.
+
+**UI**
+- 112 mid-block movement buttons read "Head ..." instead of "Continue ...".
+- `outside`'s description is two sentences instead of three.
+- A "Go through the gate" button in the alley.
+- On the patio: "The door to the patio is locked." without the master key, or an
+  "Unlock the door to the patio" button with it.
+- Six more items exist to be found.
+- No panel, button or layout code changed.
+
+**Notes / assumptions**
+- `screwdriver`'s `unitWeight:0.15` is a judgment call, retunable: `can_opener`
+  and `box_cutter` are 0.1, `kitchen_knife` 0.15.
+- The two screwdriver `chance` values — `0.20` in `tools_workshop`, `0.23` in
+  `hardware_store` — are **chosen, retunable balance values**, and the first
+  chosen numbers in `SPAWN_POOLS`. `0.20` matches that pool's
+  `box_cutter`/`metal_pipe`/`motor_oil` band; `0.23` matches `hardware_store`'s
+  `plank`. The screwdriver postdates the v0.5.1 conversion and has no lottery
+  weight to carry across, so there was nothing to derive them from.
+- **Save compatibility.** `applyLoadedData()` assigns `world = data.world` and
+  `doors = data.doors` wholesale and no backfill adds an exit or a door, so a
+  v0.5.1 save gets neither the gate exit nor the `"1a-patio"` door. It stays
+  internally consistent: no `doors["1a-patio"]` lookup can fire, because no exit
+  in that save carries the id. New games and restarts get both. Verified, not
+  assumed — see **Validation performed**.
+- `onea`'s exit label to the patio was left as "Go to the patio". The door is
+  signalled by the Here panel, not by the label.
+
+**Explicitly out of scope**
+- **#133** — the ten dead pools and the eleven remaining unreachable items. No
+  `spawnRolled` value changed, `hardware_store` stays dead, and the screwdriver
+  entry in it stays inert. Unfreezing containers is that issue's decision.
+- **#126** — the spent fire-starter and the missing fire signal, in the sibling
+  handoff. This pass adds a second fire-starter; it does not change what happens
+  when one runs out.
+- **#136** — `DOOR_LABELS` naming a door by its destination. The new door works
+  around it with a label that reads acceptably from both sides; the fix is
+  #136's. "The door to the patio is locked." read from the patio is a
+  pre-existing wart, reproducible today by locking 2A from inside it.
+- **#111** — gating vehicle forcing on `prying`. `prying` stays at 2
+  hand-placed and gates nothing.
+- Rebalancing any existing pool. No `chance`, `emptyChance`, `qtyMin` or
+  `qtyMax` already in the file changed.
+- New registry items beyond `screwdriver`; #7 lore, #8 map expansion, #6
+  rooftops; #121, #116, #15, #51.
+
+**Sections touched**
+- **WORLD DATA only** — `ITEM_REGISTRY` (one entry), `SPAWN_POOLS` (two entries
+  and the block comment), `makeDefaultDoors()` and `DOOR_LABELS` (one entry
+  each), `buildAcornApartments()`, `buildPoplarSt()`, `buildCornerStore()`,
+  `buildWaterSt()`, `buildMainSt()`, and every street builder for the 112
+  labels. Plus `GAME_CONFIG.VERSION` in CONFIG / CONSTANTS.
+- Untouched: PLAYER STATE, CORE UTILITIES, INVENTORY / ITEM SYSTEM, WORLD
+  INTERACTION, SURVIVAL / TIME SIMULATION, STAMINA / FATIGUE, CRAFTING,
+  FIRE / COOKING, PERSISTENCE, EVENTS, RENDERING.
+
+**Validation performed**
+- `git diff origin/main...HEAD -- ashfall.html` — 152 insertions, 132 deletions,
+  of which 112 `+`/`-` pairs are the label rewrite and the rest are the changes
+  listed above. Nothing outside WORLD DATA and the version string.
+- `grep -c 'label:"Continue ' ashfall.html` → **0**;
+  `grep -c 'label:"Head ' ashfall.html` → **451** (339 + 112), as the handoff's
+  acceptance test specifies.
+- Syntax check of the extracted script body with `node --check`.
+- `validateReachability()` on a fresh world, run in headless Chromium, against
+  the handoff's acceptance table — every row matches: dead pools **10**
+  (unchanged), unreachable items **12 → 11** (`lighter` is placed),
+  `fire-starter`/`fishing`/`tackle`/`chopping`/`cutting` **1 → 2** hand-placed
+  each, `can-opening` **5 → 7**, `blunt` **10 → 11**, `prying` **2** and `heat`
+  **1** unchanged. `validateItemRegistry()`, `validateLocations()` and
+  `validateRoomSchema()` all still report clean, and the page loads with no
+  console error.
+- In-browser walkthrough: alley → gate → patio and back out; the patio door
+  reads "The door to the patio is locked." without the master key and unlocks
+  with it; `storagebin1a` opens from the alley with no key (firewood ×3, nails
+  ×1); inside `onea` with the master key and both doors locked, the Here panel
+  shows two distinct buttons — `Unlock the door to 1A` and `Unlock the door to
+  the patio`.
+- Save compatibility exercised, not asserted: a save written by the v0.5.1 build
+  loads into this one under the same `ashfall_save_v0.5` key, logs "Progress
+  loaded from this browser." with **no** version warning, and its `alley` has no
+  gate exit, its `onea_patio` exits carry no `doorId`, and its `doors` holds the
+  original four.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.5.1"` → `"0.5.2"`
+
+---
+
 ## v0.5.1 — Spawn probability model
 
 Implements: handoffs/spawn-probability-model.md
