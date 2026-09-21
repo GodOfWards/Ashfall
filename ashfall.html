@@ -7,8 +7,8 @@
 <style>
   :root{
     --bg:#111315; --panel:#1b1e22; --panel-2:#20242a; --line:#33383f;
-    --ink:#e5e5e0; --ink-dim:#9a9fa6; --ink-faint:#666b72;
-    --accent:#3b82f6; --accent-dim:#25508f; --warn:#d97b3f; --danger:#b3503f; --good:#7a9463;
+    --ink:#e5e5e0; --ink-dim:#9a9fa6; --ink-faint:#888e97;
+    --accent:#3b82f6; --accent-dim:#25508f; --warn:#d97b3f; --danger:#c76552; --good:#7a9463;
   }
   *{box-sizing:border-box;}
   body{ margin:0; min-height:100vh; background:var(--bg); color:var(--ink);
@@ -25,16 +25,21 @@
   #sideMenu.open{ transform:translateX(0); }
   #sideMenu h2{ font-size:14px; margin:0; display:flex; justify-content:space-between; align-items:center; }
   #closeMenu{ background:none; border:none; color:var(--ink-dim); font-size:16px; cursor:pointer; }
-  .menu-section h3{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-faint); margin:0 0 8px; }
+  .menu-section h3{ font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-faint); margin:0 0 8px; }
   .menu-actions{ display:flex; flex-direction:column; gap:6px; }
   .menu-actions button{ background:var(--panel-2); border:1px solid var(--line); color:var(--ink);
     font-size:13px; padding:8px 10px; border-radius:3px; cursor:pointer; text-align:left; }
   .menu-actions button:hover{ border-color:var(--accent-dim); }
   .menu-placeholder{ font-size:12px; color:var(--ink-faint); font-style:italic; }
   #statsBox{ font-size:13px; color:var(--ink-dim); line-height:1.9; }
-  .map-heading{ display:flex; justify-content:space-between; align-items:center; }
+  /* The heading row, not the heading: #mapZoomToggle is a <div> and is not
+     legal inside an <h3>, so the flex row is a wrapper around both. The
+     8px below the heading moves here with it — inside a flex row the h3's
+     own margin no longer reaches the map. */
+  .map-heading{ display:flex; justify-content:space-between; align-items:center; margin:0 0 8px; }
+  .map-heading h3{ margin:0; }
   #mapZoomToggle{ display:flex; gap:5px; }
-  #mapZoomToggle button{ font-family:system-ui,sans-serif; font-size:10.5px; background:var(--panel-2);
+  #mapZoomToggle button{ font-family:system-ui,sans-serif; font-size:12px; background:var(--panel-2);
     border:1px solid var(--line); color:var(--ink-dim); padding:4px 9px; border-radius:3px; cursor:pointer; }
   #mapZoomToggle button.active{ border-color:var(--accent); color:var(--accent); }
   #mapZoomToggle button:disabled{ opacity:.4; cursor:not-allowed; }
@@ -53,7 +58,7 @@
   #rightBar{ display:flex; gap:16px; align-items:center; }
   #clockLabel{ font-size:12px; color:var(--ink-dim); }
   #gaitBar{ display:flex; gap:6px; align-items:center; }
-  #gaitBar span{ font-size:11px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.06em; }
+  #gaitBar span{ font-size:12px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.06em; }
   #gaitBar button{ font-family:system-ui,sans-serif; font-size:12px; background:var(--panel-2);
     border:1px solid var(--line); color:var(--ink-dim); padding:5px 9px; border-radius:3px; cursor:pointer; }
   #gaitBar button.active{ border-color:var(--accent); color:var(--accent); }
@@ -67,8 +72,8 @@
   #log p.sys{ font-style:italic; color:var(--accent); font-family:system-ui,sans-serif; font-size:12px; }
   #log p.warn{ color:var(--warn); font-family:system-ui,sans-serif; font-size:12px; }
   #log p.good{ color:var(--good); font-family:system-ui,sans-serif; font-size:12px; }
-  .logcount{ color:var(--ink-faint); font-size:11.5px; margin-left:5px; }
-  .actions-group h2{ font-family:system-ui,sans-serif; font-size:11px; text-transform:uppercase;
+  .logcount{ color:var(--ink-faint); font-size:12px; margin-left:5px; }
+  .actions-group h2{ font-family:system-ui,sans-serif; font-size:12px; text-transform:uppercase;
     letter-spacing:.08em; color:var(--ink-faint); margin:0 0 8px; }
   .actions{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
   button.action{ font-family:system-ui,sans-serif; font-size:13.5px; background:var(--panel-2);
@@ -76,33 +81,43 @@
   button.action:hover{ border-color:var(--accent-dim); background:#232a33; }
   button.action .cost{ color:var(--ink-faint); font-size:12px; margin-left:4px; }
   button.action.locked{ border-color:var(--danger); color:var(--danger); }
-  button.action.blocked{ border-color:var(--danger); color:var(--danger); opacity:.45; cursor:not-allowed; }
-  .itemname{ cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px; }
+  button.action.blocked{ border-color:var(--danger); color:var(--danger); cursor:not-allowed; }
+  /* The control that opens item detail. It is a <button> because that is what
+     it does; the weight and colour it used to inherit from
+     `ul.itemlist .meta b` live here now, along with the reset a button needs
+     to sit inline in a sentence. The padding/negative-margin pair is the tap
+     target: the padded box overlaps the row's own padding instead of adding
+     to it, so the row height is unchanged. Both it and the :active colour are
+     judgment calls, retunable. */
+  .itemname{ background:none; border:none; font:inherit; color:var(--ink); font-weight:600;
+    padding:6px 2px; margin:-6px -2px; cursor:pointer; text-align:left;
+    text-decoration:underline dotted; text-underline-offset:2px; }
+  .itemname:active{ color:var(--accent); }
   .detailBox{ font-size:12.5px; color:var(--ink-dim); margin-bottom:10px; line-height:1.7; }
   .detailBox b{ color:var(--ink); }
   #sidebar{ padding:16px 18px; display:flex; flex-direction:column; gap:16px; font-family:system-ui,sans-serif; overflow-y:auto; }
   .panel{ background:var(--panel); border:1px solid var(--line); border-radius:4px; padding:11px 13px; }
   .tabs{ display:flex; gap:5px; margin-bottom:9px; flex-wrap:wrap; }
-  .tabs button{ font-size:11.5px; background:var(--panel-2); border:1px solid var(--line); color:var(--ink-dim);
+  .tabs button{ font-size:12px; background:var(--panel-2); border:1px solid var(--line); color:var(--ink-dim);
     padding:5px 9px; border-radius:3px; cursor:pointer; }
   .tabs button.active{ border-color:var(--accent); color:var(--accent); }
-  .panel h2{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-faint);
+  .panel h2{ font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-faint);
     margin:0 0 8px; display:flex; justify-content:space-between; align-items:center; }
-  .panel h2 .sub{ color:var(--ink-dim); text-transform:none; letter-spacing:0; font-size:11px; display:flex; align-items:center; gap:6px; }
+  .panel h2 .sub{ color:var(--ink-dim); text-transform:none; letter-spacing:0; font-size:12px; display:flex; align-items:center; gap:6px; }
   ul.itemlist{ list-style:none; margin:0; padding:0; }
   ul.itemlist li{ display:flex; justify-content:space-between; align-items:center; gap:6px;
     padding:6px 0; border-bottom:1px solid rgba(51,56,63,.6); font-size:12.5px; }
   ul.itemlist li:last-child{ border-bottom:none; }
   ul.itemlist .meta{ color:var(--ink-dim); flex:1; }
-  ul.itemlist .meta b{ color:var(--ink); font-weight:600; }
-  ul.itemlist .cat{ color:var(--ink-faint); font-size:10.5px; }
+  ul.itemlist .cat{ color:var(--ink-faint); font-size:12px; }
+  ul.itemlist .state{ color:var(--ink-dim); }
   ul.itemlist .empty{ color:var(--ink-faint); font-style:italic; }
   .btnrow{ display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; }
-  button.mini{ background:#262a30; border:1px solid var(--line); color:var(--ink); font-size:11px;
+  button.mini{ background:#262a30; border:1px solid var(--line); color:var(--ink); font-size:12px;
     padding:4px 7px; border-radius:3px; cursor:pointer; white-space:nowrap; }
   button.mini:hover{ border-color:var(--accent-dim); }
   button.mini.equip{ border-color:var(--good); color:var(--good); }
-  button.mini.blocked{ border-color:var(--danger); color:var(--danger); opacity:.45; cursor:not-allowed; }
+  button.mini.blocked{ border-color:var(--danger); color:var(--danger); cursor:not-allowed; }
   /* The two-column grid has a 476px floor — 320px of sidebar plus the room
      description's own minimum — so below that the page scrolls sideways.
      It stops being usable well before that: at 375px the description reads
@@ -139,13 +154,16 @@
   </div>
   <div class="menu-section"><h3>Stats</h3><div id="statsBox"></div></div>
   <div class="menu-section">
-    <h3 class="map-heading">Map <div id="mapZoomToggle">
-      <button data-zoom="close" class="active">Close</button>
-      <button data-zoom="wide">Wide</button>
-      <button id="mapZoomIn">+</button>
-      <button id="mapZoomOut">&minus;</button>
-    </div></h3>
-    <svg id="mapSvg" viewBox="0 0 260 260" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="map-heading">
+      <h3>Map</h3>
+      <div id="mapZoomToggle">
+        <button data-zoom="close" class="active">Close</button>
+        <button data-zoom="wide">Wide</button>
+        <button id="mapZoomIn">+</button>
+        <button id="mapZoomOut">&minus;</button>
+      </div>
+    </div>
+    <svg id="mapSvg" xmlns="http://www.w3.org/2000/svg"></svg>
   </div>
 </aside>
 <div id="locBar">
@@ -255,7 +273,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.5.2" };
+  const GAME_CONFIG = { VERSION: "0.5.3" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -294,6 +312,21 @@
   // MIN_MOVE_MIN today and a separate constant on purpose: retuning the
   // movement floor must not silently re-round Rest, Sleep, Search, fishing,
   // craft times and the fire's fuel readout along with it.
+  //
+  // The floor stays, and the gap it opens between the printed and the charged
+  // time is accepted rounding rather than an oversight. It became visible
+  // when grid travel's floor was made proportional to distance (see
+  // MIN_MOVE_MIN): a 50 m half-move costs 0.694 min at Walk and 0.500 at Jog
+  // and prints (0:01) for both, so two half-moves through a mid-block display
+  // 2 minutes against ~1.39 actually spent at Walk. A button that printed
+  // (0:00), or one that printed a fraction, would both be worse than being a
+  // little generous about a figure the clock already shows to the minute.
+  // Three callers can go sub-minute: the Move and Here exit buttons via
+  // exitMinutes(), estimateSleepMinutes() — sleepAvailable() only requires
+  // Energy below the ceiling, so the gap can be arbitrarily small — and
+  // fmtDuration(room.fireMinutesLeft) in renderLocationPanel(), which
+  // decrements continuously toward zero. Every other caller is fed a fixed
+  // constant of 5 minutes or more and can never reach the floor.
   const MIN_DISPLAY_MIN = 1;
   const GAITS = { sneak:{speed:0.6}, walk:{speed:1.2}, fast:{speed:2.0} };
   // The length of a game day, in minutes. The clock, the day number and the
@@ -3848,18 +3881,39 @@
       }
     });
   }
+  // Returns the list and index alongside the item, the shape findItemByUid()
+  // already uses, because consumeMatchUse() below has to be able to splice it.
   function findFireStarter(){
     for(const list of invPools()){
-      const m = list.find(it=> it.tags && it.tags.includes("fire-starter") && it.durability && it.durability.current>0);
-      if(m) return m;
+      const index = list.findIndex(it=> it.tags && it.tags.includes("fire-starter")
+                                     && it.durability && it.durability.current>0);
+      if(index>=0) return { list, index, item:list[index] };
     }
     return null;
   }
   function hasMatchUses(){ return !!findFireStarter(); }
+  // A tool that reaches zero is gone. Stated here for the fire-starter because
+  // it is the only durability spender today, but it is the rule, not a
+  // special case for matches: #116's tool wear inherits it.
+  //
+  // The whole entry is spliced rather than its qty decremented. addToList()
+  // never merges a durability-bearing item and every fire-starter placement in
+  // the world is qty:1, so the entry is exactly one unit. A placement giving
+  // qty > 1 would mean two matchboxes sharing one durability object, which is
+  // already wrong wherever it came from and is #134/#116's to fix, not
+  // something to defend against here.
+  //
+  // Still returns true: the use it just spent was real, so the caller's action
+  // succeeds and only the next one finds nothing to light with.
   function consumeMatchUse(){
-    const m = findFireStarter();
-    if(!m) return false;
+    const found = findFireStarter();
+    if(!found) return false;
+    const m = found.item;
     m.durability.current -= 1;
+    if(m.durability.current <= 0){
+      found.list.splice(found.index, 1);
+      log(`The ${m.name.toLowerCase()} is spent.`, "warn");
+    }
     return true;
   }
   function roomHasHeat(room){ return !!room.heatActive || hasTool("heat"); }
@@ -4937,8 +4991,10 @@
   // validateItemRegistry(): dev-only console helper (not wired to any
   // button or UI, runs nothing automatically). Walks RECIPES/HEAT_RECIPES
   // inputs/outputs and confirms every id they reference resolves in
-  // ITEM_REGISTRY, logging any that don't. Call manually from the browser
-  // console when auditing recipe/registry consistency.
+  // ITEM_REGISTRY, logging any that don't. Call it as
+  // `ashfallDev.validateItemRegistry()` from the browser console when
+  // auditing recipe/registry consistency (see the dev seam at the foot of
+  // this file).
   function validateItemRegistry(){
     const missing = [];
     RECIPES.forEach(r=>{
@@ -4956,7 +5012,8 @@
   // validateLocations(): dev-only console helper (not wired to any button
   // or UI, runs nothing automatically), modeled on validateItemRegistry().
   // Walks every room in world, confirms locationId is set and resolves in
-  // LOCATIONS. Call manually from the browser console when auditing.
+  // LOCATIONS. Call it as `ashfallDev.validateLocations()` from the browser
+  // console when auditing.
   function validateLocations(){
     const missing = [];
     Object.keys(world).forEach(roomId=>{
@@ -4974,7 +5031,8 @@
   // or a `shelter` outside the three legal values. A helper is enough here
   // because both failures are loud: a missing address renders "undefined" in
   // the location bar of the room you are standing in, on the first frame.
-  // Call manually from the browser console when auditing.
+  // Call it as `ashfallDev.validateRoomSchema()` from the browser console
+  // when auditing.
   function validateRoomSchema(){
     const legalShelter = ["none", "partial", "full"];
     const problems = [];
@@ -5026,7 +5084,8 @@
   // It reports the current state; it does not assert the state is good. Ten
   // dead pools and twelve unreachable items are the expected output at
   // v0.5.1, and driving them to zero is the balance pass's job (#66, #67).
-  // Call manually from the browser console when auditing.
+  // Call it as `ashfallDev.validateReachability()` from the browser console
+  // when auditing.
   function validateReachability(){
     const report = [];
     Object.keys(SPAWN_POOLS).forEach(poolId=>{
@@ -5304,20 +5363,20 @@
   const MAP_LABEL_OFFSET = 5;
   const MAP_LABELS_PER_STREET = 3;
   // The rendered size of a street name at the 15px .map-street-name face, in
-  // user units: the width of the widest name on the map, and the cap height.
-  // Every name is upper case with no descender, so the cap height is the
-  // whole ink band. The inset, the label tiers and the crossing clearance
-  // below all derive from them, so retuning the face or the names retunes
-  // the three together.
+  // user units: a name's width, and the cap height. Every name is upper case
+  // with no descender, so the cap height is the whole ink band. The inset,
+  // the label tiers and the crossing clearance all derive from them, so
+  // retuning the face or the names retunes the three together.
   //
-  // The width is measured at bind time off a real pooled node rather than
-  // written down here: `system-ui` is not one font, so a literal is only
-  // correct on the machine it was measured on — it resolves to Segoe UI, SF
-  // Pro, Roboto or Cantarell depending on where the page is opened, and those
-  // differ by more than the placement arithmetic tolerates. The constant
-  // below is the last known good Chromium measurement of "POPLAR ST", kept
-  // only as the value the game starts with and the value it keeps if a
-  // measurement ever fails. It is not the live width; mapLabelW is.
+  // Each street's width is measured at bind time off its own pooled node
+  // rather than written down here: `system-ui` is not one font, so a literal
+  // is only correct on the machine it was measured on — it resolves to Segoe
+  // UI, SF Pro, Roboto or Cantarell depending on where the page is opened,
+  // and those differ by more than the placement arithmetic tolerates. The
+  // constant below is the last known good Chromium measurement of "POPLAR
+  // ST", the widest of the sixteen, kept only as what a street falls back to
+  // if its own measurement fails. It is not any street's live width;
+  // street.metrics.w is.
   const MAP_LABEL_W_FALLBACK = 99.1;
   // The cap height is deliberately *not* measured. getComputedTextLength()
   // gives width only, and getBBox().height reports the em box — 17.83 at this
@@ -5327,79 +5386,80 @@
   // Breathing room between a name and the end of the stretch it is inset
   // from. Retunable.
   const MAP_LABEL_EDGE_GAP = 5;
-  // The measured width and the three values derived from it. They are `let`s
-  // rather than `const`s because the measurement cannot happen at parse time:
-  // there is no DOM node to measure until renderMapWide() has built the pool.
-  // Module-level map-view state is this file's idiom for exactly this
-  // (mapZoomMode, mapZoomStep, mapRenderedZoom), and it keeps the per-frame
-  // placement readers free of a width parameter they would thread through
-  // three signatures for a value that is constant between binds.
-  let mapLabelW, mapLabelInset, mapLabelTiers, mapLabelClearance;
-  // Recomputes all four from one width. Called once below so the game has
-  // valid values before the first Wide bind ever runs, and again at the end
-  // of every mapBindStreetLabels().
-  function mapSetLabelWidth(w){
-    // A failed measurement — a detached node, a pool that never got layout, a
-    // browser that throws — leaves the previous width in place rather than
-    // taking a zero. Zero collapses every tier to `hi - lo >= 0`, which is
-    // always true, so every street would silently jump to three names.
-    if(!Number.isFinite(w) || w <= 0) return;
-    mapLabelW = w;
-    mapLabelInset = w / 2 + MAP_LABEL_EDGE_GAP;
-    // How many names one street gets, by the length of it currently visible,
-    // in multiples of one name's width — longest tier first. Under a single
-    // width the street gets none, since a name wider than its visible stretch
-    // would read as floating loose. This is a crowding rule, not a legibility
-    // one: a name's width in user units is the same at every span, so what the
-    // tiers measure is how many fit, and the zoom ladder's ranges are what keep
-    // them readable. The multipliers are retunable.
-    mapLabelTiers = [
-      { minVisible: 6 * w, count: 3 },
-      { minVisible: 3 * w, count: 2 },
-      { minVisible: 1 * w, count: 1 }
-    ];
-    // How close to a crossing a name may sit before it can touch that
-    // crossing's own name. A name reaches mapLabelW/2 along its street, and
-    // the crossing's name occupies a band from MAP_LABEL_OFFSET to
-    // MAP_LABEL_OFFSET + MAP_LABEL_CAP off the crossing line, so this is how
-    // far past an intersection a name's box can still reach one.
-    // A mid-block sits MAP_SPACING/2 away, which clears this on the side a name
-    // is slid away from and comes within about a unit of it at the crossing
-    // beyond. Closing that last unit needs the two names meeting there to both
-    // be within ~3 units of the widest: only "POPLAR ST" is, and it runs
-    // east-west, so it never meets another. A north-south street named wider
-    // than MAP_SPACING - 2 * (MAP_LABEL_OFFSET + MAP_LABEL_CAP) would.
-    mapLabelClearance = w / 2 + MAP_LABEL_OFFSET + MAP_LABEL_CAP;
+  // One width and the three values derived from it, as a plain object per
+  // street. Every street is measured at bind time and keeps its own set: a
+  // single map-wide width reserved "POPLAR ST"'s 99 units for "1ST ST" too,
+  // which over-reserves it by 63% and costs the shorter streets names they
+  // had room for. Returns null on a measurement that cannot be trusted — a
+  // detached node, a pool that never got layout, a browser that throws — so
+  // the caller falls back rather than taking a zero. Zero collapses every
+  // tier to `hi - lo >= 0`, which is always true, so the street would
+  // silently jump to three names.
+  function mapLabelMetrics(w){
+    if(!Number.isFinite(w) || w <= 0) return null;
+    return {
+      w,
+      inset: w / 2 + MAP_LABEL_EDGE_GAP,
+      // How many names one street gets, by the length of it currently
+      // visible, in multiples of its own name's width — longest tier first.
+      // Under a single width the street gets none, since a name wider than
+      // its visible stretch would read as floating loose. This is a crowding
+      // rule, not a legibility one: a name's width in user units is the same
+      // at every span, so what the tiers measure is how many fit, and the
+      // zoom ladder's ranges are what keep them readable. The multipliers are
+      // retunable.
+      tiers: [
+        { minVisible: 6 * w, count: 3 },
+        { minVisible: 3 * w, count: 2 },
+        { minVisible: 1 * w, count: 1 }
+      ],
+      // How close to a crossing a name may sit before it can touch that
+      // crossing's own name. A name reaches its own w/2 along its street, and
+      // the crossing's name occupies a band from MAP_LABEL_OFFSET to
+      // MAP_LABEL_OFFSET + MAP_LABEL_CAP off the crossing line, so this is
+      // how far past an intersection a name's box can still reach one.
+      // A mid-block sits MAP_SPACING/2 away. Under per-street widths the
+      // limit is a name wider than
+      // MAP_SPACING - 2 * (MAP_LABEL_OFFSET + MAP_LABEL_CAP) = 96 units, and
+      // the widest north-south name is "2ND ST" at ~65 — clear by ~31 units
+      // by construction, rather than by the coincidence that the one
+      // over-wide name happens to run east-west.
+      clearance: w / 2 + MAP_LABEL_OFFSET + MAP_LABEL_CAP
+    };
   }
-  mapSetLabelWidth(MAP_LABEL_W_FALLBACK);
+  // What a street keeps when its own measurement fails. Computed once here so
+  // the fallback is the same object every bind, and so the game has valid
+  // metrics before the first Wide bind ever runs.
+  const MAP_LABEL_METRICS_FALLBACK = mapLabelMetrics(MAP_LABEL_W_FALLBACK);
   // Positions along a street's visible stretch [lo, hi], in that street's
-  // own axis. Two or three labels sit mapLabelInset in from each end; one
-  // sits at the midpoint. Whatever the tier, a position that would land on a
-  // crossing is slid clear of it before it is returned.
-  function mapLabelPositions(lo, hi){
-    const tier = mapLabelTiers.find(t => hi - lo >= t.minVisible);
+  // own axis, against that street's own metrics `m`. Two or three labels sit
+  // m.inset in from each end; one sits at the midpoint. Whatever the tier, a
+  // position that would land on a crossing is slid clear of it before it is
+  // returned.
+  function mapLabelPositions(lo, hi, m){
+    const tier = m.tiers.find(t => hi - lo >= t.minVisible);
     if(!tier) return [];
-    if(tier.count === 1) return mapClearCrossings([(lo + hi) / 2], lo, hi);
-    if(tier.count === 2) return mapClearCrossings([lo + mapLabelInset, hi - mapLabelInset], lo, hi);
-    return mapClearCrossings([lo + mapLabelInset, (lo + hi) / 2, hi - mapLabelInset], lo, hi);
+    if(tier.count === 1) return mapClearCrossings([(lo + hi) / 2], lo, hi, m);
+    if(tier.count === 2) return mapClearCrossings([lo + m.inset, hi - m.inset], lo, hi, m);
+    return mapClearCrossings([lo + m.inset, (lo + hi) / 2, hi - m.inset], lo, hi, m);
   }
   // Intersections fall on the grid pitch along both axes, since mapToSvg()
   // offsets every coordinate by MAP_MARGIN — so where a position sits
   // relative to one is arithmetic, not a walk through the street's chain.
-  // A position within mapLabelClearance of a crossing slides to the
+  // A position within m.clearance of a crossing slides to the
   // mid-block beside it, toward the centre of the visible stretch: sliding
   // outward risks leaving the stretch. A name with no mid-block left inside
   // the stretch is dropped rather than slid again — a second slide can
   // cascade, and a street that loses one of its two or three names still
   // reads. Two names converging on one mid-block is the same case: the one
   // nearer the centre of the stretch keeps it.
-  function mapClearCrossings(positions, lo, hi){
+  function mapClearCrossings(positions, lo, hi, m){
     const mid = (lo + hi) / 2;
-    const room = mapLabelW / 2;  // a slid name still has to fit inside the stretch
+    const room = m.w / 2;  // a slid name still has to fit inside the stretch
     const cleared = [];
     positions.forEach(p=>{
       const cross = MAP_MARGIN + Math.round((p - MAP_MARGIN) / MAP_SPACING) * MAP_SPACING;
-      if(Math.abs(p - cross) >= mapLabelClearance){ cleared.push(p); return; }
+      if(Math.abs(p - cross) >= m.clearance){ cleared.push(p); return; }
       const inward = p <= mid ? 1 : -1;
       const slid = [cross + inward * MAP_SPACING / 2, cross - inward * MAP_SPACING / 2]
         .find(q => q >= lo + room && q <= hi - room);
@@ -5407,7 +5467,7 @@
     });
     const kept = [];
     cleared.slice().sort((q, r) => Math.abs(q - mid) - Math.abs(r - mid)).forEach(p=>{
-      if(kept.every(q => Math.abs(p - q) >= mapLabelW)) kept.push(p);
+      if(kept.every(q => Math.abs(p - q) >= m.w)) kept.push(p);
     });
     return kept.sort((q, r) => q - r);
   }
@@ -5416,16 +5476,15 @@
   // mapPositionPlayer() resolves #mapPlayer. Cleared for Close, which emits
   // no street names at all.
   //
-  // This is also where the street-name width is measured, for the same
+  // This is also where each street's name is measured, for the same
   // reason the widths in mapBindBuildingLabels() are: bind is the one moment
-  // the names are in the DOM and are about to be placed. The widest of the
-  // sixteen is what the placement wants, so one reading per street — the
-  // three pooled nodes of a street all carry the same string.
+  // the names are in the DOM and are about to be placed. Each street keeps
+  // its own metrics, so one reading per street — the three pooled nodes of a
+  // street all carry the same string.
   function mapBindStreetLabels(){
     mapStreetLabels = [];
     if(mapZoomMode !== "wide") return;
     const svg = document.getElementById("mapSvg");
-    let widest = 0;
     MAP_STREETS.forEach((street, i)=>{
       const first = LOCATIONS[street.chain[0]], last = LOCATIONS[street.chain[street.chain.length-1]];
       const a = mapToSvg(first.x / 100, first.y / 100);
@@ -5441,25 +5500,25 @@
       // anyway, and shipping the whole pool visible instead would paint
       // sixteen names at the origin first — the flash Close's build-order
       // comment exists to avoid.
+      let metrics = null;
       if(els.length){
         els[0].style.display = "";
-        widest = Math.max(widest, mapTextWidth(els[0]));
+        metrics = mapLabelMetrics(mapTextWidth(els[0]));
       }
-      mapStreetLabels.push({ a, b, angle, horizontal: a.y === b.y, els });
+      mapStreetLabels.push({ a, b, angle, horizontal: a.y === b.y, els,
+                             metrics: metrics || MAP_LABEL_METRICS_FALLBACK });
     });
-    mapSetLabelWidth(widest);
   }
-  // The box a name occupies: mapLabelW along its own street and
-  // MAP_LABEL_CAP across, sitting MAP_LABEL_OFFSET off the street line —
-  // above a horizontal street, right of a vertical one, which is where the
-  // rotation in mapBindStreetLabels() puts it. Centre and extents, so a hit
-  // test reads the same for either heading. The width is the widest name's,
-  // not this street's own, so a short name's box is wider than its ink — the
-  // crowding rule the tiers state, applied to one box.
+  // The box a name occupies: this street's own measured width along its
+  // street and MAP_LABEL_CAP across, sitting MAP_LABEL_OFFSET off the street
+  // line — above a horizontal street, right of a vertical one, which is where
+  // the rotation in mapBindStreetLabels() puts it. Centre and extents, so a
+  // hit test reads the same for either heading.
   function mapLabelBox(street, p){
     const band = MAP_LABEL_OFFSET + MAP_LABEL_CAP / 2;
-    if(street.horizontal) return { x: p, y: street.a.y - band, w: mapLabelW, h: MAP_LABEL_CAP };
-    return { x: street.a.x + band, y: p, w: MAP_LABEL_CAP, h: mapLabelW };
+    const w = street.metrics.w;
+    if(street.horizontal) return { x: p, y: street.a.y - band, w, h: MAP_LABEL_CAP };
+    return { x: street.a.x + band, y: p, w: MAP_LABEL_CAP, h: w };
   }
   // The player marker is drawn over the same streets and nothing else in the
   // placement knows it is there, so a name that would sit under it is dropped
@@ -5467,7 +5526,7 @@
   // the street's only name, #locBar already says where the player is.
   function mapLabelHitsPlayer(street, p, player){
     const box = mapLabelBox(street, p);
-    const reach = MAP_PLAYER_R_WIDE + mapLabelClearance;
+    const reach = MAP_PLAYER_R_WIDE + street.metrics.clearance;
     const dx = Math.max(Math.abs(player.x - box.x) - box.w / 2, 0);
     const dy = Math.max(Math.abs(player.y - box.y) - box.h / 2, 0);
     return dx * dx + dy * dy < reach * reach;
@@ -5487,12 +5546,14 @@
         if(street.a.y >= box.y && street.a.y <= box.y + box.h){
           positions = mapLabelPositions(
             Math.max(Math.min(street.a.x, street.b.x), box.x),
-            Math.min(Math.max(street.a.x, street.b.x), box.x + box.w));
+            Math.min(Math.max(street.a.x, street.b.x), box.x + box.w),
+            street.metrics);
         }
       } else if(street.a.x >= box.x && street.a.x <= box.x + box.w){
         positions = mapLabelPositions(
           Math.max(Math.min(street.a.y, street.b.y), box.y),
-          Math.min(Math.max(street.a.y, street.b.y), box.y + box.h));
+          Math.min(Math.max(street.a.y, street.b.y), box.y + box.h),
+          street.metrics);
       }
       positions = positions.filter(p => !mapLabelHitsPlayer(street, p, player));
       street.els.forEach((el, i)=>{
@@ -5782,6 +5843,16 @@
     btn.addEventListener("click", onClick);
     return btn;
   }
+  // The dim line renderHereActionsPanel() prints where an action would be if
+  // something were different — a locked door with no key, sleep on cooldown,
+  // nothing to light a fire with. One helper rather than the same style
+  // literal written at five call sites.
+  function hereNote(text){
+    const note = document.createElement("div");
+    note.style.cssText = "color:var(--ink-faint); font-size:12.5px; padding:6px 0;";
+    note.textContent = text;
+    return note;
+  }
   function renderItemList(el, list, buttons, side){
     el.innerHTML = "";
     if(list.length === 0){ el.innerHTML = '<li class="empty">Nothing here.</li>'; return; }
@@ -5790,11 +5861,22 @@
       const total = (it.qty * it.unitWeight).toFixed(2);
       const meta = document.createElement("span");
       meta.className = "meta";
-      const nameEl = document.createElement("b");
+      const nameEl = document.createElement("button");
       nameEl.className = "itemname";
       nameEl.textContent = it.name;
       nameEl.addEventListener("click", ()=>{ detailItem = { uid: ensureUid(it), side }; render(); });
       meta.appendChild(nameEl);
+      // `sealed` is three-valued (see ITEM DATA SCHEMA), and only the opened
+      // state is marked: undefined means the item was never a packaged thing,
+      // and a sealed can reads as the plain name. Hence `=== false` and not a
+      // falsiness test. The suffix sits outside nameEl so the control's text
+      // stays exactly the item's name.
+      if(it.sealed === false){
+        const stateEl = document.createElement("span");
+        stateEl.className = "state";
+        stateEl.textContent = " (Open)";
+        meta.appendChild(stateEl);
+      }
       meta.appendChild(document.createTextNode(` ×${it.qty} — ${total} kg `));
       const catSpan = document.createElement("span");
       catSpan.className = "cat";
@@ -5961,10 +6043,7 @@
       if(key){
         hereBox.appendChild(actionButton(`Unlock the door to ${label}`, ()=> doToggleLock(doorId)));
       } else {
-        const note = document.createElement("div");
-        note.style.cssText = "color:var(--ink-faint); font-size:12.5px; padding:6px 0;";
-        note.textContent = `The door to ${label} is locked.`;
-        hereBox.appendChild(note);
+        hereBox.appendChild(hereNote(`The door to ${label} is locked.`));
       }
     });
     hereBox.appendChild(actionButton("Rest " + fmtDuration(REST_DURATION_MIN), doRest));
@@ -5972,12 +6051,9 @@
       if(sleepAvailable()){
         hereBox.appendChild(actionButton("Sleep " + fmtDuration(estimateSleepMinutes()), doSleep));
       } else {
-        const note = document.createElement("div");
-        note.style.cssText = "color:var(--ink-faint); font-size:12.5px; padding:6px 0;";
-        note.textContent = sleepOffCooldown()
+        hereBox.appendChild(hereNote(sleepOffCooldown()
           ? "You're not tired enough to sleep yet."
-          : "You've slept too recently to manage it again.";
-        hereBox.appendChild(note);
+          : "You've slept too recently to manage it again."));
       }
     }
     if(room.searchLabel && !room.searched){
@@ -6001,13 +6077,25 @@
     if(room.fishable && hasTool("fishing") && hasTool("tackle")){
       hereBox.appendChild(actionButton("Go fishing " + fmtDuration(FISH_DURATION_MIN), doFish));
     }
+    // Both notes say the one thing that is missing, so a spent last
+    // fire-starter reads as a cause rather than as the action quietly
+    // disappearing. The campfire one is gated on canBuildFire() on purpose:
+    // a player with no kit and no firewood is not being denied a fire by the
+    // missing match, and saying so would be wrong. Functional UI text, held
+    // to clarity rather than to the game's descriptive tone; both retunable.
+    // The two can never both appear in one room today — every hasStove room
+    // also carries cannotHaveFire — but neither note assumes that.
     if(room.hasStove && !room.heatActive && hasMatchUses()){
       hereBox.appendChild(actionButton("Light the stove " + fmtDuration(LIGHT_STOVE_MIN), doLightStove));
+    } else if(room.hasStove && !room.heatActive){
+      hereBox.appendChild(hereNote("Nothing you're carrying will light it."));
     }
     if(!room.cannotHaveFire && !room.heatActive && hasMatchUses() && canBuildFire(room)){
       const label = !room.campfireBuilt ? "Set up the campfire kit"
         : (room.fireMinutesLeft > 0 ? "Relight the fire" : "Build a campfire");
       hereBox.appendChild(actionButton(label + " " + fmtDuration(BUILD_FIRE_MIN), doBuildFire));
+    } else if(!room.cannotHaveFire && !room.heatActive && canBuildFire(room)){
+      hereBox.appendChild(hereNote("Nothing you're carrying will light a fire."));
     }
     if(room.campfireBuilt && !room.heatActive){
       hereBox.appendChild(actionButton("Dismantle the campfire " + fmtDuration(DISMANTLE_CAMPFIRE_MIN), doDismantleCampfire, "locked"));
@@ -6141,6 +6229,12 @@
   log("You wake up in your apartment. Everything's exactly where you left it — for now.");
   mapSetZoomStep(mapZoomStep);
   render();
+
+  // Dev seam. The four validators above are local bindings inside this IIFE, so
+  // `validateReachability()` typed into devtools is a ReferenceError. This is the
+  // one deliberate hole in the closure: read-only reporting helpers, nothing that
+  // writes game state, and nothing else belongs on it.
+  window.ashfallDev = { validateItemRegistry, validateLocations, validateRoomSchema, validateReachability };
 })();
 </script>
 </body>

@@ -18,6 +18,296 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.5.3 — Presentation & signal pass
+
+Implements: handoffs/presentation-and-signal-pass.md
+
+Implements #124, #108, #110, #113, #126 and #131 in full, per
+`handoffs/presentation-and-signal-pass.md`. Everything the player reads, plus
+the one mechanics fix that gives the reading something to say, plus the dev
+seam that makes the project's own checks runnable. The sibling handoff
+`handoffs/reachable-tools-and-content-corrections.md` shipped as v0.5.2 and
+carried the same planning session's instance content; this pass is the
+rendering, markup and rules half, and touches **nothing in WORLD DATA** — no
+room, item, container, exit, description or pool changed.
+
+PATCH: no field was added to anything serialized, so `versionCompat()` does not
+move and `SAVE_KEY` stays `ashfall_save_v0.5`. Existing browser saves keep
+loading.
+
+**New**
+
+*A tool that reaches zero is gone (#126)*
+
+- `consumeMatchUse()` spent a fire-starter's use and left the item in the list
+  forever. It now removes the whole entry when `durability.current` reaches
+  zero or below, logs `The box of matches is spent.` as a `warn` line, and
+  still returns `true` — the use it just spent was real, so the caller's action
+  succeeds and only the *next* one finds nothing to light with.
+- `findFireStarter()` returns `{ list, index, item }` rather than the bare
+  item, the shape `findItemByUid()` already uses, because nothing could splice
+  what the old return gave it. `hasMatchUses()` is unchanged.
+- This is the precedent for **#116** (tool wear), not a special case for
+  matches: the rule is "a tool that reaches zero is gone", and any future
+  durability spender inherits it. Nothing else about fire changed —
+  `findFireStarter()`'s `current > 0` predicate, `canBuildFire()`,
+  `FIRE_BUILD_WOOD`, `FIRE_MINUTES_PER_WOOD` and `FIRE_MAX_MIN` are all
+  untouched.
+- The whole entry is spliced rather than its `qty` decremented, because
+  `addToList()` never merges a durability-bearing item and every fire-starter
+  placement in the world is `qty:1`, so the entry is exactly one unit. A
+  placement giving `qty > 1` would mean two matchboxes sharing one
+  `durability` object; that is already wrong wherever it came from and belongs
+  to **#134**/#116, so it is noted rather than defended against.
+
+**UI**
+
+*The fire subsystem stops vanishing silently (#126)*
+
+- Where "Light the stove" or the campfire button used to disappear once the
+  last fire-starter was spent, a dim note now says why: `Nothing you're
+  carrying will light it.` and `Nothing you're carrying will light a fire.`
+  The campfire note is gated on `canBuildFire(room)` on purpose — a player
+  with no kit and no firewood is not being denied a fire by a missing match.
+  Both are functional UI text, held to clarity rather than to the game's
+  descriptive tone, and both are retunable.
+- `hereNote(text)` is a new helper beside `actionButton()` in RENDERING. The
+  three existing inline-styled notes (locked door, sleep cooldown, not tired
+  enough) and these two now share one definition instead of writing the same
+  style literal five times.
+
+*Item state in the list (#124)*
+
+- An opened unit reads `Canned soup (Open) ×1 — 0.40 kg (Food)`; a sealed one
+  is unchanged. The test is `it.sealed === false` strictly: `undefined` means
+  the item was never a packaged thing and `true` means sealed, and only the
+  opened state is marked. The suffix is a sibling `<span class="state">`
+  outside the name element, so the clickable control's text stays exactly the
+  item's name.
+- The detail box keeps `Sealed` / `Opened`. The two sit in different
+  grammatical positions — an adjective on a noun against a status line — and
+  both read correctly; aligning them was not required and was not done.
+
+*Markup and readability (#108)*
+
+- `#mapZoomToggle` is a `<div>` and was a child of `<h3 class="map-heading">`,
+  which is not legal — flow content inside a heading. The flex row is now a
+  `.map-heading` wrapper around an `<h3>` and the toggle, with the heading's
+  `margin:0 0 8px` moved onto the wrapper so the gap above the map is
+  unchanged (measured at 8px before and after). `<h2>Menu <button…></h2>` is
+  left alone: a button inside a heading is legal.
+- `--ink-faint` `#666b72` → `#888e97` and `--danger` `#b3503f` → `#c76552`.
+  Contrast ratios, recomputed from the shipped stylesheet:
+
+  | foreground | on `--bg` | on `--panel` | on `--panel-2` |
+  |---|---|---|---|
+  | `--ink-faint` old `#666b72` | 3.47 | 3.12 | 2.90 |
+  | `--ink-faint` new `#888e97` | 5.64 | 5.07 | 4.72 |
+  | `--danger` old `#b3503f` | 3.67 | 3.29 | 3.07 |
+  | `--danger` new `#c76552` | 4.80 | 4.31 | 4.02 |
+
+  `#888e97` clears 4.5:1 on all three surfaces, which matters because
+  `button.action .cost` puts `--ink-faint` on `--panel-2`. Both values are
+  **retunable**, and the cost is real: `--ink-faint`'s relative luminance moves
+  from 0.146 to 0.268 against `--ink-dim`'s 0.344, so the panel headings now
+  sit noticeably closer to body text. The hierarchy, not the ratio alone, is
+  what to judge a retune against.
+- `opacity:.45` is gone from `button.action.blocked` and `button.mini.blocked`.
+  Composited against the page it put a blocked label at **1.53:1** at the old
+  `--danger` and **1.76:1** at the new one — effectively invisible either way,
+  which is why nudging the token alone would not have fixed it. The disabled
+  state is now colour and border only, landing the label at **4.02:1** on
+  `--panel-2`. Blocked buttons read distinctly louder than they did.
+- A 12px floor on every text token: `ul.itemlist .cat` and
+  `#mapZoomToggle button` 10.5px → 12px; `.panel h2`, `.panel h2 .sub`,
+  `.actions-group h2`, `.menu-section h3`, `button.mini` and `#gaitBar span`
+  11px → 12px; `.tabs button` and `.logcount` 11.5px → 12px. All retunable.
+  `.panel h2 .sub` is not in the handoff's table and is an addition — it
+  re-declares 11px precisely so it does *not* inherit, so leaving it would have
+  made it smaller than the heading containing it.
+- `.itemname` is a real `<button>`, the last control in the game that wasn't.
+  `ul.itemlist .meta b{ color:var(--ink); font-weight:600; }` no longer matched
+  anything and was removed rather than left as a dead rule; `.itemname` carries
+  that weight and colour itself, along with a button reset, a
+  `padding:6px 2px` / `margin:-6px -2px` tap target and an accent-coloured
+  `:active`. The padded box overlaps the row's own padding instead of adding to
+  it — the item row measures 43px tall before and after.
+- `viewBox="0 0 260 260"` is gone from `<svg id="mapSvg">`. It restated
+  `MAP_ZOOM_RANGE.close.base` × `MAP_SPACING` in HTML where nothing would catch
+  it drifting. `renderMap()` sets the attribute on first render, before
+  anything is interactive; the map measured 423×423 with a correct viewBox on
+  the first paint of an already-open side menu, so there is no flash of an
+  unsized SVG.
+
+**Changed / Reworked**
+
+*Per-street map label widths (#113)*
+
+- One label width — `"POPLAR ST"`'s — was reserved for all sixteen street
+  names, over-reserving `"1ST ST"` by 63%. `mapSetLabelWidth(w)` is replaced by
+  `mapLabelMetrics(w)`, a pure function returning `{ w, inset, tiers,
+  clearance }` and `null` on a measurement it cannot trust. The four
+  module-level `let`s (`mapLabelW`, `mapLabelInset`, `mapLabelTiers`,
+  `mapLabelClearance`) are gone; `mapBindStreetLabels()` measures each street
+  and stores its own metrics on the street, falling back to
+  `MAP_LABEL_METRICS_FALLBACK` when its own measurement fails. The four readers
+  — `mapLabelPositions()`, `mapClearCrossings()`, `mapLabelBox()` and
+  `mapLabelHitsPlayer()` — take the metrics rather than closing over module
+  state.
+- **This is a visible densification, not a refactor.** Measured across all 176
+  map nodes × 16 streets × 4 Wide spans = 11,264 street-views:
+
+  | span | labels drawn before → after | views where the count rose | fell |
+  |---|---|---|---|
+  | 390 | 1,240 → 1,542 | 230 | 0 |
+  | 520 | 2,468 → 3,171 | 677 | 0 |
+  | 650 | 3,380 → 3,851 | 506 | 45 |
+  | 780 | 4,340 → 4,989 | 657 | 44 |
+
+  19.2% of street-views change label count (2,159 of 11,264), against #113's
+  predicted 19%. Nine streets go from two names to three at span 390 and twelve
+  do at span 520, exactly as #113 predicted.
+- The 89 street-views that go 3 → 2 at the two widest spans are the converging
+  case `mapClearCrossings()` already documents: a narrower name has a smaller
+  inset, so an end position lands closer to a crossing, slides to the mid-block
+  beside it, and two names converge on one mid-block — the one nearer the
+  centre of the stretch keeps it. That is the existing rule applied to new
+  inputs, not a new behaviour.
+- The `mapLabelClearance` comment's `"POPLAR ST"` caveat is rewritten rather
+  than carried over. Under per-street widths the limit is
+  `MAP_SPACING - 2 * (MAP_LABEL_OFFSET + MAP_LABEL_CAP)` = 96 units and the
+  widest north–south name is `"2ND ST"` at ~65, clear by ~31 units *by
+  construction* rather than by the coincidence that the one over-wide name
+  happens to run east–west.
+- **#37's table is invalidated by this.** It counts labels drawn outside the
+  viewBox per span, and its "Labels shown" column (1,240 / 2,468 / 3,380 /
+  4,340) is this pass's *before* column. Its measurements need re-taking; a
+  comment on #37 says so.
+
+**Documentation**
+
+- `MIN_DISPLAY_MIN`'s comment now carries the **decision** behind the display
+  floor rather than a description of the gap (#110). **No code change.** The
+  floor stays and the difference between the printed and the charged time is
+  accepted rounding: a 50 m half-move costs 0.694 min at Walk and 0.500 at Jog
+  and prints `(0:01)` for both, so two half-moves through a mid-block display 2
+  minutes against ~1.39 spent. The comment names the three callers that can go
+  sub-minute — the exit buttons via `exitMinutes()`, `estimateSleepMinutes()`,
+  and `fmtDuration(room.fireMinutesLeft)` in `renderLocationPanel()` — and why
+  the constant stays separate from `MIN_MOVE_MIN`.
+- The four `validate*()` helpers' comments said "Call manually from the browser
+  console", which the IIFE made impossible (#131). All four now name the real
+  call — `ashfallDev.validateItemRegistry()`, `ashfallDev.validateLocations()`,
+  `ashfallDev.validateRoomSchema()`, `ashfallDev.validateReachability()` — and
+  one statement before the IIFE's closing `})();` puts them on
+  `window.ashfallDev`, with a comment saying it is a read-only seam and nothing
+  else belongs on it. No game behaviour changes: nothing reads
+  `window.ashfallDev`, it is never serialized, and the four helpers are
+  unchanged inside.
+- The `MAP_LABEL_W_FALLBACK` comment no longer describes itself as "the width
+  of the widest name on the map" — it is what one street falls back to when its
+  own measurement fails.
+- **Nothing was deferred.** Everything this pass cut was already an open issue
+  and is listed under **Explicitly out of scope** below; no new issue was
+  filed. One comment was added to #37, recording that this pass invalidated its
+  table.
+
+**Explicitly out of scope**
+
+- **#134** — stacks whose units carry durability. A flashlight at 8% and one at
+  100% still render identically; the `(Open)` suffix solves `sealed` and
+  nothing else, by design. This is what #124 leaves behind.
+- **#136** — `DOOR_LABELS` naming a door by its destination.
+- **#78** — the accessibility pass. No ARIA, no roles, no live region on
+  `#log`, no dialog semantics or focus trapping on `#sideMenu`, no `inert`, no
+  `prefers-reduced-motion` guard. #108 was carved out of #78 precisely so none
+  of that was needed here.
+- **#29** — the log's 110px height and 50-entry cap; needs a play session first.
+- **#37** — labels drawn outside the viewBox. Invalidated and noted, not fixed.
+- **#116** — tool wear. #126 sets the precedent for what a spent tool does; it
+  adds durability to nothing and no tool or weapon starts spending it.
+- **#121, #111, #96, #15, #51** — untouched.
+
+**Sections touched**
+
+- The document `<style>` block and `<body>` markup (#108a, b, c, d). Neither is
+  an ARCHITECTURE section.
+- **CONFIG / CONSTANTS** — `MIN_DISPLAY_MIN`'s comment (#110), and the version
+  string.
+- **INVENTORY / ITEM SYSTEM** — `findFireStarter()` and `consumeMatchUse()`
+  (#126). The only mechanics change in the pass.
+- **RENDERING** — `renderItemList()` (#124, #108c), `renderHereActionsPanel()`
+  (#126), the new `hereNote()` helper.
+- **RENDERING / MAP** — the label metrics and their four readers (#113).
+- **PERSISTENCE** — the four validator comments (#131).
+- The IIFE's closing line — `window.ashfallDev` (#131).
+
+Nothing in WORLD DATA, PLAYER STATE, WORLD INTERACTION, SURVIVAL / TIME
+SIMULATION, STAMINA / FATIGUE, CRAFTING or EVENTS. FIRE / COOKING was read but
+not edited: `doLightStove()` and `doBuildFire()` call `consumeMatchUse()` and
+are unchanged.
+
+**Validation performed**
+
+- `git diff origin/main...HEAD -- ashfall.html`, with every hunk mapped back to
+  the section it falls in: 14 in the `<style>`/`<body>` block, 2 in CONFIG /
+  CONSTANTS, 5 in INVENTORY / ITEM SYSTEM, 4 in PERSISTENCE, 31 in RENDERING
+  (MAP included). Nothing in WORLD DATA. Syntax check via `node --check` on the
+  extracted script.
+- **#126**, in a browser: with a matchbox at 2 uses, lighting the stove twice
+  removed it from the inventory on the second light, logged `The box of matches
+  is spent.` and replaced the button with the note. Outdoors with a campfire kit
+  and no fire-starter the campfire note appears; outdoors with neither kit nor
+  firewood it correctly does not.
+- **#124**: a stack of three sealed cans opened one unit and rendered
+  `Canned soup ×2 — 0.80 kg (Food)` beside `Canned soup (Open) ×1 — 0.40 kg
+  (Food)`; the detail box still read `Sealed` then `Opened`.
+- **#108**: side-menu screenshots before and after — the map heading renders
+  identically, and the heading-to-map gap measured 8px in both. The item row
+  measured 43px tall in both, and the name control resolves to `BUTTON` and
+  still opens the detail view. The map's first paint carried
+  `viewBox="250 185 260 260"` at 423×423 — set by `renderMap()`, no flash. The
+  contrast figures above were recomputed from the shipped stylesheet, and the
+  two "old" values against `--bg` reproduce #108's stated 3.47 and 3.67.
+- **#113**: the 11,264-street-view sweep above, driven by loading a save per
+  map node at each Wide span. Its *before* column reproduces #37's own sweep
+  (1,240 / 2,468 / 3,380 / 4,340) exactly, which is the check that it was
+  measured the same way. A second sweep over the same 704 views (176 nodes × 4
+  spans) took every visible name's rotated bounding box and found **0**
+  name-on-name overlaps and **0** names touching the player marker.
+- **#131**: `ashfallDev.validateItemRegistry()`, `validateLocations()`,
+  `validateRoomSchema()` and `validateReachability()` all called from a real
+  console against the shipped file — no temporary copy. The three pre-existing
+  helpers report clean (0 problems each) and `validateReachability()` reports
+  its 30 lines.
+- **Save compatibility**: a save tagged `0.5.0` loaded against this build with
+  `Progress loaded from this browser.` and no version-mismatch warning;
+  `SAVE_KEY` resolved to `ashfall_save_v0.5`.
+- No page errors and no console errors across every browser run.
+
+**Notes / assumptions**
+
+- The fencing comment on `window.ashfallDev` ships, per the handoff's
+  recommendation: it is the only thing standing between a deliberate seam and
+  the drawer every future helper gets hung on.
+- `.state` is scoped as `ul.itemlist .state` rather than a bare `.state`, to
+  match its neighbours `ul.itemlist .cat` and `ul.itemlist .meta` and to keep a
+  very generic class name from applying page-wide. It is coloured
+  `--ink-dim` — dimmer than the name, brighter than `.cat`.
+- `.itemname`'s `6px 2px` padding with matching negative margin, and the
+  accent-coloured `:active`, are judgment calls and retunable. Anything that
+  changes the row height would be wrong; it does not.
+- `mapSetLabelWidth` was renamed to `mapLabelMetrics`, per the handoff's
+  recommendation — it no longer sets anything.
+- `hereNote()` lives beside `actionButton()` in RENDERING, which is the same
+  kind of helper.
+- The two log/UI strings this pass adds — `The <fire-starter> is spent.` and
+  the two `Nothing you're carrying will light …` notes — are retunable.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.5.2"` → `"0.5.3"`
+
+---
+
 ## v0.5.2 — Reachable tools & content corrections
 
 Implements: handoffs/reachable-tools-and-content-corrections.md
