@@ -18,6 +18,274 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.5.1 — Spawn probability model
+
+Implements: handoffs/spawn-probability-model.md
+
+Implements #127 in full, per `handoffs/spawn-probability-model.md`. `SPAWN_POOLS`
+was a weighted lottery: `emptyChance` skipped the roll, `rollCount` decided how
+many picks to make, and each pick was an independent weighted draw over
+`entries`. A `weight` is only meaningful beside its neighbours, so no entry
+stated how likely that item was to be in a container, adding one entry silently
+re-priced every other entry in every container drawing that pool, and two items'
+likelihoods could not be set independently at any weights.
+
+This pass replaces the lottery with an **independent per-entry chance**. Each
+entry is rolled once, on its own, against its own `chance`. `emptyChance`
+survives as its own gate ahead of the entries — a settled planning decision, and
+the reason `chance` is conditional rather than absolute.
+
+**This is not a no-behaviour-change pass.** P(appears) is preserved exactly for
+every entry; quantity distribution is deliberately changed. See **Changed /
+Reworked** below.
+
+PATCH, despite #127's `tier-2` label mapping to MINOR. `SPAWN_POOLS` is a code
+constant and no field was added to anything that is serialized — containers
+still carry only `spawnPools`, `spawnRolled` and `lastRolledMinute` — so
+`versionCompat()` does not move, `SAVE_KEY` stays `ashfall_save_v0.5`, and
+existing browser saves keep loading. The mismatch is deliberate, not an error.
+
+**Changed / Reworked**
+
+*The roll (`doOpenContainer()`, WORLD INTERACTION)*
+- `emptyChance` gates the pool as before; then every entry is walked once in
+  declaration order and spawns if `Math.random() < entry.chance`. An entry can
+  contribute **at most one stack per roll**, where the old model's
+  with-replacement picks could select the same entry repeatedly and let
+  `addToList()` merge them — the "three can openers in one drawer" case is gone.
+- Items land in the container in the order the pool lists them.
+
+*The intended behaviour change*
+- Probability of appearance is preserved exactly, entry for entry. Quantity is
+  not, and cannot be: the old model's duplicate picks have no counterpart in a
+  model that rolls each entry once. `retail_stock_food` made 1.800 picks per
+  roll but yielded 1.633 distinct items; that 0.167 of duplicate mass is what
+  disappears.
+- Expected item **units** fall **6.6%** across all 28 pools (32.831 → 30.657).
+  The five largest drops: `retail_stock_food` 2.739 → 2.481, `hardware_store`
+  2.363 → 2.163, `fuel_fire` 1.761 → 1.575, `kitchen_nonperishable` 2.513 →
+  2.377, `warehouse_goods` 1.513 → 1.385. Across the 24 containers that actually
+  roll, a whole run loses ~3.3 expected item units.
+- The drop is **not compensated**, deliberately. Scaling the chances would break
+  the P(appears) the conversion exists to preserve; raising `qtyMax` would
+  hand-tune ~30 entries by feel. Both would destroy the re-derivability that
+  makes this diff checkable, to protect numbers the balance pass overwrites.
+- Large lucky stacks get shorter. That is the whole of the player-visible
+  consequence, and it is statistical — no button, panel, label or log line
+  changed.
+
+*`SPAWN_POOLS` schema (WORLD DATA)*
+- **Added** `chance` per entry — a number in `(0,1]`, the probability the entry
+  appears *given the pool did not come up empty*, so
+  `P(appears) = (1 - emptyChance) * chance`. Stated in the block comment,
+  because `chance:0.55` in a pool with `emptyChance:0.25` is 41% of containers,
+  not 55%.
+- **Removed** `weight` (per entry) and `rollCount` (per pool). `emptyChance`,
+  `qtyMin` and `qtyMax` keep their meanings exactly.
+- All 28 pools converted; 175 entries. `chance` is the new rule's own schema
+  field, so data and mechanic ship together under `CLAUDE.md`'s
+  "definition data rides along with its mechanic" bound — the
+  `restores`/`verb` + `doConsume()` precedent. No room, placement, description
+  or map coordinate changed, which is the bound holding.
+
+*The conversion*
+- Every `chance` is **derived, not chosen**, generated programmatically from the
+  pre-change pool definitions and written to six decimal places. For an entry of
+  weight `w` in a pool whose weights sum to `W` and whose `rollCount` was
+  `[a, b]`:
+
+  ```
+  chance = mean over k in {a, a+1, …, b} of [ 1 - (1 - w/W)^k ]
+  ```
+
+  the probability the entry is picked at least once in `k` with-replacement
+  draws, averaged over the uniform `rollCount`. Multiplying by
+  `(1 - emptyChance)` recovers the old unconditional probability exactly, which
+  is why `emptyChance` was carried across rather than folded in. Where `a` is 0
+  the `k = 0` term contributes 0 and is included in the mean, so the "rolled
+  zero times" case is absorbed into `chance` and `emptyChance` stays as
+  authored.
+- The numbers read `0.245069`, not `0.25`, on purpose. An ugly derived number is
+  the signal to the balance pass that nobody has chosen it yet. **No number in
+  this diff is a balance decision** — that is what makes it checkable by
+  re-derivation, and it is why rounding them to something tidier was not done.
+
+**New**
+- `validateReachability()` — a fourth dev-only console helper at the end of
+  PERSISTENCE, sibling to `validateItemRegistry()`, `validateLocations()` and
+  `validateRoomSchema()` and following their shape (returns an array, logs a
+  summary, wired to nothing, runs nothing automatically). It walks a freshly
+  built default world — never the live one, whose `spawnRolled` flags a save has
+  already mutated — and reports three things plus one guard:
+  1. **Dead pools** — a `SPAWN_POOLS` id no container with
+     `spawnPools && !spawnRolled` draws from. Ten at v0.5.1: `medical_otc`,
+     `medical_pharmacy`, `recreation`, `tools_general`, `retail_stock_food`,
+     `retail_stock_general`, `hardware_store`, `outdoor_camping`, `trash`,
+     `fuel_fire`.
+  2. **Unreachable items** — an `ITEM_REGISTRY` id not hand-placed in the
+     default world, not an entry in a live pool, not a `RECIPES`/`HEAT_RECIPES`
+     output and not in `ACTION_GRANTED_ITEM_IDS`. Twelve at v0.5.1: `lighter`,
+     `water_purification_tablets`, `compass`, `antibiotics`, `antiseptic_wipes`,
+     `cough_syrup`, `vitamins`, `candy_bar`, `chewing_gum`, `paint_can`,
+     `playing_cards`, `comic_book`.
+  3. **Reachable tool count per tag in `REPORTED_TOOL_TAGS`** — how many
+     hand-placed instances carry it and which live pools can yield one, so a
+     content pass can see when a verb is down to one item. At v0.5.1:
+     `fire-starter` 1, `fishing` 1, `tackle` 1 and `prying` 2, none of the four
+     obtainable from any live pool; `chopping`, `cutting` and `heat` 1
+     hand-placed each plus `tools_workshop`; `blunt` 10; `can-opening` 5.
+  - It also flags any entry whose `chance` is not a finite number in `(0,1]` — an
+    authoring guard the old integer `weight` could not have, since any positive
+    integer was legal there.
+  - The helper **reports** the current state; it does not assert the state is
+    good. Ten dead pools and twelve unreachable items are the expected output at
+    this version, and driving them to zero is the balance pass's job.
+- `ACTION_GRANTED_ITEM_IDS` — `firewood`, `raw_fish`, `spare_batteries`. Items an
+  action produces rather than a container holding them, written down beside the
+  helper because each grant lives inside an action's body, not in any table the
+  helper could walk.
+- `REPORTED_TOOL_TAGS` — `fire-starter`, `fishing`, `tackle`, `chopping`,
+  `cutting`, `blunt`, `can-opening`, `heat`, `prying`. Written down for the same
+  reason. Both are named constants rather than inline literals so they stay
+  visible and maintainable.
+
+**Removed**
+- `weightedPick()` (CORE UTILITIES). The new roll was its only caller, and a
+  helper with no callers is vestigial surface — the call v0.4.14 already made.
+  `randInt()` stays: the quantity draw still uses it.
+- The comment above `pet_supplies` describing the per-entry weight convention
+  ("commoner items 5-8, rarer or bulkier ones 1-3"). It documented a field that
+  no longer exists, and the block comment now states that every `chance` is
+  derived and retunable, which is what it was there to say.
+
+**Documentation**
+- The `SPAWN_POOLS` block comment rewritten: `weight`/`rollCount` replaced by
+  `chance`, with the `P(appears) = (1 - emptyChance) * chance` relationship and
+  the independence of entries stated. Its pointer to the v0.4.0 entry for "the
+  full design" now points at this entry — v0.4.0's design is no longer the model
+  in the file.
+- The CONTAINER SCHEMA's `spawnRolled` paragraph corrected. It claimed the flag
+  exists "so `doOpenContainer()` never overwrites" hand-placed contents, which is
+  wrong about the mechanism: the roll calls `addToList()`, which appends. What
+  the flag actually prevents is hand-placed contents being *topped up* with
+  rolled loot.
+- `randInt()`'s comment no longer names `weightedPick()`, and `doOpenContainer()`
+  gained a paragraph stating the per-entry independence and the declaration-order
+  guarantee.
+- Filed #131 — the four dev-only validators all say "call manually from the
+  browser console", and the script's IIFE makes that impossible; reaching them
+  needs a devtools breakpoint inside the closure. Surfaced while verifying
+  `validateReachability()` in a real browser, which had to be done against a
+  temporary copy of the page with the four names hoisted onto `window`. Nothing
+  else was deferred: no scope was cut, and the conversion turned up no pool with
+  an empty `entries` array or an entry of weight 0.
+
+**Open questions / decisions resolved**
+
+The handoff left four narrow implementation calls and no design questions.
+
+- **`weightedPick()` is deleted**, per the handoff's recommendation. See
+  **Removed**.
+- **The conversion script does not enter the repository.** It is scaffolding
+  that runs once against the pre-change file. The formula above is the
+  reproduction method: re-deriving all 175 numbers from the v0.5.0
+  `SPAWN_POOLS` is how a reviewer checks this diff without trusting it.
+- **The helper is named `validateReachability()`** — the `validate*` family the
+  three existing helpers established, naming what it validates.
+- **The three reports are one helper**, per the handoff's recommendation. They
+  share the walk of the default world that works out which pools still roll;
+  splitting them would do it three times.
+
+**Notes / assumptions**
+- **`prying` is counted although it gates nothing.** The handoff's constant
+  description lists the tags `hasTool()`/`hasMatchUses()` are actually called
+  with, which excludes `prying`; its acceptance figures include `prying` at 2.
+  `prying` is counted, which is what makes the two agree. The reason is on its
+  own merits: `renderHereActionsPanel()` records that forcing a vehicle was
+  deliberately *not* gated on `prying` because one item carries it, and #111 is
+  the standing question of whether to gate on it once that stops being true.
+  Scarcity is exactly what this report measures, so the tag it already cost a
+  decision belongs in it. The constant is named `REPORTED_TOOL_TAGS` rather than
+  "gated tags" so the name does not claim more than is true.
+- **The per-tag figure counts hand-placed instances, not distinct registry ids.**
+  A crowbar placed in two rooms counts twice. That is what the handoff's
+  acceptance numbers are (`blunt` 10 against 8 distinct ids), and it is the more
+  useful figure: what a content pass wants to know is how many of the thing are
+  out there, not how many kinds.
+- The PATCH-against-`tier-2` call is the handoff's, restated in the prose above
+  so the mismatch reads as deliberate.
+
+**Explicitly out of scope**
+
+Restated from the handoff so this needn't be opened to know what isn't here:
+
+- **Re-authoring any pool's numbers for realism.** Every `chance` here is
+  derived. The balance pass replaces them with chosen ones, and it is what
+  closes #66 and #67.
+- **Pool membership.** No container gained or lost a `spawnPools` entry and no
+  pool gained or lost an item — matches did not enter `kitchen_tools`, however
+  obviously they belong there.
+- **Unfreezing containers (#66).** No `spawnRolled` value changed. The ten dead
+  pools stay dead and the helper reports them; that is the intended output.
+- **Second copies of single-source tools (#67).** A content decision for the
+  balance pass.
+- **Container kinds (#128)**, **respawn (#15)** — `lastRolledMinute` stays
+  written-but-unread — **a shared roll core (#51)**, which this pass leaves as
+  direct `Math.random()` calls the way the rest of the file does, and **new
+  registry items**.
+- **#116, #124, #126.** Adjacent to the reachability findings, none touched.
+
+**Validation performed**
+- `git diff origin/main...HEAD -- ashfall.html` — the whole of what changed, and
+  it is confined to the four sections named below.
+- **Syntax**: the `<script>` body extracted and passed through `node --check`.
+- **The table re-derived.** All 175 entries recomputed from the pre-change
+  `SPAWN_POOLS` with the formula above and compared against what shipped:
+  every one matches to six decimal places, `emptyChance`/`qtyMin`/`qtyMax` are
+  unchanged on every entry, entry order is unchanged in every pool, and no
+  `weight` or `rollCount` survives anywhere. This is the proof that no balance
+  decision entered.
+- **Reference vectors**: `kitchen_tools`, `fuel_fire` and `police_evidence` (the
+  degenerate `rollCount:[0,1]` case, where `chance` is just `w/W`) match the
+  handoff's tables exactly, in both `chance` and `P(appears)`.
+- **Both models simulated.** The roll body was lifted verbatim out of
+  `ashfall.html` — the file's own text, not a transcription — and Monte-Carloed
+  against the old arithmetic at 200,000 trials per pool: maximum P(appears)
+  deviation 0.00382, consistent with sampling noise at that count. Re-run on the
+  widest-deviating pool at 3,000,000 trials it falls to 0.00050 and keeps
+  shrinking, confirming exact equivalence. Analytically, the only gap between
+  the old and new P(appears) is the six-decimal rounding of `chance`, whose
+  largest effect anywhere is 4.5 × 10⁻⁷.
+- **The unit drop lands where predicted** — the five pools named above, and
+  −6.6% overall, analytically and in simulation.
+- **The helper run in a real browser** (headless Chromium, the shipped file) on a
+  fresh world: ten dead pools, twelve unreachable items and the per-tag counts
+  listed above, matching the handoff's acceptance figures exactly, with no
+  illegal `chance`. `validateItemRegistry()`, `validateLocations()` and
+  `validateRoomSchema()` still report clean.
+- **All 24 rolling containers opened** in the browser: the roll produces items,
+  no container came back with two stacks of the same item, and the page logged
+  no errors.
+- **Save compatibility**: a save written by the v0.5.0 build (`version: "0.5.0"`,
+  key `ashfall_save_v0.5`) loads in the v0.5.1 build from the same origin,
+  reporting "Progress loaded from this browser." with no version-mismatch
+  warning. `localStorage` still carries `ashfall_save_v0.5`.
+
+**Sections touched**
+- **WORLD DATA** — `SPAWN_POOLS` (all 28 pools and its block comment) and the
+  CONTAINER SCHEMA comment's `spawnRolled` paragraph.
+- **WORLD INTERACTION** — `doOpenContainer()`.
+- **CORE UTILITIES** — `weightedPick()` removed, `randInt()`'s comment rewritten.
+- **PERSISTENCE** — the dev-helper block at the end.
+
+Nothing in CONFIG/CONSTANTS beyond the version string, and nothing in PLAYER
+STATE, INVENTORY / ITEM SYSTEM, SURVIVAL / TIME SIMULATION, STAMINA / FATIGUE,
+CRAFTING, FIRE / COOKING, EVENTS, RENDERING or MAP.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.5.0"` → `"0.5.1"`
+
+---
+
 ## v0.5.0 — Sealed food
 
 Implements: handoffs/sealed-food.md
