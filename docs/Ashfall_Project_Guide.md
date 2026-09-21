@@ -397,11 +397,22 @@ that became issues. That distillation is the whole reason the handoff
 exists: the coding session should never have to read around anything to
 find the instruction.
 
-Commit the handoff to `main` at the wrap, as `handoffs/<feature-name>.md`.
-Committing it before any implementation exists is what lets `git log` show
-the spec predated the code — "proven, not asserted" applied to the process
+The handoff lands on `main` at the wrap, as `handoffs/<feature-name>.md`.
+Directly, or through a pull request when the session is working on its own
+branch — a merge preserves the commit's own date, which is the part that
+matters, so both routes satisfy this equally. What is not optional is that
+it arrives: a handoff left on a branch is invisible to the coding session,
+which reads the top level of `handoffs/` and nothing else.
+
+Landing it before any implementation exists is what lets `git log` show the
+spec predated the code — "proven, not asserted" applied to the process
 itself. It also means the coding session has it already; nothing needs
 handing over.
+
+This is the one place that route is written down. `CLAUDE.md` and
+`Ashfall_Handoff_Guide.md` both name the destination and point here for the
+mechanism rather than restating it — four copies of this rule are how it
+drifted out of step with branch-per-session working in the first place.
 
 ### 2. Coding session
 

@@ -122,10 +122,10 @@ when to use them:
   schema comments in `ashfall.html` themselves. Also use this section to
   name any issues this pass filed for deferred or newly-surfaced work (see
   the Project Guide's Workflow section), with a line stating nothing was
-  deferred if that's the case. Edits to `CLAUDE.md` or the `docs/` set are
-  not this section's subject — a pass whose diff is only those files ships
-  no version and writes no entry at all (see `CLAUDE.md`'s wrap-time
-  checklist).
+  deferred if that's the case. Edits to `CLAUDE.md`, `README.md` or the
+  `docs/` set are not this section's subject — a pass that leaves
+  `ashfall.html` untouched ships no version and writes no entry at all (see
+  `CLAUDE.md`'s wrap-time checklist).
 - **Explicitly out of scope** — for a pass built from a handoff file,
   restate what the handoff deliberately deferred, so a reader doesn't
   have to open the handoff to know what *isn't* here.
