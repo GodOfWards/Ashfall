@@ -36,12 +36,7 @@ reorg/documentation-only passes, wording/UX fixes, and content or
 rendering additions (new rooms, items, descriptions, new views onto
 existing state) that don't require new save fields.
 
-Maps to **`tier-0`** and **`tier-1`** issues by default. Within the pair,
-the number is size: `tier-0` is a small, local change — one fix, one
-rename, one wording or data correction, touching one function or a few
-lines — and `tier-1` is a larger PATCH-sized pass, such as a fix that
-spans several functions, a content pass, or a new view onto existing
-state.
+Maps to **`tier-0`** and **`tier-1`** issues by default.
 
 Technical anchor: `versionCompat()` derives the save key from
 `MAJOR.MINOR` only, so a PATCH bump keeps the same `SAVE_KEY` — existing
@@ -53,16 +48,12 @@ step.
 For new mechanics or systems, especially ones introducing new persistent
 state (new vitals, new state fields, new gameplay systems).
 
-Maps to **`tier-2`** and **`tier-3`** issues by default. Within the pair,
-the number is size again: `tier-2` is one new mechanic or one new piece of
-persistent state, and `tier-3` is a whole new system — several mechanics
-that only make sense together, or a change that reaches across many
-sections.
+Maps to **`tier-2`** and **`tier-3`** issues by default.
 
-Size is the only thing the number within a pair says. It is not priority,
-and it never overrides the pair: a one-line change that adds a save field
-is still MINOR, because the pair is decided by persistent state, not by
-size.
+The pair is decided by persistent state, never by size: a one-line change
+that adds a save field is still MINOR. Which tier *within* a pair is a
+size call, made when the issue is filed — see the Project Guide, Part 3,
+"Choosing a tier".
 
 Technical anchor: a MINOR bump changes `SAVE_KEY`. Existing browser saves
 won't auto-load under the new key — still recoverable via Export/Import,
