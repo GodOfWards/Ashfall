@@ -360,18 +360,29 @@ below about filing them as they come up, not obeying this one.
 
 **Inputs — read before starting:**
 - This Project Guide.
-- `ashfall.html` at `main`, in full. Planning claims about "what already
-  exists" (schema fields, world-data shape, whether a system exists yet)
-  must be verified against the real file, per Part 2's "proven, not
-  asserted" rule. This is what the "Relevant existing state" section of a
-  handoff depends on, and it's what caught the roadmap drift reconciled
-  in v0.2.5.
-- The open issues for the area under discussion — the backlog lives in
-  GitHub Issues, labelled `tier-0` through `tier-3`. If the tracker is
-  unreachable, say so and carry on: planning works without it, and
-  anything this session finds gets filed once it's back.
+- The open issues list — the backlog lives in GitHub Issues, labelled
+  `tier-0` through `tier-3`. The list, not every issue body. If the
+  tracker is unreachable, say so and carry on: planning works without it,
+  and anything this session finds gets filed once it's back.
+
+Nothing else up front. A planning session doesn't yet know which parts of
+the game its feature touches, so reading everything before the
+discussion starts spends context on material that mostly goes unused.
+
+**Inputs — read as the discussion needs them:**
+- `ashfall.html` at `main` — the sections the feature touches, found via
+  the `ARCHITECTURE` comment, once the discussion reaches them. Planning
+  claims about "what already exists" (schema fields, world-data shape,
+  whether a system exists yet) must still be verified against the real
+  file, per Part 2's "proven, not asserted" rule — the check happens when
+  the claim is made, not in advance. This is what the "Relevant existing
+  state" section of a handoff depends on, and it's what caught the
+  roadmap drift reconciled in v0.2.5.
+- Individual issues in full, once one bears on the discussion.
 - The most recent `CHANGELOG.md` entries — the last few versions, not the
-  whole file.
+  whole file — when what shipped recently bears on the design.
+- Other docs (`Ashfall_Handoff_Guide.md` at the wrap, as before) when a
+  question reaches them.
 
 **Purpose:** discuss and design a feature or system — scope, rules, open
 questions, tradeoffs.

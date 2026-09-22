@@ -7,19 +7,24 @@ build step, no dependencies. Open it in a browser to run it.
 
 Every version moves through two session types. Identify which one you're in
 **before reading anything else**. They have different inputs, different outputs,
-and each one's inputs are the complete list. Reading the other type's inputs
-costs context and buys nothing.
+and each one's inputs are the complete list — for a planning session, the
+up-front list plus what the discussion calls for as it goes. Reading the other
+type's inputs costs context and buys nothing.
 
 ### Planning session
 
 Designs a feature. Never writes game code.
 
-**Read, before starting:**
-- `docs/Ashfall_Project_Guide.md` — tone, conventions, workflow.
-- `ashfall.html`, in full. Claims about what already exists get checked against
-  the file, never recalled.
-- The open issues for the area under discussion.
-- The last few `CHANGELOG.md` entries — not the whole file.
+**Read, before starting:** `docs/Ashfall_Project_Guide.md`, and the open issues
+list. Nothing else up front.
+
+**Read as the discussion needs it:**
+- `ashfall.html` — the sections the feature touches, once the discussion reaches
+  them. Claims about what already exists still get checked against the file,
+  never recalled; that check happens when the claim is made, not in advance.
+- Individual issues in full, once one is relevant.
+- Recent `CHANGELOG.md` entries — the last few, not the whole file — when what
+  shipped recently bears on the design.
 
 **Output:** issues filed as they surface, and — only if the session reaches a
 conclusion — a handoff at `handoffs/<feature-name>.md`, landed on `main` at the
