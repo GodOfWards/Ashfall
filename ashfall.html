@@ -273,7 +273,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.5.3" };
+  const GAME_CONFIG = { VERSION: "0.5.4" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -1246,11 +1246,6 @@
     };
   }
   let doors = makeDefaultDoors();
-  // Keyed by door id, and read from both sides of the door — see #136, which
-  // owns the fact that a name like "1A" is the destination rather than the
-  // door. "the patio" is chosen to read acceptably from either side, since
-  // `onea` and `onea_patio` both carry a door that would otherwise be "1A".
-  const DOOR_LABELS = { "2a":"2A", "2b":"2B", "1a":"1A", "1b":"1B", "1a-patio":"the patio" };
   function makeDefaultWindows(){
     return {
       "2a-transom": { state:"closed", rooms:["hallway2","living"], breakTag:"blunt", label:"transom window" },
@@ -4150,11 +4145,12 @@
     if(it.category === "Key"){
       if(it.masterKey){
         doorsForRoom(state.currentRoom).filter(doorId=>doors[doorId].building===it.building).forEach(doorId=>{
-          const label = (doors[doorId].locked ? "Unlock " : "Lock ") + (DOOR_LABELS[doorId] || doorId);
+          const label = (doors[doorId].locked ? "Unlock the " : "Lock the ") + doorLabel(doorId, state.currentRoom) + " door";
           actions.push({ label, onClick:()=>doToggleLock(doorId) });
         });
       } else if(it.doorId && doors[it.doorId] && doors[it.doorId].sides.includes(state.currentRoom)){
-        actions.push({ label: doors[it.doorId].locked ? "Unlock" : "Lock", onClick:()=>doToggleLock(it.doorId) });
+        const label = (doors[it.doorId].locked ? "Unlock the " : "Lock the ") + doorLabel(it.doorId, state.currentRoom) + " door";
+        actions.push({ label, onClick:()=>doToggleLock(it.doorId) });
       }
     }
     if(it.durability && it.durability.mode === "time"){
@@ -4197,6 +4193,28 @@
   // ==================================================
   function doorsForRoom(roomId){
     return Object.keys(doors).filter(id => doors[id].sides.includes(roomId));
+  }
+  // A door is named by the side the player is not standing on, so the same
+  // door reads correctly from both of its rooms. The composition is
+  // area-then-room because neither field alone survives the current world:
+  // "1a-patio" joins `onea` and `onea_patio`, which share the area "1A", so
+  // naming by area would call it "1A" from inside 1A; and `hallway2` carries
+  // two doors whose far sides (`living`, `twobee`) are both a "Living Room",
+  // so naming by room would give that hallway two identically-labelled doors.
+  // Area first, room only when the two sides share an area, separates both.
+  // Case is asymmetric on purpose: an area is a proper name and keeps its
+  // capitals ("2A", "2nd Floor"); a room is a common noun and is lowercased
+  // ("patio", "living room"). Callers supply the article — "the <label> door".
+  function doorLabel(doorId, fromRoomId){
+    const door = doors[doorId];
+    const near = world[fromRoomId];
+    if(!door || !near || !door.sides.includes(fromRoomId)) return doorId;
+    const far = world[door.sides.find(id => id !== fromRoomId)];
+    if(!far) return doorId;
+    if(far.area && far.area !== near.area) return far.area;
+    if(far.room) return far.room.toLowerCase();
+    if(far.area) return far.area;
+    return doorId;
   }
   function findKeyForDoor(doorId){
     const door = doors[doorId];
@@ -6038,12 +6056,12 @@
       });
     doorsForRoom(state.currentRoom).forEach(doorId=>{
       if(!doors[doorId].locked) return;
-      const label = DOOR_LABELS[doorId] || doorId;
+      const label = doorLabel(doorId, state.currentRoom);
       const key = findKeyForDoor(doorId);
       if(key){
-        hereBox.appendChild(actionButton(`Unlock the door to ${label}`, ()=> doToggleLock(doorId)));
+        hereBox.appendChild(actionButton(`Unlock the ${label} door`, ()=> doToggleLock(doorId)));
       } else {
-        hereBox.appendChild(hereNote(`The door to ${label} is locked.`));
+        hereBox.appendChild(hereNote(`The ${label} door is locked.`));
       }
     });
     hereBox.appendChild(actionButton("Rest " + fmtDuration(REST_DURATION_MIN), doRest));
