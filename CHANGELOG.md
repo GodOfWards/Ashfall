@@ -18,6 +18,178 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.5.4 — Door labels named by the far side
+
+Implements: handoffs/door-label-by-far-side.md
+
+Implements #136 in full, per `handoffs/door-label-by-far-side.md`, taking the
+issue's option 1: a door is named by the side the player is *not* standing on,
+derived from the world rather than tabulated. `DOOR_LABELS` gave each door one
+name and both readers rendered it as *where the door leads*, so it was only ever
+correct from one side — standing inside 2A with the door locked, the Here panel
+read `The door to 2A is locked.` Content is untouched; this is a mechanics and
+UI pass over four strings.
+
+**Removed**
+
+- `DOOR_LABELS` (WORLD DATA) and its comment. Nothing replaces the table — the
+  name is now derived at render time by `doorLabel()`. Its `"the patio"` entry
+  was a hand-written workaround for the `onea` duplicate described under
+  **Fixed**, and goes with it.
+
+**New**
+
+- `doorLabel(doorId, fromRoomId)` in WORLD INTERACTION, beside `doorsForRoom()`
+  and `findKeyForDoor()` — a world query with readers in two other ARCHITECTURE
+  sections, so it belongs to neither of them. It takes the entry of
+  `doors[doorId].sides` that is not `fromRoomId` and names it: the far room's
+  `area` when that differs from the near room's, else its `room` lowercased,
+  else its `area`, else the door id. Every caller is inside a `doorsForRoom()`
+  loop or guarded by `sides.includes(state.currentRoom)`, so the near room is
+  always one of the two sides.
+- The composition is `area`-then-`room` because neither field alone survives the
+  current world, and both failures are one door apart: `"1a-patio"` joins `onea`
+  and `onea_patio`, which share the area `"1A"`, so naming by `area` reproduces
+  the original bug on the patio door; `hallway2` carries `"2a"` and `"2b"`, whose
+  far sides are both a `"Living Room"`, so naming by `room` gives that hallway
+  two identically-labelled doors. The helper carries a comment saying so — it is
+  the invariant the function body cannot state.
+- Case is asymmetric on purpose: an `area` is a proper name and keeps its
+  capitals (`"2A"`, `"2nd Floor"`), a `room` is a common noun and is lowercased
+  (`"patio"`, `"living room"`). The template supplies the article, so neither
+  form needs to carry one.
+
+**Fixed**
+
+- A locked door read as its own room's name from inside it. Root cause:
+  `DOOR_LABELS` keyed one name per door id while both readers phrased it as a
+  destination. Standing in 1A now reads `The 1st Floor door is locked.` where it
+  read `The door to 1A is locked.`
+- The master key offered two identically-labelled buttons in `onea`, where
+  `doorsForRoom()` returns both `"1a"` and `"1a-patio"`. Reachable since v0.5.2
+  opened the alley gate and made the patio a day-one route in. The two now read
+  `Unlock the 1st Floor door` and `Unlock the patio door`.
+
+**UI**
+
+- Four strings, all functional UI text and all retunable:
+
+  | | before | after |
+  |---|---|---|
+  | locked note (Here) | `The door to 2A is locked.` | `The 2A door is locked.` |
+  | unlock button (Here) | `Unlock the door to 2A` | `Unlock the 2A door` |
+  | master key (item detail) | `Unlock 2A` / `Lock 2A` | `Unlock the 2A door` / `Lock the 2A door` |
+  | single key (item detail) | `Unlock` / `Lock` | `Unlock the 2A door` / `Lock the 2A door` |
+
+- The name moves in front of "door" because the derivation demands it: the old
+  template cannot take `"2nd Floor"` or `"patio"` without an article, and which
+  strings need one is not a fact the data carries. Moving the name removes the
+  article from the sentence entirely.
+- `renderHereActionsPanel()`'s unlock button and the master key's now produce the
+  **same** string, where they differed before (`Unlock the door to 2A` against
+  `Unlock 2A`). Intended — one action offered in two panels should read alike.
+- The single-key branch of `getItemActions()` named no door at all, rendering a
+  bare `Unlock` / `Lock`. It now carries the same label as the other three. This
+  is beyond #136's literal text and was specified deliberately by the handoff: it
+  is the same sentence in the same panel.
+
+**Changed / Reworked**
+
+- The four inside-an-apartment cases now read `"2nd Floor"` / `"1st Floor"` where
+  a hand-written table would have said `"the hallway"`. Accurate — from inside 2A
+  the door does lead to the 2nd floor — and the price of deriving rather than
+  tabulating. **Retunable.** If it reads wrong in play, the fix is a room-first
+  variant with per-room collision detection, which needs a different helper shape
+  (`doorLabels(roomId)` returning a map); the handoff names that a new planning
+  question rather than an implementation choice, so it was not built here.
+
+**Open questions / decisions resolved**
+
+The handoff left two implementation choices open and no questions for Tom.
+
+- **Helper name and signature.** Took the recommended default,
+  `doorLabel(doorId, fromRoomId)` — argument order matching `doorsForRoom(roomId)`
+  nearby, door-first at both call-site shapes.
+- **Where the `|| doorId` fallback lives.** Absorbed into the helper, as
+  recommended, so no caller repeats it. All four call sites now pass the result
+  through unguarded. The helper returns the door id when the door is absent, when
+  the near room is not one of its sides, when the far side does not resolve in
+  `world`, or when the far room carries neither `area` nor `room`. No current door
+  reaches any of the four.
+
+**Explicitly out of scope**
+
+Restated from the handoff so it needn't be reopened: **#142** (`doors[].sides`
+disagreeing with the exits that carry `doorId`) — that issue is about whether the
+note appears, this pass only about what it says; no `doorId` and no `sides` entry
+changed. **#141** (three outdoor rooms marked `shelter:"full"`) — no `shelter`
+value changed. **#89** (`room.building` duplicating `BUILDINGS[].name`) — the
+helper reads `area` and `room`, never `building`. **#29** (log size and entry
+cap). **#78** (the accessibility pass) — `hereNote()` and `actionButton()` are
+used exactly as they were. No new door, no new key, no change to
+`makeDefaultDoors()`, no exit label changed.
+
+**Explicitly NOT changed**
+
+- No WORLD DATA content. No room, container, exit, item or door *definition* was
+  touched; `doors[].sides`, `doors[].building` and `doors[].locked` are byte-for-
+  byte as they were, and `makeDefaultDoors()` is unchanged. The only WORLD DATA
+  edit is the deletion of `DOOR_LABELS`, a lookup table, not a definition.
+- No save format change. No state field added, read or changed. `SAVE_KEY` stays
+  `ashfall_save_v0.5` — this is a PATCH bump, `versionCompat()` does not move, and
+  existing browser saves keep loading.
+- `findKeyForDoor()`, `doorsForRoom()` and `doToggleLock()` are unchanged. Which
+  doors are lockable, by whom, and from where is exactly as it was; only the name
+  on the button changed.
+
+**Validation performed**
+
+- `grep -c DOOR_LABELS ashfall.html` → `0`.
+- `git diff origin/main...HEAD -- ashfall.html` read hunk by hunk and mapped to
+  the five sections below; five hunks, nothing else in the file.
+- `node --check` on the extracted script body.
+- `ashfallDev.validateRoomSchema()`, `validateLocations()`, `validateItemRegistry()`
+  and `validateReachability()` run against both the v0.5.3 build and this one in a
+  DOM, and diffed: **identical output**, as required by a pass that changes no
+  world data.
+- All ten sides of all five doors exercised through the real render path — the
+  locked note and, with the master key, the unlock button. Every row matches the
+  handoff's table: `2A` / `2nd Floor`, `2B` / `2nd Floor`, `1A` / `1st Floor`,
+  `1B` / `1st Floor`, `patio` / `living room`.
+- Both `getItemActions()` key branches checked in both lock states: the master key
+  in `onea` yields two buttons with **different** labels, and the single key reads
+  `Unlock the 2A door` from `hallway2` and `Unlock the 2nd Floor door` from
+  `living`.
+- A save written by the v0.5.3 build loads under `ashfall_save_v0.5` with no
+  version warning and labels its doors correctly. A v0.5.1-shaped save, whose
+  `doors` blob has no `"1a-patio"` entry, loads and renders with no error; the
+  loader merges the default door set, so the absent-door path is not reached in
+  practice, and `doorLabel()` returns the door id if it ever is.
+
+**Sections touched**
+
+- **CONFIG / CONSTANTS** — `GAME_CONFIG.VERSION` only.
+- **WORLD DATA** — `DOOR_LABELS` and its comment deleted. Nothing else.
+- **WORLD INTERACTION** — the new `doorLabel()` helper.
+- **INVENTORY / ITEM SYSTEM** — `getItemActions()`, both key branches.
+- **RENDERING** — `renderHereActionsPanel()`, the unlock button and the locked note.
+
+Untouched: PLAYER STATE, CORE UTILITIES, SURVIVAL / TIME SIMULATION, STAMINA /
+FATIGUE, CRAFTING, FIRE / COOKING, PERSISTENCE, EVENTS, RENDERING / MAP, and the
+document `<style>` and `<body>` blocks.
+
+**Documentation**
+
+- The `doorLabel()` comment is the only prose added to the script; the
+  ARCHITECTURE comment and the schema comments are unchanged.
+- **Nothing was deferred.** Everything this pass cut is already an open issue and
+  is named under **Explicitly out of scope**, and no new issue was filed — the
+  pass surfaced nothing beyond its spec.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.5.3"` → `"0.5.4"`
+
+---
+
 ## v0.5.3 — Presentation & signal pass
 
 Implements: handoffs/presentation-and-signal-pass.md
