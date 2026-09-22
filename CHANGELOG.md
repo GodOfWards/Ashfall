@@ -18,6 +18,115 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.5.5 — `shelter` corrected on five rooms, and `partial` put to use
+
+Implements: handoffs/shelter-partial-and-none.md
+
+Implements #141 in full, per `handoffs/shelter-partial-and-none.md`. `shelter`
+records whether a room is under cover, and five rooms recorded the wrong thing:
+three outdoor rooms were marked `"full"`, and two street nodes with described
+overhead cover were marked `"none"`. Nothing reads the field yet, so nothing was
+visibly broken — the point is that #58 (weather) and #6 (rooftops) inherit the
+data rather than the error. The pass also puts `"partial"` into service for the
+first time; `validateRoomSchema()` has always accepted it. Content-only: five
+one-token WORLD DATA edits and the ROOM SCHEMA comment, with no mechanic, no
+rendering and no state.
+
+**New content**
+
+- `balcony` (2A) and `twobee_balcony` (2B): `shelter:"full"` → `"partial"`. A
+  top-floor balcony sits under the building's roof overhang, and a narrow ledge
+  recessed into a facade is enclosed on three sides — cover without enclosure.
+  The two are described as mirroring each other and take the same value.
+- `onea_patio` (1A): `shelter:"full"` → `"none"`. "Out back, low fence, a gate
+  leading to the alley" describes nothing overhead.
+- `mill2nd`: `shelter:"none"` → `"partial"`. The description puts the room
+  explicitly under a conveyor bridge.
+- `mid_cedar_1_2`: `shelter:"none"` → `"partial"`. A bus shelter is a partial
+  shelter by construction; at room granularity, standing at the node means
+  being able to stand in it.
+- Counts after the pass: `shelter:"full"` 37, `"partial"` 4, `"none"` 177 —
+  218 rooms, unchanged. `cannotHaveFire` is still on 40 rooms; no room gained
+  or lost it.
+
+**Documentation**
+
+- The `shelter` entry in the ROOM SCHEMA comment (WORLD DATA). Its type line
+  now reads `"none" | "partial" | "full"`, the paragraph describing `"partial"`
+  as reserved for a later pass is replaced by what `"partial"` means, and the
+  claim that `shelter` and `cannotHaveFire` "happen to be coextensive" is
+  replaced by the divergence this pass creates, stated in both directions: the
+  two balconies and the 1A patio carry `cannotHaveFire` without being fully
+  under cover, and the two partial street nodes are covered and can still host
+  a fire. The "laid down ahead of its consumers" paragraph and the
+  `backfillRoomAddresses()` sentence are both still true and are kept.
+- Nothing was deferred, and no sixth mis-classified room turned up, so no
+  issues were filed by this pass.
+
+**Explicitly NOT changed**
+
+- Every other room's `shelter` value. The remaining 213 are read as correct;
+  a full re-read of all 218 descriptions is a content session of its own.
+- Room `desc` strings. The five classifications are read *from* the
+  descriptions as authored — rewriting one to justify a value would be
+  reasoning backwards.
+- `cannotHaveFire` on any room. The correlation breaking is the point of the
+  pass, not a thing to repair.
+- `validateRoomSchema()`, which already accepted `"partial"` and would not have
+  caught any of these five: it checks that a value is legal, not that it is
+  right.
+- Save format and `versionCompat()`. No state field is added or read, and
+  `backfillRoomAddresses()` still deliberately does not restore `shelter` — a
+  loaded save keeps whatever value it was written with, which is acceptable
+  precisely because nothing consumes it.
+
+**Explicitly out of scope**
+
+- #58 (weather) and #6 (rooftops), the eventual consumers. This pass gives them
+  correct data to inherit and builds nothing on top of it.
+- #142, the locked-door note (`handoffs/locked-door-note-from-exits.md`) —
+  sibling handoff from the same planning session, touching no common line.
+- #89 (`room.building` duplicating `BUILDINGS[].name`) — a different field.
+
+**Validation performed**
+
+- `git diff origin/main...HEAD -- ashfall.html` shows exactly six hunks: five
+  one-token `shelter` edits, the ROOM SCHEMA comment, and `GAME_CONFIG.VERSION`.
+- `node --check` on the extracted script body: clean.
+- Counts by grep: `"full"` 40 → 37, `"partial"` 0 → 4, `"none"` 178 → 177,
+  totalling 218; `cannotHaveFire` 40 → 40, no longer equal to the `"full"`
+  count.
+- `ashfallDev.validateRoomSchema()` reports no problems. `validateLocations()`,
+  `validateItemRegistry()` and `validateReachability()` run against a v0.5.4
+  build and this one in Chromium produce identical output, as none of them
+  reads `shelter`.
+- A save written by the v0.5.4 build loads in this build under
+  `ashfall_save_v0.5` with no version warning.
+
+**Open questions / decisions resolved**
+
+- The handoff left only the schema comment's wrapping and phrasing open. Every
+  statement in its replacement text is kept; the one departure is its closing
+  sentence, "They are different facts, a fire rule against being under cover",
+  rendered as "They are different facts (a fire rule vs. being under cover)" —
+  the wording the comment already used, which the surrounding sentences read
+  against more cleanly.
+
+**Sections touched**
+
+- **WORLD DATA** — five `shelter` values in `buildAcornApartments()` (three),
+  `buildMillSt()` (one) and `buildCedarSt()` (one), and the ROOM SCHEMA
+  comment.
+- **CONFIG / CONSTANTS** — `GAME_CONFIG.VERSION`.
+
+**UI**
+
+- None. Nothing reads `shelter`, so the player sees no difference of any kind.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.5.4"` → `"0.5.5"`
+
+---
+
 ## v0.5.4 — Door labels named by the far side
 
 Implements: handoffs/door-label-by-far-side.md
