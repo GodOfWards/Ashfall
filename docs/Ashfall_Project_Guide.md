@@ -385,6 +385,24 @@ is still fresh, labelled by tier. Don't hold them for the wrap — they're
 independent of whether this session reaches a handoff, and a session that
 ends inconclusively should still leave them behind.
 
+**Choosing a tier.** Two questions, in order. First, does the work need
+new persistent state? No means `tier-0`/`tier-1` (PATCH), yes means
+`tier-2`/`tier-3` (MINOR) — `Ashfall_Handoff_Guide.md` Part 1 owns that
+mapping. Second, within the pair, how big is it? The lower number is the
+smaller one:
+
+- `tier-0` — a small, local change: one fix, one rename, one wording or
+  data correction, touching one function or a few lines.
+- `tier-1` — a larger PATCH-sized pass: a fix spanning several functions,
+  a content pass, a new view onto existing state.
+- `tier-2` — one new mechanic or one new piece of persistent state.
+- `tier-3` — a whole new system: several mechanics that only make sense
+  together, or a change reaching across many sections.
+
+Size is the only thing the number within a pair says. It is not priority,
+and it never moves work across the pair. Coding sessions use the same rule
+for the issues they file at the wrap.
+
 **A handoff file, only at the wrap.** Produced *only* at the point the
 session concludes and is genuinely ready to become code, per
 `Ashfall_Handoff_Guide.md`. A planning session that doesn't reach that

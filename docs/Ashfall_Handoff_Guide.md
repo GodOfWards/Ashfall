@@ -50,6 +50,11 @@ state (new vitals, new state fields, new gameplay systems).
 
 Maps to **`tier-2`** and **`tier-3`** issues by default.
 
+The pair is decided by persistent state, never by size: a one-line change
+that adds a save field is still MINOR. Which tier *within* a pair is a
+size call, made when the issue is filed — see the Project Guide, Part 3,
+"Choosing a tier".
+
 Technical anchor: a MINOR bump changes `SAVE_KEY`. Existing browser saves
 won't auto-load under the new key — still recoverable via Export/Import,
 but the automatic browser-slot continuity resets. Treat a MINOR bump as a

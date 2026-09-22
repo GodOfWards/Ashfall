@@ -31,7 +31,7 @@
     font-size:13px; padding:8px 10px; border-radius:3px; cursor:pointer; text-align:left; }
   .menu-actions button:hover{ border-color:var(--accent-dim); }
   .menu-placeholder{ font-size:12px; color:var(--ink-faint); font-style:italic; }
-  #statsBox{ font-size:13px; color:var(--ink-dim); line-height:1.9; }
+  #statsBox, #runBox{ font-size:13px; color:var(--ink-dim); line-height:1.9; }
   /* The heading row, not the heading: #mapZoomToggle is a <div> and is not
      legal inside an <h3>, so the flex row is a wrapper around both. The
      8px below the heading moves here with it — inside a flex row the h3's
@@ -153,6 +153,7 @@
     </div>
   </div>
   <div class="menu-section"><h3>Stats</h3><div id="statsBox"></div></div>
+  <div class="menu-section"><h3>Run</h3><div id="runBox"></div></div>
   <div class="menu-section">
     <div class="map-heading">
       <h3>Map</h3>
@@ -273,7 +274,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.5.6" };
+  const GAME_CONFIG = { VERSION: "0.6.0" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -336,6 +337,15 @@
   // energy over one.
   const DECAY = { hunger:100/(3*MINUTES_PER_DAY), thirst:100/MINUTES_PER_DAY, energy:100/MINUTES_PER_DAY };
   const CAMPFIRE_KIT_COST = 3;
+  // The roll source's constants (see chance() in CORE UTILITIES). FNV-1a's
+  // published 32-bit offset basis and prime — fixed by the algorithm, not
+  // tunable. KEY_SEP joins a roll's key parts: the unit separator, a character
+  // that cannot occur in a room, container, pool or item id, so ("a","bc")
+  // and ("ab","c") can never produce the same key. Any such character would
+  // do; the point is that one exists.
+  const FNV_OFFSET_BASIS = 2166136261;
+  const FNV_PRIME = 16777619;
+  const KEY_SEP = "\u001F";
   // ==================================================
   // STAMINA / FATIGUE SYSTEM CONSTANTS
   // ==================================================
@@ -523,7 +533,10 @@
   //     on            powered-equipment on/off state
   //     hasBatteries  powered-equipment battery-installed state
   //     drainRate     durability loss per minute while `on`
-  //     illnessChance % chance consuming this item causes illness
+  //     illnessChance chance that eating this item causes illness, as a
+  //                   fraction in [0,1] — the file's one probability
+  //                   convention (see chance()). Pre-0.6 saves carry it as
+  //                   a percent; backfillIllnessScale() repairs them.
   //     masterKey     key unlocks every door in `building`
   //     building      building association for a masterKey
   //     doorId        specific door a (non-master) key unlocks
@@ -617,7 +630,7 @@
     bandage: { name:"Bandage", category:"Medical", unitWeight:0.05 },
     campfire_kit: { name:"Campfire Kit", category:"Materials", unitWeight:2.4 },
     cooked_fish: { name:"Cooked fish", category:"Food", unitWeight:0.35, restores:{hunger:35}, verb:"Eat" },
-    raw_fish: { name:"Raw fish", category:"Food", unitWeight:0.3, restores:{hunger:10}, verb:"Eat", illnessChance:35 },
+    raw_fish: { name:"Raw fish", category:"Food", unitWeight:0.3, restores:{hunger:10}, verb:"Eat", illnessChance:0.35 },
     canned_tuna: { name:"Canned tuna", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat", sealed:true, opensWith:"can-opening" },
     cereal_box: { name:"Box of cereal", category:"Food", unitWeight:0.5, restores:{hunger:15}, verb:"Eat", sealed:true },
     crackers: { name:"Crackers", category:"Food", unitWeight:0.2, restores:{hunger:8}, verb:"Eat" },
@@ -750,13 +763,18 @@
   // SPAWN_POOLS: per-entry-chance loot tables, sibling registry to
   // ITEM_REGISTRY. A container opts in via its `spawnPools` field (see
   // CONTAINER SCHEMA above); doOpenContainer() (WORLD INTERACTION) rolls
-  // each pool independently the first time such a container is opened.
+  // each pool independently the first time such a container is opened, via
+  // rolledLootFor(), keyed on the run's seed and the container's identity —
+  // so what a container holds is fixed by the world, not by when it is opened.
   //   emptyChance  0-1 chance the whole pool produces nothing. Rolled once,
   //                ahead of the entries, and gates all of them.
   //   entries    [{ itemId, chance, qtyMin, qtyMax }] — every entry is
   //              rolled once, independently of every other, in declaration
   //              order, so an entry contributes at most one stack per roll
-  //              and items land in the order the pool lists them.
+  //              and items land in the order the pool lists them. A pool
+  //              must not list one itemId twice, nor a container one pool id
+  //              twice: the roll is keyed by those ids, so a repeat would
+  //              roll identically (validateReachability() reports both).
   //              `chance` is a number in (0,1] and is CONDITIONAL: it is
   //              the probability this entry appears given the pool did not
   //              come up empty. The unconditional probability of the item
@@ -3620,8 +3638,21 @@
   // ==================================================
   // PLAYER STATE
   // ==================================================
-  function makeDefaultState(){
+  function makeDefaultState(seed){
     const s = {
+      // The run's identity: every roll derives from it (see chance()). Set
+      // once, never mutated. The one remaining Math.random() in the file, and
+      // deliberately so: a new run needs an unpredictable seed, and every roll
+      // after this point derives from it rather than calling here again. Not
+      // a missed conversion.
+      seed: seed === undefined ? (Math.floor(Math.random() * 4294967296) >>> 0) : (seed >>> 0),
+      // Disambiguates rolls that have no natural key — today only illness on
+      // eating, which is instant and so cannot be keyed on game time. The one
+      // ordering invariant of the roll core: NOTHING REACHABLE FROM render()
+      // MAY ADVANCE rollSeq. A roll placed in a render path would shift every
+      // later illness roll against a save, in a way that is close to
+      // undebuggable. Its only writer is doConsume(), a click handler.
+      rollSeq: 0,
       currentRoom:"living", gait:"walk",
       totalMinutes:0, collapseCount:0, illnessMinutesLeft:0,
       // lastExertionMinute/lastWakeMinute start far in the past so recovery
@@ -3696,11 +3727,71 @@
     return null;
   }
 
-  // randInt: small RNG helper backing SPAWN_POOLS — the quantity draw in
-  // doOpenContainer() (WORLD INTERACTION). The entry draw beside it is a
-  // plain Math.random() against the entry's own `chance`, so there is no
-  // second helper here any more.
-  function randInt(min, max){ return min + Math.floor(Math.random() * (max - min + 1)); }
+  // The roll core. There is no PRNG cursor: a roll is a pure function of the
+  // run's seed and a KEY saying what is being decided, so asking the same
+  // question twice gets the same answer and draw order never matters. That
+  // is what blocks save-scumming — reloading and repeating an action
+  // reproduces its outcome — and what makes container loot a property of the
+  // world rather than of the player's route. A caller picks a key that
+  // changes exactly when the outcome should: loot on the container's
+  // identity, fishing on game time, illness on state.rollSeq.
+  //
+  // FNV-1a over a string, from a caller-supplied 32-bit basis. Two callers:
+  // hashKey() mixes in the run's seed as the basis, seedFromInput() uses the
+  // standard offset basis because there is no seed yet. Not cryptographic and
+  // does not need to be — it is a game's dice.
+  function fnv1a(str, basis){
+    let h = basis >>> 0;
+    for(let i = 0; i < str.length; i++){
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, FNV_PRIME) >>> 0;
+    }
+    return h >>> 0;
+  }
+  function hashKey(parts){ return fnv1a(parts.join(KEY_SEP), state.seed); }
+  // A key's value in [0,1). mulberry32's avalanche, without its stepping —
+  // there is no cursor to step. Strictly below 1, which both callers rely on.
+  function rollValue(...parts){
+    let t = (hashKey(parts) + 0x6D2B79F5) | 0;
+    t = Math.imul(t ^ t >>> 15, 1 | t);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+  // The one way to ask the game whether something happens. `p` is a fraction
+  // in [0,1] — the file's one probability convention — and this is the one
+  // place a probability's legality is checked. Warns and clamps rather than
+  // throwing: a throw inside doOpenContainer() would break the game
+  // mid-action, and a mis-authored probability should be loud, not fatal.
+  // p === 0 is always false and p === 1 always true, because rollValue() is
+  // strictly below 1. Returns a bare boolean on purpose: degrees of success
+  // and near misses are a character-dependent layer's business (#10), built
+  // on top of this rather than into it.
+  function chance(p, ...keyParts){
+    if(!(Number.isFinite(p) && p >= 0 && p <= 1)){
+      console.warn(`chance: p ${p} is not a number in [0,1] — clamped`, keyParts);
+      p = Number.isFinite(p) ? Math.max(0, Math.min(1, p)) : 0;
+    }
+    return rollValue(...keyParts) < p;
+  }
+  // An integer in [min, max], from the same keyed source — the quantity draw
+  // in rolledLootFor(). Keyed like chance(), or a container's quantities
+  // would stay unseeded and its contents unreproducible.
+  function randInt(min, max, ...keyParts){
+    return min + Math.floor(rollValue(...keyParts) * (max - min + 1));
+  }
+  // A run's seed from whatever the player typed. A plain decimal integer
+  // inside the uint32 range is taken as the seed itself, so the number the
+  // menu shows round-trips exactly. Anything else — a word, a phrase, an
+  // out-of-range number — is hashed, because taking `4294967296 >>> 0` would
+  // silently alias seed 0.
+  function seedFromInput(str){
+    const s = str.trim();
+    if(/^\d+$/.test(s)){
+      const n = Number(s);
+      if(Number.isSafeInteger(n) && n <= 4294967295) return n >>> 0;
+    }
+    return fnv1a(s, FNV_OFFSET_BASIS);
+  }
   function keychainAllows(item){ return item.category === "Key"; }
   function fmtDuration(min){
     min = Math.max(MIN_DISPLAY_MIN, Math.round(min));
@@ -4023,9 +4114,21 @@
     it.qty -= 1;
     if(it.qty <= 0) src.items.splice(index,1);
     log(`You ${it.verb.toLowerCase()} the ${it.name.toLowerCase()}.`, "good", "consume:" + (it.itemId || it.name));
-    if(it.illnessChance && Math.random()*100 < it.illnessChance && state.illnessMinutesLeft <= 0){
-      state.illnessMinutesLeft = ILLNESS_DURATION_MIN;
-      log("It doesn't sit right. You can feel it already.", "warn");
+    // Eating is instant, so three raw fish eaten in the same game minute
+    // share every time-based key; rollSeq tells them apart. The roll and the
+    // advance happen whenever the item can cause illness, even if the player
+    // is already ill and the result is discarded — the order the old
+    // short-circuit consumed draws in. Hoisting the already-ill test into
+    // the outer guard would skip the advance and put rollSeq out of step with
+    // a save taken before the meal. rollSeq cannot be farmed for rerolls: the
+    // only way to advance it is to eat the food and take its roll.
+    if(it.illnessChance){
+      const ill = chance(it.illnessChance, "illness", state.rollSeq);
+      state.rollSeq += 1;
+      if(ill && state.illnessMinutesLeft <= 0){
+        state.illnessMinutesLeft = ILLNESS_DURATION_MIN;
+        log("It doesn't sit right. You can feel it already.", "warn");
+      }
     }
     render();
   }
@@ -4436,30 +4539,48 @@
     log("You cut through the lock on the " + c.name.toLowerCase() + ".", "warn");
     render();
   }
-  // doOpenContainer: fires whenever the player switches the world
-  // panel to a container's tab. Rolls each of the container's spawnPools
-  // independently exactly once (gated by spawnRolled — see CONTAINER
-  // SCHEMA), then renders. Containers with no spawnPools, or with
-  // spawnRolled already set (all hand-placed containers, set true at
-  // authoring time), are entirely unaffected.
+  // The items a container's pools yield, as a pure function of the run's seed
+  // and the container's identity. No mutation, no state read but state.seed —
+  // so the same container yields the same contents whether it is opened first
+  // or fiftieth, and whether it is opened at all. That last property is what
+  // lets a seed be evaluated without playing it (#150).
   //
   // Within a pool, emptyChance gates the whole pool and then every entry is
   // rolled once against its own `chance` — no entry can be drawn twice, so a
   // roll yields at most one stack per entry. Entries are walked in
-  // declaration order, which is the order they land in the container.
+  // declaration order, which is the order they land in the container. Keys
+  // name the pool and the item by id, never by array index, so reordering a
+  // container's spawnPools or a pool's entries during authoring does not
+  // reshuffle every container in the game.
+  function rolledLootFor(roomId, container){
+    const out = [];
+    (container.spawnPools || []).forEach(poolId=>{
+      const pool = SPAWN_POOLS[poolId];
+      if(!pool) return; // defensive — an unknown pool id contributes nothing
+      if(chance(pool.emptyChance, "loot", roomId, container.id, poolId, "empty")) return;
+      pool.entries.forEach(entry=>{
+        if(!chance(entry.chance, "loot", roomId, container.id, poolId, entry.itemId)) return;
+        const qty = randInt(entry.qtyMin, entry.qtyMax,
+          "loot", roomId, container.id, poolId, entry.itemId, "qty");
+        out.push(itemFromRegistry({ id:entry.itemId, qty }));
+      });
+    });
+    return out;
+  }
+  // doOpenContainer: fires whenever the player switches the world
+  // panel to a container's tab. Appends rolledLootFor()'s yield exactly once
+  // (gated by spawnRolled — see CONTAINER SCHEMA), then renders. Containers
+  // with no spawnPools, or with spawnRolled already set (all hand-placed
+  // containers, set true at authoring time), are entirely unaffected. The
+  // roll being deterministic does not retire spawnRolled: the yield is
+  // appended, so without the flag a second open would append it again.
+  // state.currentRoom is the right roomId: the only caller is the Here
+  // panel's tab handler, which passes world[state.currentRoom].
   function doOpenContainer(room, container){
     worldTab = container.id;
     if(container.spawnPools && !container.spawnRolled){
-      container.spawnPools.forEach(poolId=>{
-        const pool = SPAWN_POOLS[poolId];
-        if(!pool) return; // defensive — an unknown pool id contributes nothing
-        if(Math.random() < pool.emptyChance) return;
-        pool.entries.forEach(entry=>{
-          if(Math.random() >= entry.chance) return;
-          const qty = randInt(entry.qtyMin, entry.qtyMax);
-          addToList(container.items, itemFromRegistry({ id:entry.itemId, qty }));
-        });
-      });
+      rolledLootFor(state.currentRoom, container)
+        .forEach(it=> addToList(container.items, it));
       container.spawnRolled = true;
       container.lastRolledMinute = state.totalMinutes;
     }
@@ -4713,7 +4834,11 @@
   function doFish(){
     advanceTime(FISH_DURATION_MIN);
     applyExertion(FISH_EXERTION);
-    if(Math.random() < FISH_BITE_CHANCE){
+    // Keyed on game time *after* the cast, and that is the save-scum rule:
+    // repeating the cast from a reloaded save lands on the same minute and
+    // reproduces the bite, while spending any time first — walking, resting,
+    // chopping — moves the minute and genuinely rerolls.
+    if(chance(FISH_BITE_CHANCE, "fish", state.currentRoom, state.totalMinutes)){
       giveItem(itemFromRegistry({ id:"raw_fish", qty:1 }));
       log("Something bites. You reel in a fish.", "good", "fish", "bite");
     } else {
@@ -5002,6 +5127,32 @@
       if(slot && !slot.itemId && nameToId[slot.name]) slot.itemId = nameToId[slot.name];
     });
   }
+  // backfillIllnessScale(): sixth companion to backfillItemIds(), run
+  // alongside it on every load. Instances written before illnessChance became
+  // a fraction carry it as a percent (raw_fish shipped 35). A value above 1 is
+  // a percent by construction — a legal fraction can never exceed 1 — so the
+  // test is unambiguous and dividing by 100 is exact. Without this, every raw
+  // fish in an imported pre-0.6 save would be a guaranteed illness, since 35
+  // exceeds every value rollValue() can return. It descends into `contents`,
+  // which the other backfills do not: an unequipped bag carries its items
+  // there, and a fish stowed in one would otherwise surface unrepaired the
+  // moment the bag is equipped again.
+  function backfillIllnessScale(){
+    const scan = (list)=> (list || []).forEach(it=>{
+      if(!it) return;
+      if(typeof it.illnessChance === "number" && it.illnessChance > 1){
+        it.illnessChance /= 100;
+      }
+      if(Array.isArray(it.contents)) scan(it.contents);
+    });
+    invPools().forEach(scan);
+    Object.keys(world).forEach(roomId=>{
+      const room = world[roomId];
+      scan(room.floor);
+      (room.containers || []).forEach(c=>scan(c.items));
+      (room.carContainers || []).forEach(c=>scan(c.items));
+    });
+  }
   function applyLoadedData(data){
     if(!data || !data.state || !data.world || !data.world[data.state.currentRoom]){
       log("That save doesn't look valid — nothing was loaded.", "warn");
@@ -5012,6 +5163,9 @@
     } else if(versionCompat(data.version) !== versionCompat(GAME_CONFIG.VERSION)){
       log(`This save is from v${data.version}, this build is v${GAME_CONFIG.VERSION} — it may not load correctly.`, "warn");
     }
+    // A save predating a state field inherits its default here — which is
+    // how a pre-0.6 save gets `seed` (a fresh one: its unopened containers
+    // roll from it) and `rollSeq`.
     const base = makeDefaultState();
     const nextState = { ...base, ...data.state, vitals: { ...base.vitals, ...(data.state.vitals || {}) } };
     const nextWorld = data.world;
@@ -5044,6 +5198,7 @@
     backfillLocationIds();
     backfillContainerFields();
     backfillRoomAddresses();
+    backfillIllnessScale();
     render();
     return true;
   }
@@ -5054,8 +5209,18 @@
   // `ashfallDev.validateItemRegistry()` from the browser console when
   // auditing recipe/registry consistency (see the dev seam at the foot of
   // this file).
+  //
+  // It also flags any ITEM_REGISTRY entry whose `illnessChance` is not a
+  // fraction in [0,1] — a registry fact, so the registry's validator checks
+  // it. chance() would clamp such a value at runtime, loudly; this catches it
+  // before anyone eats one.
   function validateItemRegistry(){
     const missing = [];
+    Object.keys(ITEM_REGISTRY).forEach(id=>{
+      const p = ITEM_REGISTRY[id].illnessChance;
+      if(p !== undefined && !(Number.isFinite(p) && p >= 0 && p <= 1))
+        missing.push(`ITEM_REGISTRY.${id}.illnessChance: ${p} is not a number in [0,1]`);
+    });
     RECIPES.forEach(r=>{
       r.inputs.forEach(inp=>{ if(!ITEM_REGISTRY[inp.id]) missing.push(`RECIPES[${r.id}].inputs: ${inp.id}`); });
       if(!ITEM_REGISTRY[r.output.id]) missing.push(`RECIPES[${r.id}].output: ${r.output.id}`);
@@ -5064,8 +5229,8 @@
       if(!ITEM_REGISTRY[r.input]) missing.push(`HEAT_RECIPES[${r.id}].input: ${r.input}`);
       if(!ITEM_REGISTRY[r.output.id]) missing.push(`HEAT_RECIPES[${r.id}].output: ${r.output.id}`);
     });
-    if(missing.length) console.warn("validateItemRegistry: unresolved ids", missing);
-    else console.log("validateItemRegistry: all recipe ids resolve in ITEM_REGISTRY");
+    if(missing.length) console.warn("validateItemRegistry: problems", missing);
+    else console.log("validateItemRegistry: all recipe ids resolve in ITEM_REGISTRY, every illnessChance is in [0,1]");
     return missing;
   }
   // validateLocations(): dev-only console helper (not wired to any button
@@ -5138,7 +5303,11 @@
   //      when a verb is down to a single item.
   // It also flags any pool entry whose `chance` is outside (0,1] — an
   // authoring guard the old integer `weight` could not have, since any
-  // positive integer was legal there.
+  // positive integer was legal there — and any pool whose `emptyChance` is
+  // outside [0,1]. And two collision hazards the keyed loot roll creates (see
+  // rolledLootFor()): a pool listing the same itemId twice, and a container
+  // listing the same pool id twice. Either pair would share a key and so
+  // always roll alike. Neither occurs today.
   //
   // It reports the current state; it does not assert the state is good. Ten
   // dead pools and twelve unreachable items are the expected output at
@@ -5148,16 +5317,31 @@
   function validateReachability(){
     const report = [];
     Object.keys(SPAWN_POOLS).forEach(poolId=>{
-      SPAWN_POOLS[poolId].entries.forEach(entry=>{
+      const pool = SPAWN_POOLS[poolId];
+      if(!(Number.isFinite(pool.emptyChance) && pool.emptyChance >= 0 && pool.emptyChance <= 1))
+        report.push(`illegal emptyChance: SPAWN_POOLS.${poolId} has emptyChance ${pool.emptyChance}, which is not a number in [0,1]`);
+      const seenItems = new Set();
+      pool.entries.forEach(entry=>{
         if(!(Number.isFinite(entry.chance) && entry.chance > 0 && entry.chance <= 1))
           report.push(`illegal chance: SPAWN_POOLS.${poolId} entry ${entry.itemId} has chance ${entry.chance}, which is not a number in (0,1]`);
+        if(seenItems.has(entry.itemId))
+          report.push(`duplicate entry: SPAWN_POOLS.${poolId} lists ${entry.itemId} twice — both share one roll key`);
+        seenItems.add(entry.itemId);
       });
     });
-    const badChances = report.length;
     // Walk a freshly-built default world, never the live one: a loaded save
     // has already flipped spawnRolled on every container the player opened,
     // so `world` would report those containers' pools as dead.
     const fresh = makeDefaultWorld();
+    Object.keys(fresh).forEach(roomId=>{
+      (fresh[roomId].containers || []).concat(fresh[roomId].carContainers || []).forEach(c=>{
+        (c.spawnPools || []).forEach((poolId, i, all)=>{
+          if(all.indexOf(poolId) === i && all.lastIndexOf(poolId) !== i)
+            report.push(`duplicate pool: ${roomId}/${c.id} lists ${poolId} twice — both share one roll key`);
+        });
+      });
+    });
+    const badAuthoring = report.length;
     const freshState = makeDefaultState();
     const livePools = new Set();
     const placed = {}; // itemId -> how many hand-placed instances exist
@@ -5191,13 +5375,17 @@
       report.push(`tool tag "${tag}": ${hand} hand-placed instance${hand === 1 ? "" : "s"}, `
         + (pools.length ? `live pools: ${pools.join(", ")}` : "no live pool"));
     });
-    if(badChances) console.warn("validateReachability: pool entries with an illegal chance", report.slice(0, badChances));
+    if(badAuthoring) console.warn("validateReachability: pool authoring problems", report.slice(0, badAuthoring));
     console.log(`validateReachability: ${report.length} lines`, report);
     return report;
   }
-  function doRestart(){
+  // `seed` is optional: undefined starts a fresh world, a uint32 replays that
+  // one (see seedFromInput()). Callers wired straight to a click must wrap
+  // this in an arrow — a bare doRestart handler would receive the click event
+  // as its seed.
+  function doRestart(seed){
     gameOver = false;
-    state = makeDefaultState();
+    state = makeDefaultState(seed);
     world = makeDefaultWorld();
     doors = makeDefaultDoors();
     windows = makeDefaultWindows();
@@ -5247,8 +5435,16 @@
     if(file) doImportSave(file);
     e.target.value = "";
   });
+  // The prompt's Cancel is the destructive-action guard the old confirm()
+  // was, so the protection is kept rather than dropped. Blank is a fresh
+  // world, the old behaviour; anything typed becomes a seed.
   document.getElementById("restartMenuBtn").addEventListener("click", ()=>{
-    if(confirm("Restart the game? This throws away all current progress.")) doRestart();
+    const answer = prompt(
+      "Restart the game? This throws away all current progress.\n\n"
+      + "Leave blank for a new world, or enter a seed to replay a specific one.", "");
+    if(answer === null) return;                       // cancelled
+    const s = answer.trim();
+    doRestart(s === "" ? undefined : seedFromInput(s));
   });
   const sideMenu = document.getElementById("sideMenu");
   const menuBackdrop = document.getElementById("menuBackdrop");
@@ -6251,7 +6447,16 @@
       { label:"Take", disabled:(it)=> invTab === "keychain" && !keychainAllows(it), onClick:(i)=> doTake(i) }
     ], "world");
   }
+  // The seed, as its canonical uint32 — what a typed word hashed to, which is
+  // what reproduces the run; a word is lossy, the number is the seed. Its own
+  // menu section rather than a line in Stats, and drawn ahead of render()'s
+  // game-over branch, because that branch wipes #statsBox and the seed is
+  // exactly what a player wants after dying.
+  function renderRunPanel(){
+    document.getElementById("runBox").textContent = "Seed: " + state.seed;
+  }
   function render(){
+    renderRunPanel();
     if(gameOver){
       document.getElementById("locLabel").textContent = "";
       document.getElementById("clockLabel").textContent = "";
@@ -6259,7 +6464,7 @@
       document.getElementById("statsBox").innerHTML = "Hunger: —<br>Thirst: —<br>Energy: —<br>Health: 0";
       const moveBox = document.getElementById("moveActions");
       moveBox.innerHTML = "";
-      moveBox.appendChild(actionButton("Restart", doRestart));
+      moveBox.appendChild(actionButton("Restart", ()=> doRestart()));
       document.getElementById("moveGroup").style.display = "";
       document.getElementById("hereGroup").style.display = "none";
       document.getElementById("invTabs").innerHTML = "";

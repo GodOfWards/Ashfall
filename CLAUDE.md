@@ -84,7 +84,9 @@ loading; a MINOR bump breaks them. So: new state fields mean MINOR, and MINOR is
 a real seam — never a formality.
 
 **Tier maps to version bump.** Issues are labelled `tier-0` through `tier-3`.
-`tier-0`/`tier-1` maps to PATCH, `tier-2`/`tier-3` to MINOR.
+`tier-0`/`tier-1` maps to PATCH, `tier-2`/`tier-3` to MINOR. Within each pair
+the number is size (lower is smaller), never priority — Project Guide, Part 3,
+"Choosing a tier".
 
 **Flag judgment calls.** A threshold, balance number, or naming choice with no
 prior convention gets called out as retunable, not left to read as settled.
