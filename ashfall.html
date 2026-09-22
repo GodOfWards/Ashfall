@@ -273,7 +273,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.5.4" };
+  const GAME_CONFIG = { VERSION: "0.5.5" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -406,22 +406,23 @@
   //                 field holding a building *id* ("acorn"), unrelated to this.
   //   area          floor/apartment/street grouping, e.g. "2A"
   //   room          room type/name, e.g. "Kitchen"
-  //   shelter       "none" | "full" — whether the room is under cover.
-  //                 Required on every room. "partial" is a reserved third value
-  //                 (a covered porch, an open garage, a doorway); no room uses
-  //                 it yet, because classifying which rooms are genuinely
-  //                 partial is content for the pass that gives shelter its first
-  //                 consumer. Nothing reads shelter today — it is laid down
-  //                 ahead of its consumers (#58 weather, #6 rooftops) the same
-  //                 way LOCATIONS' z is, so those passes need no retrofit across
-  //                 every room. An unused field here is not a dead one. It is
-  //                 also NOT cannotHaveFire and must never be derived from it:
-  //                 the two happen to be coextensive in the current content, but
-  //                 they are different facts (a fire rule vs. being under cover)
-  //                 and content that breaks the correlation is already specced.
-  //                 The pass that adds the first consumer also inherits shelter's
-  //                 save backfill — backfillRoomAddresses() deliberately does not
-  //                 restore it, since nothing reads it.
+  //   shelter       "none" | "partial" | "full" — whether the room is under
+  //                 cover. Required on every room. "partial" is cover without
+  //                 enclosure: a balcony under the building's roof overhang, a
+  //                 street node under a conveyor bridge, a block with a bus
+  //                 shelter in it. Nothing reads shelter today — it is laid
+  //                 down ahead of its consumers (#58 weather, #6 rooftops) the
+  //                 same way LOCATIONS' z is, so those passes need no retrofit
+  //                 across every room. An unused field here is not a dead one.
+  //                 It is also NOT cannotHaveFire and must never be derived
+  //                 from it: the two are not coextensive, and the divergence
+  //                 runs both ways — the two balconies and the 1A patio carry
+  //                 cannotHaveFire without being fully under cover, and the two
+  //                 partial street nodes are covered and can still host a fire.
+  //                 They are different facts (a fire rule vs. being under
+  //                 cover). The pass that adds the first consumer also inherits
+  //                 shelter's save backfill — backfillRoomAddresses()
+  //                 deliberately does not restore it, since nothing reads it.
   //   desc          description shown to the player
   //   floor         array of loose item objects (see ITEM DATA SCHEMA)
   //   floorCap      maximum loose-item capacity in kg
@@ -1338,7 +1339,7 @@
         { to:"bathroom", label:"Go to the bathroom", distanceM:3 },
         { to:"hallway2", label:"Leave the apartment", distanceM:7 } ]
     },
-    balcony: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Balcony", shelter:"full",
+    balcony: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Balcony", shelter:"partial",
       desc:"A narrow concrete ledge overlooking the street below. A dead plant sits in the corner, and a rusted fire escape ladder leads down.",
       cannotHaveFire:true, floorCap:40, floor:itemsFromRegistry([ { id:"dead_potted_plant", qty:1 } ]),
       containers:[
@@ -1426,7 +1427,7 @@
         { to:"twobee_bathroom", label:"Go to the bathroom", distanceM:3 },
         { to:"hallway2", label:"Leave 2B", distanceM:7, doorId:"2b" } ]
     },
-    twobee_balcony: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2B", room:"Balcony", shelter:"full",
+    twobee_balcony: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2B", room:"Balcony", shelter:"partial",
       desc:"A narrow balcony, mirroring yours. No fire escape here — just a view of the street.",
       cannotHaveFire:true, floorCap:40, floor:[],
       containers:[
@@ -1524,7 +1525,7 @@
         { to:"onea_bathroom", label:"Go to the bathroom", distanceM:3 },
         { to:"hallway1", label:"Leave 1A", distanceM:7, doorId:"1a" } ]
     },
-    onea_patio: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1A", room:"Patio", shelter:"full",
+    onea_patio: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1A", room:"Patio", shelter:"none",
       desc:"A small concrete patio out back, low fence, a gate leading to the alley.",
       cannotHaveFire:true, floorCap:40, floor:[],
       containers:[
@@ -2074,7 +2075,7 @@
         { to:"mill4th", label:"Head west toward 4th St" },
         { to:"mill2nd", label:"Head east toward 2nd St" } ]
     },
-    mill2nd: { locationId:"mill2nd", address:"Mill St & 2nd St", area:null, room:null, shelter:"none",
+    mill2nd: { locationId:"mill2nd", address:"Mill St & 2nd St", area:null, room:null, shelter:"partial",
       desc:"Mill and 2nd, under a conveyor bridge that crosses overhead from one building to another.",
       floorCap:100, floor:[], containers:[],
       exits:[
@@ -2241,7 +2242,7 @@
         { to:"elm2nd", label:"Head north on 2nd St" },
         { to:"mid_2nd_c_e", label:"Step into the block (north)" } ]
     },
-    mid_cedar_1_2: { locationId:"mid_cedar_1_2", address:"Cedar St", area:null, room:"between 1st & 2nd", shelter:"none",
+    mid_cedar_1_2: { locationId:"mid_cedar_1_2", address:"Cedar St", area:null, room:"between 1st & 2nd", shelter:"partial",
       desc:"A block of Cedar with a bus shelter in it. The route map inside has faded to a blank rectangle.",
       floorCap:20, floor:[], containers:[],
       exits:[
