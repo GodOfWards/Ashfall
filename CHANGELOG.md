@@ -18,6 +18,160 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.5.6 — The locked-door note, driven by gated exits
+
+Implements: handoffs/locked-door-note-from-exits.md
+
+Implements #142 in full, per `handoffs/locked-door-note-from-exits.md`. In six
+rooms a locked door removed the only exit and the Here panel printed nothing in
+its place; in a seventh it printed a note about a door that blocks nothing. Both
+came from one cause: the door UI read `doors[].sides` — which two rooms a door
+physically separates — while movement is gated by `doorId` on an exit, which
+says which exits that door actually blocks. The two disagree, and this pass
+moves the UI onto the exits. Rendering-side only: no WORLD DATA, no schema
+field, no state field, no change to which doors are lockable or which exits a
+locked door removes.
+
+**New**
+
+- `gatedExitsForRoom(roomId)` in WORLD INTERACTION: one `{ doorId, to }` per
+  exit of the room's raw `room.exits` that carries a `doorId` resolving in
+  `doors`, in the room's own exit order, deduped by `doorId`. Reads raw
+  `room.exits` rather than `getExitsForRoom()` — the latter is what drops a
+  locked exit, which is precisely what has to be reported. An exit whose
+  `doorId` does not resolve is skipped, matching how `doorLabel()` already
+  fails safe.
+- `doorsTouchingRoom(roomId)` beside it: the union of `doorsForRoom(roomId)`
+  and the `doorId`s of that room's gated exits, `doorsForRoom()` entries first
+  in their existing order. The union is load-bearing — a narrower rule would
+  withdraw the master key's existing `Lock the 2nd Floor door` from inside
+  `living`, which is a `sides`-only door.
+
+**Fixed**
+
+- The Here panel's door block (`renderHereActionsPanel()`) is now driven by the
+  room's locked gated exits instead of `doorsForRoom()`. The six rooms that lose
+  their only exit to a locked door now explain it: `twobee_kitchen`,
+  `twobee_bathroom` and `twobee_bedroom` print the `2nd Floor` door;
+  `onea_kitchen`, `onea_bathroom` and `onea_bedroom` print the `1st Floor` door
+  — the same labels `twobee` and `onea` already print one room away.
+- `living` no longer prints `The 2nd Floor door is locked.` The exit out of 2A
+  carries no `doorId` and is walkable whatever `"2a"`'s state is, so the note was
+  false. Removing it is the fix, not a side effect; the master key still offers
+  Lock/Unlock there via `doorsTouchingRoom()`.
+- `doorLabel(doorId, fromRoomId)` widened in place — same name, signature and
+  `doorId` fallback. The far side is still the other `sides` entry when the near
+  room adjoins the door; otherwise it is the `to` of that room's gated exit
+  through the door. Its first guard previously returned the bare `doorId` for a
+  non-`sides` room, which would have rendered `The 2b door is locked.` in the
+  six rooms above. The naming rules below it are untouched.
+- `getItemActions()`'s master-key branch reads `doorsTouchingRoom()` in place of
+  `doorsForRoom()`, so the master key's panel — blank in those same six rooms —
+  now offers Lock/Unlock there. Its `building` filter and label are unchanged.
+- The single-key branch's guard is membership of `doorsTouchingRoom()` in place
+  of `doors[it.doorId].sides.includes(state.currentRoom)`. This changes nothing
+  today — the only single key is `acorn_apt_2a_key` (`doorId:"2a"`), and the one
+  room with a `2a`-gated exit is `hallway2`, already a `sides` member — and is
+  specified so a future single key behaves like the master one rather than
+  inheriting the bug this pass removes.
+
+**UI**
+
+- No new string and no new control. The same two sentences —
+  `Unlock the ${label} door` and `The ${label} door is locked.` — appear in six
+  rooms where nothing appeared, and stop appearing in one room where they were
+  wrong.
+- `onea`'s two notes swap order (`patio` now before `1st Floor`), because the
+  block follows exit order rather than `Object.keys(doors)` order. Exit order is
+  also the order the exits themselves appear in the panel immediately above.
+  Key-panel label order is unchanged everywhere, which is what
+  `doorsTouchingRoom()`'s `doorsForRoom()`-first ordering buys.
+
+**Explicitly NOT changed**
+
+- WORLD DATA: no room, exit, container, item or `doors` entry moved. No
+  `doorId` was added anywhere.
+- `findKeyForDoor()`, `doorsForRoom()`, `doToggleLock()`, `getExitsForRoom()`
+  and `makeDefaultDoors()` are untouched. Which doors are lockable, by whom, and
+  which exits a locked door removes is exactly as it was.
+- Save format: no state field added, read or changed. `versionCompat()` does not
+  move and a PATCH bump keeps `ashfall_save_v0.5`, so v0.5.5 saves load with no
+  version warning.
+- `hereNote()` and `actionButton()` are used exactly as before.
+
+**Validation performed**
+
+- `git diff origin/main...HEAD -- ashfall.html` read hunk by hunk: five hunks,
+  touching only `GAME_CONFIG.VERSION`, `getItemActions()`'s two key branches,
+  the two new queries, `doorLabel()` and `renderHereActionsPanel()`'s door
+  block. No WORLD DATA line appears in the diff.
+- `node --check` on the extracted script body.
+- `ashfallDev.validateRoomSchema()`, `validateLocations()`,
+  `validateItemRegistry()` and `validateReachability()` run against a v0.5.5
+  build and this one and diffed: identical output, as required since no world
+  data moved.
+- All thirteen rooms that touch a door walked through the real
+  `renderHereActionsPanel()` and `getItemActions()` path in three lock states
+  (default, all locked, all unlocked), against both builds. The delta is exactly
+  the seven rows the handoff predicted: six rooms gain a note/button, `living`
+  loses its false one, `onea`'s two notes swap order, and the other six rooms
+  are byte-identical.
+- The day-one route from #142 replayed: master key in hand, `onea_patio` →
+  unlock `1a-patio` → `onea` → `onea_kitchen`. Before: no exit and no note.
+  After: `Unlock the 1st Floor door`, and unlocking restores `Leave 1A`.
+- The master key in `living` confirmed to still offer `Lock the 2nd Floor door`.
+
+**Open questions / decisions resolved**
+
+- **Names and return shape of the two new queries.** `gatedExitsForRoom(roomId)`
+  returns `[{ doorId, to }]` as the handoff recommended. The union query is
+  named `doorsTouchingRoom(roomId)` rather than the recommended `doorsAtRoom` —
+  `doorsAtRoom` and `doorsForRoom` are too close to tell apart at a call site,
+  and the handoff's own instruction was to rename the new one rather than the
+  old one, which is described in existing comments. It keeps
+  `doorsForRoom(roomId)`'s argument shape and `doorId[]` return type so the two
+  still read as siblings.
+- **Where the dedup lives.** Inside `gatedExitsForRoom()`, per the recommended
+  default, so neither caller repeats it and the guarantee belongs to the query.
+  No room needs it today; it is insurance against a future room with two exits
+  through one door printing the note twice.
+- **Whether `doorLabel()` is widened or gains a sibling.** Widened in place, per
+  the recommended default — one function, three call sites, and no caller edited
+  for the label at all. A sibling would mean choosing at each call site which to
+  use.
+
+**Explicitly out of scope**
+
+- **#145** — 2A's four outbound exits carrying no `doorId`. Split out of #142
+  during planning precisely so this pass stays rendering-side; left open and
+  untouched.
+- **#89** (`room.building` duplicating `BUILDINGS[].name`) — the label reads
+  `area` and `room`, never `building`.
+- **#29** (log size and entry cap) and **#78** (the accessibility pass).
+- No new door, no new key, no new window, no world data of any kind.
+
+**Sections touched**
+
+- **WORLD INTERACTION** — `gatedExitsForRoom()` and `doorsTouchingRoom()` added
+  beside `doorsForRoom()`; `doorLabel()`'s far-room resolution widened and its
+  invariant comment extended.
+- **INVENTORY / ITEM SYSTEM** — `getItemActions()`, both key branches.
+- **RENDERING** — `renderHereActionsPanel()`, the door block only.
+- **CONFIG / CONSTANTS** — `GAME_CONFIG.VERSION`.
+
+**Documentation**
+
+- The comment above `doorLabel()` now states that the far side comes from the
+  room's gated exit when the near room is not a `sides` member. The two new
+  queries carry comments recording why the UI is driven by exits rather than by
+  `sides`.
+- Nothing was deferred. No new issues were filed — the pass surfaced nothing
+  beyond #145, which planning had already split out.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.5.5"` → `"0.5.6"`
+
+---
+
 ## v0.5.5 — `shelter` corrected on five rooms, and `partial` put to use
 
 Implements: handoffs/shelter-partial-and-none.md

@@ -273,7 +273,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.5.5" };
+  const GAME_CONFIG = { VERSION: "0.5.6" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -4145,11 +4145,11 @@
       actions.push({ label:"Equip", onClick:()=>doEquip(side, index) });
     if(it.category === "Key"){
       if(it.masterKey){
-        doorsForRoom(state.currentRoom).filter(doorId=>doors[doorId].building===it.building).forEach(doorId=>{
+        doorsTouchingRoom(state.currentRoom).filter(doorId=>doors[doorId].building===it.building).forEach(doorId=>{
           const label = (doors[doorId].locked ? "Unlock the " : "Lock the ") + doorLabel(doorId, state.currentRoom) + " door";
           actions.push({ label, onClick:()=>doToggleLock(doorId) });
         });
-      } else if(it.doorId && doors[it.doorId] && doors[it.doorId].sides.includes(state.currentRoom)){
+      } else if(it.doorId && doors[it.doorId] && doorsTouchingRoom(state.currentRoom).includes(it.doorId)){
         const label = (doors[it.doorId].locked ? "Unlock the " : "Lock the ") + doorLabel(it.doorId, state.currentRoom) + " door";
         actions.push({ label, onClick:()=>doToggleLock(it.doorId) });
       }
@@ -4195,6 +4195,38 @@
   function doorsForRoom(roomId){
     return Object.keys(doors).filter(id => doors[id].sides.includes(roomId));
   }
+  // The exits a room loses when a door is shut. `doors[].sides` names the two
+  // rooms a door physically separates; `doorId` on an exit names the exits that
+  // door actually blocks, and the two are not the same set — 2B's kitchen,
+  // bathroom and bedroom each leave through the "2b" door without being one of
+  // its sides. Anything the player is told about a shut door is driven from
+  // here, so the rooms that lose an exit are the rooms that explain it. Reads
+  // raw `room.exits` on purpose: `getExitsForRoom()` is what drops a locked
+  // exit, which is exactly what has to be reported. Deduped by door, so a
+  // future room with two exits through one door says it once.
+  function gatedExitsForRoom(roomId){
+    const room = world[roomId];
+    if(!room || !room.exits) return [];
+    const seen = [];
+    const gated = [];
+    room.exits.forEach(e=>{
+      if(!e.doorId || !doors[e.doorId] || seen.includes(e.doorId)) return;
+      seen.push(e.doorId);
+      gated.push({ doorId:e.doorId, to:e.to });
+    });
+    return gated;
+  }
+  // Every door a room touches: the ones it adjoins as a `sides` member, then
+  // the ones only its exits pass through. The union, not either half — a key
+  // has to keep offering to lock the 2nd Floor door from inside 2A, whose
+  // exits carry no doorId, and has to start offering it in 2B's kitchen, which
+  // is no door's side. `doorsForRoom()` first keeps every key panel's existing
+  // label order intact.
+  function doorsTouchingRoom(roomId){
+    const ids = doorsForRoom(roomId);
+    gatedExitsForRoom(roomId).forEach(e=>{ if(!ids.includes(e.doorId)) ids.push(e.doorId); });
+    return ids;
+  }
   // A door is named by the side the player is not standing on, so the same
   // door reads correctly from both of its rooms. The composition is
   // area-then-room because neither field alone survives the current world:
@@ -4206,11 +4238,19 @@
   // Case is asymmetric on purpose: an area is a proper name and keeps its
   // capitals ("2A", "2nd Floor"); a room is a common noun and is lowercased
   // ("patio", "living room"). Callers supply the article — "the <label> door".
+  // The far side is the other `sides` entry where the near room adjoins the
+  // door, and otherwise the destination of the near room's exit through it —
+  // the rooms that leave through a door without adjoining it are the ones that
+  // most need it named, and naming it this way makes the same door read the
+  // same from every room it shuts.
   function doorLabel(doorId, fromRoomId){
     const door = doors[doorId];
     const near = world[fromRoomId];
-    if(!door || !near || !door.sides.includes(fromRoomId)) return doorId;
-    const far = world[door.sides.find(id => id !== fromRoomId)];
+    if(!door || !near) return doorId;
+    const farId = door.sides.includes(fromRoomId)
+      ? door.sides.find(id => id !== fromRoomId)
+      : (gatedExitsForRoom(fromRoomId).find(e => e.doorId === doorId) || {}).to;
+    const far = world[farId];
     if(!far) return doorId;
     if(far.area && far.area !== near.area) return far.area;
     if(far.room) return far.room.toLowerCase();
@@ -6055,7 +6095,7 @@
       .forEach(exit=>{
         hereBox.appendChild(actionButton(exit.label, ()=> doMove(exit), { cost: fmtDuration(exitMinutes(exit)) }));
       });
-    doorsForRoom(state.currentRoom).forEach(doorId=>{
+    gatedExitsForRoom(state.currentRoom).forEach(({doorId})=>{
       if(!doors[doorId].locked) return;
       const label = doorLabel(doorId, state.currentRoom);
       const key = findKeyForDoor(doorId);
