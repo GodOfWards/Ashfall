@@ -18,6 +18,271 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.6.0 — Roll core and the seeded world
+
+Implements: handoffs/roll-core-and-seeded-world.md
+
+Implements #51 in full, per `handoffs/roll-core-and-seeded-world.md`. The file
+had one helper and four bare `Math.random()` comparisons using three different
+conventions (percent-hit, fraction-hit, fraction-miss). They are replaced by
+one operation, `chance(p, ...key)`. It is backed by a stateless source seeded
+per run: a roll is a pure function of the run's seed and a key naming what is
+being decided. It has no cursor, so draw order never matters. The seed does
+two things the old source could not. Reloading and repeating an action
+reproduces its outcome, which blocks save-scumming. And container loot becomes
+a property of the world rather than of the order the player explores it in.
+This is the character-independent core only. #10's skill checks will be a
+layer calling `chance()`.
+
+**New**
+
+- The roll core, in CORE UTILITIES:
+  - `fnv1a(str, basis)` is a 32-bit FNV-1a hash.
+  - `hashKey(parts)` joins the key parts with `KEY_SEP` and hashes them from
+    `state.seed`.
+  - `rollValue(...key)` returns a value in `[0,1)`: mulberry32's avalanche
+    step applied to the hash, without any stepping.
+  - `chance(p, ...key)` returns `rollValue(...key) < p`. `p` is a fraction in
+    `[0,1]`, and this is the one place a probability is checked for legality:
+    an out-of-range or non-finite `p` gets a `console.warn` and is clamped
+    (NaN becomes 0) instead of throwing. `p === 0` is always false and
+    `p === 1` always true. It returns a plain boolean.
+  - `randInt(min, max, ...key)` is widened to take a key and uses the same
+    source.
+- Constants, in CONFIG / CONSTANTS: `FNV_OFFSET_BASIS` (`2166136261`),
+  `FNV_PRIME` (`16777619`), and `KEY_SEP` (`"\u001F"`, the unit separator,
+  which cannot occur in any id). Because of the separator, `("a","bc")` and
+  `("ab","c")` never produce the same key.
+- The three key shapes:
+  - Pool empty gate: `"loot", roomId, containerId, poolId, "empty"`.
+  - Pool entry: `"loot", roomId, containerId, poolId, itemId`.
+  - Entry quantity: the entry's key plus `"qty"`.
+  - Fishing bite: `"fish", state.currentRoom, state.totalMinutes`, read after
+    `advanceTime()`.
+  - Illness on eating: `"illness", state.rollSeq`.
+  - Loot keys name pools and items by id, never by array index, so reordering
+    a container's `spawnPools` or a pool's `entries` does not reshuffle the
+    world.
+- `rolledLootFor(roomId, container)` in WORLD INTERACTION returns a
+  container's pool yield as a pure function of the seed and the container's
+  identity, and mutates nothing. `doOpenContainer()` now only appends that
+  yield. `spawnRolled` still guards against a second append, and
+  `lastRolledMinute` is still written and still unread.
+- PLAYER STATE gains two fields:
+  - `seed`: a uint32, the run's identity, set once and never changed.
+  - `rollSeq`: starts at `0` and tells apart rolls with no natural key.
+  - `makeDefaultState(seed)` takes an optional seed. Without one it draws a
+    fresh seed with `Math.random()`, now the only call to it in the file, on
+    purpose.
+  - `doRestart(seed)` passes the seed on.
+- `seedFromInput(str)` in CORE UTILITIES turns typed text into a seed. A plain
+  decimal inside the uint32 range is used as the seed itself, so the displayed
+  number can be typed back in. Anything else (a word, or an out-of-range
+  number) is hashed with `fnv1a` from the standard offset basis.
+  `"4294967296"` is hashed rather than wrapping around to seed 0.
+- `backfillIllnessScale()` in PERSISTENCE is the sixth load-time backfill,
+  wired into `applyLoadedData()` after `backfillRoomAddresses()`. It divides
+  any instance's `illnessChance` above 1 by 100. A legal fraction can never
+  exceed 1, so the test is unambiguous and the division is exact. Running it
+  on a v0.6 save changes nothing.
+
+**Changed / Reworked**
+
+*The four randomness sites*
+
+- `doOpenContainer()`: the empty gate, entry and quantity rolls moved into
+  `rolledLootFor()` with the keys above. The entry test is now a hit test
+  (`chance(entry.chance, …)`), where it used to be the miss form
+  `>= entry.chance`. Behaviour is the same, under one convention.
+- `doFish()`: `chance(FISH_BITE_CHANCE, "fish", state.currentRoom,
+  state.totalMinutes)`. Keying on game time is what enforces the save-scum
+  rule: repeating the same cast gives the same result, while spending any
+  time first changes the roll.
+- `doConsume()`: the illness branch is restructured so it rolls and advances
+  `rollSeq` whenever `it.illnessChance` is set, even if the player is already
+  ill and the result is thrown away. That matches the order the old
+  short-circuit used up draws in. The already-ill test stays inside the
+  branch. Moving it into the outer guard would get `rollSeq` out of step with
+  a save taken before the meal.
+
+*`illnessChance` unit*
+
+- `ITEM_REGISTRY.raw_fish.illnessChance` changed from `35` to `0.35`, and the
+  ITEM DATA SCHEMA comment now describes it as a fraction in `[0,1]`. The
+  probability is 35% before and after, so this is not a balance change. This
+  is definition data for the mechanic, since the field's unit is part of the
+  convention being set up, so it ships with this pass rather than as a
+  separate content pass.
+
+*Player-visible behaviour — none of it a balance change*
+
+1. **Reloading no longer rerolls.** Repeating an action from a reloaded save
+   gives the same outcome. Doing anything that costs game time first gives a
+   genuinely different roll.
+2. **Container loot is set by the seed and the container's location.** It is
+   the same whatever order the world is explored in. A loaded save's
+   containers that were already rolled keep what they were saved with.
+   Containers not yet opened roll from the save's seed; a pre-0.6 save gets a
+   fresh one.
+3. **Illness probability is unchanged** at 35%. Only the field's unit changed.
+
+**UI**
+
+- A new **Run** section in the side menu, below Stats, shows `Seed: <n>` as
+  the canonical uint32. `renderRunPanel()` draws it at the top of `render()`,
+  before the game-over branch, so the seed stays visible after death. The
+  game-over branch clears `#statsBox`; the seed has its own `#runBox`, which
+  shares `#statsBox`'s style rule.
+- **Restart game** now uses a `prompt()` instead of a `confirm()`, with the
+  same warning plus "Leave blank for a new world, or enter a seed to replay a
+  specific one." Cancel does nothing, so it still guards the destructive
+  action the way the confirm did. Blank restarts with a fresh world, which is
+  the old behaviour. Anything else goes through `seedFromInput()`.
+- No other control, panel or string changed.
+
+**Hardened**
+
+- Four authoring guards were added to the validators:
+  - `validateReachability()` now reports an `emptyChance` outside `[0,1]`.
+  - It reports a pool that lists the same `itemId` twice.
+  - It reports a container (in the fresh default world) that lists the same
+    pool id twice. Both duplicates would share a roll key and always roll
+    alike.
+  - `validateItemRegistry()` reports any `illnessChance` outside `[0,1]`.
+  - `validateReachability()`'s warning block is now labelled "pool authoring
+    problems" and covers all of its checks, not only the old entry-chance
+    one.
+  - None of the guards fire on the current data, and the rest of
+    `validateReachability()`'s report is identical to v0.5.6's.
+
+**Documentation**
+
+- Comments updated: the ITEM DATA SCHEMA `illnessChance` line; the
+  SPAWN_POOLS header (loot is keyed and rolled through `rolledLootFor()`, and
+  duplicate pool or item ids are forbidden); `doOpenContainer()`'s header;
+  both validators' headers; and `applyLoadedData()` (how an older save gets
+  `seed`).
+- The ordering rule is written beside `rollSeq` in `makeDefaultState()`:
+  nothing reachable from `render()` may advance `rollSeq`.
+- Filed #153: `resyncUidCounter()` and `backfillItemIds()` never look inside
+  an unequipped bag's `contents`, so after a load a stowed item's `_uid` can
+  be handed out again. This predates the pass; see Notes for why
+  `backfillIllnessScale()` recurses anyway. Nothing from the handoff's In
+  scope list was deferred.
+
+**Explicitly out of scope**
+
+- #10: degrees of success, opposed rolls, modifiers, and anything that
+  depends on the character. `chance()` returning a plain boolean is what
+  keeps those layers apart.
+- #150: `simulateSeed()` and seed sampling. `rolledLootFor()` is built to
+  make it possible, and none of it is built here.
+- #149: run configuration beyond the seed.
+- Any general stream registry or key-namespacing scheme. There are three
+  domains and three key shapes.
+- `SPAWN_POOLS` values: all 178 entry `chance`s and 29 `emptyChance`s are
+  untouched.
+- Eating taking zero game time (#120/#121).
+- #15: `lastRolledMinute` stays reserved.
+- #133: dead pools and unreachable items.
+- #48, #50, #52, #23: the consumers the core exists for.
+- #134/#116: durability and tool wear.
+
+**Sections touched**
+
+- CONFIG / CONSTANTS
+- WORLD DATA: the `raw_fish.illnessChance` value, the ITEM DATA SCHEMA and
+  SPAWN_POOLS comments, and nothing else.
+- PLAYER STATE
+- CORE UTILITIES
+- INVENTORY / ITEM SYSTEM: `doConsume()`
+- WORLD INTERACTION: `rolledLootFor()` and `doOpenContainer()`
+- FIRE / COOKING: `doFish()`
+- PERSISTENCE: the backfill, `doRestart(seed)`, and the validators
+- EVENTS / UI HELPERS: the restart prompt
+- RENDERING: `renderRunPanel()` and the game-over Restart button
+- The side-menu markup and CSS (`#runBox`)
+
+This is neither a content-only nor a mechanics-only pass. The one WORLD DATA
+value is part of the mechanic's own definition.
+
+**Open questions / decisions resolved**
+
+- **Seed readout placement**: the handoff's recommended default, a new
+  **Run** section below Stats, chosen over a line inside Stats. It survives
+  the game-over wipe, and #149 will need a home for run configuration.
+- **`rolledLootFor()` extraction**: extracted as specified, so #150 can
+  evaluate a seed without mutating a world.
+- **`KEY_SEP`**: `"\u001F"`, as recommended.
+- **Prompt wording**: the handoff's default text, unchanged.
+
+**Notes / assumptions**
+
+- `backfillIllnessScale()` also descends into an item's `contents`, which
+  the handoff's version did not. An unequipped bag keeps its items there,
+  where `invPools()` and the world walk don't reach. A pre-0.6 raw fish
+  stowed in one would otherwise come back unrepaired when the bag is
+  equipped again and cause illness every time it is eaten (`chance()` would
+  clamp 35 to 1, with a warning). This is a technical choice, noted here
+  instead of made silently. The same gap in the older scans is #153.
+- The game-over **Restart** button now calls `()=> doRestart()` instead of
+  passing `doRestart` directly. Once `doRestart` took a `seed` parameter, the
+  bare handler would have received the click event as its seed, and
+  `event >>> 0` is `0`. So every restart from the death screen would have
+  replayed seed 0. This is a hazard the pass created and closed before it
+  shipped, not a bug that reached players. That button still starts a fresh
+  random world with no prompt, since the handoff limits UI changes to the
+  menu's Restart. Replaying a seed after death goes through the menu, where
+  the Run section still shows the seed.
+- `FISH_BITE_CHANCE` (0.55) and the illness figure (0.35) are unchanged
+  balance values, still retunable.
+
+**Validation performed**
+
+- `git diff origin/main...HEAD -- ashfall.html` is the diff. The only
+  `Math.random()` left is the seed draw in `makeDefaultState()`.
+- Headless Chromium, run against a copy of the file with its internals
+  exposed for testing (the copy was not committed):
+  - **`SAVE_KEY` rotation and the backfill.** A save made with the v0.5.6
+    build (raw fish in the inventory, on the floor, and inside an unequipped
+    backpack) was saved under `ashfall_save_v0.5`, which "Load from this
+    browser" in v0.6.0 does not see ("No saved game found in this
+    browser."). The exported file imported through the real file input with
+    the v0.5.6 → v0.6.0 version warning. All three fish came back with
+    `illnessChance` `0.35`. The state inherited a uint32 `seed` and
+    `rollSeq` `0`, and the Run box updated. Importing the result again left
+    `0.35` unchanged.
+  - **The save-scum rule.** Tested across 200 seeds at the riverbank.
+    Reload and repeat `doFish()`: the same outcome 200 of 200 times. Reload,
+    Rest, then fish: the same outcome 104 of 200 times (chance agreement).
+    Bite rate was 0.575 against 0.55.
+  - **Loot.** With the same seed, opening all 24 still-rolling containers
+    in reverse order after an hour's Rest gave identical contents. A
+    different seed changed 23 of the 24. `rolledLootFor()` is pure and
+    returns the same result on repeat calls. Opening a container twice does
+    not add its loot twice. Over 20,000 seeds, `bottled_water` in
+    `kitchen_nonperishable` appeared at 0.172 against the expected 0.174,
+    with quantities 1, 2 and 3 about equally often.
+  - **Illness.** Over 2,000 seeds the illness rate was 0.340 against 0.35.
+    `rollSeq` does not move for food without `illnessChance`, and does
+    advance when the player is already ill. Three raw fish eaten in the same
+    minute roll independently and give the same results from a reloaded
+    save.
+  - **`chance()` and `rollValue()`.** `chance(0)` never fired and
+    `chance(1)` always fired over 5,000 keys. `rollValue()` stayed below 1.
+    `p` of `35` and `NaN` warned and clamped.
+  - **`seedFromInput()` and the prompt.** Cancel left the run untouched.
+    Blank gave a new seed. `" 98765 "` gave seed `98765`, and a word gave
+    its hash, with both shown in the Run box. After death the seed stays
+    visible, and the Restart button gave five different non-zero seeds.
+  - **Validators.** A copy with a duplicated pool, a duplicated entry,
+    `emptyChance:1.5` and `illnessChance:35` triggered all four new guards,
+    and the real file triggers none. There were no page errors.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.5.6"` → `"0.6.0"`
+
+---
+
 ## v0.5.6 — The locked-door note, driven by gated exits
 
 Implements: handoffs/locked-door-note-from-exits.md
