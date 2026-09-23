@@ -140,25 +140,37 @@ Every PR that changes `ashfall.html` carries all six:
    issue by hand.
 5. New issues for anything deferred — cut scope, follow-ups this pass surfaced.
    If nothing was deferred, say so in the changelog's Documentation section.
-6. After the merge, tag it: `git tag vX.Y.Z <commit>`. **Name the commit
-   explicitly.** A bare `git tag vX.Y.Z` tags whatever `HEAD` happens to be, which
-   is how `v0.4.4` and `v0.4.5` ended up on the same commit as `v0.4.7` (#32,
-   since corrected). Verify with `git show vX.Y.Z:ashfall.html | grep VERSION` —
-   it must print the version you just tagged.
+6. The tag commands, as the last thing in the session's final message. Tom
+   pushes tags by hand, and the merge commit doesn't exist until he merges, so
+   the session doesn't tag — it hands him this block, filled in with the PR
+   number and the version:
+
+   ```
+   git fetch origin main
+   C=$(git log origin/main --first-parent -1 --format=%H --grep="^Merge pull request #NN ") &&
+   git tag vX.Y.Z "$C" &&
+   git show vX.Y.Z:ashfall.html | grep VERSION &&   # must print X.Y.Z
+   git push origin vX.Y.Z
+   ```
+
+   **The commit is named explicitly** — resolved by PR number when the block
+   runs. A bare `git tag vX.Y.Z` tags whatever `HEAD` happens to be, which is how
+   `v0.4.4` and `v0.4.5` ended up on the same commit as `v0.4.7` (#32, since
+   corrected). The lookup assumes the PR lands as a merge commit, not a squash.
 
 The merge ships the version; the tag is what makes it reachable afterwards. A
 version that shipped as a commit inside someone else's PR still gets its own tag,
 on the commit carrying its `GAME_CONFIG.VERSION`.
 
 **A pass that does not touch `ashfall.html` is the exception.** No version bump,
-no changelog entry, no tag — the game did not change, and a tag pointing at a
-commit where nothing shipped is a new way to get tagging wrong. Items 3, 4 and 5
-still apply — the archive move in the diff, `Closes #NN` and the new issues in
-the PR body rather than the changelog, or a line saying nothing was deferred.
-The archive move carries more weight here than anywhere else: a
-documentation-only pass writes no changelog entry, so its handoff can never
-register as spent by grep, and the folder is the only record that it shipped.
-The diff and the PR are the whole record.
+no changelog entry, no tag commands — the game did not change, and a tag
+pointing at a commit where nothing shipped is a new way to get tagging wrong.
+Items 3, 4 and 5 still apply — the archive move in the diff, `Closes #NN` and
+the new issues in the PR body rather than the changelog, or a line saying
+nothing was deferred. The archive move carries more weight here than anywhere
+else: a documentation-only pass writes no changelog entry, so its handoff can
+never register as spent by grep, and the folder is the only record that it
+shipped. The diff and the PR are the whole record.
 
 The test is one question — **did `ashfall.html` change?** — and it is
 deliberately not a list of exempt paths. A list has to be maintained, and the
