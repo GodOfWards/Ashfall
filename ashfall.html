@@ -14,8 +14,8 @@
   body{ margin:0; min-height:100vh; background:var(--bg); color:var(--ink);
     font-family:Georgia,'Times New Roman',serif; display:flex; flex-direction:column; }
   header{ display:flex; align-items:center; gap:14px; padding:12px 24px; border-bottom:1px solid var(--line); font-family:system-ui,sans-serif; }
-  header h1{ font-size:15px; margin:0; letter-spacing:.04em; }
-  #menuToggle{ background:var(--panel-2); border:1px solid var(--line); color:var(--ink); font-size:13px; padding:7px 11px; border-radius:3px; cursor:pointer; }
+  header h1{ font-size:13px; margin:0; letter-spacing:.04em; }
+  #menuToggle{ background:var(--panel-2); border:1px solid var(--line); color:var(--ink); font-size:12px; padding:6px 10px; border-radius:3px; cursor:pointer; }
   #menuToggle:hover{ border-color:var(--accent-dim); }
   #menuBackdrop{ position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:15; display:none; }
   #menuBackdrop.show{ display:block; }
@@ -30,7 +30,7 @@
      line, the way a blocked recipe carries its (needs …). */
   #hubRow{ display:flex; gap:6px; }
   #hubRow button{ flex:1; background:var(--panel-2); border:1px solid var(--line); color:var(--ink);
-    font-size:13px; padding:8px 6px; border-radius:3px; cursor:pointer; }
+    font-size:12px; padding:7px 6px; border-radius:3px; cursor:pointer; }
   #hubRow button:hover:not(:disabled){ border-color:var(--accent-dim); }
   #hubRow button:disabled{ color:var(--ink-faint); cursor:not-allowed; opacity:.6; }
   #hubRow .hint{ display:block; font-size:11px; font-style:italic; margin-top:2px; }
@@ -73,7 +73,7 @@
   .menu-section h3{ font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-faint); margin:0 0 8px; }
   .menu-actions{ display:flex; flex-direction:column; gap:6px; }
   .menu-actions button{ background:var(--panel-2); border:1px solid var(--line); color:var(--ink);
-    font-size:13px; padding:8px 10px; border-radius:3px; cursor:pointer; text-align:left; }
+    font-size:12px; padding:7px 9px; border-radius:3px; cursor:pointer; text-align:left; }
   .menu-actions button:hover{ border-color:var(--accent-dim); }
   .menu-placeholder{ font-size:12px; color:var(--ink-faint); font-style:italic; }
   #statsBox{ font-size:13px; color:var(--ink-dim); line-height:1.9; }
@@ -99,32 +99,37 @@
   #mapPlayer{ fill:var(--accent); }
   #locBar{ padding:10px 24px; border-bottom:1px solid var(--line); font-family:system-ui,sans-serif;
     display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; }
-  #locLabel{ font-size:14px; color:var(--accent); }
+  #locLabel{ font-size:12px; color:var(--accent); }
   #rightBar{ display:flex; gap:16px; align-items:center; }
   #clockLabel{ font-size:12px; color:var(--ink-dim); }
   #gaitBar{ display:flex; gap:6px; align-items:center; }
-  #gaitBar span{ font-size:12px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.06em; }
+  #gaitBar span{ font-size:11px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.06em; }
   #gaitBar button{ font-family:system-ui,sans-serif; font-size:12px; background:var(--panel-2);
-    border:1px solid var(--line); color:var(--ink-dim); padding:5px 9px; border-radius:3px; cursor:pointer; }
+    border:1px solid var(--line); color:var(--ink-dim); padding:4px 8px; min-height:24px; border-radius:3px; cursor:pointer; }
   #gaitBar button.active{ border-color:var(--accent); color:var(--accent); }
   #gaitBar button:disabled{ opacity:.4; cursor:not-allowed; }
-  main{ flex:1; display:grid; grid-template-columns:1fr 320px; }
+  /* Landscape is three columns: the text takes the left half, and the
+     sidebar's two panels share the right half, text | Inventory | Here in
+     DOM order. The portrait query below overrides only what differs there.
+     The 50 / 50 split of main, the sidebar's 8px gaps and the panels' 10px
+     9px padding are judgment calls and retunable. */
+  main{ flex:1; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
   #left{ padding:18px 26px; border-right:1px solid var(--line); display:flex; flex-direction:column; gap:14px; }
-  #roomDesc{ color:var(--ink-dim); line-height:1.4; margin:0; font-size:15px; }
+  #roomDesc{ color:var(--ink-dim); line-height:1.4; margin:0; font-size:12px; }
   #log{ display:flex; flex-direction:column; gap:5px; max-height:110px; overflow-y:auto; }
   /* A .log-result is a view of #log (see renderLogResult()), so its lines
      read exactly as they do there. */
-  #log p, .log-result p{ margin:0; font-size:13.5px; line-height:1.35; color:var(--ink-dim); }
+  #log p, .log-result p{ margin:0; font-size:12px; line-height:1.35; color:var(--ink-dim); }
   #log p.fresh, .log-result p.fresh{ color:var(--ink); }
   #log p.sys, .log-result p.sys{ font-style:italic; color:var(--accent); font-family:system-ui,sans-serif; font-size:12px; }
   #log p.warn, .log-result p.warn{ color:var(--warn); font-family:system-ui,sans-serif; font-size:12px; }
   #log p.good, .log-result p.good{ color:var(--good); font-family:system-ui,sans-serif; font-size:12px; }
   .logcount{ color:var(--ink-faint); font-size:12px; margin-left:5px; }
-  .actions-group h2{ font-family:system-ui,sans-serif; font-size:12px; text-transform:uppercase;
+  .actions-group h2{ font-family:system-ui,sans-serif; font-size:11px; text-transform:uppercase;
     letter-spacing:.08em; color:var(--ink-faint); margin:0 0 8px; }
   .actions{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
-  button.action{ font-family:system-ui,sans-serif; font-size:12.5px; background:var(--panel-2);
-    border:1px solid var(--line); color:var(--ink); padding:6px 10px; border-radius:3px; cursor:pointer; }
+  button.action{ font-family:system-ui,sans-serif; font-size:12px; background:var(--panel-2);
+    border:1px solid var(--line); color:var(--ink); padding:5px 9px; min-height:24px; border-radius:3px; cursor:pointer; }
   button.action:hover{ border-color:var(--accent-dim); background:#232a33; }
   button.action .cost{ color:var(--ink-faint); font-size:11px; margin-left:3px; }
   button.action.locked{ border-color:var(--danger); color:var(--danger); }
@@ -137,23 +142,32 @@
      to it, so the row height is unchanged. Both it and the :active colour are
      judgment calls, retunable. */
   .itemname{ background:none; border:none; font:inherit; color:var(--ink); font-weight:600;
-    padding:6px 2px; margin:-6px -2px; cursor:pointer; text-align:left;
-    text-decoration:underline dotted; text-underline-offset:2px; }
+    padding:6px 2px; margin:-6px -2px; cursor:pointer; text-align:left; }
   .itemname:active{ color:var(--accent); }
-  .detailBox{ font-size:12.5px; color:var(--ink-dim); margin-bottom:10px; line-height:1.7; }
+  .detailBox{ font-size:12px; color:var(--ink-dim); margin-bottom:10px; line-height:1.7; }
   .detailBox b{ color:var(--ink); }
-  #sidebar{ padding:16px 18px; display:flex; flex-direction:column; gap:16px; font-family:system-ui,sans-serif; overflow-y:auto; }
-  .panel{ background:var(--panel); border:1px solid var(--line); border-radius:4px; padding:11px 13px; }
-  .tabs{ display:flex; gap:5px; margin-bottom:9px; flex-wrap:wrap; }
+  #sidebar{ padding:10px 8px; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; font-family:system-ui,sans-serif; overflow-y:auto; }
+  /* The panels' min-width:0 is load-bearing: a grid item's automatic
+     minimum width is its content's min-content width, and a tab row that
+     doesn't wrap would widen its panel past its column. */
+  .panel{ background:var(--panel); border:1px solid var(--line); border-radius:4px; padding:10px 9px;
+    display:flex; flex-direction:column; min-width:0; }
+  /* A panel's tabs are one row that scrolls sideways. The fade at the right
+     edge is always on: it is the only sign that more tabs are off to the
+     right. Its 80% stop is a judgment call, retunable. After every render
+     the selected tab is scrolled fully into view (see revealActiveTab()). */
+  .tabs{ display:flex; gap:5px; margin-bottom:9px; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none;
+    -webkit-mask-image:linear-gradient(to right, #000 80%, transparent); mask-image:linear-gradient(to right, #000 80%, transparent); }
+  .tabs::-webkit-scrollbar{ display:none; }
   .tabs button{ font-size:12px; background:var(--panel-2); border:1px solid var(--line); color:var(--ink-dim);
-    padding:5px 9px; border-radius:3px; cursor:pointer; }
+    padding:4px 8px; min-height:24px; border-radius:3px; cursor:pointer; flex:none; white-space:nowrap; }
   .tabs button.active{ border-color:var(--accent); color:var(--accent); }
-  .panel h2{ font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-faint);
-    margin:0 0 8px; display:flex; justify-content:space-between; align-items:center; }
+  .panel h2{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-faint);
+    margin:0 0 8px; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:2px 6px; }
   .panel h2 .sub{ color:var(--ink-dim); text-transform:none; letter-spacing:0; font-size:12px; display:flex; align-items:center; gap:6px; }
   ul.itemlist{ list-style:none; margin:0; padding:0; }
   ul.itemlist li{ display:flex; justify-content:space-between; align-items:center; gap:6px;
-    padding:6px 0; border-bottom:1px solid rgba(51,56,63,.6); font-size:12.5px; }
+    padding:6px 0; border-bottom:1px solid rgba(51,56,63,.6); font-size:12px; }
   ul.itemlist li:last-child{ border-bottom:none; }
   ul.itemlist .meta{ color:var(--ink-dim); flex:1; }
   ul.itemlist .cat{ color:var(--ink-faint); font-size:12px; }
@@ -161,25 +175,31 @@
   ul.itemlist .empty{ color:var(--ink-faint); font-style:italic; }
   .btnrow{ display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; }
   button.mini{ background:#262a30; border:1px solid var(--line); color:var(--ink); font-size:12px;
-    padding:4px 7px; border-radius:3px; cursor:pointer; white-space:nowrap; }
+    padding:4px 7px; min-height:24px; border-radius:3px; cursor:pointer; white-space:nowrap; }
   button.mini:hover{ border-color:var(--accent-dim); }
   button.mini.equip{ border-color:var(--good); color:var(--good); }
   button.mini.blocked{ border-color:var(--danger); color:var(--danger); cursor:not-allowed; }
-  /* One column when the viewport is portrait, the way a phone is held; the
-     two-column grid stays for landscape. A desktop window taller than it is
-     wide takes the one column too, by design (#159). The second clause is a
-     floor: the two-column grid needs 476px — 320px of sidebar plus the room
-     description's own minimum — and below that the page scrolls sideways,
-     so a landscape window narrower than 480px takes the one column as well.
-     480 and the 14px 16px padding, which fits two action buttons to a line
-     on a ~390px screen, are judgment calls and retunable.
+  /* One column when the viewport is portrait, the way a phone is held: the
+     text on top, the two panels side by side under it. Landscape keeps the
+     base rules' three columns. A desktop window taller than it is wide takes
+     the one column too, by design (#159). The second clause is a floor:
+     below 480px the three landscape columns get too narrow, so a landscape
+     window narrower than that takes the one column as well. 480 and the
+     14px 16px padding, which fits two action buttons to a line on a ~390px
+     screen, are judgment calls and retunable.
+     The rows are auto 1fr, and that is what keeps the panels directly under
+     the actions (#186): #left takes only the height it needs, and the panel
+     row takes the rest and stretches to the bottom of the screen. A long
+     list grows the page instead, and the page scrolls. Left to the default,
+     the rows stretch and #left absorbs the spare height, which opens a gap
+     between the last action and the panels.
      #left's border-right would read as a stray rule down the page once it
-     spans the full width, so it becomes the seam between the two stacked
-     columns instead. The Here panel comes up above Inventory, nearest the
-     Here actions it goes with, and any other sidebar panel follows the two
-     in its existing order; the two-column layout keeps the DOM order. */
+     spans the full width, so it becomes the seam between the text and the
+     panels instead. Here sits beside Inventory rather than above it, and
+     comes first, so the row reads Here | Inventory; any other sidebar panel
+     follows the two in its existing order. Landscape keeps the DOM order. */
   @media (orientation: portrait), (max-width: 480px){
-    main{ grid-template-columns:1fr; }
+    main{ grid-template-columns:1fr; grid-template-rows:auto 1fr; }
     #left{ padding:14px 16px; border-right:none; border-bottom:1px solid var(--line); }
     #worldPanel{ order:-2; }
     #invPanel{ order:-1; }
@@ -346,7 +366,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.7.0" };
+  const GAME_CONFIG = { VERSION: "0.7.1" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -7120,6 +7140,20 @@
     }
     hereGroup.style.display = hereBox.children.length ? "" : "none";
   }
+  // A tab strip scrolls sideways (see .tabs), and a rebuild keeps its old
+  // scroll offset, clamped to the new row: move from a room whose Here strip
+  // was scrolled to its last tab, and the next room's Floor can start off the
+  // strip's left edge. So after each rebuild the selected tab is scrolled
+  // fully into view, by the least distance that does it: a tab already in
+  // view leaves the strip where it is. Only the strip scrolls, never the
+  // page, which is why this is not scrollIntoView().
+  function revealActiveTab(strip){
+    const tab = strip.querySelector(".active");
+    if(!tab) return;
+    const s = strip.getBoundingClientRect(), t = tab.getBoundingClientRect();
+    const left = t.left - s.left + strip.scrollLeft, right = t.right - s.left + strip.scrollLeft;
+    strip.scrollLeft = Math.min(Math.max(strip.scrollLeft, Math.ceil(right) - strip.clientWidth), Math.floor(left));
+  }
   function renderInventoryPanel(){
     const invTabsEl = document.getElementById("invTabs");
     invTabsEl.innerHTML = "";
@@ -7138,6 +7172,7 @@
       btn.addEventListener("click", ()=>{ invTab = key; render(); });
       invTabsEl.appendChild(btn);
     });
+    revealActiveTab(invTabsEl);
     const currentInv = invSlot(invTab);
     document.getElementById("invWeight").textContent =
       totalWeight(currentInv.items).toFixed(2) + (currentInv.capacityKg ? " / " + currentInv.capacityKg + " kg" : " kg");
@@ -7170,6 +7205,7 @@
       });
       worldTabsEl.appendChild(btn);
     });
+    revealActiveTab(worldTabsEl);
     if(!worldTabDefs.find(d=>d[0]===worldTab)) worldTab = "floor";
     const currentWorld = worldSlot(room, worldTab);
     document.getElementById("worldWeight").textContent =
