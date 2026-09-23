@@ -18,6 +18,181 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.6.3 — A stowed bag's contents: counted at load, counted as weight
+
+Implements: handoffs/stowed-bag-contents.md
+
+Implements #153 and #156 in full, per `handoffs/stowed-bag-contents.md`. When
+a bag is unequipped, what it held moves into the bag item's `contents`. Two
+parts of the file never looked inside that array. The load-time scans missed
+it, so a stowed item's `_uid` could be handed out again. Weight missed it too,
+so a full duffel in the base inventory weighed 0.8 kg. Both now treat an item
+as something that can hold a list of items, to any depth. No state or item
+field is added and `SAVE_KEY` does not move, so this is PATCH.
+
+**Fixed**
+
+- **#153: `_uidCounter` could land at or below a `_uid` still in use.**
+  Root cause: `resyncUidCounter()` and `backfillItemIds()` each walked the
+  inventory pools, floors, containers and car containers by hand, and neither
+  descended into `contents`. After a load, the counter ignored every uid inside
+  a stowed bag. New items reused one, and re-equipping the bag left two live
+  items sharing it. Fix: a single walker, `forEachItemList(visit)`
+  (PERSISTENCE), calls `visit(list)` for every item array reachable from
+  `state` and `world`. That includes the `contents` of any item in any visited
+  list, recursively, guarded by `Array.isArray(it.contents)`.
+  `resyncUidCounter()`, `backfillItemIds()` and `backfillIllnessScale()` all
+  use it now. `backfillIllnessScale()`'s private recursion is gone, because the
+  walker's replaces it. `applyLoadedData()`'s call order is unchanged.
+- **#156: a stowed bag weighed only itself.** Root cause: `totalWeight()` and
+  six inline `qty × unitWeight` products read the empty bag's `unitWeight` and
+  nothing in `contents`. Fix: two helpers beside `totalWeight()` in INVENTORY /
+  ITEM SYSTEM:
+  - `itemUnitWeight(it)` = `it.unitWeight + (Array.isArray(it.contents) ? totalWeight(it.contents) : 0)`;
+  - `itemWeight(it)` = `it.qty × itemUnitWeight(it)`.
+
+  `totalWeight()` now sums `itemWeight()`, and the recursion runs back through
+  it, so nested bags count at any depth. Every inline product was replaced:
+  `addToDestination()`, `giveItem()`, `doStore()`, `renderItemList()`'s row
+  total, and `renderCraftPanel()`'s total and "each" figures. No `qty *
+  unitWeight` product remains outside the helpers. An item with no `contents`
+  weighs exactly what it did in v0.6.2.
+
+**Changed / Reworked**
+
+*Capacity at loaded weight*
+
+- **Unequipping a loaded bag can put the base inventory over its 3 kg.**
+  `doUnequip()` still has no capacity check, by Tom's decision. The bag always
+  goes into the inventory, and the readout shows the true figure, e.g.
+  `8.90 / 3 kg`. While over cap:
+  - Take into the inventory is refused: "That won't fit — not enough room
+    there.";
+  - `giveItem()` drops crafted items, caught fish and removed batteries to the
+    floor with its existing warnings;
+  - storing items out of the inventory still works.
+- **Floors and containers are hard caps at loaded weight.** `doStore()` refuses
+  a loaded bag onto a floor or into a container it doesn't fit ("That won't fit
+  there."). `addToDestination()` refuses taking a loaded bag into a pool it
+  doesn't fit. Both are behaviour changes: before this pass, a bag's contents
+  weighed nothing to these checks.
+- **Saves already over cap stay over cap.** No load-time repair moves
+  anything.
+- **Equipped slots are unchanged.** No total counts an equipped bag's own
+  weight, as before. What an equipped bag weighs on the player is #168.
+
+**UI**
+
+- No new string or control. Figures changed: a stowed loaded bag's row total
+  and detail view (total and "each") show its loaded weight. The Inventory and
+  Here readouts count loaded bags in full, and the Inventory readout can read
+  over cap. Existing capacity warnings now fire in the cases above.
+
+**Documentation**
+
+- ITEM DATA SCHEMA, `contents`: its items count toward the item's weight
+  (`itemUnitWeight()`), bags may nest to any depth, and every load-time scan
+  reaches them through `forEachItemList()`.
+- `forEachItemList()` carries the invariant: every scan over item lists goes
+  through it, because a hand-rolled walk is how a stowed bag's contents gets
+  missed.
+- `backfillIllnessScale()`'s comment no longer says it is the only scan that
+  descends into `contents`.
+- The weight helpers carry a comment saying they are the only place an item's
+  weight is computed.
+- Nothing was deferred, and no new issues were filed.
+
+**Open questions / decisions resolved**
+
+- **Names**: `forEachItemList()`, `itemUnitWeight()`, `itemWeight()`, as the
+  handoff suggested.
+- **Walker location**: PERSISTENCE, directly above `resyncUidCounter()`, as the
+  handoff recommended. Every caller is a load-time scan.
+- **`validateReachability()`**: not moved onto the walker, as the handoff
+  recommended. It walks a fresh default world, which holds no `contents`, so
+  its report cannot change either way.
+
+**Notes / assumptions**
+
+- The walker skips any list that is not an array (`Array.isArray`), where the
+  old scans used `list || []`. For `null` or missing lists the two behave the
+  same. The only difference is a truthy non-array, which used to throw in
+  `forEach` and is now skipped. `validateLoadedWorld()` already rejects a
+  non-array floor, so this can only matter for a malformed container's
+  `items`.
+- `doStore()`'s check reads `moveQty × itemUnitWeight(it)` rather than
+  building a copy for `itemWeight()`. Bags never stack, so `moveQty` is 1
+  whenever `contents` is present.
+
+**Explicitly out of scope**
+
+- #168 (encumbrance and the equipped-bag carry bonus), #170 (over-encumbrance
+  penalties and a hard limit), #169 (a floor bag as a Here tab, including
+  `findItemByUid()` searching floor bags).
+- Forbidding nesting: Tom's decision is that bags may nest.
+- Any capacity number: bag `capacityKg`, `floorCap`, the base inventory's 3 kg.
+- A load-time repair for over-cap saves.
+- `findItemByUid()`, which still does not descend into `contents`, correctly,
+  since nothing inside a stowed bag appears in any panel.
+- #134 (per-unit durability in stacks).
+
+**Explicitly NOT changed**
+
+- Save format and `SAVE_KEY`: no new field.
+- `doUnequip()`, `doEquip()`, `addToList()`, `findItemByUid()`.
+- `applyLoadedData()`'s backfill order.
+- All WORLD DATA except the ITEM DATA SCHEMA comment. No capacity or balance
+  constant.
+- Every weight figure for an item without `contents`.
+
+**Sections touched**
+
+- CONFIG / CONSTANTS: `GAME_CONFIG.VERSION` only.
+- WORLD DATA: the ITEM DATA SCHEMA comment only.
+- INVENTORY / ITEM SYSTEM: `itemUnitWeight()`, `itemWeight()`, `totalWeight()`;
+  the weight reads in `addToDestination()`, `giveItem()` and `doStore()`.
+- PERSISTENCE: `forEachItemList()`; `resyncUidCounter()`, `backfillItemIds()`
+  and `backfillIllnessScale()` moved onto it.
+- RENDERING: `renderItemList()`'s row total; `renderCraftPanel()`'s detail
+  total and "each" figure.
+
+**Validation performed**
+
+- `git diff origin/main...HEAD -- ashfall.html` shows only the functions named
+  in Sections touched, plus `GAME_CONFIG.VERSION`. The script passes
+  `node --check`.
+- All checks ran in headless Chromium against uncommitted copies of v0.6.2 and
+  this build, with internals exposed.
+- **#153 reproduced and fixed.** Setup: one uid'd item in an equipped duffel,
+  then unequip, export, reset the counter, import. v0.6.2 left `_uidCounter` at
+  1 with `u1` in use. This build set it to 2. A deeper case put a purse holding
+  a uid'd knife inside a duffel with two uid'd items, then unequipped, exported
+  and imported. `_uidCounter` exceeded every `_uid` in any list, nested
+  included. After re-equipping and adding six new uid'd items, no two items
+  shared a `_uid`.
+- **Backfills two deep.** A pre-registry `Paperback novel` (no `itemId`) and a
+  raw fish at `illnessChance: 35` sat inside a purse inside a tote. After
+  import they read `paperback_novel` and `0.35`. A second import changed
+  nothing.
+- **Weight.** A duffel holding 2.95 kg (a purse with contents nested inside)
+  showed `2.95` on its tab, then `3.75 / 3 kg` in the inventory after unequip.
+  Its row read `3.75 kg`. With nine frying pans the inventory read
+  `8.90 / 3 kg`, and the detail view read `8.90 kg (8.90 kg each)`. Take into
+  the inventory returned `capacity`. Storing the loaded duffel onto a floor
+  capped at 5 kg was refused. With the cap lifted, storing it out of the
+  over-cap inventory succeeded. A tote › purse › two items read `1.30` kg.
+- **Plain items unchanged.** Row totals and detail views for a pasta stack, a
+  box of matches (durability) and a sealed/opened canned soup split were
+  identical text on v0.6.2 and this build.
+- **Validators.** `validateRoomSchema()`, `validateLocations()`,
+  `validateItemRegistry()` and `validateReachability()`: return values and
+  console output identical to v0.6.2.
+- Grep: no `qty * unitWeight` / `qty*unitWeight` product outside the helpers.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.6.2"` → `"0.6.3"`
+
+---
+
 ## v0.6.2 — Seed report: what a seed's world holds
 
 Implements: handoffs/seed-report.md
