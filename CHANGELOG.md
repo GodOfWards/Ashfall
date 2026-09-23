@@ -18,6 +18,174 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.7.1 — Compact sizes and side-by-side panels
+
+Implements: handoffs/compact-sizes-and-side-by-side-panels.md
+
+Implements #190, #191 and #186 in full, per
+`handoffs/compact-sizes-and-side-by-side-panels.md`. The play screen changes in
+three ways. Controls are about 10% smaller than v0.7.0, with a 24px floor. Play
+screen text is 12px. The Here and Inventory panels are two side-by-side columns
+in both orientations. Presentation only: no game rule changes, nothing is added
+to `state`, and `SAVE_KEY` stays `ashfall_save_v0.7`. **PATCH**, so existing
+browser saves keep loading.
+
+**UI**
+
+- **Sizes.** `<style>` only. Every value is from the handoff's §1 table:
+  - Title (`header h1`) 15 → 13px.
+  - `#menuToggle` 13 → 12px, padding `7px 11px` → `6px 10px`.
+  - `#hubRow button` 13 → 12px, padding `8px 6px` → `7px 6px`.
+  - `.menu-actions button` 13 → 12px, padding `8px 10px` → `7px 9px`.
+  - `#locLabel` 14 → 12px. `#roomDesc` 15 → 12px. `#log p` and
+    `.log-result p` 13.5 → 12px. `.detailBox` and `ul.itemlist li` 12.5 → 12px.
+  - `#gaitBar span`, `.actions-group h2` and `.panel h2` 12 → 11px.
+  - `button.action` 12.5 → 12px, padding `6px 10px` → `5px 9px`.
+  - `#gaitBar button` and `.tabs button` padding `5px 9px` → `4px 8px`.
+  - `min-height:24px` on `button.action`, `#gaitBar button`, `.tabs button` and
+    `button.mini`.
+  - Line-heights and the serif face of the room text and log are unchanged.
+- **Resulting heights** at 412px with Roboto: menu 31 → 28, actions 29 → 26,
+  pace 26 → 24, tabs 26 → 24, item buttons 24 → 24.
+- **Item names lose the dotted underline.** #108 added it as the hint that a
+  name can be tapped. Removing it is Tom's decision, made in #190. The bold
+  weight is now the only hint.
+- **Two panel columns in both orientations (#191).**
+  - `#sidebar` is a two-column grid (`minmax(0,1fr) minmax(0,1fr)`, 8px gap,
+    `10px 8px` padding).
+  - `.panel` is a flex column with `10px 9px` padding and `min-width:0`.
+  - `.panel h2` wraps (`gap:2px 6px`), so in a narrow column the weight and the
+    Unequip or Device Options button drop under the heading.
+  - Item rows are unchanged: the button stays beside the text, which wraps.
+- **Tabs are one row that scrolls sideways.** `.tabs` no longer wraps. It
+  scrolls on `overflow-x`, with its scrollbar hidden and a fade at the right
+  edge (`mask-image`, `#000 80%` → transparent). The fade is always on. It is
+  the only sign that more tabs are off to the right.
+- **The selected tab is always fully visible.** After every render, each strip
+  scrolls its selected tab into view.
+- **Portrait: Fill (#186).** `main` gets `grid-template-rows:auto 1fr`. `#left`
+  takes only the height it needs, and the panels start directly under the
+  actions and stretch to the bottom of the screen. A long list grows the page,
+  and the page scrolls. The portrait order rules stay, so the row reads
+  Here | Inventory.
+- **Landscape: 50 / 25 / 25.** `main` is `minmax(0,1fr) minmax(0,1fr)` in place
+  of `1fr 320px`. The text column ends at the middle of the screen, and the two
+  panels share the right half: text | Inventory | Here.
+
+**Fixed**
+
+- **A tab strip kept a stale scroll offset across rooms.** Found in the mock-up
+  and fixed here, before it could ship. Each render rebuilds a strip's buttons
+  inside the same element. The browser keeps the old `scrollLeft`, clamped to
+  the new, shorter row. In 2A's kitchen, scroll the Here strip to Pantry, tap
+  it, then go to the living room: Floor is selected but starts 20px off the
+  strip's left edge (11px in landscape). The fix is the new `revealActiveTab()`,
+  below.
+
+**New**
+
+- **`revealActiveTab(strip)`** (RENDERING) scrolls a strip by the least distance
+  that puts its `.active` tab fully in view. A tab already in view leaves the
+  strip where it is. It sets the strip's `scrollLeft` only, so the page never
+  moves. `renderInventoryPanel()` and `renderWorldItemsPanel()` both call it
+  once their tabs are built.
+
+**Documentation**
+
+- The portrait query's comment is rewritten. The `max-width:480px` clause stays;
+  its reason is now that three columns get too narrow below it, where it was
+  the 320px sidebar's 476px floor. The comment says Here sits beside Inventory,
+  and that the `auto 1fr` rows are what keep the panels under the actions
+  (#186).
+- New comments on the landscape columns (`main`), the panels' load-bearing
+  `min-width:0`, the tab strip and its fade, and `revealActiveTab()`.
+- Filed #193. `hereNote()` sets the Here group's notes inline at 12.5px. #190
+  and the handoff's §1 table both miss it, so it stays at 12.5px here. Nothing
+  else was deferred.
+
+**Validation performed**
+
+- `git diff origin/main...HEAD -- ashfall.html` shows the changes above and
+  nothing else.
+- Exercised in headless Chromium at 412×800 and 860×320, with Roboto and Noto
+  Serif substituted for `system-ui` and Georgia, to match Tom's phone:
+  - **Heights.** v0.7.0 measured 31 / 29 / 26 / 26 / 24, matching the handoff.
+    v0.7.1 measures 28 / 26 / 24 / 24 / 24, matching §1's second table.
+  - **The tab case (§3).** With `revealActiveTab()` disabled, the bug
+    reproduced: Floor 20px off in portrait, 11px in landscape. With it, Floor
+    is at 0 in both. Tapping a tab that was already in view (Fridge, with the
+    strip scrolled to Pantry) did not move the strip. The page's `scrollY`
+    stayed 0 throughout.
+  - **Portrait.** The panels start 10px under `#left` (the sidebar's padding)
+    and reach the bottom of the screen. With a long floor list in the living
+    room (a scratch copy), the page grew to 1480px and scrolled. The sidebar
+    did not scroll inside itself.
+  - **Landscape.** `#left` is 430px of 860. Inventory is at x=438 and Here at
+    x=649, both 203px wide.
+  - **Header wrap.** On the kitchen's Stove tab, the Here header's Device
+    Options button drops under the heading and stays inside the panel.
+  - No horizontal page scroll at either size, and no page errors.
+    `validateItemRegistry()`, `validateLocations()` and `validateRoomSchema()`
+    are clean. `validateReachability()` returns the same report as v0.7.0.
+
+**Open questions / decisions resolved**
+
+- **Keeping the selected tab visible.** A shared helper, `revealActiveTab()`,
+  called by both panel renderers. It lives in RENDERING beside them, not in
+  EVENTS / UI HELPERS, because only renderers call it and it reads nothing but
+  the DOM they just built. It computes the tab's position within the strip and
+  sets `scrollLeft`. It does not use `scrollIntoView()`, which can scroll the
+  page vertically. `Math.floor` and `Math.ceil` round the target so a
+  fractional tab edge never leaves a sub-pixel sliver out of view.
+- **Where the grid rules live.** In the base rules, which apply in both
+  orientations: the `#sidebar` grid, the `.panel` flex column and the tab strip.
+  The portrait query overrides only `main`'s tracks, as before, plus `#left` and
+  the order rules.
+
+**Notes / assumptions**
+
+- **Retunable judgment calls, all approved by Tom in the layout lab:**
+  - every size in the §1 table;
+  - the 24px floor;
+  - the fade's 80% stop;
+  - the sidebar's 8px gaps and the `10px 8px` / `10px 9px` paddings;
+  - the 50 / 50 landscape split of `main`.
+- **The selected tab can sit under the fade.** "Fully visible" means inside the
+  strip's scrollport. With the fade always on, a selected last tab, scrolled to
+  the end, still shows its right edge faded. That is the approved look, not a
+  miss by `revealActiveTab()`.
+- **A stale `worldTab` gets no reveal.** `renderWorldItemsPanel()` marks the
+  active tab before it falls back to Floor for a `worldTab` that no longer
+  exists, so on that render no tab is `.active`. `revealActiveTab()` then does
+  nothing. That behaviour is v0.7.0's; movement already resets `worldTab` to
+  `"floor"` before rendering.
+- **`button.action` changes everywhere it is used:** the play screen's Move and
+  Here groups, the item pop-up, the Crafting list and the Device Options panel.
+  #190 names the pop-up's and the recipes' buttons as part of the cut.
+
+**Explicitly out of scope**
+
+- Other text in the drawer and the full-screen panels keeps its v0.7.0 size:
+  `#statsBox`, `#seedRow`, `#deviceStatus`, `.menu-section h3`,
+  `.menu-placeholder`, the `#sideMenu` and `.full-panel` headings,
+  `#hubRow .hint`, the map's text and buttons, `#closeMenu` and `.panel-close`.
+- Rejected in planning: a half-screen dock, a 40 / 30 / 30 split, a 1280px cap,
+  wrapping tabs, and a dropdown in place of tabs.
+- #165 (adjustable layout in Options). This pass's values become its defaults.
+- #29 (the log's `max-height` and 50-entry cap). #169 (a bag as a Here tab).
+- `positionItemPop()`: the pop-up's width and position are unchanged.
+- #78, accessibility.
+
+**Sections touched**
+
+- `<style>`
+- RENDERING (`revealActiveTab()`, `renderInventoryPanel()`,
+  `renderWorldItemsPanel()`)
+
+**Version**: `GAME_CONFIG.VERSION` `"0.7.0"` → `"0.7.1"`
+
+---
+
 ## v0.7.0 — Device Options: a `device` tag, container tags, and the stove's controls in their own panel
 
 Implements: handoffs/device-options.md
