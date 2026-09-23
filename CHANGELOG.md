@@ -18,6 +18,199 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.7.2 — Tier-0 sweep
+
+Implements: handoffs/tier-0-sweep.md
+
+Implements #173, #176, #180, #181, #183, #184, #193 and #195 in full, per
+`handoffs/tier-0-sweep.md`. These are eight independent small fixes: the open
+`tier-0` backlog minus #167. Only #180 and #195 are coupled. #180 removes the
+walkie-talkie's `battery` tag, and #195's load-time tag resync is what takes
+that removal into saves that already hold one. Nothing is added to `state`, and
+`SAVE_KEY` stays `ashfall_save_v0.7`. **PATCH**, so existing browser saves keep
+loading.
+
+**Fixed**
+
+- **The walkie-talkie was a battery (#180).** `walkie_talkie`'s `ITEM_REGISTRY`
+  entry carried `tags:["battery"]`, so `countByTag("battery")` counted it, and
+  "Replace batteries" on a flashlight or radio could spend a whole
+  walkie-talkie through `consumeByTag("battery", 1)`. The entry no longer has a
+  `tags` field and gets nothing in its place. This is the pass's only WORLD DATA
+  change. It corrects a definition and places no instance.
+- **A registry tag fix never reached a save (#195).** `itemFromRegistry()`
+  deep-copies `tags` onto every instance, so a save keeps whatever tags its items
+  were created with. The new `backfillRegistryTags()` (PERSISTENCE) resyncs
+  them on load. It covers every item `forEachItemList()` reaches, and each
+  `CONTAINER_SLOTS` slot object on `state`. An item whose `itemId` is an own key
+  of `ITEM_REGISTRY` takes a fresh copy of the entry's `tags`, or loses the
+  field when the entry has none. An item with no `itemId`, or one the registry
+  does not know, is left untouched. `applyLoadedData()` calls it straight after
+  `backfillItemIds()` and `backfillSlotItemIds()`, whose `itemId` it keys off.
+  It runs on load only.
+- **Devices stopped draining once put down (#181).** `applyWorldTicking()`
+  drained only `invPools()`. That skipped a bag's `contents`, and every floor
+  and container in the world. A radio left on in a room froze at its charge
+  until picked up again. The drain now runs over every list
+  `forEachItemList()` reaches. The formula and the switch-off are unchanged. The
+  log line depends on where the device is:
+  - carried, including inside a carried bag at any depth: "Your … runs out of
+    battery and shuts off." (unchanged);
+  - anywhere in the current room, including nested `contents`: "The … runs out
+    of battery and shuts off.";
+  - anywhere else: no line. It shuts off silently, as a fire elsewhere already
+    goes out.
+- **Crafting opened onto an empty catalogue after death (#183).** The Crafting
+  hub button is now `disabled` while `gameOver` is true, and enabled otherwise.
+  It has no hint line, because "You did not survive." already says why. The
+  existing `#hubRow button:disabled` style is the whole visual. `render()` sets
+  the state before it branches, so it runs on every render. Restart, Replay
+  this seed and loading a save after death all re-enable it. The game-over
+  branch still blanks `#craftingList`. `doCraft()` has no `gameOver` guard, so
+  a live recipe button must never survive into the game-over screen.
+
+**New**
+
+- **Replay this seed (#176).** The game-over screen has a second button after
+  Restart: `actionButton("Replay this seed", ()=> doRestart(state.seed))`. It
+  starts a fresh run on the dead run's seed. Restart is unchanged and still
+  starts a new world.
+- **`forEachItemList()` says where each list is.** `visit` is now called as
+  `visit(list, roomId)`, where `roomId` is the id of the room the list is in, or
+  `null` when it is carried. A bag's `contents` inherits its bag's answer.
+  Existing callers ignore the argument and behave as before. This is how the
+  #181 tick picks its log line.
+
+**UI**
+
+- **Here group notes (#193).** `hereNote()` is now `font-size:12px;
+  padding:5px 0`, down from 12.5px and `6px 0`. That puts it in line with
+  v0.7.1's 12px play screen. The colour is unchanged. The same helper draws
+  the Device Options panel's "Nothing you're carrying will light it.", which
+  changes with it.
+- **Game over:** two buttons, Restart then Replay this seed. In the drawer,
+  Crafting is greyed out and does nothing.
+- **Log:** a device switched on in the current room says "The … runs out of
+  battery and shuts off." when it dies.
+- **Batteries:** "Replace batteries" is no longer offered on the strength of a
+  walkie-talkie. In an old save this takes effect when the save is loaded.
+
+**Removed**
+
+- The `.menu-placeholder` CSS rule (#184). No markup or script used the class.
+  Nothing replaces it.
+
+**Documentation**
+
+- ITEM DATA SCHEMA: an item's `tags` are definition data. `overrides` never
+  sets them, and the load path resyncs them from the registry.
+- The paragraph above `validateReachability()` (#173) no longer carries a
+  count, a version or an issue number. It says dead pools and unreachable items
+  are expected until the spawn balance is done, and names
+  `ashfallDev.validateReachability()` as the live figure, with
+  `ashfallDev.sampleSeeds()` beside it.
+- `hereNote()`'s comment no longer counts its call sites. It said five and
+  there are four. It now also names the stove note among its uses.
+- `render()`'s blanking comment no longer cites #183. It now says why the
+  blanking stays.
+- New comments on `applyWorldTicking()`, `backfillRegistryTags()`, the
+  `forEachItemList()` second argument, and the hub-button lookup.
+- Filed #197. `validateLoadedWorld()`'s comment still says "the three
+  backfills". There are now seven, plus `resyncUidCounter()`. The backfills'
+  own "third / fourth / sixth companion" ordinals also disagree. Found here and
+  outside this handoff's scope. Nothing was deferred.
+
+**Validation performed**
+
+- `git diff origin/main...HEAD -- ashfall.html` touches only the sections
+  listed below.
+- Exercised in headless Chromium, with v0.7.1 (`origin/main`'s
+  `ashfall.html`) run alongside as the baseline:
+  - **`validateReachability()`** returns a report identical to v0.7.1's: 10
+    dead pools, 11 unreachable items, the same tool-tag lines.
+    `validateItemRegistry()`, `validateLocations()` and `validateRoomSchema()`
+    are clean. No page errors.
+  - **#195 and #180 on an old save.** The test save was a v0.7.1 save with no
+    spare batteries, carrying a walkie-talkie tagged `battery` and a portable
+    radio. In v0.7.1, the radio's Device Options offered "Replace batteries".
+    Loaded in v0.7.2, they offered Turn on and Remove batteries only.
+    Every walkie-talkie lost its `tags` field: the carried one, one two bags
+    deep in `contents`, and one on another room's floor. An equipped slot object
+    lost a stray `tags` field. A frying pan saved without tags got `["blunt"]`
+    back. An item with no `itemId`, and one with an unknown `itemId`, kept their
+    tags. The keychain was untouched.
+  - **#181.** One Rest, with four devices on at 0.5% charge. A flashlight stowed
+    in a carried bag logged "Your flashlight…". A radio on the current floor
+    logged "The portable radio…". A flashlight in a bag inside a current-room
+    container logged "The flashlight…". A radio on another room's floor went to
+    0 and shut off with no line. A full radio in another room's container
+    drained by exactly `60 × drainRate`, once, not twice. A switched-off
+    flashlight did not drain.
+  - **#183 and #176.** Alive, Crafting is enabled. After death, the buttons
+    read Restart then Replay this seed. Crafting is disabled with the label
+    "Crafting" only, Options is still enabled, and the catalogue is blank.
+    Replay this seed kept the seed shown in Options and started at minute 0
+    with full health, and Crafting was enabled again. A load after death
+    re-enabled Crafting. Restart gave a new seed and re-enabled it.
+  - **#193.** The sleep-cooldown note computes to 12px with `5px 0px` padding.
+    The stylesheet has no `.menu-placeholder` rule.
+
+**Sections touched**
+
+- RENDERING: `hereNote()`, `render()` (the Crafting button state and the
+  game-over branch), and `<style>`.
+- EVENTS / UI HELPERS: the hub-row build, which now keeps `hubButtonFor`.
+- SURVIVAL / TIME SIMULATION: `applyWorldTicking()`.
+- WORLD DATA: `walkie_talkie`'s registry entry, and the ITEM DATA SCHEMA
+  comment.
+- PERSISTENCE: `forEachItemList()`, the new `backfillRegistryTags()`,
+  `applyLoadedData()`, and the comment above `validateReachability()`.
+
+**Open questions / decisions resolved**
+
+- **How the tick knows where a device is (#181): option (b).**
+  `forEachItemList()` got an optional second argument. Walking the three scopes
+  by hand inside `applyWorldTicking()` would have been a second item walker,
+  which the walker's own comment names as how a bag's `contents` gets missed.
+  Each list is still visited exactly once. The drain-once check above confirms
+  it.
+- **How `render()` reaches the Crafting button (#183): a kept reference.**
+  `hubButtonFor` maps each enabled hub button by the `FULL_PANELS` id it opens.
+  It is filled when the row is built, and read as `hubButtonFor.crafting`. It
+  is keyed by `opens`, never by label.
+- **`hereNote()` (#193): the inline style stays.** It is a two-value edit.
+  Moving it to a class is left to #165's text-size option, which would need one.
+- **`backfillRegistryTags()` tests `hasOwnProperty`.** A truthy lookup would
+  count an `itemId` of `"constructor"` as a registry key. The handoff says "a
+  key of `ITEM_REGISTRY`", and own keys are what that means.
+
+**Notes / assumptions**
+
+- **The tick now walks the whole world every game minute.** A ~570-minute
+  Sleep measured about 13 ms in v0.7.1 and about 35 ms in v0.7.2 on a fresh
+  world. The cost scales with how many items the world holds. It is well under
+  a frame, and was accepted rather than optimised.
+- **A device that dies during a move counts the room being left as the current
+  room.** A move's minutes tick before `state.currentRoom` changes. The fire's
+  "burns down and goes out" line already works the same way.
+- **The new log line's wording** is the handoff's.
+
+**Explicitly out of scope**
+
+- #167 (tag-driven Disassemble). #195 removes its save seam, but it is not
+  implemented here. `campfire_kit` gets no tag.
+- The walkie-talkie as a working device (a `device` tag, battery controls). A
+  salvage action to take its batteries.
+- A `gameOver` guard in `doCraft()`.
+- Resyncing container tags. Containers are world instance data, not registry
+  entries.
+- A log line, or any notice, for a device outside the current room.
+- Showing the seed on the game-over screen. It stays in Options.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.7.1"` → `"0.7.2"`
+
+---
+
 ## v0.7.1 — Compact sizes and side-by-side panels
 
 Implements: handoffs/compact-sizes-and-side-by-side-panels.md

@@ -75,7 +75,6 @@
   .menu-actions button{ background:var(--panel-2); border:1px solid var(--line); color:var(--ink);
     font-size:12px; padding:7px 9px; border-radius:3px; cursor:pointer; text-align:left; }
   .menu-actions button:hover{ border-color:var(--accent-dim); }
-  .menu-placeholder{ font-size:12px; color:var(--ink-faint); font-style:italic; }
   #statsBox{ font-size:13px; color:var(--ink-dim); line-height:1.9; }
   /* The heading row, not the heading: #mapZoomToggle is a <div> and is not
      legal inside an <h3>, so the flex row is a wrapper around both. The
@@ -366,7 +365,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.7.1" };
+  const GAME_CONFIG = { VERSION: "0.7.2" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -597,6 +596,9 @@
   //   (e.g. a specific unit's current durability), never for properties
   //   that should be shared — those belong in the registry entry itself,
   //   so an item's definition is never duplicated across placements.
+  //   An item's `tags` are definition data: `overrides` never sets them, and
+  //   the load path resyncs them from the registry (backfillRegistryTags()),
+  //   so a tag fix here reaches every save.
   //   Basic item: { name, category, qty, unitWeight }
   //   Optional properties:
   //     tags          capability tags used by mechanics instead of name
@@ -815,7 +817,7 @@
     utility_bill: { name:"Utility bill", category:"Literature", unitWeight:0.02 },
     missing_person_flyer: { name:"Missing person flyer", category:"Literature", unitWeight:0.02 },
     // Electronics
-    walkie_talkie: { name:"Walkie-talkie", category:"Electronics", unitWeight:0.3, tags:["battery"] },
+    walkie_talkie: { name:"Walkie-talkie", category:"Electronics", unitWeight:0.3 },
     dead_cellphone: { name:"Dead cellphone", category:"Electronics", unitWeight:0.15 },
     disposable_camera: { name:"Disposable camera", category:"Electronics", unitWeight:0.2 },
     // Money / valuables
@@ -4801,14 +4803,20 @@
       state.illnessMinutesLeft -= tick;
     }
   }
+  // A device drains wherever it is: carried, stowed in a bag, or left switched
+  // on anywhere in the world. Where it is decides only who hears it die: a
+  // carried one is "your", one in the room you are in is "the", and one
+  // anywhere else shuts off silently, the way a fire elsewhere goes out.
   function applyWorldTicking(min){
-    invPools().forEach(list=>{
+    forEachItemList((list, roomId)=>{
       list.forEach(it=>{
         if(it.on && it.durability){
           it.durability.current = Math.max(0, it.durability.current - it.drainRate*min);
           if(it.durability.current <= 0){
             it.on = false;
-            log(`Your ${it.name.toLowerCase()} runs out of battery and shuts off.`, "warn");
+            const name = it.name.toLowerCase();
+            if(roomId === null) log(`Your ${name} runs out of battery and shuts off.`, "warn");
+            else if(roomId === state.currentRoom) log(`The ${name} runs out of battery and shuts off.`, "warn");
           }
         }
       });
@@ -5165,24 +5173,27 @@
   // session keep getting unique ids, and ensureUid() lazily assigns one to
   // any loaded item that predates the uid system.
   function serializeGame(){ return JSON.stringify({ version: GAME_CONFIG.VERSION, state, world, doors, windows }, null, 2); }
-  // forEachItemList(): calls visit(list) once for every item array reachable
-  // from the current `state` and `world` — the inventory pools, every room's
-  // floor, containers and car containers, and the `contents` of any item in
-  // any of those, to any depth. Every scan over item lists goes through this
-  // rather than walking them by hand: a hand-rolled walk is how a stowed
-  // bag's contents gets missed. It reads `state` and `world` at call time.
+  // forEachItemList(): calls visit(list, roomId) once for every item array
+  // reachable from the current `state` and `world` — the inventory pools,
+  // every room's floor, containers and car containers, and the `contents` of
+  // any item in any of those, to any depth. Every scan over item lists goes
+  // through this rather than walking them by hand: a hand-rolled walk is how a
+  // stowed bag's contents gets missed. It reads `state` and `world` at call
+  // time. `roomId` says where the list is: the id of the room it is in, or
+  // null when it is carried, and `contents` inherits its bag's answer. A
+  // caller that only needs the list ignores it.
   function forEachItemList(visit){
-    const walk = (list)=>{
+    const walk = (list, roomId)=>{
       if(!Array.isArray(list)) return;
-      visit(list);
-      list.forEach(it=>{ if(it && Array.isArray(it.contents)) walk(it.contents); });
+      visit(list, roomId);
+      list.forEach(it=>{ if(it && Array.isArray(it.contents)) walk(it.contents, roomId); });
     };
-    invPools().forEach(walk);
+    invPools().forEach(list=> walk(list, null));
     Object.keys(world).forEach(roomId=>{
       const room = world[roomId];
-      walk(room.floor);
-      (room.containers || []).forEach(c=>walk(c.items));
-      (room.carContainers || []).forEach(c=>walk(c.items));
+      walk(room.floor, roomId);
+      (room.containers || []).forEach(c=>walk(c.items, roomId));
+      (room.carContainers || []).forEach(c=>walk(c.items, roomId));
     });
   }
   function resyncUidCounter(){
@@ -5340,6 +5351,26 @@
       if(slot && !slot.itemId && nameToId[slot.name]) slot.itemId = nameToId[slot.name];
     });
   }
+  // backfillRegistryTags(): companion to backfillItemIds(), run after it and
+  // backfillSlotItemIds() on every load, since it keys off the itemId they
+  // assign. itemFromRegistry() deep-copies `tags` onto every instance, so
+  // without this a tag fixed in ITEM_REGISTRY would never reach an item
+  // already in a save: the walkie-talkie would go on counting as a battery.
+  // Every item forEachItemList() reaches, and every equipped slot object,
+  // takes a fresh copy of its registry entry's `tags`, or loses the field when
+  // the entry has none. An item with no itemId, or one the registry does not
+  // know, is left as it is. A new game needs none of this: its items come
+  // from the registry already.
+  function backfillRegistryTags(){
+    const resync = (it)=>{
+      if(!it || !it.itemId || !Object.prototype.hasOwnProperty.call(ITEM_REGISTRY, it.itemId)) return;
+      const def = ITEM_REGISTRY[it.itemId];
+      if(def.tags) it.tags = def.tags.slice();
+      else delete it.tags;
+    };
+    forEachItemList(list=> list.forEach(resync));
+    CONTAINER_SLOTS.forEach(slotKey=> resync(state[slotKey]));
+  }
   // backfillIllnessScale(): sixth companion to backfillItemIds(), run
   // alongside it on every load. Instances written before illnessChance became
   // a fraction carry it as a percent (raw_fish shipped 35). A value above 1 is
@@ -5400,6 +5431,7 @@
     resyncUidCounter();
     backfillItemIds();
     backfillSlotItemIds();
+    backfillRegistryTags();
     backfillLocationIds();
     backfillContainerFields();
     backfillRoomAddresses();
@@ -5532,11 +5564,13 @@
   // listing the same pool id twice. Either pair would share a key and so
   // always roll alike. Neither occurs today.
   //
-  // It reports the current state; it does not assert the state is good. Ten
-  // dead pools and twelve unreachable items are the expected output at
-  // v0.5.1, and driving them to zero is the balance pass's job (#66, #67).
-  // Call it as `ashfallDev.validateReachability()` from the browser console
-  // when auditing.
+  // It reports the current state; it does not assert the state is good. Dead
+  // pools and unreachable items are expected until the spawn balance is done,
+  // so a report that lists some is not a failure, and how many it lists is
+  // not written down here, where it would go stale. The live figure is what
+  // `ashfallDev.validateReachability()` returns: call it from the browser
+  // console when auditing. `ashfallDev.sampleSeeds()` (below) shows how often
+  // each item actually turns up across seeds.
   function validateReachability(){
     const report = [];
     Object.keys(SPAWN_POOLS).forEach(poolId=>{
@@ -5985,10 +6019,14 @@
     { label:"Options",  opens:"options" }
   ];
   const HUB_PLACEHOLDER_HINT = "Not yet";
+  // Each enabled hub button, keyed by the FULL_PANELS id it opens, so
+  // render() can reach one by what it opens rather than by its label.
+  const hubButtonFor = {};
   HUB_BUTTONS.forEach(b=>{
     const btn = document.createElement("button");
     btn.textContent = b.label;
     if(b.opens){
+      hubButtonFor[b.opens] = btn;
       btn.addEventListener("click", ()=> openPanel(b.opens));
     } else {
       btn.disabled = true;
@@ -6688,13 +6726,13 @@
     btn.addEventListener("click", onClick);
     return btn;
   }
-  // The dim line renderHereActionsPanel() prints where an action would be if
-  // something were different — a locked door with no key, sleep on cooldown,
-  // nothing to light a fire with. One helper rather than the same style
-  // literal written at five call sites.
+  // The dim line printed where an action would be if something were
+  // different — a locked door with no key, sleep on cooldown, nothing to light
+  // a fire or the stove with. One helper rather than the same style literal
+  // written at every call site.
   function hereNote(text){
     const note = document.createElement("div");
-    note.style.cssText = "color:var(--ink-faint); font-size:12.5px; padding:6px 0;";
+    note.style.cssText = "color:var(--ink-faint); font-size:12px; padding:5px 0;";
     note.textContent = text;
     return note;
   }
@@ -7235,6 +7273,11 @@
   }
   function render(){
     renderOptionsPanel();
+    // Crafting is unavailable once the run is over, and available again the
+    // moment it isn't: set on every render, so Restart, Replay this seed and
+    // a load after death all re-enable it. No hint line: "You did not
+    // survive." already says why.
+    hubButtonFor.crafting.disabled = gameOver;
     if(gameOver){
       document.getElementById("locLabel").textContent = "";
       document.getElementById("clockLabel").textContent = "";
@@ -7243,6 +7286,7 @@
       const moveBox = document.getElementById("moveActions");
       moveBox.innerHTML = "";
       moveBox.appendChild(actionButton("Restart", ()=> doRestart()));
+      moveBox.appendChild(actionButton("Replay this seed", ()=> doRestart(state.seed)));
       document.getElementById("moveGroup").style.display = "";
       document.getElementById("hereGroup").style.display = "none";
       document.getElementById("invTabs").innerHTML = "";
@@ -7253,9 +7297,10 @@
       document.getElementById("worldList").innerHTML = "";
       document.getElementById("worldWeight").textContent = "";
       deviceOptionsBtn.style.display = "none";
-      // The catalogue goes blank with the rest, as the old Craft panel's body
-      // did: Crafting can still be opened after death, and offers nothing
-      // (#183 asks whether it should say more).
+      // The catalogue goes blank with the rest, even though the Crafting
+      // button is disabled above and the panel cannot be opened. The blanking
+      // stays because doCraft() has no gameOver guard: a live recipe button
+      // must never survive into the game-over screen.
       document.getElementById("craftingList").innerHTML = "";
       // Game over closes every layer, so "You did not survive." is what the
       // player sees. It does so once, on the render that first draws this
