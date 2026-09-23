@@ -274,7 +274,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.6.0" };
+  const GAME_CONFIG = { VERSION: "0.6.1" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -1292,7 +1292,7 @@
         { to:"bedroom", label:"Go to the bedroom", distanceM:5 },
         { to:"bathroom", label:"Go to the bathroom", distanceM:5 },
         { to:"balcony", label:"Go to the balcony", distanceM:3 },
-        { to:"hallway2", label:"Leave the apartment", distanceM:6 } ]
+        { to:"hallway2", label:"Leave the apartment", distanceM:6, doorId:"2a" } ]
     },
     kitchen: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Kitchen", shelter:"full",
       desc:"Grease and old coffee grounds. The fridge hums no more, and something inside it has clearly given up. The gas stove still works — no power needed to light it.",
@@ -1316,7 +1316,7 @@
       ],
       exits:[
         { to:"living", label:"Go to the living room", distanceM:4 },
-        { to:"hallway2", label:"Leave the apartment", distanceM:8 } ]
+        { to:"hallway2", label:"Leave the apartment", distanceM:8, doorId:"2a" } ]
     },
     bathroom: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Bathroom", shelter:"full",
       desc:"A cracked mirror over the sink. The water hasn't run in days, but the cabinet's still worth a look.",
@@ -1332,7 +1332,7 @@
       exits:[
         { to:"living", label:"Go to the living room", distanceM:5 },
         { to:"bedroom", label:"Go to the bedroom", distanceM:3 },
-        { to:"hallway2", label:"Leave the apartment", distanceM:7 } ]
+        { to:"hallway2", label:"Leave the apartment", distanceM:7, doorId:"2a" } ]
     },
     bedroom: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Bedroom", shelter:"full",
       desc:"The bed's still unmade from whatever morning this all started. A closet stands half open.",
@@ -1355,7 +1355,7 @@
       exits:[
         { to:"living", label:"Go to the living room", distanceM:5 },
         { to:"bathroom", label:"Go to the bathroom", distanceM:3 },
-        { to:"hallway2", label:"Leave the apartment", distanceM:7 } ]
+        { to:"hallway2", label:"Leave the apartment", distanceM:7, doorId:"2a" } ]
     },
     balcony: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Balcony", shelter:"partial",
       desc:"A narrow concrete ledge overlooking the street below. A dead plant sits in the corner, and a rusted fire escape ladder leads down.",
@@ -4320,11 +4320,12 @@
     return gated;
   }
   // Every door a room touches: the ones it adjoins as a `sides` member, then
-  // the ones only its exits pass through. The union, not either half — a key
-  // has to keep offering to lock the 2nd Floor door from inside 2A, whose
-  // exits carry no doorId, and has to start offering it in 2B's kitchen, which
-  // is no door's side. `doorsForRoom()` first keeps every key panel's existing
-  // label order intact.
+  // the ones only its exits pass through. The union, not either half — 2B's
+  // kitchen leaves through the "2b" door without being one of its sides, and a
+  // room a door adjoins keeps its key actions even if one of its exits
+  // through that door is authored without a doorId, as 2A's four were until
+  // v0.6.1. `doorsForRoom()` first keeps every key panel's existing label
+  // order intact.
   function doorsTouchingRoom(roomId){
     const ids = doorsForRoom(roomId);
     gatedExitsForRoom(roomId).forEach(e=>{ if(!ids.includes(e.doorId)) ids.push(e.doorId); });
