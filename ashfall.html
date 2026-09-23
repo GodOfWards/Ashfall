@@ -274,7 +274,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.6.1" };
+  const GAME_CONFIG = { VERSION: "0.6.2" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -3736,8 +3736,16 @@
   // changes exactly when the outcome should: loot on the container's
   // identity, fishing on game time, illness on state.rollSeq.
   //
+  // The core takes its seed explicitly: rollValueFor(), chanceFor() and
+  // randIntFor() are the real functions, and rollValue(), chance() and
+  // randInt() are the game's API, the same three bound to state.seed. The
+  // explicit form exists so the dev seam can evaluate a seed that is not the
+  // current run's (simulateSeed()) without ever writing state.seed — a
+  // swap-and-restore would leave the wrong seed in place if anything between
+  // the two threw.
+  //
   // FNV-1a over a string, from a caller-supplied 32-bit basis. Two callers:
-  // hashKey() mixes in the run's seed as the basis, seedFromInput() uses the
+  // hashKey() mixes in a seed as the basis, seedFromInput() uses the
   // standard offset basis because there is no seed yet. Not cryptographic and
   // does not need to be — it is a game's dice.
   function fnv1a(str, basis){
@@ -3748,15 +3756,16 @@
     }
     return h >>> 0;
   }
-  function hashKey(parts){ return fnv1a(parts.join(KEY_SEP), state.seed); }
+  function hashKey(seed, parts){ return fnv1a(parts.join(KEY_SEP), seed); }
   // A key's value in [0,1). mulberry32's avalanche, without its stepping —
   // there is no cursor to step. Strictly below 1, which both callers rely on.
-  function rollValue(...parts){
-    let t = (hashKey(parts) + 0x6D2B79F5) | 0;
+  function rollValueFor(seed, parts){
+    let t = (hashKey(seed, parts) + 0x6D2B79F5) | 0;
     t = Math.imul(t ^ t >>> 15, 1 | t);
     t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
     return ((t ^ t >>> 14) >>> 0) / 4294967296;
   }
+  function rollValue(...parts){ return rollValueFor(state.seed, parts); }
   // The one way to ask the game whether something happens. `p` is a fraction
   // in [0,1] — the file's one probability convention — and this is the one
   // place a probability's legality is checked. Warns and clamps rather than
@@ -3765,20 +3774,23 @@
   // p === 0 is always false and p === 1 always true, because rollValue() is
   // strictly below 1. Returns a bare boolean on purpose: degrees of success
   // and near misses are a character-dependent layer's business (#10), built
-  // on top of this rather than into it.
-  function chance(p, ...keyParts){
+  // on top of this rather than into it. The check lives in chanceFor(), and
+  // chance() delegates to it, so it exists in one place for both.
+  function chanceFor(seed, p, keyParts){
     if(!(Number.isFinite(p) && p >= 0 && p <= 1)){
       console.warn(`chance: p ${p} is not a number in [0,1] — clamped`, keyParts);
       p = Number.isFinite(p) ? Math.max(0, Math.min(1, p)) : 0;
     }
-    return rollValue(...keyParts) < p;
+    return rollValueFor(seed, keyParts) < p;
   }
+  function chance(p, ...keyParts){ return chanceFor(state.seed, p, keyParts); }
   // An integer in [min, max], from the same keyed source — the quantity draw
-  // in rolledLootFor(). Keyed like chance(), or a container's quantities
+  // in rolledPoolFor(). Keyed like chance(), or a container's quantities
   // would stay unseeded and its contents unreproducible.
-  function randInt(min, max, ...keyParts){
-    return min + Math.floor(rollValue(...keyParts) * (max - min + 1));
+  function randIntFor(seed, min, max, keyParts){
+    return min + Math.floor(rollValueFor(seed, keyParts) * (max - min + 1));
   }
+  function randInt(min, max, ...keyParts){ return randIntFor(state.seed, min, max, keyParts); }
   // A run's seed from whatever the player typed. A plain decimal integer
   // inside the uint32 range is taken as the seed itself, so the number the
   // menu shows round-trips exactly. Anything else — a word, a phrase, an
@@ -4540,11 +4552,12 @@
     log("You cut through the lock on the " + c.name.toLowerCase() + ".", "warn");
     render();
   }
-  // The items a container's pools yield, as a pure function of the run's seed
-  // and the container's identity. No mutation, no state read but state.seed —
-  // so the same container yields the same contents whether it is opened first
-  // or fiftieth, and whether it is opened at all. That last property is what
-  // lets a seed be evaluated without playing it (#150).
+  // The items a container's pools yield, as a pure function of a seed and
+  // the container's identity. No mutation and no state read at all — the
+  // seed is an argument — so the same container yields the same contents
+  // whether it is opened first or fiftieth, and whether it is opened at all.
+  // That last property is what lets simulateSeed() evaluate a seed without
+  // playing it.
   //
   // Within a pool, emptyChance gates the whole pool and then every entry is
   // rolled once against its own `chance` — no entry can be drawn twice, so a
@@ -4553,18 +4566,32 @@
   // name the pool and the item by id, never by array index, so reordering a
   // container's spawnPools or a pool's entries during authoring does not
   // reshuffle every container in the game.
-  function rolledLootFor(roomId, container){
+  //
+  // rolledPoolFor() is one pool's roll and the only place the three loot key
+  // shapes are written: { empty, items }, where `empty` is the empty gate's
+  // result and `items` the stacks that hit, in declaration order. null for
+  // an unknown pool id, which rolls nothing. sampleSeeds() reads entry-level
+  // hits by calling it, never by rebuilding a key. rolledLootFor() is its
+  // concatenation over the container's spawnPools, in their order.
+  function rolledPoolFor(seed, roomId, containerId, poolId){
+    const pool = SPAWN_POOLS[poolId];
+    if(!pool) return null; // defensive — an unknown pool id contributes nothing
+    if(chanceFor(seed, pool.emptyChance, ["loot", roomId, containerId, poolId, "empty"]))
+      return { empty:true, items:[] };
+    const items = [];
+    pool.entries.forEach(entry=>{
+      if(!chanceFor(seed, entry.chance, ["loot", roomId, containerId, poolId, entry.itemId])) return;
+      const qty = randIntFor(seed, entry.qtyMin, entry.qtyMax,
+        ["loot", roomId, containerId, poolId, entry.itemId, "qty"]);
+      items.push(itemFromRegistry({ id:entry.itemId, qty }));
+    });
+    return { empty:false, items };
+  }
+  function rolledLootFor(seed, roomId, container){
     const out = [];
     (container.spawnPools || []).forEach(poolId=>{
-      const pool = SPAWN_POOLS[poolId];
-      if(!pool) return; // defensive — an unknown pool id contributes nothing
-      if(chance(pool.emptyChance, "loot", roomId, container.id, poolId, "empty")) return;
-      pool.entries.forEach(entry=>{
-        if(!chance(entry.chance, "loot", roomId, container.id, poolId, entry.itemId)) return;
-        const qty = randInt(entry.qtyMin, entry.qtyMax,
-          "loot", roomId, container.id, poolId, entry.itemId, "qty");
-        out.push(itemFromRegistry({ id:entry.itemId, qty }));
-      });
+      const rolled = rolledPoolFor(seed, roomId, container.id, poolId);
+      if(rolled) rolled.items.forEach(it=> out.push(it));
     });
     return out;
   }
@@ -4580,7 +4607,7 @@
   function doOpenContainer(room, container){
     worldTab = container.id;
     if(container.spawnPools && !container.spawnRolled){
-      rolledLootFor(state.currentRoom, container)
+      rolledLootFor(state.seed, state.currentRoom, container)
         .forEach(it=> addToList(container.items, it));
       container.spawnRolled = true;
       container.lastRolledMinute = state.totalMinutes;
@@ -5291,6 +5318,24 @@
   // once that stops being true. The count is the evidence that question wants.
   const REPORTED_TOOL_TAGS = ["fire-starter", "fishing", "tackle", "chopping",
     "cutting", "blunt", "can-opening", "heat", "prying"];
+  // Whether the registry entry for `id` carries `tag`, the test every tag
+  // count on the dev seam applies.
+  function registryCarriesTag(id, tag){ const def = ITEM_REGISTRY[id]; return !!(def && def.tags && def.tags.includes(tag)); }
+  // Every container in `world` that still rolls — carries spawnPools and has
+  // not had spawnRolled set — as [{ roomId, container }], car containers
+  // included, in room order. The one definition of "a container that still
+  // rolls" the dev helpers share; doOpenContainer() applies the same test to
+  // the one container it is opening.
+  function rollingContainers(world){
+    const out = [];
+    Object.keys(world).forEach(roomId=>{
+      const room = world[roomId];
+      (room.containers || []).concat(room.carContainers || []).forEach(c=>{
+        if(c.spawnPools && !c.spawnRolled) out.push({ roomId, container:c });
+      });
+    });
+    return out;
+  }
   // validateReachability(): dev-only console helper (not wired to any button
   // or UI, runs nothing automatically), sibling to the three above. Reports
   // what a fresh world can actually hand the player:
@@ -5352,9 +5397,9 @@
       (room.floor || []).forEach(place);
       (room.containers || []).concat(room.carContainers || []).forEach(c=>{
         (c.items || []).forEach(place);
-        if(c.spawnPools && !c.spawnRolled) c.spawnPools.forEach(id=> livePools.add(id));
       });
     });
+    rollingContainers(fresh).forEach(({ container })=> container.spawnPools.forEach(id=> livePools.add(id)));
     [freshState.inventory].concat(CONTAINER_SLOTS.map(slot=> freshState[slot])).forEach(slot=>{
       if(slot && slot.items) slot.items.forEach(place);
     });
@@ -5370,7 +5415,7 @@
       if(!reachable.has(id)) report.push(`unreachable item: ${id} — not hand-placed, not in a live pool, not crafted, not action-granted`);
     });
     REPORTED_TOOL_TAGS.forEach(tag=>{
-      const carries = (id)=>{ const def = ITEM_REGISTRY[id]; return !!(def && def.tags && def.tags.includes(tag)); };
+      const carries = (id)=> registryCarriesTag(id, tag);
       const hand = Object.keys(placed).filter(carries).reduce((s,id)=> s + placed[id], 0);
       const pools = Array.from(livePools).filter(id=> SPAWN_POOLS[id].entries.some(e=> carries(e.itemId))).sort();
       report.push(`tool tag "${tag}": ${hand} hand-placed instance${hand === 1 ? "" : "s"}, `
@@ -5379,6 +5424,156 @@
     if(badAuthoring) console.warn("validateReachability: pool authoring problems", report.slice(0, badAuthoring));
     console.log(`validateReachability: ${report.length} lines`, report);
     return report;
+  }
+  // simulateSeed() and sampleSeeds(): dev-only console helpers (not wired to
+  // any button or UI, run nothing automatically), siblings to
+  // validateReachability(). That one reports what a fresh world can hold;
+  // these report what a given seed's world does hold. Existence only: neither
+  // asks whether the player can get past a lock, a window or a search to it.
+  //
+  // simulateSeed(seed) is the manifest of one seed's world, one row per item
+  // stack, hand-placed or rolled, without playing the seed. `seed` is a
+  // number (taken >>> 0), a string (through seedFromInput(), so a typed word
+  // gives exactly the world Restart would give it), or omitted for the
+  // current run — the helper's only read of game state. It builds its own
+  // makeDefaultWorld() and makeDefaultState(seed) and never reads the live
+  // world, which a played run has already rolled and rearranged. A row is
+  // { roomId, place, source, itemId, qty }: roomId is "(start)" for the
+  // starting inventory and slots; place is "floor", a container id,
+  // "inventory" or a slot key; source is "hand-placed" or "rolled". Per tag in
+  // REPORTED_TOOL_TAGS it counts the stacks carrying it — stacks, not units,
+  // validateReachability()'s convention, so the two reports compare directly.
+  // Call it as `ashfallDev.simulateSeed(12345)` or
+  // `ashfallDev.simulateSeed("some word")`.
+  //
+  // sampleSeeds(n = 1000, start = 0) runs seeds start … start + n − 1 and sets
+  // what the loot rolls actually yield against what SPAWN_POOLS says they
+  // should: per pool entry, its hit rate against (1 − emptyChance) × chance;
+  // per pool, its empty rate against emptyChance. A trial is one seed of one
+  // rolling container that draws the pool. It also reports, per item, the
+  // fraction of seeds whose world holds it anywhere (hand-placed items read 1,
+  // unreachable ones 0), and per tag, the fraction of seeds with no stack
+  // carrying it. A dead pool has trials 0 and is listed as not rolled, never
+  // as flagged. Call it as `ashfallDev.sampleSeeds()` or
+  // `ashfallDev.sampleSeeds(20000, 5000)`.
+  //
+  // A pool or entry row is flagged when its observed rate strays from the
+  // expected one by more than SAMPLE_TOLERANCE_SIGMA standard errors. At 3σ
+  // over the hundred-odd rows compared, one flag in a clean run is to be
+  // expected: a flag is a prompt to rerun with a larger n or another start,
+  // not a verdict. One that survives the rerun is a finding about the derived
+  // `chance` figures. The 3 is a judgment call, retunable.
+  //
+  // Both are read-only. Every roll they make takes its seed as an argument;
+  // neither reads state.seed to evaluate another seed nor writes it at all.
+  const SAMPLE_TOLERANCE_SIGMA = 3;
+  function seedReportRow(roomId, place, source, it){
+    return { roomId, place, source, itemId:it.itemId, qty:it.qty };
+  }
+  // The seed-independent rows of a manifest: every stack authored into
+  // `fresh` (floors, container items, car containers) and into the starting
+  // state `start` (inventory and slots).
+  function handPlacedRows(fresh, start){
+    const rows = [];
+    Object.keys(fresh).forEach(roomId=>{
+      const room = fresh[roomId];
+      (room.floor || []).forEach(it=> rows.push(seedReportRow(roomId, "floor", "hand-placed", it)));
+      (room.containers || []).concat(room.carContainers || []).forEach(c=>{
+        (c.items || []).forEach(it=> rows.push(seedReportRow(roomId, c.id, "hand-placed", it)));
+      });
+    });
+    [["inventory", start.inventory]].concat(CONTAINER_SLOTS.map(slot=> [slot, start[slot]])).forEach(([place, slot])=>{
+      if(slot && slot.items) slot.items.forEach(it=> rows.push(seedReportRow("(start)", place, "hand-placed", it)));
+    });
+    return rows;
+  }
+  // Per tag in REPORTED_TOOL_TAGS, how many of `rows` carry it.
+  function tagStackCounts(rows){
+    const tags = {};
+    REPORTED_TOOL_TAGS.forEach(tag=>{ tags[tag] = rows.filter(r=> registryCarriesTag(r.itemId, tag)).length; });
+    return tags;
+  }
+  function simulateSeed(seed){
+    const s = seed === undefined ? state.seed
+      : typeof seed === "string" ? seedFromInput(seed)
+      : seed >>> 0;
+    const fresh = makeDefaultWorld();
+    const rows = handPlacedRows(fresh, makeDefaultState(s));
+    rollingContainers(fresh).forEach(({ roomId, container })=>{
+      rolledLootFor(s, roomId, container).forEach(it=> rows.push(seedReportRow(roomId, container.id, "rolled", it)));
+    });
+    const tags = tagStackCounts(rows);
+    console.table(rows);
+    REPORTED_TOOL_TAGS.forEach(tag=>
+      console.log(`simulateSeed ${s}: tool tag "${tag}": ${tags[tag]} stack${tags[tag] === 1 ? "" : "s"}`));
+    return { seed:s, rows, tags };
+  }
+  function sampleSeeds(n = 1000, start = 0){
+    // One fresh world for every seed: everything evaluated against it is pure.
+    const fresh = makeDefaultWorld();
+    const rolling = rollingContainers(fresh);
+    const hand = handPlacedRows(fresh, makeDefaultState(start >>> 0));
+    const handIds = new Set(hand.map(r=> r.itemId));
+    const handTags = tagStackCounts(hand);
+    const tally = {}; // poolId -> { trials, empties, hits: itemId -> count }
+    Object.keys(SPAWN_POOLS).forEach(poolId=>{ tally[poolId] = { trials:0, empties:0, hits:{} }; });
+    const itemSeeds = {};
+    Object.keys(ITEM_REGISTRY).forEach(id=>{ itemSeeds[id] = 0; });
+    const tagMissing = {};
+    REPORTED_TOOL_TAGS.forEach(tag=>{ tagMissing[tag] = 0; });
+    for(let i = 0; i < n; i++){
+      const seed = (start + i) >>> 0;
+      const ids = new Set(handIds);
+      const tags = Object.assign({}, handTags);
+      // Pool by pool, which is rolledLootFor()'s yield split at the seams the
+      // tallies need: the same stacks simulateSeed() lists as rolled.
+      rolling.forEach(({ roomId, container })=>{
+        container.spawnPools.forEach(poolId=>{
+          const rolled = rolledPoolFor(seed, roomId, container.id, poolId);
+          if(!rolled) return;
+          const t = tally[poolId];
+          t.trials += 1;
+          if(rolled.empty) t.empties += 1;
+          rolled.items.forEach(it=>{
+            t.hits[it.itemId] = (t.hits[it.itemId] || 0) + 1;
+            ids.add(it.itemId);
+            REPORTED_TOOL_TAGS.forEach(tag=>{ if(registryCarriesTag(it.itemId, tag)) tags[tag] += 1; });
+          });
+        });
+      });
+      ids.forEach(id=>{ itemSeeds[id] += 1; });
+      REPORTED_TOOL_TAGS.forEach(tag=>{ if(tags[tag] === 0) tagMissing[tag] += 1; });
+    }
+    const judge = (count, expected, trials)=>{
+      if(!trials) return { observed:null, flagged:false };
+      const observed = count / trials;
+      const tolerance = SAMPLE_TOLERANCE_SIGMA * Math.sqrt(expected * (1 - expected) / trials);
+      return { observed, flagged: Math.abs(observed - expected) > tolerance };
+    };
+    const entries = [], pools = [];
+    Object.keys(SPAWN_POOLS).forEach(poolId=>{
+      const pool = SPAWN_POOLS[poolId], t = tally[poolId], rolled = t.trials > 0;
+      const gate = judge(t.empties, pool.emptyChance, t.trials);
+      pools.push({ poolId, rolled, trials:t.trials, empties:t.empties,
+        observed:gate.observed, expected:pool.emptyChance, flagged:gate.flagged });
+      pool.entries.forEach(e=>{
+        const expected = (1 - pool.emptyChance) * e.chance;
+        const hits = t.hits[e.itemId] || 0;
+        const r = judge(hits, expected, t.trials);
+        entries.push({ poolId, itemId:e.itemId, rolled, trials:t.trials, hits,
+          observed:r.observed, expected, flagged:r.flagged });
+      });
+    });
+    const items = Object.keys(ITEM_REGISTRY).map(id=>
+      ({ itemId:id, seeds:itemSeeds[id], fraction: n ? itemSeeds[id] / n : null }));
+    const tags = REPORTED_TOOL_TAGS.map(tag=>
+      ({ tag, seedsMissing:tagMissing[tag], fraction: n ? tagMissing[tag] / n : null }));
+    const compared = pools.concat(entries).filter(r=> r.rolled);
+    const flagged = compared.filter(r=> r.flagged);
+    if(flagged.length) console.warn(`sampleSeeds: ${flagged.length} row${flagged.length === 1 ? "" : "s"} outside `
+      + `${SAMPLE_TOLERANCE_SIGMA}σ — rerun with a larger n or another start before reading anything into it`, flagged);
+    console.log(`sampleSeeds: n ${n}, start ${start}, ${compared.length} rows compared, ${flagged.length} flagged`);
+    return { n, start, entries, pools, items, tags };
   }
   // `seed` is optional: undefined starts a fresh world, a uint32 replays that
   // one (see seedFromInput()). Callers wired straight to a click must wrap
@@ -6495,11 +6690,13 @@
   mapSetZoomStep(mapZoomStep);
   render();
 
-  // Dev seam. The four validators above are local bindings inside this IIFE, so
-  // `validateReachability()` typed into devtools is a ReferenceError. This is the
-  // one deliberate hole in the closure: read-only reporting helpers, nothing that
-  // writes game state, and nothing else belongs on it.
-  window.ashfallDev = { validateItemRegistry, validateLocations, validateRoomSchema, validateReachability };
+  // Dev seam. The four validators and the two seed reports above are local
+  // bindings inside this IIFE, so `validateReachability()` typed into devtools
+  // is a ReferenceError. This is the one deliberate hole in the closure:
+  // read-only reporting helpers, nothing that writes game state, and nothing
+  // else belongs on it.
+  window.ashfallDev = { validateItemRegistry, validateLocations, validateRoomSchema, validateReachability,
+    simulateSeed, sampleSeeds };
 })();
 </script>
 </body>
