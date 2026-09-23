@@ -18,6 +18,211 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.6.2 — Seed report: what a seed's world holds
+
+Implements: handoffs/seed-report.md
+
+Implements #150 in full, per `handoffs/seed-report.md`. Two dev-only console
+helpers join the `window.ashfallDev` seam. `simulateSeed(seed)` lists every
+item stack in one seed's world, hand-placed or rolled, without playing the
+seed. `sampleSeeds(n, start)` runs many seeds and checks how often each loot
+roll actually hits against what `SPAWN_POOLS` says it should. To make that
+possible, the roll core now takes its seed as an argument, and every roll the
+game makes comes out bit-identical to v0.6.1. The helpers report existence
+only, not what the player can reach, by Tom's decision. Nothing here is
+persisted and nothing is a mechanic, so this is PATCH.
+
+**New**
+
+- **`simulateSeed(seed)`** (PERSISTENCE). `seed` can be a number (taken
+  `>>> 0`) or a string (through `seedFromInput()`, so a typed word gives the
+  same world Restart would). Omitted, it uses the current run's `state.seed`,
+  which is the helper's only read of game state. It builds its own
+  `makeDefaultWorld()` and `makeDefaultState(seed)` and never reads the live
+  world. It returns `{ seed, rows, tags }`:
+  - Each row is `{ roomId, place, source, itemId, qty }`. `roomId` is
+    `"(start)"` for the starting inventory and slots. `place` is `"floor"`,
+    a container id, `"inventory"` or a slot key. `source` is `"hand-placed"`
+    or `"rolled"`.
+  - Hand-placed rows cover every floor, every container's authored `items`
+    (car containers included) and the starting state. Rolled rows are
+    `rolledLootFor(seed, …)` for each container that still rolls.
+  - `tags` counts, for each tag in `REPORTED_TOOL_TAGS`, the stacks that carry
+    it. It counts stacks, not units, which is the convention
+    `validateReachability()` uses, so the two reports compare directly.
+  - It prints the rows with `console.table()` and one `console.log()` line per
+    tag.
+- **`sampleSeeds(n = 1000, start = 0)`** (PERSISTENCE). It runs seeds `start`
+  through `start + n − 1`, each `>>> 0`, over one shared fresh world. It
+  returns `{ n, start, entries, pools, items, tags }`:
+  - `entries`: one row per pool entry, with `trials`, `hits`, `observed` and
+    `expected = (1 − emptyChance) × chance`. A trial is one seed of one rolling
+    container that draws the pool.
+  - `pools`: one row per pool, with the empty gate's `observed` rate against
+    `emptyChance`.
+  - `items`: for each registry item, the fraction of seeds whose world holds
+    it anywhere.
+  - `tags`: for each `REPORTED_TOOL_TAGS` tag, the fraction of seeds where no
+    stack carries it.
+  - A pool or entry row is flagged when
+    `|observed − expected| > SAMPLE_TOLERANCE_SIGMA × sqrt(expected × (1 − expected) / trials)`.
+    Flagged rows go to `console.warn()`, followed by a one-line summary. A dead
+    pool has `trials: 0` and `rolled: false`, and is never flagged.
+- **`SAMPLE_TOLERANCE_SIGMA = 3`**, beside the helpers. At 3σ over the
+  136 rows compared today, one chance flag in a clean run is expected. The
+  comment says a flag is a prompt to rerun, not a verdict.
+
+**Changed / Reworked**
+
+*Roll core (CORE UTILITIES)*
+
+- `hashKey(seed, parts)` takes the seed as an argument instead of reading
+  `state.seed`. `rollValueFor(seed, parts)`, `chanceFor(seed, p, keyParts)`
+  and `randIntFor(seed, min, max, keyParts)` are the real functions.
+  `rollValue()`, `chance()` and `randInt()` keep their signatures and remain
+  the game's API, bound to `state.seed`. The warn-and-clamp legality check
+  moved into `chanceFor()` and is still written exactly once. Its warning text
+  is unchanged. `doFish()` and `doConsume()` were not edited.
+
+*Loot (WORLD INTERACTION)*
+
+- `rolledPoolFor(seed, roomId, containerId, poolId)` is one pool's roll. It
+  returns `{ empty, items }`, or `null` for an unknown pool id. It is now the
+  only place the three loot key shapes are written. `rolledLootFor(seed,
+  roomId, container)` concatenates it over `container.spawnPools` in order.
+  `doOpenContainer()`, the only game caller, passes `state.seed`.
+
+*Dev helpers (PERSISTENCE)*
+
+- `rollingContainers(world)` returns `[{ roomId, container }]` for every
+  container, car containers included, that carries `spawnPools` without
+  `spawnRolled`. This is now the one definition of a container that still
+  rolls. `validateReachability()` builds `livePools` from it, and both new
+  helpers use it.
+- `registryCarriesTag(id, tag)` was extracted from `validateReachability()`'s
+  inline `carries` so the tag test is written once for all three helpers.
+
+**Documentation**
+
+- The roll core's comment now describes the explicit-seed form and why a
+  swap-and-restore of `state.seed` is never used.
+- `rolledLootFor()`'s comment names `simulateSeed()` instead of an issue
+  number, and describes `rolledPoolFor()`.
+- The dev seam's comment covers "the four validators and the two seed
+  reports". The read-only rule stays stated.
+- Filed #173: `validateReachability()`'s comment still says twelve
+  unreachable items at v0.5.1, but there are eleven. The handoff put the fix
+  out of scope, because that helper's report and code had to stay unchanged
+  this pass. Nothing else was deferred. The one entry the sampler flagged did
+  not survive a rerun (see Validation), so no finding about the `chance`
+  figures was filed.
+
+**Open questions / decisions resolved**
+
+The handoff left these to implementation. None of them moves the version
+type.
+
+- **Names:** the handoff's suggestions were kept: `rollValueFor`,
+  `chanceFor`, `randIntFor`, `rolledPoolFor`, `rollingContainers`.
+- **Argument order:** seed first everywhere, matching `rolledLootFor(seed, …)`.
+  The explicit-seed siblings take their key as one array, not rest
+  parameters, so the seed and the key can't be confused.
+- **An unknown pool id:** `rolledPoolFor()` returns `null`, not
+  `{ empty, items }`, since no gate was rolled. `rolledLootFor()` skips it, as
+  before.
+- **Row fields:**
+  - The starting inventory's `place` is `"inventory"`, which is not a slot
+    key.
+  - Rows list hand-placed stacks first, then rolled ones.
+  - Sampler rows carry `rolled` so dead pools read as not rolled.
+  - Dead pools' entries are listed too, with `observed: null`.
+  - With `n = 0`, fractions are `null` rather than `NaN`.
+
+**Notes / assumptions**
+
+- `SAMPLE_TOLERANCE_SIGMA = 3` is the handoff's figure, a judgment call and
+  retunable. The handoff estimated about 200 comparisons. The real count is
+  136 (18 live pools' gates plus their 118 entries), so the comment says
+  "hundred-odd".
+- `sampleSeeds()` takes its per-seed item and tag tallies from the same
+  `rolledPoolFor()` results that feed the entry tallies. It does not call
+  `rolledLootFor()` a second time. The yield is the same by construction,
+  since `rolledLootFor()` is exactly that concatenation.
+- `items` reads `0` for 12 items: the 11 `validateReachability()` calls
+  unreachable, plus `campfire_kit`, which can be crafted but never sits in the
+  world.
+
+**Explicitly out of scope**
+
+- Whether the player can *reach* anything: locked doors, locked storage
+  units, breakable windows and `searchLabel` rooms.
+- #133 (dead pools and unreachable items). This pass only measures them.
+- Checks on the quantity distribution. #15, #149 and #10.
+- `validateReachability()`'s own report, which is unchanged, and its stale
+  comment (#173).
+- Any UI.
+
+**Explicitly NOT changed**
+
+- Every roll's outcome. The fishing and illness call sites. `SPAWN_POOLS`,
+  `ITEM_REGISTRY` and every other WORLD DATA table.
+- The save format and `SAVE_KEY`. No state field was added.
+- Rendering.
+
+**Sections touched**
+
+- CONFIG / CONSTANTS: `GAME_CONFIG.VERSION` only.
+- CORE UTILITIES: the roll core.
+- WORLD INTERACTION: `rolledPoolFor()`, `rolledLootFor()`, and
+  `doOpenContainer()`'s call.
+- PERSISTENCE: `registryCarriesTag()`, `rollingContainers()`,
+  `validateReachability()` rewired, `SAMPLE_TOLERANCE_SIGMA`,
+  `simulateSeed()`, `sampleSeeds()` and their private helpers
+  `seedReportRow()`, `handPlacedRows()` and `tagStackCounts()`.
+- The dev seam.
+- No WORLD DATA, no other ACTIONS, no SIMULATION, no RENDERING.
+
+**Validation performed**
+
+- `git diff origin/main...HEAD -- ashfall.html` shows the changes above and
+  nothing else. The script passes `node --check`.
+- All checks ran in headless Chromium against uncommitted copies of v0.6.1
+  and this build, with internals exposed.
+- **Rolls are bit-identical.** Seeds 0–199 were compared: each of the 24
+  rolling containers' `rolledLootFor()` yield, plus `rollValue()` for 20
+  rooms × 8 minutes of fishing keys and 30 illness keys. That is 42,800
+  values, all identical. 3,802 of the loot yields were non-empty.
+- **The manifest matches play.** A run on seed 987654321 opened all 24 rolling
+  containers through `doOpenContainer()`. Their contents, summed per
+  container and item, equalled `simulateSeed()`'s rolled rows (45 stacks).
+  `simulateSeed("some word")` equals
+  `simulateSeed(seedFromInput("some word"))`.
+- **The helpers are read-only.** With a save loaded through
+  `applyLoadedData()`, `JSON.stringify` of `state`, `world`, `doors` and
+  `windows` was identical before and after `simulateSeed()` (three forms) and
+  `sampleSeeds(200, 3)`.
+- **`validateReachability()` is unchanged.** Its 30 lines are byte-identical
+  to v0.6.1's.
+- **The sampler agrees with the arithmetic.**
+  - `sampleSeeds()` at defaults compared 136 rows and flagged 1:
+    `valuables`/`jewelry_piece` at 0.075 against 0.052 over 1,000 trials.
+  - `sampleSeeds(20000)` flagged 0. `bottled_water` in
+    `kitchen_nonperishable` came out at 0.1731 against 0.1744, over 100,000
+    trials.
+  - `sampleSeeds(5000, 100000)` flagged a different single row
+    (`clothing`/`winter_jacket`).
+  - No flag persisted across a rerun, so all three are chance flags.
+  - The 10 dead pools were none of them flagged.
+  - Every tag's missing fraction reads 0.
+  - Runtime: 235 ms for `sampleSeeds(1000)` and 4.7 s for
+    `sampleSeeds(20000)`.
+- **The legality check is written once.** `chance: p … clamped` occurs once
+  in the file. No page errors and no clamp warnings occurred.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.6.1"` → `"0.6.2"`
+
+---
+
 ## v0.6.1 — 2A's front door, gated both ways
 
 Implements: handoffs/2a-door-both-ways.md
