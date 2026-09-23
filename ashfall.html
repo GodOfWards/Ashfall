@@ -24,14 +24,57 @@
     z-index:20; padding:20px 18px; display:flex; flex-direction:column; gap:16px; font-family:system-ui,sans-serif; overflow-y:auto; }
   #sideMenu.open{ transform:translateX(0); }
   #sideMenu h2{ font-size:14px; margin:0; display:flex; justify-content:space-between; align-items:center; }
-  #closeMenu{ background:none; border:none; color:var(--ink-dim); font-size:16px; cursor:pointer; }
+  #closeMenu, .panel-close{ background:none; border:none; color:var(--ink-dim); font-size:16px; cursor:pointer; }
+  /* The drawer's hub row: one button per sub-menu, built from HUB_BUTTONS.
+     A placeholder is disabled and carries its "Not yet" hint on a second
+     line, the way a blocked recipe carries its (needs …). */
+  #hubRow{ display:flex; gap:6px; }
+  #hubRow button{ flex:1; background:var(--panel-2); border:1px solid var(--line); color:var(--ink);
+    font-size:13px; padding:8px 6px; border-radius:3px; cursor:pointer; }
+  #hubRow button:hover:not(:disabled){ border-color:var(--accent-dim); }
+  #hubRow button:disabled{ color:var(--ink-faint); cursor:not-allowed; opacity:.6; }
+  #hubRow .hint{ display:block; font-size:11px; font-style:italic; margin-top:2px; }
+  /* A full-screen panel (Crafting, Options) stacked over the drawer. Above
+     #sideMenu's 20, so it covers the drawer and its backdrop. */
+  .full-panel{ position:fixed; inset:0; z-index:30; background:var(--panel); padding:20px 18px;
+    overflow-y:auto; font-family:system-ui,sans-serif; display:none; }
+  .full-panel.open{ display:block; }
+  .full-panel > h2{ font-size:14px; margin:0 0 16px; display:flex; justify-content:space-between; align-items:center; }
+  .full-panel-body{ max-width:560px; display:flex; flex-direction:column; gap:16px; }
+  #craftingList{ display:flex; flex-direction:column; align-items:flex-start; gap:8px; }
+  /* The body face, which the panel's system-ui would otherwise replace:
+     #craftResult's lines are #log's, set as #log sets them. */
+  #craftResult{ display:flex; flex-direction:column; gap:5px; border-top:1px solid var(--line); padding-top:12px;
+    font-family:Georgia,'Times New Roman',serif; }
+  #craftResult:empty{ display:none; }
+  #seedRow{ display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink-dim); }
+  .full-panel .menu-actions{ align-items:flex-start; }
+  #seedValue{ color:var(--ink); user-select:all; -webkit-user-select:all; }
+  /* The item pop-up and the transparent layer behind it that takes an
+     outside tap. Both sit below #menuBackdrop's 15: the pop-up belongs to
+     the play area, and opening the drawer covers it rather than closing it. */
+  #itemPopBackdrop{ position:fixed; inset:0; z-index:10; display:none; }
+  #itemPopBackdrop.show{ display:block; }
+  #itemPop{ position:fixed; z-index:11; display:none; background:var(--panel); border:1px solid var(--line);
+    border-radius:4px; padding:11px 13px; font-family:system-ui,sans-serif; overflow-y:auto;
+    box-shadow:0 6px 18px rgba(0,0,0,.45); }
+  #itemPop.open{ display:block; }
+  .pop-actions{ display:flex; flex-direction:column; align-items:stretch; gap:6px; }
+  .pop-actions button.action{ text-align:left; }
+  /* Focus is drawn for keyboard use only, so a click or a tap looks as it
+     always has even now that opening and closing a layer moves focus. A
+     layer's own root is focusable only as the last place focus can land,
+     and never draws a ring. */
+  :focus:not(:focus-visible){ outline:none; }
+  :focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  [tabindex="-1"]:focus{ outline:none; }
   .menu-section h3{ font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-faint); margin:0 0 8px; }
   .menu-actions{ display:flex; flex-direction:column; gap:6px; }
   .menu-actions button{ background:var(--panel-2); border:1px solid var(--line); color:var(--ink);
     font-size:13px; padding:8px 10px; border-radius:3px; cursor:pointer; text-align:left; }
   .menu-actions button:hover{ border-color:var(--accent-dim); }
   .menu-placeholder{ font-size:12px; color:var(--ink-faint); font-style:italic; }
-  #statsBox, #runBox{ font-size:13px; color:var(--ink-dim); line-height:1.9; }
+  #statsBox{ font-size:13px; color:var(--ink-dim); line-height:1.9; }
   /* The heading row, not the heading: #mapZoomToggle is a <div> and is not
      legal inside an <h3>, so the flex row is a wrapper around both. The
      8px below the heading moves here with it — inside a flex row the h3's
@@ -67,11 +110,13 @@
   #left{ padding:18px 26px; border-right:1px solid var(--line); display:flex; flex-direction:column; gap:14px; }
   #roomDesc{ color:var(--ink-dim); line-height:1.6; margin:0; font-size:15px; }
   #log{ display:flex; flex-direction:column; gap:5px; max-height:110px; overflow-y:auto; }
-  #log p{ margin:0; font-size:13.5px; line-height:1.5; color:var(--ink-dim); }
-  #log p.fresh{ color:var(--ink); }
-  #log p.sys{ font-style:italic; color:var(--accent); font-family:system-ui,sans-serif; font-size:12px; }
-  #log p.warn{ color:var(--warn); font-family:system-ui,sans-serif; font-size:12px; }
-  #log p.good{ color:var(--good); font-family:system-ui,sans-serif; font-size:12px; }
+  /* #craftResult is a view of #log (see renderCraftResult()), so its lines
+     read exactly as they do there. */
+  #log p, #craftResult p{ margin:0; font-size:13.5px; line-height:1.5; color:var(--ink-dim); }
+  #log p.fresh, #craftResult p.fresh{ color:var(--ink); }
+  #log p.sys, #craftResult p.sys{ font-style:italic; color:var(--accent); font-family:system-ui,sans-serif; font-size:12px; }
+  #log p.warn, #craftResult p.warn{ color:var(--warn); font-family:system-ui,sans-serif; font-size:12px; }
+  #log p.good, #craftResult p.good{ color:var(--good); font-family:system-ui,sans-serif; font-size:12px; }
   .logcount{ color:var(--ink-faint); font-size:12px; margin-left:5px; }
   .actions-group h2{ font-family:system-ui,sans-serif; font-size:12px; text-transform:uppercase;
     letter-spacing:.08em; color:var(--ink-faint); margin:0 0 8px; }
@@ -138,9 +183,12 @@
   <button id="menuToggle">☰ Menu</button>
   <h1 id="pageTitle">ASHFALL</h1>
 </header>
+<div id="itemPopBackdrop"></div>
+<div id="itemPop" tabindex="-1"></div>
 <div id="menuBackdrop"></div>
 <aside id="sideMenu">
   <h2>Menu <button id="closeMenu">✕</button></h2>
+  <div id="hubRow"></div>
   <div class="menu-section">
     <h3>Save / Load</h3>
     <div class="menu-actions">
@@ -149,11 +197,9 @@
       <button id="exportBtn">Export save file</button>
       <button id="importBtn">Import save file</button>
       <input type="file" id="importInput" accept="application/json" style="display:none;">
-      <button id="restartMenuBtn">Restart game</button>
     </div>
   </div>
   <div class="menu-section"><h3>Stats</h3><div id="statsBox"></div></div>
-  <div class="menu-section"><h3>Run</h3><div id="runBox"></div></div>
   <div class="menu-section">
     <div class="map-heading">
       <h3>Map</h3>
@@ -167,6 +213,20 @@
     <svg id="mapSvg" xmlns="http://www.w3.org/2000/svg"></svg>
   </div>
 </aside>
+<section id="craftingPanel" class="full-panel" tabindex="-1">
+  <h2>Crafting <button class="panel-close">✕</button></h2>
+  <div class="full-panel-body">
+    <div id="craftingList"></div>
+    <div id="craftResult"></div>
+  </div>
+</section>
+<section id="optionsPanel" class="full-panel" tabindex="-1">
+  <h2>Options <button class="panel-close">✕</button></h2>
+  <div class="full-panel-body">
+    <div id="seedRow">Seed: <span id="seedValue"></span><button id="copySeedBtn" class="mini">Copy</button></div>
+    <div class="menu-actions"><button id="restartMenuBtn">Restart game</button></div>
+  </div>
+</section>
 <div id="locBar">
   <div id="locLabel"></div>
   <div id="rightBar">
@@ -196,10 +256,6 @@
       <h2>Here <span class="sub" id="worldWeight"></span></h2>
       <div class="tabs" id="worldTabs"></div>
       <ul class="itemlist" id="worldList"></ul>
-    </div>
-    <div class="panel">
-      <h2>Craft <button id="craftBackBtn" class="mini" style="display:none;">&larr; Back</button></h2>
-      <div id="craftBody"></div>
     </div>
   </div>
 </main>
@@ -274,7 +330,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.6.3" };
+  const GAME_CONFIG = { VERSION: "0.6.4" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -3676,6 +3732,18 @@
   let state = makeDefaultState();
   let gameOver = false; // UI-only: never saved — a loaded save always resumes alive
   let detailItem = null; // UI-only: { uid, side } — resolved fresh via findItemByUid(), safe against list mutation
+  // The open menu layers, bottom to top — the item pop-up, the drawer, a
+  // full-screen panel. UI-only and never saved, like detailItem. See
+  // openLayer() in EVENTS / UI HELPERS for what an entry holds.
+  let layerStack = [];
+  // What the last craft from the Crafting panel wrote to #log: references to
+  // #log's own <p> elements, never copies of their text, so the result area
+  // is a view of the log rather than a second history. UI-only.
+  let craftResult = [];
+  // Whether the last render() drew the game-over screen. UI-only. Game over
+  // closes every layer once, on the render that first draws it, so the
+  // drawer can still be opened and used afterwards (see render()).
+  let gameOverRendered = false;
   // Which tab each item panel is showing. UI-only and deliberately outside
   // `state`, the same call already made for mapZoomMode/mapZoomStep, gameOver
   // and detailItem: serializeGame() writes `state` wholesale, so anything left
@@ -4221,7 +4289,7 @@
   // ==================================================
   // INVENTORY / ITEM SYSTEM — item-detail action list
   // ==================================================
-  // Called fresh on every render with a list/index pair that renderCraftPanel
+  // Called fresh on every render with a list/index pair that renderItemPop()
   // has already resolved via findItemByUid() for the *current* state, so the
   // resulting closures capture a correct index for this render. It still
   // validates defensively (getItemAt) so a future caller that passes a stale
@@ -4262,8 +4330,9 @@
     // An action offered on an item you are inspecting appears only if you can
     // perform it — so Eat is absent while the item is still sealed, and Open
     // is absent when the tool it needs is not carried. The two exceptions are
-    // the keychain-blocked Take above and renderCraftPanel()'s recipe list,
-    // which is a catalogue and would become undiscoverable if filtered.
+    // the keychain-blocked Take above and the Crafting panel's recipe list
+    // (renderCraftingPanel()), which is a catalogue and would become
+    // undiscoverable if filtered.
     if(it.restores && !it.sealed) actions.push({ label: it.verb || "Use", onClick:()=>doConsume(side, index) });
     if(it.sealed && (!it.opensWith || hasTool(it.opensWith)))
       actions.push({ label:"Open", onClick:()=>doOpen(side, index) });
@@ -5639,27 +5708,208 @@
     if(file) doImportSave(file);
     e.target.value = "";
   });
-  // The prompt's Cancel is the destructive-action guard the old confirm()
-  // was, so the protection is kept rather than dropped. Blank is a fresh
-  // world, the old behaviour; anything typed becomes a seed.
+  const sideMenu = document.getElementById("sideMenu");
+  const menuBackdrop = document.getElementById("menuBackdrop");
+  // ==================================================
+  // EVENTS / UI HELPERS
+  // ==================================================
+  // MENU LAYERS. Three kinds stack: the item pop-up, the drawer, and a
+  // full-screen panel over the drawer. layerStack holds the open ones bottom
+  // to top, each as { el, hide, back }: the layer's root element, what
+  // closing it does, and where focus goes when it closes. Esc closes the top
+  // one only. Nothing here knows which layers exist, so a new one (#161's
+  // device panel) is one more openLayer() call.
+  function layerOpen(el){ return layerStack.some(l => l.el === el); }
+  // The enabled, rendered controls in a layer, in document order.
+  function focusablesIn(el){
+    return Array.from(el.querySelectorAll("button, input, select, textarea, a[href], [tabindex]:not([tabindex='-1'])"))
+      .filter(x => !x.disabled && x.getClientRects().length > 0);
+  }
+  // The .itemname control for an item. Rows are rebuilt on every render(),
+  // so this is how anything that pointed at one row finds its replacement:
+  // by the item's _uid, never by index and never by a kept DOM node.
+  function itemNameButton(uid){
+    return Array.from(document.querySelectorAll(".itemname")).find(b => b.dataset.uid === uid) || null;
+  }
+  // Where focus goes back to: the element focused when the layer opened, and
+  // if that is an item's name, the item's uid, so a rebuilt row still counts.
+  function focusReturnPoint(){
+    const el = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
+    return { el, uid: el && el.classList.contains("itemname") ? el.dataset.uid : null };
+  }
+  // Opening moves focus to the layer's first control. `back` defaults to
+  // whatever is focused now; a caller that has already lost that element to
+  // a render passes its own.
+  function openLayer(el, show, hide, back){
+    if(layerOpen(el)) return;
+    layerStack.push({ el, hide, back: back || focusReturnPoint() });
+    show();
+    (focusablesIn(el)[0] || el).focus({ preventScroll:true });
+  }
+  // Closing hands focus back, but only if focus was in the layer or had
+  // nowhere else to be. Focus the player has moved elsewhere is left alone,
+  // and so is focus in a layer above one that closes underneath it, as the
+  // pop-up does when a Load from the drawer clears detailItem.
+  function closeLayer(el){
+    const i = layerStack.findIndex(l => l.el === el);
+    if(i < 0) return;
+    const layer = layerStack.splice(i, 1)[0];
+    const wasTop = i === layerStack.length;
+    const active = document.activeElement;
+    const lost = !active || active === document.body;
+    layer.hide();
+    if(el.contains(active) || (wasTop && lost)) restoreFocus(layer.back);
+  }
+  function closeAllLayers(){
+    while(layerStack.length) closeLayer(layerStack[layerStack.length - 1].el);
+  }
+  // The same element if it is still there; otherwise the rebuilt .itemname
+  // for the same item; otherwise nowhere, without error.
+  function restoreFocus(back){
+    let target = back.el && back.el.isConnected && !back.el.disabled ? back.el : null;
+    if(!target && back.uid) target = itemNameButton(back.uid);
+    if(target) target.focus({ preventScroll:true });
+    else if(document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+  }
+  // A render() that rebuilds a layer's contents would drop focus out of it:
+  // the focused button is removed and focus falls to <body>. This puts it
+  // back inside, on the control with the same label if the rebuild made one,
+  // else on the one at the same position, else on the layer itself.
+  function rebuildKeepingFocus(root, rebuild){
+    const had = root.contains(document.activeElement) ? document.activeElement : null;
+    const index = had ? focusablesIn(root).indexOf(had) : -1;
+    const label = had && had.textContent;
+    rebuild();
+    if(!had || !layerOpen(root) || (had.isConnected && document.activeElement === had)) return;
+    const after = focusablesIn(root);
+    (after.find(x => x.textContent === label) || after[Math.min(index, after.length - 1)] || root).focus({ preventScroll:true });
+  }
+  document.addEventListener("keydown", e=>{
+    if(e.key !== "Escape" || !layerStack.length) return;
+    e.preventDefault();
+    closeLayer(layerStack[layerStack.length - 1].el);
+  });
+
+  // The item pop-up (see renderItemPop()). Its backdrop is transparent and
+  // does one thing: an outside tap closes the pop-up and goes no further.
+  // So a tap on another item's name closes this pop-up, and a second tap
+  // opens that item's.
+  const itemPop = document.getElementById("itemPop");
+  const itemPopBackdrop = document.getElementById("itemPopBackdrop");
+  function showItemPop(){ itemPop.classList.add("open"); itemPopBackdrop.classList.add("show"); }
+  // Closing the pop-up is clearing detailItem, so the two never disagree.
+  function hideItemPop(){ detailItem = null; itemPop.classList.remove("open"); itemPopBackdrop.classList.remove("show"); }
+  itemPopBackdrop.addEventListener("click", ()=> closeLayer(itemPop));
+  window.addEventListener("resize", positionItemPop);
+  // Capture phase, because scroll doesn't bubble and a scroll inside
+  // #sidebar moves the row as surely as a page scroll does. A scroll inside
+  // the pop-up itself isn't the row moving.
+  window.addEventListener("scroll", e=>{
+    if(!(e.target instanceof Node && itemPop.contains(e.target))) positionItemPop();
+  }, true);
+
+  // The drawer.
+  function openMenu(){
+    openLayer(sideMenu,
+      ()=>{ sideMenu.classList.add("open"); menuBackdrop.classList.add("show"); },
+      ()=>{ sideMenu.classList.remove("open"); menuBackdrop.classList.remove("show"); });
+  }
+  function closeMenu(){ closeLayer(sideMenu); }
+  document.getElementById("menuToggle").addEventListener("click", openMenu);
+  document.getElementById("closeMenu").addEventListener("click", closeMenu);
+  menuBackdrop.addEventListener("click", closeMenu);
+
+  // The full-screen panels, by id. One element each, sharing .full-panel;
+  // each stacks over the drawer, and closing one returns to the drawer.
+  // `onClose` is what the panel forgets when it goes.
+  const FULL_PANELS = {
+    crafting: { el: document.getElementById("craftingPanel"), onClose(){ craftResult = []; renderCraftResult(); } },
+    options:  { el: document.getElementById("optionsPanel") }
+  };
+  function openPanel(id){
+    const p = FULL_PANELS[id];
+    openLayer(p.el, ()=> p.el.classList.add("open"), ()=>{
+      p.el.classList.remove("open");
+      if(p.onClose) p.onClose();
+    });
+  }
+  document.querySelectorAll(".full-panel .panel-close").forEach(btn=>{
+    btn.addEventListener("click", ()=> closeLayer(btn.closest(".full-panel")));
+  });
+  // The drawer's hub row, in order: one entry per button, giving its label
+  // and the FULL_PANELS id it opens. An entry that opens nothing is a
+  // placeholder, disabled and carrying HUB_PLACEHOLDER_HINT, so whether a
+  // button is enabled is whether it opens something, and enabling Health
+  // (#163) or Clothing (#164) is filling in `opens`. A new sub-menu is one
+  // line. The order and the hint's wording are retunable.
+  const HUB_BUTTONS = [
+    { label:"Crafting", opens:"crafting" },
+    { label:"Health",   opens:null },
+    { label:"Clothing", opens:null },
+    { label:"Options",  opens:"options" }
+  ];
+  const HUB_PLACEHOLDER_HINT = "Not yet";
+  HUB_BUTTONS.forEach(b=>{
+    const btn = document.createElement("button");
+    btn.textContent = b.label;
+    if(b.opens){
+      btn.addEventListener("click", ()=> openPanel(b.opens));
+    } else {
+      btn.disabled = true;
+      const hint = document.createElement("span");
+      hint.className = "hint";
+      hint.textContent = HUB_PLACEHOLDER_HINT;
+      btn.appendChild(hint);
+    }
+    document.getElementById("hubRow").appendChild(btn);
+  });
+
+  // Options. The prompt's Cancel is the destructive-action guard the old
+  // confirm() was, so the protection is kept rather than dropped. Blank is a
+  // fresh world, the old behaviour; anything typed becomes a seed. A
+  // confirmed restart closes every layer, so the new run opens on the play
+  // area. Cancel closes nothing.
   document.getElementById("restartMenuBtn").addEventListener("click", ()=>{
     const answer = prompt(
       "Restart the game? This throws away all current progress.\n\n"
       + "Leave blank for a new world, or enter a seed to replay a specific one.", "");
     if(answer === null) return;                       // cancelled
     const s = answer.trim();
+    closeAllLayers();
     doRestart(s === "" ? undefined : seedFromInput(s));
   });
-  const sideMenu = document.getElementById("sideMenu");
-  const menuBackdrop = document.getElementById("menuBackdrop");
-  // ==================================================
-  // EVENTS / UI HELPERS
-  // ==================================================
-  function openMenu(){ sideMenu.classList.add("open"); menuBackdrop.classList.add("show"); }
-  function closeMenu(){ sideMenu.classList.remove("open"); menuBackdrop.classList.remove("show"); }
-  document.getElementById("menuToggle").addEventListener("click", openMenu);
-  document.getElementById("closeMenu").addEventListener("click", closeMenu);
-  menuBackdrop.addEventListener("click", closeMenu);
+  // Copy puts the seed's number on the clipboard. It uses the async clipboard
+  // where the page has one, and otherwise selects the number and runs
+  // execCommand("copy"), since a page opened from file:// may have no async
+  // clipboard. The fallback leaves the number selected, so a copy that fails
+  // can still be finished by hand. Feedback goes on the button, never to #log,
+  // which this panel covers. The wording and COPY_FEEDBACK_MS are functional
+  // choices and retunable.
+  const COPY_FEEDBACK_MS = 1500;
+  const copySeedBtn = document.getElementById("copySeedBtn");
+  const copySeedLabel = copySeedBtn.textContent;
+  let copyFeedbackTimer = null;
+  function copySeed(){
+    const say = (text)=>{
+      copySeedBtn.textContent = text;
+      clearTimeout(copyFeedbackTimer);
+      copyFeedbackTimer = setTimeout(()=>{ copySeedBtn.textContent = copySeedLabel; }, COPY_FEEDBACK_MS);
+    };
+    const fallback = ()=>{
+      const range = document.createRange();
+      range.selectNodeContents(document.getElementById("seedValue"));
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      let ok = false;
+      try{ ok = document.execCommand("copy"); }catch(e){ ok = false; }
+      say(ok ? "Copied" : "Couldn't copy");
+    };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(String(state.seed)).then(()=> say("Copied"), fallback);
+    } else fallback();
+  }
+  copySeedBtn.addEventListener("click", copySeed);
   document.querySelectorAll("#gaitBar button[data-gait]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       if(gaitLocked() && btn.dataset.gait !== "sneak") return;
@@ -6323,6 +6573,11 @@
       const nameEl = document.createElement("button");
       nameEl.className = "itemname";
       nameEl.textContent = it.name;
+      // Carried only by an item that already has a _uid: every item the
+      // pop-up has been opened on does, and minting one for every row drawn
+      // would put a _uid into every save for nothing. It is how the pop-up
+      // finds its anchor row, and focus finds its way back, after a rebuild.
+      if(it._uid) nameEl.dataset.uid = it._uid;
       nameEl.addEventListener("click", ()=>{ detailItem = { uid: ensureUid(it), side }; render(); });
       meta.appendChild(nameEl);
       // `sealed` is three-valued (see ITEM DATA SCHEMA), and only the opened
@@ -6358,16 +6613,21 @@
       el.appendChild(li);
     });
   }
-  function renderCraftPanel(){
-    const body = document.getElementById("craftBody");
-    const backBtn = document.getElementById("craftBackBtn");
-    body.innerHTML = "";
-    if(detailItem){
-      const found = findItemByUid(detailItem.uid);
-      if(!found){ detailItem = null; renderCraftPanel(); return; }
-      const it = found.item;
-      backBtn.style.display = "";
-      backBtn.onclick = ()=>{ detailItem = null; render(); };
+  // The item detail view: a pop-up at the tapped item's row. It shows what
+  // the view always has (name, category and weight, durability, sealed
+  // state), then getItemActions(), one per line. getItemActions() stays the
+  // single source of what can be done; the pop-up adds no action of its own.
+  // Whether it is open follows detailItem and nothing else. Set, it opens;
+  // cleared for any reason (movement, load, restart, the item leaving every
+  // list, as Take All does) it closes. It stays open after an action and
+  // updates in place, because every action ends in render().
+  function renderItemPop(){
+    const found = detailItem && findItemByUid(detailItem.uid);
+    if(detailItem && !found) detailItem = null;
+    if(!detailItem){ closeLayer(itemPop); return; }
+    const it = found.item;
+    rebuildKeepingFocus(itemPop, ()=>{
+      itemPop.innerHTML = "";
       const box = document.createElement("div");
       box.className = "detailBox";
       const nameLine = document.createElement("div");
@@ -6396,23 +6656,66 @@
         sealLine.textContent = it.sealed ? "Sealed" : "Opened";
         box.appendChild(sealLine);
       }
-      body.appendChild(box);
+      itemPop.appendChild(box);
+      const actions = document.createElement("div");
+      actions.className = "pop-actions";
       getItemActions(found.list, found.index, detailItem.side).forEach(a=>{
         const btn = document.createElement("button");
         btn.className = "action" + (a.disabled ? " blocked" : "");
         btn.textContent = a.label;
         if(a.disabled){ btn.disabled = true; }
         else { btn.addEventListener("click", a.onClick); }
-        body.appendChild(btn);
-        body.appendChild(document.createElement("br"));
+        actions.appendChild(btn);
       });
-    } else {
-      backBtn.style.display = "none";
-      // Unavailable recipes stay visible and disabled, with their `(needs
-      // ...)` string. This is a catalogue, not an action list: filtering it
-      // to what is currently craftable would make crafting undiscoverable.
-      // The rule that an unperformable action is hidden (see
-      // getItemActions()) governs actions on a specific item, not this.
+      itemPop.appendChild(actions);
+    });
+    // Focus goes back to the item's name. doOpen() re-points detailItem at
+    // the unit it opened, and the pop-up follows, so the name it returns to
+    // follows too.
+    const layer = layerStack.find(l => l.el === itemPop);
+    if(layer) layer.back.uid = detailItem.uid;
+    else openLayer(itemPop, showItemPop, hideItemPop, { el:null, uid: detailItem.uid });
+    positionItemPop();
+  }
+  // The pop-up hangs from its item's row, found again by uid on every call.
+  // It opens directly below the row and flips above when below would run off
+  // the bottom of the viewport. It is never wider than the row and never off
+  // either side of the viewport. If neither side has room for all of it, it
+  // takes the roomier side and scrolls inside. It re-runs on every render,
+  // scroll and resize, so it stays attached to its row. POP_MARGIN is how
+  // close it may come to a viewport edge, and is retunable.
+  const POP_MARGIN = 8;
+  function positionItemPop(){
+    if(!detailItem || !layerOpen(itemPop)) return;
+    const name = itemNameButton(detailItem.uid);
+    const row = name && name.closest("li");
+    if(!row) return;
+    const r = row.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+    const width = Math.min(r.width, vw - 2 * POP_MARGIN);
+    itemPop.style.width = width + "px";
+    itemPop.style.left = Math.min(Math.max(r.left, POP_MARGIN), vw - POP_MARGIN - width) + "px";
+    itemPop.style.maxHeight = "";
+    const h = itemPop.offsetHeight;
+    const below = vh - POP_MARGIN - r.bottom, above = r.top - POP_MARGIN;
+    let top;
+    if(h <= below) top = r.bottom;
+    else if(h <= above) top = r.top - h;
+    else if(below >= above){ top = r.bottom; itemPop.style.maxHeight = below + "px"; }
+    else { top = POP_MARGIN; itemPop.style.maxHeight = above + "px"; }
+    itemPop.style.top = top + "px";
+  }
+  // The Crafting panel. Unavailable recipes stay visible and disabled, with
+  // their `(needs ...)` string. This is a catalogue, not an action list:
+  // filtering it to what is currently craftable would make crafting
+  // undiscoverable. The rule that an unperformable action is hidden (see
+  // getItemActions()) governs actions on a specific item, not this. Drawn by
+  // every render(), open or not, as the sidebar's panels are, so it is
+  // current the moment it opens and after every craft.
+  function renderCraftingPanel(){
+    rebuildKeepingFocus(FULL_PANELS.crafting.el, ()=>{
+      const list = document.getElementById("craftingList");
+      list.innerHTML = "";
       RECIPES.forEach(r=>{
         const ok = canCraft(r);
         const need = r.inputs.map(inp=>`${ITEM_REGISTRY[inp.id].name} x${inp.qty}`).join(", ")
@@ -6420,11 +6723,41 @@
         const btn = document.createElement("button");
         btn.className = "action" + (ok ? "" : " blocked");
         btn.innerHTML = `${r.label} <span class="cost">(needs ${need})</span>`;
-        if(ok){ btn.addEventListener("click", ()=> doCraft(r.id)); }
+        if(ok){ btn.addEventListener("click", ()=> craftFromPanel(r.id)); }
         else { btn.disabled = true; }
-        body.appendChild(btn);
+        list.appendChild(btn);
       });
-    }
+    });
+    renderCraftResult();
+  }
+  // doCraft() is not changed and doesn't report what it wrote, so the click
+  // handler reads #log on either side of it. What the craft wrote is every
+  // <p> that wasn't there before, plus the last one if its text changed:
+  // log() updates the last entry in place rather than appending when its key
+  // repeats, as a second identical craft does with its ×2.
+  function craftFromPanel(recipeId){
+    const logDiv = document.getElementById("log");
+    const before = new Set(logDiv.children);
+    const last = logDiv.lastElementChild;
+    const lastText = last ? last.textContent : null;
+    doCraft(recipeId);
+    // A craft that ended the run has already closed every layer, this one
+    // included.
+    if(!layerOpen(FULL_PANELS.crafting.el)) return;
+    craftResult = Array.from(logDiv.children).filter(p => !before.has(p) || (p === last && p.textContent !== lastText));
+    renderCraftResult();
+  }
+  // The result area: what the last craft wrote, in #log's order and wording
+  // and nothing older: the craft line, a giveItem() "drops to the floor"
+  // warning, anything that craft's advanceTime() logged. It is drawn from the
+  // live <p>s each time, so an entry updated in place shows in its updated
+  // form, and one #log has since dropped isn't shown. Replaced by the next
+  // craft; cleared when the panel closes.
+  function renderCraftResult(){
+    const box = document.getElementById("craftResult");
+    const logDiv = document.getElementById("log");
+    box.innerHTML = "";
+    craftResult.forEach(p=>{ if(p.parentNode === logDiv) box.appendChild(p.cloneNode(true)); });
   }
   function renderLocationPanel(){
     const room = world[state.currentRoom];
@@ -6652,15 +6985,15 @@
     ], "world");
   }
   // The seed, as its canonical uint32 — what a typed word hashed to, which is
-  // what reproduces the run; a word is lossy, the number is the seed. Its own
-  // menu section rather than a line in Stats, and drawn ahead of render()'s
-  // game-over branch, because that branch wipes #statsBox and the seed is
-  // exactly what a player wants after dying.
-  function renderRunPanel(){
-    document.getElementById("runBox").textContent = "Seed: " + state.seed;
+  // what reproduces the run; a word is lossy, the number is the seed. It lives
+  // in Options rather than as a line in Stats, and is drawn ahead of
+  // render()'s game-over branch, because that branch wipes #statsBox and
+  // returns early, and the seed is exactly what a player wants after dying.
+  function renderOptionsPanel(){
+    document.getElementById("seedValue").textContent = state.seed;
   }
   function render(){
-    renderRunPanel();
+    renderOptionsPanel();
     if(gameOver){
       document.getElementById("locLabel").textContent = "";
       document.getElementById("clockLabel").textContent = "";
@@ -6678,17 +7011,29 @@
       document.getElementById("worldTabs").innerHTML = "";
       document.getElementById("worldList").innerHTML = "";
       document.getElementById("worldWeight").textContent = "";
-      document.getElementById("craftBackBtn").style.display = "none";
-      document.getElementById("craftBody").innerHTML = "";
+      // The catalogue goes blank with the rest, as the old Craft panel's body
+      // did: Crafting can still be opened after death, and offers nothing
+      // (#183 asks whether it should say more).
+      document.getElementById("craftingList").innerHTML = "";
+      // Game over closes every layer, so "You did not survive." is what the
+      // player sees. It does so once, on the render that first draws this
+      // screen: the drawer and Options can still be opened afterwards, and the
+      // map's zoom toggle calls render() from inside the drawer, so closing
+      // on every game-over render would shut the drawer under the player.
+      if(!gameOverRendered) closeAllLayers();
+      gameOverRendered = true;
       return;
     }
+    gameOverRendered = false;
     renderLocationPanel();
     renderStatsPanel();
     renderMoveActionsPanel();
     renderHereActionsPanel();
     renderInventoryPanel();
     renderWorldItemsPanel();
-    renderCraftPanel();
+    // After both item lists: the pop-up anchors to a row they just drew.
+    renderItemPop();
+    renderCraftingPanel();
     renderMap();
   }
 

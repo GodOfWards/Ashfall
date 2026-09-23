@@ -18,6 +18,280 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.6.4 — Menu hub: the item pop-up, the drawer hub with Crafting, and Options
+
+Implements: handoffs/menu-hub.md
+
+Implements #157, #158 and #160 in full, per `handoffs/menu-hub.md`. Item
+actions move out of the sidebar's Craft panel into a pop-up at the tapped item.
+The ☰ drawer becomes a hub whose buttons open full-screen Crafting and Options
+panels. The Craft panel and the drawer's Run section leave the page. This is a
+rendering pass. Nothing enters `state`, and `RECIPES`, `canCraft()`,
+`doCraft()`, `getItemActions()`, `seedFromInput()`, `doRestart()` and `log()`
+are unchanged; they are only called from new places. `SAVE_KEY` does not move,
+so this is PATCH.
+
+**Changed / Reworked**
+
+*Item detail view (#157)*
+
+- Tapping an item's name still sets `detailItem = { uid, side }`. It now opens
+  `#itemPop`, a pop-up anchored to that item's row, instead of repainting the
+  Craft panel. `renderItemPop()` replaces `renderCraftPanel()`'s detail branch
+  and shows the same lines in the same wording and order. The actions from
+  `getItemActions()` follow, one `button.action` per line in a flex column
+  (`.pop-actions`), where the old view separated them with `<br>`.
+- Whether the pop-up is open follows `detailItem` and nothing else. Movement,
+  load, restart and `findItemByUid()` missing (Take All) all clear it and so
+  close the pop-up. Closing the pop-up sets `detailItem = null`. It stays open
+  after an action and updates in place, and `doOpen()`'s re-pointing keeps it
+  on the opened unit.
+- Position (`positionItemPop()`): directly below the row, flipped above when
+  below would run off the bottom of the viewport. Width is the row's, clamped
+  to the viewport minus `POP_MARGIN` (8 px) on each side. If neither side has
+  room, it takes the roomier side and scrolls inside. It re-runs on every
+  render, on resize, and on scroll (capture phase, so `#sidebar`'s own scroll
+  counts). The row is re-found by uid through `itemNameButton()` every time,
+  never by index or a kept node.
+- An outside tap lands on `#itemPopBackdrop`, a transparent layer at z-index 10
+  (pop-up at 11), which closes the pop-up and does nothing else. Both sit below
+  `#menuBackdrop`'s 15, so opening the drawer covers the pop-up and does not
+  close it.
+
+*Side menu hub (#158)*
+
+- `#hubRow` sits under the `Menu ✕` heading and is built once from
+  `HUB_BUTTONS`: Crafting, Health, Clothing, Options. An entry's `opens` names
+  the `FULL_PANELS` id it opens. `opens: null` makes it a placeholder, disabled
+  and carrying `HUB_PLACEHOLDER_HINT` ("Not yet") on a second line.
+- Crafting (`#craftingPanel`) and Options (`#optionsPanel`) are `.full-panel`s:
+  fixed, the whole viewport, at z-index 30, over `#sideMenu`'s 20. Each has its
+  own heading and ✕. Closing one returns to the drawer.
+- The Crafting panel (`renderCraftingPanel()`) is today's catalogue, moved
+  as-is with its comment: every recipe in `RECIPES` order, unavailable ones
+  disabled with `(needs …)`. `render()` draws it every time, like the sidebar
+  panels.
+- The result area (`#craftResult`). A recipe click goes through
+  `craftFromPanel()`, which snapshots `#log`'s children and the last entry's
+  text, calls `doCraft()` unchanged, and then keeps every `<p>` that is new,
+  plus the old last one if its text changed. That second case is how a `×2`
+  in-place update counts. `craftResult` holds references to `#log`'s own
+  `<p>`s, never copies of their text. `renderCraftResult()` clones the ones
+  still in `#log` each time it draws, so the area shows #log's current wording
+  and styling. It is replaced by the next craft and cleared when the panel
+  closes. It writes nothing to `#log`.
+
+*Options (#160)*
+
+- The seed is its canonical number in `#seedValue` (selectable,
+  `user-select:all`), with **Copy** beside it and **Restart game** below.
+  `renderOptionsPanel()` (was `renderRunPanel()`) writes the seed at the top of
+  `render()`, ahead of the game-over branch, as before, and keeps its comment's
+  reasoning.
+- Copy (`copySeed()`) uses `navigator.clipboard.writeText()`. If that is
+  missing or rejects, it selects the number and runs
+  `document.execCommand("copy")`. Feedback is the button's own label:
+  "Copied", or "Couldn't copy", for `COPY_FEEDBACK_MS` (1500 ms). It never
+  logs.
+- Restart keeps its `prompt()`, wording and seed handling. A confirmed restart
+  calls `closeAllLayers()` and then `doRestart()`. Cancel closes nothing.
+
+*Layers, Esc and focus*
+
+- `layerStack` (UI-only, beside `detailItem`) holds the open layers bottom to
+  top as `{ el, hide, back }`. `openLayer()` pushes an entry and focuses the
+  layer's first enabled control, or the layer's root (`tabindex="-1"`) if it
+  has none. `closeLayer()` removes one entry and hands focus back through
+  `restoreFocus()`: first the same element, then the rebuilt `.itemname` for
+  the same `_uid`, otherwise nowhere. A `keydown` listener closes the top
+  layer on Escape.
+- The drawer (`openMenu()` / `closeMenu()`), both full-screen panels and the
+  pop-up all go through the stack. #161's device panel is one more
+  `openLayer()` call.
+- `rebuildKeepingFocus()` wraps the pop-up's and Crafting's rebuilds. If focus
+  was inside, it goes back to the control with the same label, else the one at
+  the same position, else the layer root.
+- Focus rings are drawn for keyboard use only:
+  `:focus:not(:focus-visible){ outline:none }` and a 2 px accent
+  `:focus-visible` outline. Layer roots never draw one.
+- Game over closes every layer, on the render that first draws the game-over
+  screen (`gameOverRendered`).
+
+**UI**
+
+- The sidebar holds Inventory and Here only.
+- The drawer opens onto four buttons: Crafting, Health (Not yet), Clothing
+  (Not yet), Options. Save / Load, Stats and Map are otherwise unchanged. The
+  seed no longer shows every time the drawer opens.
+- Functional text introduced: "Crafting", "Health", "Clothing", "Options",
+  "Not yet", "Seed:", "Copy", "Copied", "Couldn't copy". It is held to clarity,
+  not to the game's tone, and all of it is retunable.
+
+**Removed**
+
+- The sidebar's Craft panel: its `.panel` markup, `#craftBody`,
+  `#craftBackBtn`, `renderCraftPanel()`, and the two game-over-branch lines
+  that cleared them. The game-over branch now blanks `#craftingList` instead.
+- The drawer's Run section: its markup, `#runBox`, and `#runBox` in the
+  `#statsBox, #runBox` rule. `#restartMenuBtn` left Save / Load and moved into
+  Options, keeping its id.
+
+**Function relocation**
+
+- The `#restartMenuBtn` click handler moved from the end of PERSISTENCE to
+  EVENTS / UI HELPERS. It is event wiring that now also closes layers, and it
+  still calls PERSISTENCE's `doRestart()` unchanged.
+- `renderRunPanel()` became `renderOptionsPanel()` in RENDERING and targets
+  `#seedValue`.
+
+**Documentation**
+
+- `getItemActions()`'s two comments that named `renderCraftPanel()` now name
+  `renderItemPop()` and the Crafting panel's `renderCraftingPanel()`. The
+  pop-up's comment defines "the item detail view", which older comments
+  elsewhere still use for the concept. None of them place it in the Craft
+  panel.
+- Issues filed for what this pass surfaced: #183 (Crafting after game over
+  opens onto an empty catalogue: keep it, or show something else?) and #184
+  (the `.menu-placeholder` CSS rule is unused). Nothing in scope was deferred.
+
+**Open questions / decisions resolved**
+
+- **Full-screen panel markup**: one element each (`#craftingPanel`,
+  `#optionsPanel`) sharing `.full-panel`, not one shared element. Options is
+  static markup that only needs its seed written. That keeps Copy's feedback
+  timer on a button that is never rebuilt, and a third panel is one more
+  element plus one `FULL_PANELS` entry.
+- **Layer stack shape**: an array of `{ el, hide, back }`, generic over layers.
+- **Finding what a craft wrote**: the before/after `#log` snapshot above.
+  Neither `doCraft()` nor `log()` changed.
+- **Copy**: the async clipboard with an `execCommand` fallback. Feedback is on
+  the button.
+- **Pop-up width and scroll**: as the handoff recommended. It is no wider than
+  the row, clamped to the viewport, and re-anchored on scroll and resize.
+- **Z-order**: as suggested. Pop-up and backdrop at 11/10, below 15. Panels at
+  30, above 20.
+- **Hub row data**: `HUB_BUTTONS` entries carry `label` and `opens`. Whether a
+  button is enabled is derived from `opens`, not stored as a second field that
+  could disagree with it.
+
+**Notes / assumptions**
+
+- **Game over closes layers once, not on every game-over render.** The map's
+  zoom toggle calls `render()` from inside the drawer. Closing on every
+  game-over render would shut the drawer after death, which the handoff says
+  stays usable.
+- **Crafting after death is empty.** The game-over branch blanks the
+  catalogue, as it blanked `#craftBody`. `doCraft()` does not check
+  `gameOver`, so live buttons there would let a dead player craft. Whether
+  the empty panel should say something is #183, for Tom.
+- **Focus is handed back only when it was in the closing layer, or had
+  nowhere to be.** Focus the player moved elsewhere is not taken back. Neither
+  is focus in the drawer when the pop-up closes beneath it, as it does on a
+  Load.
+- **The pop-up's focus return point follows `doOpen()`'s re-pointing.** After
+  the last sealed unit is opened, Esc returns focus to the opened unit's
+  name, which is the item the pop-up is now about.
+- **`data-uid` is written only for items that already have a `_uid`.**
+  Minting one for every row drawn would add a `_uid` to every item in every
+  save.
+- Retunable: `POP_MARGIN` (8 px), `COPY_FEEDBACK_MS` (1500 ms), the hub order,
+  the placeholder hint, the full-screen body's 560 px max width, and the result
+  area sitting below the recipe list.
+- While the pop-up is open, its transparent backdrop also covers the ☰ Menu
+  button. A tap there closes the pop-up only, per the handoff: an outside tap
+  "does nothing else".
+
+**Explicitly out of scope**
+
+- #159 (portrait layout and compact buttons). The pop-up and panels use
+  `button.action` as it is.
+- #161 (Device Options). The layer stack takes one more layer and nothing more
+  was built.
+- #162 (Crafting search and filters), #163 / #164 (enabling Health and
+  Clothing), #165 (panel sizes), #166 (title screen), #176 (Replay this seed on
+  the game-over screen).
+- #78 (ARIA roles, labels, inert backgrounds, the closed drawer's tab order).
+- Heat recipes in the Crafting panel (#119, #120).
+- Any change to `getItemActions()`, `doCraft()`, `doRestart()` or `log()`.
+
+**Explicitly NOT changed**
+
+- Save format and `SAVE_KEY`: no state field. `layerStack`, `craftResult` and
+  `gameOverRendered` are UI-only and outside `state`.
+- WORLD DATA, ACTIONS, SIMULATION and PERSISTENCE logic.
+- `detailItem`'s shape and every place that clears or re-points it.
+- The game-over screen's own Restart button.
+- The `#log` rules' values. They gained `#craftResult` as a second selector.
+
+**Sections touched**
+
+- `<style>`: the hub row, `.full-panel`, the pop-up and its backdrop,
+  `.pop-actions`, the focus-visible rules, `#craftResult` added to the `#log p`
+  rules, `#runBox` dropped from the stats rule.
+- Markup: `#sideMenu` (hub row added; Run and `#restartMenuBtn` removed),
+  `#sidebar` (Craft panel removed), new `#itemPopBackdrop`, `#itemPop`,
+  `#craftingPanel` and `#optionsPanel`.
+- CONFIG / CONSTANTS: `GAME_CONFIG.VERSION` only.
+- PLAYER STATE: the UI-only `layerStack`, `craftResult` and
+  `gameOverRendered`, beside `detailItem`.
+- INVENTORY / ITEM SYSTEM: two comments in `getItemActions()`.
+- PERSISTENCE: the Restart handler moved out.
+- EVENTS / UI HELPERS: the layer stack (`openLayer()`, `closeLayer()`,
+  `closeAllLayers()`, `restoreFocus()`, `rebuildKeepingFocus()`,
+  `focusablesIn()`, `itemNameButton()`), Esc, the pop-up's show/hide and
+  listeners, the drawer, `FULL_PANELS`, `HUB_BUTTONS`, the Restart handler and
+  `copySeed()`.
+- RENDERING: `renderItemList()` (`data-uid`), `renderItemPop()`,
+  `positionItemPop()`, `renderCraftingPanel()`, `craftFromPanel()`,
+  `renderCraftResult()`, `renderOptionsPanel()`, `render()`.
+
+**Validation performed**
+
+- `git diff origin/main...HEAD -- ashfall.html` touches only the sections
+  above. The script parses (`new Function` over the `<script>` body).
+- Headless Chromium (Playwright) at 1280×800 and 390×760. Items were seeded
+  through Save, an edit to the save, then Load. No page errors.
+- **Pop-up.**
+  - Placement: opens below its row. Flips above near the bottom (390×700).
+    Re-anchors on page scroll and on resize to 360×640. Never wider than the
+    row, and on-screen at both sizes.
+  - Focus: moves to the first action. The ring shows for a keyboard open and
+    not for a mouse open. Keyboard Enter on Take 1 keeps focus inside after
+    the re-render.
+  - Closing: Esc returns focus to the item's name. An outside tap closes it,
+    and a tap on another item's name only closes. Take All closes it; Take 1
+    and Place 1 leave it open. Movement closes it.
+  - Opening the last sealed box of cereal keeps it open on the opened unit,
+    and Esc then focuses that unit's name.
+  - With the drawer open over it, Esc closes the drawer first and the pop-up
+    second.
+- **Hub and panels.**
+  - The hub row's order is right, with Health and Clothing disabled and
+    reading "Not yet". The drawer focuses ✕ on open.
+  - Crafting fills the viewport. Esc closes Crafting, leaves the drawer open,
+    and focuses the Crafting button. A second Esc closes the drawer and
+    focuses ☰ Menu.
+  - Results: a craft showed "You craft a bandage." A second identical craft
+    showed "You craft a bandage.×2" in place. The campfire kit then replaced
+    it. `#log`'s length grew only by what the crafts wrote. Availability
+    updated. The result cleared on close.
+  - Load from the drawer left the drawer open.
+- **Options.**
+  - The seed shows as a number, and Copy put it on the clipboard and read
+    "Copied", then "Copy" again.
+  - Restart: Cancel left Options open. A confirmed restart with `12345` closed
+    every layer, logged the wake-up line, and Options then showed `12345`.
+- **Game over.**
+  - A craft at 0.01 health with no food or water ended the run and closed
+    every layer.
+  - The drawer then stayed open through a map zoom-toggle re-render, and
+    Options still showed the seed.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.6.3"` → `"0.6.4"`
+
+---
+
 ## v0.6.3 — A stowed bag's contents: counted at load, counted as weight
 
 Implements: handoffs/stowed-bag-contents.md
