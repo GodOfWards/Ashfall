@@ -18,6 +18,117 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.7.5 — Equip load delta, pop-up tab guard
+
+Implements: handoffs/equip-load-pop-up-tab-and-tag-commands.md
+
+Implements #203, #201 and #205, per
+`handoffs/equip-load-pop-up-tab-and-tag-commands.md`. Equip is now checked
+against the hard limit by what it actually adds to the load, from either side.
+The item pop-up closes when its item is no longer on its side's current tab.
+The third part, the wrap-time tag block, is documentation only. No new state:
+`SAVE_KEY` stays `ashfall_save_v0.7`. **PATCH**, so existing browser saves keep
+loading.
+
+**Fixed**
+
+- **#203: equipping a bag stowed in a lower-factor worn bag could raise the
+  load past `CARRY_HARD_LIMIT_KG`.** `doEquip()` checked the hard limit only
+  when `sourceKind === "world"`. From the inventory side, a bag moving from a
+  0.72 backpack into its own 0.81 slot adds load and was never checked. The
+  check now runs on both sides, by the delta:
+  `added = itemUnitWeight(it) × (carryFactorOf(it) − srcFactor)`, where
+  `srcFactor` is 0 in the world and `carryFactorOf(src)` in the inventory (1
+  for the loose inventory and the keychain, the worn bag's own factor
+  otherwise). It refuses only when `added > 0 && playerLoad() + added >
+  CARRY_HARD_LIMIT_KG`, so a player already past the limit may still equip a
+  bag when doing so lowers the load or leaves it unchanged. The world side is
+  unchanged: with `srcFactor` 0, `added` is the old expression. Same refusal
+  line ("You can't carry any more.", `warn`), and Equip stays offered.
+- **#201: the item pop-up could act on the wrong item after a keyboard switch
+  of the Here tab.** The pop-up closed only when its item left every list, but
+  the transfer functions (`doTake`, `doStore`, `doConsume`, `doOpen`,
+  `doEquip`) resolve their list from the *current* tab, so after a tab switch
+  the pop-up's index pointed into a different list. `renderItemPop()` now also
+  clears `detailItem` when `found.list` is not, by identity, the list its
+  side's current tab resolves to: `worldSlot(world[state.currentRoom],
+  worldTab).items` for `"world"`, `invSlot(invTab).items` otherwise. A null
+  slot counts as a mismatch. That one check covers a tab-strip click or
+  keypress, `doOpenContainer()`, a vanished tab falling back, and
+  `doEquip()` setting `invTab`. Switching the *other* side's tab leaves the
+  pop-up open, since that only moves where Take/Place/Store go. `doOpen()`
+  re-points `detailItem` into the same list, so it stays open.
+
+**UI**
+
+- Equipping a bag from inside a lower-factor worn bag near 32.5 kg can now
+  fail with "You can't carry any more."
+- Switching a tab on the same side as an open pop-up's item closes the pop-up.
+
+**Documentation**
+
+- `doEquip()`'s comment, which said equipping from the inventory side was
+  never refused on load, is rewritten: refused only when it would raise the
+  load past `CARRY_HARD_LIMIT_KG`, a bag counting at 0 in the world and at its
+  source's factor in the inventory. The carry-limits comment above
+  `CARRY_LIMIT_KG` ("nothing may add load past … only Unequip can take it
+  there") was left as is: it is accurate again.
+- The comment above `renderItemPop()` adds a close reason ("its side's tab no
+  longer showing it") and a paragraph on why the tab check exists.
+- Nothing was deferred. The one known follow-up, focus loss when a tab strip
+  is rebuilt, was already filed as #206.
+
+**Sections touched**
+
+- INVENTORY / ITEM SYSTEM: `doEquip()` (mechanics and comment).
+- RENDERING: `renderItemPop()` (the guard and its comment).
+- No WORLD DATA, no SIMULATION, no PERSISTENCE.
+
+**Open questions / decisions resolved**
+
+- **Wording.** The two code comments are as above. `CLAUDE.md` checklist item
+  6 now carries the handoff's block verbatim, and states why it resolves the
+  commit rather than using `HEAD` (the `v0.4.4`/`v0.4.5` → #32 history) and
+  its three safeguards: `[ -n "$C" ]`, the trailing ` from`, and a squash or
+  rebase merge falling through to the `else`.
+- **#205 had partly landed already.** PR #207 had rewritten item 6, the
+  documentation-only "no tag commands" line and the Project Guide's pointer
+  before this pass. The guide pointer and the no-tag line already said what
+  the handoff asks, so they are untouched. Item 6's block was the one
+  difference: #207's tagged first and checked the version after, and used
+  `--first-parent` with a trailing space rather than `--merges` with
+  ` from`. It is replaced by the handoff's check-before-tagging block.
+- **Shell.** The block assumes a POSIX shell (bash, zsh, Git Bash), as item
+  6's `grep` already did. Retunable if Tom tags from elsewhere.
+- **Guard shape.** One conditional in `renderItemPop()` covers both the
+  existing null-`found` close and the new tab mismatch, rather than two
+  separate checks.
+
+**Validation performed**
+
+- `git diff origin/main...HEAD -- ashfall.html`: only `GAME_CONFIG.VERSION`,
+  `doEquip()`'s check and comment, and `renderItemPop()`'s guard and comment.
+- Headless Chromium, against a copy of the script with a test hook appended:
+  a duffel stowed in a worn backpack, with the load 0.05 kg under the hard
+  limit, is refused (adds 0.072 kg) and stays in the backpack, with the
+  refusal logged; a duffel in the loose inventory is equipped while the load
+  is past the limit, and the load drops; a pop-up on an inventory item stays
+  open after a Here tab switch and closes after an inventory tab switch. No
+  page errors.
+
+**Explicitly out of scope**
+
+- Making the transfer functions act on `found.list` (#201's option b), and
+  trapping focus in the pop-up (#201's option c, overlaps #78).
+- Focus loss when a tab strip is rebuilt (#206).
+- Hiding or disabling Equip when it would be refused.
+- Any change to Unequip's "always allowed".
+- #200 (carry limit from the character) and #152 (parallel handoffs).
+
+**Version**: `GAME_CONFIG.VERSION` `"0.7.4"` → `"0.7.5"`
+
+---
+
 ## v0.7.4 — Carry load
 
 Implements: handoffs/carry-load.md
