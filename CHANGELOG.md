@@ -18,6 +18,99 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.6.1 — 2A's front door, gated both ways
+
+Implements: handoffs/2a-door-both-ways.md
+
+Implements #145 in full, per `handoffs/2a-door-both-ways.md`, using Tom's
+option 2. Every exit *into* apartment 2A already passed through door `"2a"`,
+but none of the four exits *out* of it did. With the door locked, the player
+could still leave 2A from any room and only couldn't get back in. 2B and 1A
+were already gated both ways from every room, and now 2A is too. This is a
+content-only pass: four exits in WORLD DATA, plus one comment that described
+the old data.
+
+**Fixed**
+
+- Door `"2a"` blocked only one way. Root cause: the four `hallway2` exits in
+  `buildAcornApartments()`, from `living`, `kitchen`, `bathroom` and
+  `bedroom`, were authored without a `doorId`, so `getExitsForRoom()` had
+  nothing to drop when the door was locked. Each one now carries
+  `doorId:"2a"`. `to`, `label` and `distanceM` are unchanged. These are the
+  only exits in the file from a 2A room to `hallway2`, since `balcony` has
+  none.
+
+**UI**
+
+No new string or control. The existing door UI, which reads the exits
+directly since v0.5.6, picks up the four rooms on its own:
+
+- With `"2a"` locked, `Leave the apartment` no longer appears in `living`,
+  `kitchen`, `bathroom` or `bedroom`. In its place `renderHereActionsPanel()`
+  prints `Unlock the 2nd Floor door` if a key is carried, or
+  `The 2nd Floor door is locked.` if none is.
+- In `kitchen`, `bathroom` and `bedroom`, the 2A key's and the master key's
+  detail views now offer `Lock the 2nd Floor door` / `Unlock the 2nd Floor
+  door`, through `doorsTouchingRoom()`. `living` already offered these,
+  because it is one of the door's `sides`, and is unchanged.
+- `doorLabel()` names the door "2nd Floor" from all four rooms, because the
+  far side of each gated exit is `hallway2`, whose area differs from 2A's.
+
+**Save compatibility**
+
+- **An existing save keeps 2A ungated.** `applyLoadedData()` restores `world`
+  from the save as a whole, and no backfill adds an exit field. Only a new
+  game or a Restart gets the fix. No `SAVE_KEY` change: PATCH, as the handoff
+  specified.
+
+**Documentation**
+
+- The comment above `doorsTouchingRoom()` justified the `sides` half of the
+  union by saying 2A's exits "carry no doorId", which is no longer true.
+  After this pass, every room in a door's `sides` also has an exit through
+  that door, so today the `sides` half only guards against an exit authored
+  without its `doorId`, which is how 2A's four were. The comment now says
+  that. Changing it went beyond the handoff's "change nothing else", and Tom
+  approved it during the session. It is a comment only, with no code
+  change.
+- Nothing was deferred.
+
+**Explicitly out of scope**
+
+- Whether `"2a"` should ship locked. `makeDefaultDoors()` is untouched and it
+  stays `locked:false`, the only door that ships unlocked.
+- The `2a-transom` window and the fire escape are unchanged. They are why
+  gating is safe: both still get the player out with the door locked and no
+  key.
+- #89 (`room.building` duplicating `BUILDINGS[].name`), and every other door,
+  key and window.
+
+**Sections touched**
+
+- WORLD DATA: four exits in `buildAcornApartments()`.
+- WORLD INTERACTION: the comment on `doorsTouchingRoom()` only. No ACTIONS,
+  SIMULATION or RENDERING code changed.
+
+**Validation performed**
+
+- `git diff origin/main...HEAD -- ashfall.html` shows the four exit lines,
+  `GAME_CONFIG.VERSION`, and the `doorsTouchingRoom()` comment, and nothing
+  else.
+- In headless Chromium, `ashfallDev.validateItemRegistry()`,
+  `validateLocations()`, `validateRoomSchema()` and
+  `validateReachability()` return output identical to v0.6.0.
+- Walked all four rooms with the door unlocked, then locked with the 2A key
+  on the keychain, then locked with the key dropped. Every state matched the
+  handoff's UI table. Unlocking from inside `kitchen`, `bathroom` and
+  `bedroom` brought `Leave the apartment` back. The master key, added to a
+  save, offered `Unlock the 2nd Floor door` in `kitchen`. With the door locked
+  and no key, the transom (open, then climb through) reached `hallway2`, and
+  the fire escape reached `alley`. No page errors.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.6.0"` → `"0.6.1"`
+
+---
+
 ## v0.6.0 — Roll core and the seeded world
 
 Implements: handoffs/roll-core-and-seeded-world.md
