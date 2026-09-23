@@ -18,6 +18,187 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.7.3 — Here panel tabs
+
+Implements: handoffs/here-panel-tabs.md
+
+Implements #169, #188 and #197 in full, per `handoffs/here-panel-tabs.md`. A
+bag lying on the floor opens as its own Here tab. A container tagged `device`
+is a Here tab before the room is searched. Four PERSISTENCE comments lose a
+stale count and three stale ordinals. Nothing is added to `state`, to any saved
+item or to any saved room, and `SAVE_KEY` stays `ashfall_save_v0.7`. **PATCH**,
+so existing browser saves keep loading.
+
+**New**
+
+- **Floor bags open as Here tabs (#169).** The new `floorBags(room)`
+  (INVENTORY / ITEM SYSTEM) is the one statement of which floor items open. It
+  returns every item on `room.floor` that has a `slotType` and a numeric
+  `capacityKg`, which is every registry bag. A dropped keychain has
+  `capacityKg:null`, so it stays shut, and `keychainAllows()` keeps its one
+  enforcement point. Bags in room containers, car containers, other bags or
+  the inventory also stay shut. Three places call `floorBags()`:
+  - **The Here tab list.** Each floor bag is a tab after Floor, in floor order,
+    before the room's containers and car containers. The tabs show whether or
+    not the room has been searched.
+  - **`worldSlot()`.** A floor-bag key resolves to
+    `{ items: bag.contents, capacityKg: bag.capacityKg }`. Take, Store,
+    Eat/Drink, Open and Equip all route through `worldSlot()`, so they work
+    from a floor-bag tab with no new action code. `doStore()`'s capacity check
+    uses the bag's own `capacityKg`, not the room's `floorCap`.
+  - **`findItemByUid()`.** It also searches the `contents` of the current
+    room's floor bags, one level deep, and no other bag. Without this, an
+    item's pop-up opened from a floor-bag tab closed at once.
+
+  A floor-bag tab never calls `doOpenContainer()`, so it never rolls loot. The
+  tab handler's container lookup misses a bag key, as before.
+- **`floorBagTab(bag)`** returns a floor bag's tab key, `"bag:" +
+  ensureUid(bag)`.
+- **`shownWithoutSearch(container)`** (WORLD INTERACTION) is true for a
+  container tagged `device`. The Here tab list and `doSearch()` both ask it.
+
+**Fixed**
+
+- **1B's stove needed a search first (#188).** `renderWorldItemsPanel()` added
+  a room's containers only when `!room.searchLabel || room.searched`. That
+  gated 1B's Stove, and with it the Device Options button, behind "Search the
+  unit", though the room description names the stove. An unlocked container
+  now becomes a tab when the room is searched or `shownWithoutSearch(c)` is
+  true. Order is the containers' authored order. Before the search, 1B shows
+  Floor and Stove. After it, 1B shows Floor, Stove, Tool Cabinet, Desk and
+  Closet. `roomStove()`, `getHeatContainer()` and the Device Options panel
+  never read the search, so they are unchanged.
+- **`doSearch()` listed what was already in view.** Its line now leaves out
+  `shownWithoutSearch()` containers. In 1B it reads "You search the place
+  carefully. You find: tool cabinet, desk, closet." When nothing is left to
+  list, it logs "You search the place carefully. You find nothing else." as
+  `"good"`. No room reaches that line yet.
+- **A vanished tab left no tab active.** `renderWorldItemsPanel()` fell back to
+  Floor only after it had built the buttons and run `revealActiveTab()`. On the
+  render where the open tab disappeared, no button carried `.active`. The
+  fallback now runs before the buttons are built, so Floor is marked active,
+  and scrolled into view, on that same render.
+
+**UI**
+
+- **Here panel:** each bag on the floor has its own tab after Floor, named
+  after the bag. When bags share a name, the first in floor order keeps the
+  plain name and later ones are numbered from 2: "Purse", "Purse 2". The
+  header reads `<contents weight> / <capacityKg> kg`, the same as a
+  container's. The inventory's button reads "Store" there, as on any non-floor
+  tab.
+- **1B:** the Stove tab and its Device Options button show before the unit is
+  searched. The search line no longer names the stove.
+
+**Documentation**
+
+- #197: `validateLoadedWorld()`'s comment says "the load-time backfills", not
+  "the three backfills". `backfillRoomAddresses()`, `backfillSlotItemIds()`
+  and `backfillIllnessScale()` no longer number themselves ("third", "fourth",
+  "sixth companion"). No other words changed.
+- New comments on `floorBags()`, `floorBagTab()`, the floor-bag branch of
+  `worldSlot()` and `findItemByUid()`, `shownWithoutSearch()`, `doSearch()`'s
+  empty line, and the tab list's order and fallback.
+- Filed #201. In v0.7.2 a keyboard user can switch the Here tab while an item's
+  pop-up is open. The pop-up's Take, Eat, Open and Equip then act on the item
+  at the same index in the new tab's list. It predates this pass, which only
+  adds more tabs it can happen on. Nothing else was deferred.
+
+**Validation performed**
+
+- `git diff origin/main...HEAD -- ashfall.html` touches only the sections
+  listed below, plus the version line.
+- Exercised in headless Chromium. The page ran with a test-only hook added to
+  expose `world`, `state` and `render()`. The hook is not in the shipped file.
+  v0.7.2 (`origin/main`'s `ashfall.html`) ran alongside as the baseline. No
+  page errors.
+  - **Floor bags.** With two purses on the floor, the tabs read Floor, Purse,
+    Purse 2, then the room's containers. Purse 2 read `0.00 / 5 kg`. Storing
+    Dish soap made it `0.40 / 5 kg`, and the first purse stayed empty. Storing
+    6 kg of laundry detergent logged "That won't fit there." and changed
+    nothing. The soap's pop-up opened from Purse 2 stayed open, and its Take
+    All took the soap back. Clicking the tab six more times added no loot.
+    Taking the first purse from Floor left one tab, "Purse", still holding the
+    soap. A bag in a room container got no tab.
+  - **The fallback.** With the remaining purse's tab open, the hook removed the
+    purse and re-rendered. Floor was the only active tab on that render. No
+    player action does this today: every floor removal goes through the Floor
+    tab or its pop-up.
+  - **The keychain.** Unequipped and placed on the floor, it got no tab.
+  - **1B, new game.** The tabs were Floor and Stove. Device Options showed on
+    the Stove tab, and with a box of matches the stove lit. The search logged
+    "You find: tool cabinet, desk, closet.", and the tabs became Floor, Stove,
+    Tool Cabinet, Desk and Closet. With the non-device containers removed by
+    the hook, the search logged "You find nothing else." as `good`.
+  - **Saves.** A save written by v0.7.2 held a registry purse and an
+    unequipped duffel with two Dish soap in its `contents`, both on the floor.
+    It loaded in v0.7.3 with no version warning. Both bags got tabs, and the
+    duffel's tab listed the soap at `0.80 / 18 kg`.
+
+**Sections touched**
+
+- INVENTORY / ITEM SYSTEM: the new `floorBags()` and `floorBagTab()`, and
+  `worldSlot()`.
+- CORE UTILITIES: `findItemByUid()`. The handoff files it under INVENTORY /
+  ITEM SYSTEM, but it lives in CORE UTILITIES and was edited in place.
+- WORLD INTERACTION: the new `shownWithoutSearch()`, and `doSearch()`.
+- RENDERING: `renderWorldItemsPanel()`.
+- PERSISTENCE: comments only.
+
+No WORLD DATA, no SIMULATION, no CRAFTING.
+
+**Open questions / decisions resolved**
+
+- **The tab key's prefix: `"bag:" + _uid`,** the handoff's recommendation.
+  Container ids are authored words and uids are `"u" + n`, so the key cannot
+  be taken for either. It is written once, in `floorBagTab()`, and
+  `worldSlot()` matches by comparing against that, not by parsing the key.
+- **Where the floor-bag list is computed: one helper, `floorBags(room)`,** the
+  handoff's recommendation. The tab list, `worldSlot()` and `findItemByUid()`
+  all call it, so the rule is written once.
+- **Where `contents = []` is created: in `worldSlot()`, on resolve.** A
+  registry bag gets an empty `contents` the first time its tab resolves. From
+  then on, the tab, the transfers and the save all see one real array. The
+  alternative was to create it in `doStore()` on first store, with
+  `worldSlot()` returning a detached empty array before that. That would put
+  the same fact in two functions.
+- **`shownWithoutSearch()` is a helper, not two `hasTag(c, "device")` calls.**
+  The tab list and `doSearch()` must agree on what a search does not hide. A
+  later "visible without search" tag (#15) then changes one line.
+
+**Notes / assumptions**
+
+- **"You find nothing else."** is the handoff's wording, and retunable.
+- **`floorBagTab()` mints a `_uid` for each floor bag in the current room when
+  the Here panel draws.** `renderItemList()` avoids minting uids for every
+  row, so that saves don't fill with them. A floor bag needs one for its tab
+  key, as the handoff specifies. Only bags on the current room's floor get one.
+- **The first `contents = []` is written during a render**, because
+  `renderWorldItemsPanel()` resolves the open tab through `worldSlot()`. It
+  adds no weight, touches no roll, and is the field the bag would carry had it
+  ever been equipped.
+- **Storing into a floor bag ignores `floorCap`,** per the handoff: the check
+  is against the bag's `capacityKg` only. The bag's contents still count in
+  `totalWeight(room.floor)` through `itemUnitWeight()`, as they already did
+  for a bag placed full. So the Floor header rises as the bag fills, and a
+  later Place onto that floor counts them. Filling a floor bag can take a
+  floor past its `floorCap`, as `giveItem()` already can.
+
+**Explicitly out of scope**
+
+- #167 (Disassemble).
+- Carry load (#168, #170), in `handoffs/carry-load.md`, which is implemented
+  after this. Its Take and Equip checks reach floor-bag tabs through
+  `worldSlot()`.
+- Opening a bag that sits in a room container, a car container or another bag.
+- A "visible without search" container tag (#15). The rule keys off `device`.
+- Reachable crafting (#119) and container `kind` (#128).
+- #201 (the pop-up after a keyboard tab switch).
+
+**Version**: `GAME_CONFIG.VERSION` `"0.7.2"` → `"0.7.3"`
+
+---
+
 ## v0.7.2 — Tier-0 sweep
 
 Implements: handoffs/tier-0-sweep.md

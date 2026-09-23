@@ -365,7 +365,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.7.2" };
+  const GAME_CONFIG = { VERSION: "0.7.3" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -3856,6 +3856,14 @@
         }
       }
     }
+    // Inside a bag only where its Here tab lists it: a floor bag in the
+    // current room, one level deep. Without this, a pop-up opened from a
+    // floor-bag tab would close the moment it opened.
+    for(const bag of floorBags(world[state.currentRoom])){
+      const list = bag.contents || [];
+      const idx = list.findIndex(it=>it._uid===uid);
+      if(idx>=0) return { list, index:idx, item:list[idx] };
+    }
     return null;
   }
 
@@ -4189,8 +4197,31 @@
     if(tab === "inventory") return state.inventory;
     return CONTAINER_SLOTS.indexOf(tab) >= 0 ? state[tab] : null;
   }
+  // The bags on a room's floor that open as their own Here tab: a floor item
+  // with a slotType and a numeric capacityKg, which is every registry bag. A
+  // dropped keychain's capacityKg is null, so it stays shut — its keys come
+  // back by equipping it again, and keychainAllows() keeps its one
+  // enforcement point. A bag anywhere else (a container, another bag, the
+  // inventory) stays shut too. The one statement of the rule: the Here tab
+  // list, worldSlot() and findItemByUid() all ask it.
+  function floorBags(room){
+    return room.floor.filter(it=> it.slotType && typeof it.capacityKg === "number");
+  }
+  // A floor bag's Here tab key: its _uid, never its floor index, prefixed so
+  // it can't be mistaken for an authored container id.
+  function floorBagTab(bag){ return "bag:" + ensureUid(bag); }
   function worldSlot(room, tab){
     if(tab === "floor") return { items:room.floor, capacityKg:room.floorCap };
+    // A floor bag holds its items in `contents`, the field an unequipped bag
+    // already carries and saves already walk. One straight from the registry
+    // has none, so it gets an empty one here, the first time its tab
+    // resolves. A store is checked against the bag's own capacityKg, not the
+    // floor's.
+    const bag = floorBags(room).find(b=> floorBagTab(b) === tab);
+    if(bag){
+      if(!bag.contents) bag.contents = [];
+      return { items:bag.contents, capacityKg:bag.capacityKg };
+    }
     let c = room.containers.find(x=>x.id===tab);
     if(!c && room.carContainers) c = room.carContainers.find(x=>x.id===tab);
     return c ? { items:c.items, capacityKg:c.capacityKg } : null;
@@ -4681,12 +4712,21 @@
     log("You get real sleep. You wake up feeling considerably better.", "good");
     render();
   }
+  // A container a search doesn't hide: one tagged `device`, a fixture the
+  // room's description already names (1B's stove). The Here tab list shows
+  // it before a search, and doSearch() leaves it out of what the search
+  // found.
+  function shownWithoutSearch(container){ return hasTag(container, "device"); }
   function doSearch(){
     const room = world[state.currentRoom];
     advanceTime(room.searchMinutes);
     room.searched = true;
-    const names = room.containers.map(c=>c.name.toLowerCase()).join(", ");
-    log("You search the place carefully. You find: " + names + ".", "good");
+    const names = room.containers.filter(c=> !shownWithoutSearch(c)).map(c=>c.name.toLowerCase());
+    // No room reaches the empty line yet: it guards a later content pass.
+    // The wording is retunable.
+    log(names.length
+      ? "You search the place carefully. You find: " + names.join(", ") + "."
+      : "You search the place carefully. You find nothing else.", "good");
     render();
   }
   function doBreakCar(){
@@ -5273,7 +5313,7 @@
   // and runs on every load — hence its place here in PERSISTENCE beside the
   // backfills rather than in the dev-helper block.
   //
-  // It covers exactly the shapes that make resyncUidCounter(), the three
+  // It covers exactly the shapes that make resyncUidCounter(), the load-time
   // backfills or render() throw, and no more. This is a shape check, not a
   // schema validator: a save that is merely out of date is the backfills'
   // problem, and they run only once this has passed. Returns an array of
@@ -5307,7 +5347,7 @@
   // keep playing — the old order committed `world` first and a throw in a
   // backfill left a half-loaded world on screen with no way back but
   // Restart.
-  // backfillRoomAddresses(): third companion to backfillLocationIds(), run
+  // backfillRoomAddresses(): companion to backfillLocationIds(), run
   // alongside it on every load. roomLabel() now composes from `address`, a
   // field no save made before it shipped carries — without this, every room in
   // such a save renders "undefined, ...". It keys off `address === undefined`
@@ -5333,7 +5373,7 @@
       }
     });
   }
-  // backfillSlotItemIds(): fourth companion to backfillItemIds(), run
+  // backfillSlotItemIds(): companion to backfillItemIds(), run
   // alongside it on every load. Saves written before equipment slots carried
   // itemId hold a slot object built by hand from an item's fields — so
   // countInPools() cannot see the equipped bag by id, and unequipping it
@@ -5371,7 +5411,7 @@
     forEachItemList(list=> list.forEach(resync));
     CONTAINER_SLOTS.forEach(slotKey=> resync(state[slotKey]));
   }
-  // backfillIllnessScale(): sixth companion to backfillItemIds(), run
+  // backfillIllnessScale(): companion to backfillItemIds(), run
   // alongside it on every load. Instances written before illnessChance became
   // a fraction carry it as a percent (raw_fish shipped 35). A value above 1 is
   // a percent by construction — a legal fraction can never exceed 1 — so the
@@ -7228,10 +7268,23 @@
     const worldTabsEl = document.getElementById("worldTabs");
     worldTabsEl.innerHTML = "";
     const worldTabDefs = [["floor","Floor"]];
-    if(!room.searchLabel || room.searched){
-      room.containers.forEach(c=>{ if(!c.locked) worldTabDefs.push([c.id, c.name]); });
-    }
+    // Floor bags straight after Floor, in floor order, searched or not: the
+    // bag is on the floor, and Floor is never gated. Bags sharing a name are
+    // numbered from the second on — "Purse", "Purse 2".
+    const nameCount = new Map();
+    floorBags(room).forEach(bag=>{
+      const n = (nameCount.get(bag.name) || 0) + 1;
+      nameCount.set(bag.name, n);
+      worldTabDefs.push([floorBagTab(bag), n > 1 ? bag.name + " " + n : bag.name]);
+    });
+    const searched = !room.searchLabel || room.searched;
+    room.containers.forEach(c=>{
+      if(!c.locked && (searched || shownWithoutSearch(c))) worldTabDefs.push([c.id, c.name]);
+    });
     if(room.carContainers && !room.carLocked) room.carContainers.forEach(c=> worldTabDefs.push([c.id, c.name]));
+    // Before the buttons are built, so the render that drops the open tab
+    // also marks Floor active.
+    if(!worldTabDefs.find(d=>d[0]===worldTab)) worldTab = "floor";
     worldTabDefs.forEach(([key,label])=>{
       const btn = document.createElement("button");
       btn.textContent = label;
@@ -7244,7 +7297,6 @@
       worldTabsEl.appendChild(btn);
     });
     revealActiveTab(worldTabsEl);
-    if(!worldTabDefs.find(d=>d[0]===worldTab)) worldTab = "floor";
     const currentWorld = worldSlot(room, worldTab);
     document.getElementById("worldWeight").textContent =
       totalWeight(currentWorld.items).toFixed(2) + " / " + currentWorld.capacityKg + " kg";
