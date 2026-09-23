@@ -18,6 +18,116 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.6.5 — Portrait layout, compact action buttons, tighter line spacing
+
+Implements: handoffs/portrait-layout.md
+
+Implements #159 in full, per `handoffs/portrait-layout.md`. The layout now
+switches on orientation instead of width. Portrait gets one column with the Here
+panel above Inventory. Action buttons are smaller and the room text is set
+tighter in both layouts. The pass changes the `<style>` block and adds two ids
+to the sidebar's panels. No script logic changed and `state` did not change, so
+`SAVE_KEY` stays the same and this is PATCH.
+
+**UI**
+
+- **What switches the layout.** `@media (orientation: portrait), (max-width: 480px)`
+  replaces `@media (max-width:760px)`. A portrait viewport of any width gets
+  the one-column layout, and so does any viewport narrower than 480px. A
+  landscape viewport 480px or wider keeps today's two columns. The 480px clause
+  is a floor, not the trigger. The two-column grid needs 476px (the 320px
+  sidebar plus the description's minimum). Without the floor, a landscape
+  window narrower than that would scroll sideways.
+- **Tall desktop windows get one column too.** A desktop window taller than it
+  is wide takes the one-column layout, by design (#159).
+- **One-column layout.** Everything in it sits under that one query, so there is
+  one alternative layout, not two. From the top: the header and `#locBar`
+  (unchanged), then `#left` (room description, log, Move group, Here actions),
+  then the **Here** panel, then **Inventory**, then any other sidebar panel in
+  its existing DOM order. `#left`'s padding drops from `18px 26px` to
+  `14px 16px`. Its border still moves from right to bottom. The two-column
+  layout keeps Inventory above Here.
+- **Everywhere (both layouts):**
+
+  | rule | was | now |
+  |---|---|---|
+  | `button.action` font-size | `13.5px` | `12.5px` |
+  | `button.action` padding | `8px 13px` | `6px 10px` |
+  | `.actions` gap | `8px` | `6px` |
+  | `button.action .cost` font-size | `12px` | `11px` |
+  | `button.action .cost` margin-left | `4px` | `3px` |
+  | `#roomDesc` line-height | `1.6` | `1.4` |
+  | `#log p` line-height (and `#craftResult p`, which shares the rule) | `1.5` | `1.35` |
+
+  An action button is now 29px tall, down from 34px.
+- **Known tradeoff: tap targets.** 29px (and the old 34px) is below the usual
+  44px (iOS) and 48px (Android) minimums. Tom chose the compact size knowing
+  this. Tap-target minimums generally stay with #78.
+
+**Documentation**
+
+- Rewrote the layout comment above the media query. It now gives the
+  orientation trigger, the 480px floor and the 476px grid floor behind it, that
+  tall desktop windows take one column by design, and that the numbers are
+  retunable. It keeps the note about `#left`'s border moving from right to
+  bottom, and drops every sentence about the 760px rule.
+- Filed #186. In the one-column layout, a room with little content leaves a gap
+  between the Here actions and the panels. `main`'s grid rows stretch to fill
+  the viewport. This predates this pass (the 760px rule did the same), but
+  portrait now shows it more often. Whether the panels should sit directly under
+  the actions is Tom's call. Nothing else was deferred.
+
+**Validation performed**
+
+- `git diff origin/main...HEAD -- ashfall.html` contains only the `<style>`
+  block, the `id`s on the two sidebar panels, and the `GAME_CONFIG.VERSION` bump.
+- Measured in headless Chromium, comparing this branch with `origin/main`:
+  - 390×844 (portrait): one column, Here above Inventory, `#left` padding
+    `14px 16px`, two action buttons per line.
+  - 844×390 (landscape): `524px 320px` columns, Inventory above Here.
+  - 900×1100 (tall desktop): one column.
+  - 470×400 (landscape below the floor): one column.
+  - 1280×800: two columns, as before.
+  - No viewport scrolls sideways.
+- Checked every `button.action` user at the compact size, in portrait and
+  landscape: the Move group on Poplar St, the Here actions, the item pop-up's
+  `.pop-actions`, the Crafting panel's recipe buttons (disabled, with
+  `(needs …)` costs), and the game-over Restart (reached by loading a save with
+  `health: 0`). All render without clipping or overlap, and costs sit inline.
+  No page errors.
+
+**Open questions / decisions resolved**
+
+- **How Here gets above Inventory:** CSS `order` inside the query, as the
+  handoff recommended. The panels got ids, `#invPanel` and `#worldPanel`, named
+  after their `#invList` and `#worldList`. The rule sets `#worldPanel{ order:-2 }`
+  and `#invPanel{ order:-1 }`. Any other panel keeps the default `order:0`, so it
+  follows the two in DOM order wherever it sits in the markup. The DOM order
+  is unchanged, and the two-column layout is untouched. No positional selectors
+  were used.
+
+**Notes / assumptions**
+
+- These values are judgment calls and retunable: the 480px floor, the
+  `14px 16px` padding, and every value in the "Everywhere" table. They come from
+  mock-ups Tom approved at 390×844 and 844×390.
+
+**Explicitly out of scope**
+
+- #29: the log's `max-height:110px` and its 50-entry cap are unchanged.
+- #165: adjustable panel sizes. This pass's values become its defaults.
+- An Options toggle for the layout.
+- #78: tap-target minimums and accessibility generally.
+
+**Sections touched**
+
+- The `<style>` block, and the markup of the two `#sidebar` panels (`id`s only).
+  No WORLD DATA, ACTIONS, SIMULATION, PERSISTENCE or RENDERING logic.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.6.4"` → `"0.6.5"`
+
+---
+
 ## v0.6.4 — Menu hub: the item pop-up, the drawer hub with Crafting, and Options
 
 Implements: handoffs/menu-hub.md
