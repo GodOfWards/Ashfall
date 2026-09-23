@@ -365,7 +365,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.7.4" };
+  const GAME_CONFIG = { VERSION: "0.7.5" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -4407,9 +4407,15 @@
     const it = getItemAt(src && src.items, index);
     if(!it || !it.slotType) return;
     if(state[it.slotType]){ log("You're already carrying something in that slot.", "warn"); return; }
-    // Only a bag picked up from the world adds load, at its own factor.
-    // Equipping from the inventory side is never refused on load.
-    if(sourceKind === "world" && playerLoad() + itemUnitWeight(it) * carryFactorOf(it) > CARRY_HARD_LIMIT_KG){
+    // Refused only when it would raise the load past CARRY_HARD_LIMIT_KG.
+    // What it adds is the bag's weight at its own factor less what it
+    // already counts for where it sits: 0 in the world (worldSlot() has no
+    // itemId, so carryFactorOf() would say 1), its source's factor in the
+    // inventory. So a bag stowed in a lower-factor worn bag can add load.
+    // A player already past the limit may still equip when it adds nothing.
+    const srcFactor = sourceKind === "world" ? 0 : carryFactorOf(src);
+    const added = itemUnitWeight(it) * (carryFactorOf(it) - srcFactor);
+    if(added > 0 && playerLoad() + added > CARRY_HARD_LIMIT_KG){
       log("You can't carry any more.", "warn");
       return;
     }
@@ -6960,11 +6966,21 @@
   // single source of what can be done; the pop-up adds no action of its own.
   // Whether it is open follows detailItem and nothing else. Set, it opens;
   // cleared for any reason (movement, load, restart, the item leaving every
-  // list, as Take All does) it closes. It stays open after an action and
-  // updates in place, because every action ends in render().
+  // list, as Take All does, or its side's tab no longer showing it) it
+  // closes. It stays open after an action and updates in place, because
+  // every action ends in render().
+  //
+  // The tab check is what keeps the actions honest: they act on the list
+  // their side's current tab resolves to, so a pop-up whose item is on
+  // another tab would act on the wrong item. Both tabs are final by now,
+  // since the two item panels render first. The other side's tab may
+  // change freely; that only moves where Take/Place/Store go.
   function renderItemPop(){
     const found = detailItem && findItemByUid(detailItem.uid);
-    if(detailItem && !found) detailItem = null;
+    const slot = found && (detailItem.side === "world"
+      ? worldSlot(world[state.currentRoom], worldTab)
+      : invSlot(invTab));
+    if(detailItem && (!slot || slot.items !== found.list)) detailItem = null;
     if(!detailItem){ closeLayer(itemPop); return; }
     const it = found.item;
     rebuildKeepingFocus(itemPop, ()=>{

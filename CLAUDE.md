@@ -143,20 +143,29 @@ Every PR that changes `ashfall.html` carries all six:
 6. The tag commands, as the last thing in the session's final message. Tom
    pushes tags by hand, and the merge commit doesn't exist until he merges, so
    the session doesn't tag — it hands him this block, filled in with the PR
-   number and the version:
+   number (`NN`) and the version (`X.Y.Z`), in its final message and not the
+   PR description:
 
-   ```
+   ```sh
    git fetch origin main
-   C=$(git log origin/main --first-parent -1 --format=%H --grep="^Merge pull request #NN ") &&
-   git tag vX.Y.Z "$C" &&
-   git show vX.Y.Z:ashfall.html | grep VERSION &&   # must print X.Y.Z
-   git push origin vX.Y.Z
+   C=$(git log origin/main --merges -1 --format=%H --grep="^Merge pull request #NN from")
+   if [ -n "$C" ] && git show "$C:ashfall.html" | grep -qF 'VERSION: "X.Y.Z"'; then
+     git tag vX.Y.Z "$C" && git push origin vX.Y.Z
+   else
+     echo "Not tagged: PR #NN has no merge commit on main, or it isn't X.Y.Z"
+   fi
    ```
 
-   **The commit is named explicitly** — resolved by PR number when the block
-   runs. A bare `git tag vX.Y.Z` tags whatever `HEAD` happens to be, which is how
-   `v0.4.4` and `v0.4.5` ended up on the same commit as `v0.4.7` (#32, since
-   corrected). The lookup assumes the PR lands as a merge commit, not a squash.
+   **The block resolves the commit instead of using `HEAD`.** A bare
+   `git tag vX.Y.Z` tags whatever `HEAD` happens to be, which is how `v0.4.4`
+   and `v0.4.5` ended up on the same commit as `v0.4.7` (#32, since
+   corrected). So it finds the merge commit by PR number, and checks that the
+   commit carries the version *before* tagging, so a wrong tag is never
+   created. Its safeguards stay as written: `[ -n "$C" ]`, because with an
+   empty `$C` the `git show` reads the index and could pass; the trailing
+   ` from`, which keeps `#12` from matching `#123`. A squash or rebase merge
+   finds no merge commit and falls through to the `else`. It assumes a POSIX
+   shell (bash, zsh, Git Bash).
 
 The merge ships the version; the tag is what makes it reachable afterwards. A
 version that shipped as a commit inside someone else's PR still gets its own tag,
