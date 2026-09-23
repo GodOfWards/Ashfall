@@ -274,7 +274,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.6.2" };
+  const GAME_CONFIG = { VERSION: "0.6.3" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -529,7 +529,10 @@
   //                   the slot key isn't good enough (e.g. "Fanny Pack")
   //     capacityKg    capacity of an equippable container item
   //     contents      stored contents when an equipped container is
-  //                   unequipped back into a stowable item
+  //                   unequipped back into a stowable item. Its items count
+  //                   toward the item's weight (itemUnitWeight()), bags may
+  //                   nest to any depth, and every load-time scan reaches
+  //                   them through forEachItemList()
   //     on            powered-equipment on/off state
   //     hasBatteries  powered-equipment battery-installed state
   //     drainRate     durability loss per minute while `on`
@@ -3908,7 +3911,15 @@
   // ==================================================
   // INVENTORY / ITEM SYSTEM
   // ==================================================
-  function totalWeight(list){ return list.reduce((s,it)=> s + it.qty*it.unitWeight, 0); }
+  // The only place an item's weight is computed. A stowed bag weighs itself
+  // plus everything in its `contents`, and the recursion runs back through
+  // totalWeight(), so bags nested to any depth count in full. An item with
+  // no `contents` weighs exactly qty × unitWeight.
+  function itemUnitWeight(it){
+    return it.unitWeight + (Array.isArray(it.contents) ? totalWeight(it.contents) : 0);
+  }
+  function itemWeight(it){ return it.qty * itemUnitWeight(it); }
+  function totalWeight(list){ return list.reduce((s,it)=> s + itemWeight(it), 0); }
   // Returns the list entry the item ended up in — the stack it merged into,
   // or the new one pushed. doOpen() is the only caller that reads it, to
   // point the detail view at the unit it just opened; every other caller
@@ -4020,7 +4031,7 @@
     const dst = invSlot(invTab);
     if(!dst) return { ok:false, reason:"no-destination" };
     if(invTab === "keychain" && !keychainAllows(item)) return { ok:false, reason:"keychain" };
-    const weight = item.qty * item.unitWeight;
+    const weight = itemWeight(item);
     if(dst.capacityKg && totalWeight(dst.items) + weight > dst.capacityKg) return { ok:false, reason:"capacity" };
     addToList(dst.items, item);
     return { ok:true };
@@ -4029,7 +4040,7 @@
     const room = world[state.currentRoom];
     const result = addToDestination(item);
     if(result.ok) return;
-    const weight = item.qty * item.unitWeight;
+    const weight = itemWeight(item);
     const floorFull = room.floorCap && totalWeight(room.floor) + weight > room.floorCap;
     addToList(room.floor, item);
     if(result.reason === "keychain"){
@@ -4105,7 +4116,7 @@
     if(!it || !dst) return;
     const moveQty = normalizeQty(qty, it.qty);
     if(moveQty == null) return;
-    if(dst.capacityKg && totalWeight(dst.items) + moveQty*it.unitWeight > dst.capacityKg){
+    if(dst.capacityKg && totalWeight(dst.items) + moveQty*itemUnitWeight(it) > dst.capacityKg){
       log("That won't fit there.", "warn");
       return;
     }
@@ -4986,21 +4997,34 @@
   // session keep getting unique ids, and ensureUid() lazily assigns one to
   // any loaded item that predates the uid system.
   function serializeGame(){ return JSON.stringify({ version: GAME_CONFIG.VERSION, state, world, doors, windows }, null, 2); }
+  // forEachItemList(): calls visit(list) once for every item array reachable
+  // from the current `state` and `world` — the inventory pools, every room's
+  // floor, containers and car containers, and the `contents` of any item in
+  // any of those, to any depth. Every scan over item lists goes through this
+  // rather than walking them by hand: a hand-rolled walk is how a stowed
+  // bag's contents gets missed. It reads `state` and `world` at call time.
+  function forEachItemList(visit){
+    const walk = (list)=>{
+      if(!Array.isArray(list)) return;
+      visit(list);
+      list.forEach(it=>{ if(it && Array.isArray(it.contents)) walk(it.contents); });
+    };
+    invPools().forEach(walk);
+    Object.keys(world).forEach(roomId=>{
+      const room = world[roomId];
+      walk(room.floor);
+      (room.containers || []).forEach(c=>walk(c.items));
+      (room.carContainers || []).forEach(c=>walk(c.items));
+    });
+  }
   function resyncUidCounter(){
     let maxSeen = 0;
-    const scanList = (list)=> (list || []).forEach(it=>{
+    forEachItemList(list=> list.forEach(it=>{
       if(it && it._uid){
         const n = parseInt(String(it._uid).replace(/^u/, ""), 10);
         if(!isNaN(n) && n > maxSeen) maxSeen = n;
       }
-    });
-    invPools().forEach(scanList);
-    Object.keys(world).forEach(roomId=>{
-      const room = world[roomId];
-      scanList(room.floor);
-      (room.containers || []).forEach(c=>scanList(c.items));
-      (room.carContainers || []).forEach(c=>scanList(c.items));
-    });
+    }));
     _uidCounter = maxSeen + 1;
   }
   // backfillItemIds(): companion to resyncUidCounter(), run alongside it on
@@ -5012,16 +5036,9 @@
   function backfillItemIds(){
     const nameToId = {};
     Object.keys(ITEM_REGISTRY).forEach(id=>{ nameToId[ITEM_REGISTRY[id].name] = id; });
-    const scanList = (list)=> (list || []).forEach(it=>{
+    forEachItemList(list=> list.forEach(it=>{
       if(it && !it.itemId && nameToId[it.name]) it.itemId = nameToId[it.name];
-    });
-    invPools().forEach(scanList);
-    Object.keys(world).forEach(roomId=>{
-      const room = world[roomId];
-      scanList(room.floor);
-      (room.containers || []).forEach(c=>scanList(c.items));
-      (room.carContainers || []).forEach(c=>scanList(c.items));
-    });
+    }));
   }
   // backfillLocationIds(): companion to backfillItemIds(), run alongside it
   // on every load. Older saves (pre-v0.2.9) predate the locationId field —
@@ -5161,25 +5178,16 @@
   // a percent by construction — a legal fraction can never exceed 1 — so the
   // test is unambiguous and dividing by 100 is exact. Without this, every raw
   // fish in an imported pre-0.6 save would be a guaranteed illness, since 35
-  // exceeds every value rollValue() can return. It descends into `contents`,
-  // which the other backfills do not: an unequipped bag carries its items
-  // there, and a fish stowed in one would otherwise surface unrepaired the
-  // moment the bag is equipped again.
+  // exceeds every value rollValue() can return. forEachItemList() carries it
+  // into `contents`: an unequipped bag holds its items there, and a fish
+  // stowed in one would otherwise surface unrepaired the moment the bag is
+  // equipped again.
   function backfillIllnessScale(){
-    const scan = (list)=> (list || []).forEach(it=>{
-      if(!it) return;
-      if(typeof it.illnessChance === "number" && it.illnessChance > 1){
+    forEachItemList(list=> list.forEach(it=>{
+      if(it && typeof it.illnessChance === "number" && it.illnessChance > 1){
         it.illnessChance /= 100;
       }
-      if(Array.isArray(it.contents)) scan(it.contents);
-    });
-    invPools().forEach(scan);
-    Object.keys(world).forEach(roomId=>{
-      const room = world[roomId];
-      scan(room.floor);
-      (room.containers || []).forEach(c=>scan(c.items));
-      (room.carContainers || []).forEach(c=>scan(c.items));
-    });
+    }));
   }
   function applyLoadedData(data){
     if(!data || !data.state || !data.world || !data.world[data.state.currentRoom]){
@@ -6309,7 +6317,7 @@
     if(list.length === 0){ el.innerHTML = '<li class="empty">Nothing here.</li>'; return; }
     list.forEach((it, i)=>{
       const li = document.createElement("li");
-      const total = (it.qty * it.unitWeight).toFixed(2);
+      const total = itemWeight(it).toFixed(2);
       const meta = document.createElement("span");
       meta.className = "meta";
       const nameEl = document.createElement("button");
@@ -6368,10 +6376,10 @@
       nameLine.appendChild(nameB);
       box.appendChild(nameLine);
       const statsLine = document.createElement("div");
-      statsLine.appendChild(document.createTextNode(`${it.category} · ${(it.qty*it.unitWeight).toFixed(2)} kg `));
+      statsLine.appendChild(document.createTextNode(`${it.category} · ${itemWeight(it).toFixed(2)} kg `));
       const eachSpan = document.createElement("span");
       eachSpan.style.color = "var(--ink-faint)";
-      eachSpan.textContent = `(${it.unitWeight.toFixed(2)} kg each)`;
+      eachSpan.textContent = `(${itemUnitWeight(it).toFixed(2)} kg each)`;
       statsLine.appendChild(eachSpan);
       box.appendChild(statsLine);
       if(it.durability){
