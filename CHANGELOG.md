@@ -18,6 +18,235 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.7.4 — Carry load
+
+Implements: handoffs/carry-load.md
+
+Implements #168 and #170 in full, per `handoffs/carry-load.md`. The player has
+one carry limit, 13 kg. A worn bag counts for less than its weight. Over the
+limit, moving is slower and costs Exertion, and from 26 kg it costs Health.
+Nothing may add load past 32.5 kg, except Unequip. The loose inventory loses
+its 3 kg cap. The load is derived and never stored. Each bag's factor is read
+from `ITEM_REGISTRY` by `itemId`. The only save-facing change deletes a field
+(`inventory.capacityKg`) on load. `SAVE_KEY` stays `ashfall_save_v0.7`.
+**PATCH**, so existing browser saves keep loading.
+
+**New**
+
+- **`playerLoad()`** (INVENTORY / ITEM SYSTEM) is the one definition every
+  carry rule reads. It is `totalWeight(state.inventory.items)`, plus, for each
+  filled `CONTAINER_SLOTS` slot, `(slot.unitWeight + totalWeight(slot.items))
+  × carryFactorOf(slot)`. The keychain counts at 1, its ring and its keys
+  included. A bag that is not worn counts in full wherever it is.
+- **`carryFactorOf(thing)`** takes a slot or an item. It returns
+  `ITEM_REGISTRY[thing.itemId].carryFactor` when the entry defines one, and 1
+  otherwise: the keychain, the loose inventory, an unknown or unrepaired slot.
+  The factor is never copied onto a slot or an item.
+- **Constants**, all retunable and each written once:
+  - `CARRY_LIMIT_KG = 13` and `CARRY_HARD_LIMIT_KG = CARRY_LIMIT_KG * 2.5`
+    (32.5), beside `playerLoad()`.
+  - `LOOSE_INVENTORY_MAX_KG = 100` and `LOOSE_INVENTORY_MAX_ENTRIES = 1000`,
+    beside them. These hidden safety caps are never shown.
+  - Beside `doMove()`, on the precedent of `JOG_EXERTION_PER_MIN`:
+    `OVERLOAD_HARM_START_KG = CARRY_LIMIT_KG * 2` (26),
+    `OVERLOAD_MIN_SPEED_FACTOR = 0.25`,
+    `OVERLOAD_MAX_EXERTION_PER_MIN = JOG_EXERTION_PER_MIN`,
+    `OVERLOAD_HARM_MINUTES_PER_HEALTH_START = 10` and
+    `OVERLOAD_HARM_MINUTES_PER_HEALTH_END = 5`.
+- **The bands.** `overloadFraction(load)` runs from the carry limit to the
+  hard limit, and `harmFraction(load)` from 26 kg to the hard limit. Both are
+  clamped to [0, 1] through `loadFraction()`, so past the hard limit both stay
+  at 1.
+  - **Speed.** `overloadSpeedFactor(load) = 1 − over × (1 −
+    OVERLOAD_MIN_SPEED_FACTOR)`. `moveMinutes()` divides by the gait's speed
+    times this. The `MIN_MOVE_MIN` floor does not scale. The move buttons
+    price through `exitMinutes()`, so they show the slower times with no
+    RENDERING change.
+  - **Exertion.** Every move adds `over × OVERLOAD_MAX_EXERTION_PER_MIN ×
+    minutes`, at every gait, on top of Jog's surcharge.
+  - **Health.** While the load is at or above 26 kg, a move costs `minutes ×
+    overloadHealthPerMin(load)`. That rate runs linearly from 0.1 per minute
+    at 26 kg to 0.2 per minute at 32.5 kg and beyond. The move logs
+    "Something in your back twinges under the weight." as `warn`, with the
+    log key `overload-harm`, so consecutive moves collapse to "×N". Then it
+    calls `checkGameOver()`.
+  - `doMove()` samples `playerLoad()` once, beside its gait sample and before
+    `advanceTime()`. `minutes` includes the slowdown, so the per-minute
+    Exertion and Health grow with it.
+- **The hard limit.** `addToDestination()` returns `{ok:false,
+  reason:"load"}` when `playerLoad() + itemWeight(item) ×
+  carryFactorOf(dst)` would pass `CARRY_HARD_LIMIT_KG`. The checks run in
+  this order: keychain, then room (the bag's own `capacityKg`, or for the
+  loose inventory the hidden caps), then load.
+  - `doTake()` logs "You can't carry any more." (`warn`) on `load`.
+  - `giveItem()` drops the item to the floor on `load` through its existing
+    floor lines. Its code is unchanged: every refusal but the keychain's
+    already took them. This covers crafting, fishing, chopping, a dismantled
+    campfire, Disassemble and removed batteries.
+  - `doEquip()` from the world side (floor, container or floor-bag tab) is
+    refused with the same line when `itemUnitWeight(bag) × carryFactorOf(bag)`
+    would pass the hard limit. From the inventory side it is never refused on
+    load. `doUnequip()` is never refused, and can take the load past the hard
+    limit.
+
+**New content**
+
+- `carryFactor` on the five bags in `ITEM_REGISTRY`: `worn_backpack` 0.72,
+  `fanny_pack` 0.76, `duffel_bag` 0.81, `tote_bag` 0.85, `purse` 0.85. Each is
+  Tom's first proposal × 0.9, floored to two decimals, and all are retunable.
+  This is the mechanic's own definition data, not instance data: no room,
+  placement or description changed.
+
+**Removed**
+
+- **The loose inventory's weight cap.** `makeDefaultState()`'s `inventory` no
+  longer carries `capacityKg:3`. The new `backfillInventoryCap()`
+  (PERSISTENCE) deletes `state.inventory.capacityKg` on every load, after the
+  other backfills, so no old save keeps its 3 kg. Nothing reads a capacity off
+  the inventory any more. The only weight guards on it are the hidden caps,
+  checked in `addToDestination()` alone. A refusal there is `reason:"capacity"`,
+  so `doTake()` says "That won't fit — not enough room there." `doUnequip()`
+  and `doOpen()` don't check the caps.
+
+**UI**
+
+- **Inventory tab header** shows the player's load against the limit, e.g.
+  `9.15 / 13 kg`. It is the normal colour at or under 13 kg, `var(--warn)`
+  over 13 kg, and `var(--danger)` from 26 kg.
+- **Bag tabs** are unchanged: the bag's own fill against its own capacity,
+  whatever its factor. **Keychain** is unchanged (`x kg`).
+- **Log:** "You can't carry any more." when Take or a world-side Equip is
+  refused at the hard limit. "Something in your back twinges under the
+  weight." on each move at or above 26 kg.
+
+**Documentation**
+
+- ITEM DATA SCHEMA documents `carryFactor` beside `capacityKg`.
+- New comments on the carry constants, `carryFactorOf()`, `playerLoad()`,
+  `addToDestination()`'s check order, `giveItem()`, `doEquip()`'s world-side
+  check, `doUnequip()`'s deliberate lack of one, the overload block beside
+  `doMove()`, `moveMinutes()`, `backfillInventoryCap()` and the Inventory
+  header. The backfill's comment carries no count or ordinal.
+- `validateItemRegistry()` (dev-only) also flags any entry with a `slotType`
+  whose `carryFactor` is missing or not in (0, 1].
+- Filed #203. An inventory-side Equip is never refused on load, per the
+  handoff. But a bag stowed inside a worn bag with a lower factor counts for
+  more once equipped. A full purse in the backpack gains 0.70 kg, and a
+  duffel about 1 kg. So near the hard limit, that Equip can pass it by up to
+  about 1 kg. Nothing else was deferred.
+
+**Validation performed**
+
+- `git diff origin/main...HEAD -- ashfall.html` touches only the sections
+  listed below, plus the version line.
+- Exercised in headless Chromium. A test-only hook exposed `state`, `world`
+  and the functions under test. The hook is not in the shipped file. No page
+  errors, and `ashfallDev.validateItemRegistry()` returned `[]`.
+  - **Load arithmetic.** A new game reads `0.08 / 13 kg`: the keychain's
+    0.05 plus its 0.03 kg key. Equipping an empty backpack from the floor gave
+    0.51, and filling it to 12 kg gave 9.15. The handoff's figures (0.05,
+    0.48, 9.12) leave out the key. Its formula counts the keychain's
+    contents, and that formula is what shipped. The backpack's own tab read
+    `12.00 / 12 kg`.
+  - **Speed**, on a 100 m grid move at Walk: 1.0× at 13 kg, 1.6× at 22.75 kg,
+    4.0× at 32.5 kg, and 4.0× at 40 kg. Jog's 100 m stays on its 1-minute
+    floor at no load.
+  - **Exertion and Health on real moves.** At 0 and 13 kg the move cost
+    nothing extra. At 20 and 25.9 kg the Stamina drop equalled `over × 0.5 ×
+    minutes` and Health did not change. At 26 kg a 2.78-minute move cost
+    0.278 Health (0.1 per minute) and 0.926 Stamina. At 32.5 kg a 5.56-minute
+    move cost 1.111 Health (0.2 per minute) and 2.778 Stamina. A second move
+    at 30 kg collapsed the log line to "×2".
+  - **The header.** Normal at 13.00, `--warn` at 13.50 and 25.90, `--danger`
+    at 26.00 and above.
+  - **The hard limit.** At 32 kg, taking a 1 kg item logged "You can't carry
+    any more." and moved nothing. At 31 kg it moved. At 32.43 kg, 0.09 kg
+    went into the worn backpack (adding 0.065), and 0.1 kg into the loose
+    inventory was refused. Taking from a floor-bag tab at 32 kg was refused
+    the same way. A campfire kit crafted at 32.4 kg, from firewood held in
+    the backpack, dropped to the floor with "No room for the campfire kit —
+    it drops to the floor instead." Equipping a floor duffel holding 5 kg
+    was refused at 28 kg and allowed at 27 kg. Unequipping a full duffel at
+    30 kg took the load to 33.57 kg.
+  - **Hidden caps.** With 99.5 kg loose, Take logged the room message. With
+    1000 entries loose, Take logged the room message. With 99.9 kg loose,
+    `giveItem()` dropped a raw fish to the floor. Neither cap appears in any
+    header.
+  - **An old save.** A save stamped `0.7.2` with `inventory.capacityKg:3`
+    loaded, had no `capacityKg` on the inventory afterwards, and took 5 kg
+    loose.
+  - **Death.** A move at 32.5 kg with 0.5 Health logged the twinge, then
+    "Your body finally gives out.", and drew "You did not survive."
+
+**Sections touched**
+
+- ITEM DATA SCHEMA / `ITEM_REGISTRY`: `carryFactor` on five bags, and the
+  schema comment.
+- PLAYER STATE: `makeDefaultState()`'s inventory.
+- CORE UTILITIES: `moveMinutes()`. The handoff files it under WORLD
+  INTERACTION, but it lives in CORE UTILITIES and was edited in place.
+- INVENTORY / ITEM SYSTEM: the carry constants, `carryFactorOf()`,
+  `playerLoad()`, `addToDestination()`, `giveItem()` (comment only),
+  `doTake()`, `doEquip()` and `doUnequip()` (comment only).
+- WORLD INTERACTION: the overload constants and helpers, and `doMove()`.
+- PERSISTENCE: the new `backfillInventoryCap()`, its call in
+  `applyLoadedData()`, and `validateItemRegistry()`.
+- RENDERING: `renderInventoryPanel()`'s header.
+
+STAMINA / FATIGUE is unchanged: movement declares more Exertion, and the system
+handles it as it handles any other. No SIMULATION, no CRAFTING, no FIRE /
+COOKING.
+
+**Open questions / decisions resolved**
+
+- **Where the constants live: the handoff's recommendation.** The carry
+  limits and the hidden caps sit beside `playerLoad()`. The speed, Exertion
+  and Health figures sit beside `doMove()`.
+- **The `capacityKg` removal: a named backfill,** `backfillInventoryCap()`,
+  the handoff's recommendation. It is listed with the other load-time
+  repairs.
+- **Helper shape.** One `carryFactorOf(thing)` serves both of the handoff's
+  lookups, `slotFactor(slot)` and `carryFactor(bag)`. A worn slot and a bag
+  item both carry `itemId`, so one function keeps the lookup in one place.
+  `loadFraction(load, from, to)` holds the clamped fraction, and
+  `overloadFraction()` and `harmFraction()` are its two uses.
+  `overloadSpeedFactor()` and `overloadHealthPerMin()` each write one formula
+  once.
+- **The registry check: added,** the handoff's recommendation.
+
+**Notes / assumptions**
+
+- **Every figure above is retunable.** That covers the 13 kg limit, the 2.5×
+  and 2× multiples, the 0.25 speed floor, the jog-rate Exertion cap, the
+  10 and 5 minutes per Health point, the five factors, and the 100 kg and
+  1000-entry hidden caps. Interpolating Health per minute rather than minutes
+  per point was Tom's choice, and is flagged retunable with the rest.
+- **The overload Exertion is a second `applyExertion()` call** after Jog's
+  line, rather than one call with a summed figure. The result is the same:
+  Stamina drains first, then Fatigue. `applyExertion()` returns early at
+  zero, so a move at or under 13 kg stamps no `lastExertionMinute` it didn't
+  before.
+- **The hidden entry cap refuses at 1000 entries even when the item would
+  merge into an existing stack,** as the handoff specifies
+  (`items.length >= 1000`).
+- **The header's colour is set inline** (`style.color`), the precedent of the
+  item pop-up's "each" line, rather than through new CSS classes.
+
+**Explicitly out of scope**
+
+- Capacity retunes. The shipped bag capacities stay.
+- Load affecting anything but movement. Chopping, fishing, sleep and rest are
+  unchanged.
+- Clothing (#56), Health (#53) and weather (#58) feeding the limit or the
+  penalties, and run options (#149).
+- #167 (Disassemble).
+- New log wording for `giveItem()`'s load refusal.
+- #203 (inventory-side Equip from inside a lower-factor bag).
+
+**Version**: `GAME_CONFIG.VERSION` `"0.7.3"` → `"0.7.4"`
+
+---
+
 ## v0.7.3 — Here panel tabs
 
 Implements: handoffs/here-panel-tabs.md

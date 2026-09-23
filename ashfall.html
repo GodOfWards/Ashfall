@@ -365,7 +365,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.7.3" };
+  const GAME_CONFIG = { VERSION: "0.7.4" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -638,6 +638,14 @@
   //     slotLabel     inventory-tab label for that slot, when capitalizing
   //                   the slot key isn't good enough (e.g. "Fanny Pack")
   //     capacityKg    capacity of an equippable container item
+  //     carryFactor   an equippable bag's factor against the player's carry
+  //                   load, a number in (0,1]: while the bag is worn, its
+  //                   own weight plus everything in it counts at this
+  //                   fraction (see playerLoad()). A bag that is not worn
+  //                   counts in full. Definition data: always read from the
+  //                   registry by itemId (carryFactorOf()), never copied
+  //                   onto an instance or a slot, so a retune reaches every
+  //                   save.
   //     contents      stored contents when an equipped container is
   //                   unequipped back into a stowable item. Its items count
   //                   toward the item's weight (itemUnitWeight()), bags may
@@ -682,7 +690,7 @@
     dirty_laundry: { name:"Dirty laundry", category:"Misc", unitWeight:0.5 },
     winter_jacket: { name:"Winter jacket", category:"Clothing", unitWeight:1.2 },
     sturdy_boots: { name:"Sturdy boots", category:"Clothing", unitWeight:1.0 },
-    worn_backpack: { name:"Worn backpack", category:"Container", unitWeight:0.6, slotType:"backpack", capacityKg:12 },
+    worn_backpack: { name:"Worn backpack", category:"Container", unitWeight:0.6, slotType:"backpack", capacityKg:12, carryFactor:0.72 },
     flashlight: { name:"Flashlight", category:"Electronics", unitWeight:0.2, on:false, hasBatteries:true, durability:{ current:100, max:100, mode:"time" }, drainRate:100/480 },
     spare_batteries: { name:"Spare batteries", category:"Materials", unitWeight:0.05, tags:["battery"] },
     wristwatch: { name:"Wristwatch", category:"Electronics", unitWeight:0.05, isWatch:true },
@@ -827,10 +835,10 @@
     // slotType/capacityKg make it an equippable container. `slotLabel` is
     // what the inventory tab reads (see SLOT_LABELS below); omit it and the
     // slot key is capitalized instead, which is why worn_backpack needs none.
-    duffel_bag: { name:"Duffel bag", category:"Container", unitWeight:0.8, slotType:"duffel", slotLabel:"Duffel Bag", capacityKg:18 },
-    purse: { name:"Purse", category:"Container", unitWeight:0.4, slotType:"purse", capacityKg:5 },
-    fanny_pack: { name:"Fanny pack", category:"Container", unitWeight:0.2, slotType:"fannypack", slotLabel:"Fanny Pack", capacityKg:3 },
-    tote_bag: { name:"Tote bag", category:"Container", unitWeight:0.3, slotType:"tote", slotLabel:"Tote Bag", capacityKg:8 }
+    duffel_bag: { name:"Duffel bag", category:"Container", unitWeight:0.8, slotType:"duffel", slotLabel:"Duffel Bag", capacityKg:18, carryFactor:0.81 },
+    purse: { name:"Purse", category:"Container", unitWeight:0.4, slotType:"purse", capacityKg:5, carryFactor:0.85 },
+    fanny_pack: { name:"Fanny pack", category:"Container", unitWeight:0.2, slotType:"fannypack", slotLabel:"Fanny Pack", capacityKg:3, carryFactor:0.76 },
+    tote_bag: { name:"Tote bag", category:"Container", unitWeight:0.3, slotType:"tote", slotLabel:"Tote Bag", capacityKg:8, carryFactor:0.85 }
   };
   // itemFromRegistry/itemsFromRegistry expand a { id, qty, overrides? }
   // placement reference into a full runtime item object, deep-cloned from
@@ -3772,7 +3780,7 @@
       // and Sleep are both available immediately at game start.
       lastExertionMinute:-9999, lastWakeMinute:-9999,
       vitals:{ hunger:75, thirst:75, energy:85, health:100, stamina:100, fatigue:0 },
-      inventory:{ name:"Inventory", unitWeight:0, capacityKg:3, items:[] },
+      inventory:{ name:"Inventory", unitWeight:0, items:[] },
       keychain:{ name:"Keychain", unitWeight:0.05, capacityKg:null, items:itemsFromRegistry([
         { id:"acorn_apt_2a_key", qty:1 } ])}
     };
@@ -3955,10 +3963,11 @@
   const NUMBER_WORDS = ["zero","one","two","three","four","five","six","seven","eight","nine","ten"];
   function numberWord(n){ return n >= 0 && n < NUMBER_WORDS.length ? NUMBER_WORDS[n] : String(n); }
   // See MIN_MOVE_MIN for why the floor has two forms and why the flat one
-  // must stay.
+  // must stay. A load over the carry limit slows the pace (see
+  // overloadSpeedFactor()) but never scales the floor.
   function moveMinutes(distanceM, gridTravel){
     const floor = gridTravel ? MIN_MOVE_MIN * distanceM / BLOCK_M : MIN_MOVE_MIN;
-    return Math.max(floor, distanceM / GAITS[effectiveGait()].speed / 60);
+    return Math.max(floor, distanceM / (GAITS[effectiveGait()].speed * overloadSpeedFactor(playerLoad())) / 60);
   }
   function exitMinutes(exit){
     const fromLoc = world[state.currentRoom].locationId;
@@ -4100,6 +4109,40 @@
     return [state.inventory.items].concat(
       CONTAINER_SLOTS.map(slot => state[slot] ? state[slot].items : []));
   }
+  // The player's carry limits, in kg of load (see playerLoad()). Up to
+  // CARRY_LIMIT_KG carrying is free; past it, moving slows and costs (see
+  // doMove()); nothing may add load past CARRY_HARD_LIMIT_KG, and only
+  // Unequip can take it there. Balance values, retunable, each written once:
+  // the hard limit is stated as a multiple of the carry limit so the two
+  // move together.
+  const CARRY_LIMIT_KG = 13;
+  const CARRY_HARD_LIMIT_KG = CARRY_LIMIT_KG * 2.5;
+  // The loose inventory has no weight cap of its own. These two guard only
+  // against a bug that adds items without end, sit far above anything play
+  // reaches, and are never shown. Entries are list entries, so a stack is
+  // one. addToDestination() is their only reader.
+  const LOOSE_INVENTORY_MAX_KG = 100;
+  const LOOSE_INVENTORY_MAX_ENTRIES = 1000;
+  // A worn bag's factor against the load, or a bag's that is about to be:
+  // its registry entry's carryFactor, looked up by itemId, and 1 for
+  // anything without one — the keychain, the loose inventory, an unknown or
+  // unrepaired slot. Takes a slot or an item; both carry itemId.
+  function carryFactorOf(thing){
+    const id = thing && thing.itemId;
+    const def = id && Object.prototype.hasOwnProperty.call(ITEM_REGISTRY, id) ? ITEM_REGISTRY[id] : null;
+    return def && typeof def.carryFactor === "number" ? def.carryFactor : 1;
+  }
+  // What the player carries, in kg of load: the loose inventory in full,
+  // and each filled slot's own weight plus its contents at that slot's
+  // factor. Derived, never stored, and the factor is looked up by itemId
+  // rather than kept on the slot, so a retune reaches every save. The one
+  // definition every carry rule reads.
+  function playerLoad(){
+    return CONTAINER_SLOTS.reduce((load, slotKey)=>{
+      const slot = state[slotKey];
+      return slot ? load + (slot.unitWeight + totalWeight(slot.items)) * carryFactorOf(slot) : load;
+    }, totalWeight(state.inventory.items));
+  }
   function countInPools(itemId){
     return invPools().reduce((sum,list)=> sum + list.filter(it=>it.itemId===itemId).reduce((s,it)=>s+it.qty,0), 0);
   }
@@ -4169,15 +4212,24 @@
     return true;
   }
   function roomHasHeat(room){ return !!room.heatActive || hasTool("heat"); }
+  // Checks run keychain, then room, then load, so when both room and weight
+  // fail the room message wins. Room is the bag's own capacityKg, or for the
+  // loose inventory the hidden caps. Load is what the item adds at the
+  // destination's factor.
   function addToDestination(item){
     const dst = invSlot(invTab);
     if(!dst) return { ok:false, reason:"no-destination" };
     if(invTab === "keychain" && !keychainAllows(item)) return { ok:false, reason:"keychain" };
     const weight = itemWeight(item);
     if(dst.capacityKg && totalWeight(dst.items) + weight > dst.capacityKg) return { ok:false, reason:"capacity" };
+    if(invTab === "inventory" && (totalWeight(dst.items) + weight > LOOSE_INVENTORY_MAX_KG
+       || dst.items.length >= LOOSE_INVENTORY_MAX_ENTRIES)) return { ok:false, reason:"capacity" };
+    if(playerLoad() + weight * carryFactorOf(dst) > CARRY_HARD_LIMIT_KG) return { ok:false, reason:"load" };
     addToList(dst.items, item);
     return { ok:true };
   }
+  // Every refusal ends on the floor. Only the keychain's has its own line;
+  // room and load alike take the floor lines below.
   function giveItem(item){
     const room = world[state.currentRoom];
     const result = addToDestination(item);
@@ -4264,6 +4316,7 @@
     const result = addToDestination({ ...it, qty:moveQty });
     if(!result.ok){
       if(result.reason === "capacity") log("That won't fit — not enough room there.", "warn");
+      else if(result.reason === "load") log("You can't carry any more.", "warn");
       return; // no-destination and keychain-restricted stay silent, matching the disabled/hidden button state
     }
     it.qty -= moveQty;
@@ -4354,6 +4407,12 @@
     const it = getItemAt(src && src.items, index);
     if(!it || !it.slotType) return;
     if(state[it.slotType]){ log("You're already carrying something in that slot.", "warn"); return; }
+    // Only a bag picked up from the world adds load, at its own factor.
+    // Equipping from the inventory side is never refused on load.
+    if(sourceKind === "world" && playerLoad() + itemUnitWeight(it) * carryFactorOf(it) > CARRY_HARD_LIMIT_KG){
+      log("You can't carry any more.", "warn");
+      return;
+    }
     // itemId rides along so the slot stays traceable to its registry entry:
     // countInPools() can see a stowed bag by id, and doUnequip() rebuilds
     // the item from the registry rather than by hand.
@@ -4377,6 +4436,8 @@
       ? Object.assign(itemFromRegistry({ id: slot.itemId, qty:1 }), { contents: slot.items })
       : { name:slot.name, category:"Container", qty:1, unitWeight:slot.unitWeight,
           slotType:slotKey, capacityKg:slot.capacityKg, contents:slot.items };
+    // No capacity or load check, by design: Unequip is always allowed, even
+    // when it takes the load past CARRY_HARD_LIMIT_KG.
     addToList(state.inventory.items, item);
     state[slotKey] = null;
     if(invTab === slotKey) invTab = "inventory";
@@ -4646,6 +4707,33 @@
   // chopping or fishing, and its rate sits with it. Per-minute because
   // movement, unlike those two, has no fixed duration to scale from.
   const JOG_EXERTION_PER_MIN = 0.5;
+  // What a load over CARRY_LIMIT_KG costs a move. Balance values, all
+  // retunable. Two fractions of the way along, each clamped to [0,1] so they
+  // hold at 1 past the hard limit, which only Unequip reaches: overload runs
+  // from the carry limit to the hard limit, harm from OVERLOAD_HARM_START_KG
+  // to the hard limit. Every cost is linear in one of them.
+  //   Speed    falls from 1 at the carry limit to OVERLOAD_MIN_SPEED_FACTOR
+  //            at the hard limit.
+  //   Exertion adds up to OVERLOAD_MAX_EXERTION_PER_MIN per minute moved, at
+  //            every gait, on top of Jog's own — one more jogging's rate.
+  //   Health   from OVERLOAD_HARM_START_KG only, one point per
+  //            OVERLOAD_HARM_MINUTES_PER_HEALTH_START minutes moved there,
+  //            rising to one per OVERLOAD_HARM_MINUTES_PER_HEALTH_END at the
+  //            hard limit. Interpolated in Health per minute, not in minutes
+  //            per point — a choice, retunable with the rest.
+  const OVERLOAD_HARM_START_KG = CARRY_LIMIT_KG * 2;
+  const OVERLOAD_MIN_SPEED_FACTOR = 0.25;
+  const OVERLOAD_MAX_EXERTION_PER_MIN = JOG_EXERTION_PER_MIN;
+  const OVERLOAD_HARM_MINUTES_PER_HEALTH_START = 10;
+  const OVERLOAD_HARM_MINUTES_PER_HEALTH_END = 5;
+  function loadFraction(load, from, to){ return Math.max(0, Math.min(1, (load - from) / (to - from))); }
+  function overloadFraction(load){ return loadFraction(load, CARRY_LIMIT_KG, CARRY_HARD_LIMIT_KG); }
+  function harmFraction(load){ return loadFraction(load, OVERLOAD_HARM_START_KG, CARRY_HARD_LIMIT_KG); }
+  function overloadSpeedFactor(load){ return 1 - overloadFraction(load) * (1 - OVERLOAD_MIN_SPEED_FACTOR); }
+  function overloadHealthPerMin(load){
+    const start = 1 / OVERLOAD_HARM_MINUTES_PER_HEALTH_START, end = 1 / OVERLOAD_HARM_MINUTES_PER_HEALTH_END;
+    return start + harmFraction(load) * (end - start);
+  }
   function doMove(exit){
     const minutes = exitMinutes(exit);
     // The gait this move is actually made at — the effective one, not the
@@ -4656,9 +4744,19 @@
     // through, and reading it afterwards would charge Jog exertion for a
     // distance covered at Sneak speed.
     const gait = effectiveGait();
+    // The load, sampled beside the gait for the same reason: the move is
+    // priced and charged from one reading. `minutes` already carries the
+    // slowdown, so the per-minute costs below grow with it.
+    const load = playerLoad();
     advanceTime(minutes);
     // Walking doesn't directly consume Stamina; jogging does.
     if(gait === "fast") applyExertion(JOG_EXERTION_PER_MIN * minutes);
+    applyExertion(overloadFraction(load) * OVERLOAD_MAX_EXERTION_PER_MIN * minutes);
+    if(load >= OVERLOAD_HARM_START_KG){
+      state.vitals.health = clamp(state.vitals.health - minutes * overloadHealthPerMin(load));
+      log("Something in your back twinges under the weight.", "warn", "overload-harm");
+      checkGameOver();
+    }
     state.currentRoom = exit.to;
     worldTab = "floor";
     detailItem = null;
@@ -5428,6 +5526,16 @@
       }
     }));
   }
+  // backfillInventoryCap(): companion to backfillItemIds(), run alongside it
+  // on every load. The loose inventory has no weight cap of its own — weight
+  // answers to the player's load (playerLoad()) instead — but a save written
+  // while it had one carries `inventory.capacityKg`, and applyLoadedData()'s
+  // spread brings the saved inventory back wholesale over the default. This
+  // deletes the field, so no old save keeps its cap and nothing reads a
+  // capacity off the inventory.
+  function backfillInventoryCap(){
+    delete state.inventory.capacityKg;
+  }
   function applyLoadedData(data){
     if(!data || !data.state || !data.world || !data.world[data.state.currentRoom]){
       log("That save doesn't look valid — nothing was loaded.", "warn");
@@ -5476,6 +5584,7 @@
     backfillContainerFields();
     backfillRoomAddresses();
     backfillIllnessScale();
+    backfillInventoryCap();
     render();
     return true;
   }
@@ -5491,12 +5600,20 @@
   // fraction in [0,1] — a registry fact, so the registry's validator checks
   // it. chance() would clamp such a value at runtime, loudly; this catches it
   // before anyone eats one.
+  //
+  // And any equippable bag (an entry with a slotType) whose `carryFactor` is
+  // missing or not in (0,1]. carryFactorOf() would count such a bag at 1,
+  // silently; this makes it loud.
   function validateItemRegistry(){
     const missing = [];
     Object.keys(ITEM_REGISTRY).forEach(id=>{
-      const p = ITEM_REGISTRY[id].illnessChance;
+      const def = ITEM_REGISTRY[id];
+      const p = def.illnessChance;
       if(p !== undefined && !(Number.isFinite(p) && p >= 0 && p <= 1))
         missing.push(`ITEM_REGISTRY.${id}.illnessChance: ${p} is not a number in [0,1]`);
+      const f = def.carryFactor;
+      if(def.slotType && !(Number.isFinite(f) && f > 0 && f <= 1))
+        missing.push(`ITEM_REGISTRY.${id}.carryFactor: ${f} is not a number in (0,1]`);
     });
     RECIPES.forEach(r=>{
       r.inputs.forEach(inp=>{ if(!ITEM_REGISTRY[inp.id]) missing.push(`RECIPES[${r.id}].inputs: ${inp.id}`); });
@@ -5507,7 +5624,7 @@
       if(!ITEM_REGISTRY[r.output.id]) missing.push(`HEAT_RECIPES[${r.id}].output: ${r.output.id}`);
     });
     if(missing.length) console.warn("validateItemRegistry: problems", missing);
-    else console.log("validateItemRegistry: all recipe ids resolve in ITEM_REGISTRY, every illnessChance is in [0,1]");
+    else console.log("validateItemRegistry: all recipe ids resolve in ITEM_REGISTRY, every illnessChance is in [0,1], every bag's carryFactor is in (0,1]");
     return missing;
   }
   // validateLocations(): dev-only console helper (not wired to any button
@@ -7252,8 +7369,22 @@
     });
     revealActiveTab(invTabsEl);
     const currentInv = invSlot(invTab);
-    document.getElementById("invWeight").textContent =
-      totalWeight(currentInv.items).toFixed(2) + (currentInv.capacityKg ? " / " + currentInv.capacityKg + " kg" : " kg");
+    const invWeight = document.getElementById("invWeight");
+    // The Inventory tab reads the player's whole load against the carry
+    // limit, coloured by what moving costs at it: warn once over the limit,
+    // danger from where moving starts to cost Health. A bag tab reads its own
+    // fill against its own capacity, whatever its factor; the keychain, its
+    // own weight.
+    if(invTab === "inventory"){
+      const load = playerLoad();
+      invWeight.textContent = load.toFixed(2) + " / " + CARRY_LIMIT_KG + " kg";
+      invWeight.style.color = load >= OVERLOAD_HARM_START_KG ? "var(--danger)"
+        : load > CARRY_LIMIT_KG ? "var(--warn)" : "";
+    } else {
+      invWeight.textContent =
+        totalWeight(currentInv.items).toFixed(2) + (currentInv.capacityKg ? " / " + currentInv.capacityKg + " kg" : " kg");
+      invWeight.style.color = "";
+    }
     const unequipBtn = document.getElementById("unequipBtn");
     if(CONTAINER_SLOTS.indexOf(invTab) >= 0){
       unequipBtn.style.display = "";
