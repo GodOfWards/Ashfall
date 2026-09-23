@@ -34,19 +34,21 @@
   #hubRow button:hover:not(:disabled){ border-color:var(--accent-dim); }
   #hubRow button:disabled{ color:var(--ink-faint); cursor:not-allowed; opacity:.6; }
   #hubRow .hint{ display:block; font-size:11px; font-style:italic; margin-top:2px; }
-  /* A full-screen panel (Crafting, Options) stacked over the drawer. Above
-     #sideMenu's 20, so it covers the drawer and its backdrop. */
+  /* A full-screen panel (Crafting, Options, Device Options) stacked over the
+     drawer. Above #sideMenu's 20, so it covers the drawer and its backdrop. */
   .full-panel{ position:fixed; inset:0; z-index:30; background:var(--panel); padding:20px 18px;
     overflow-y:auto; font-family:system-ui,sans-serif; display:none; }
   .full-panel.open{ display:block; }
   .full-panel > h2{ font-size:14px; margin:0 0 16px; display:flex; justify-content:space-between; align-items:center; }
   .full-panel-body{ max-width:560px; display:flex; flex-direction:column; gap:16px; }
-  #craftingList{ display:flex; flex-direction:column; align-items:flex-start; gap:8px; }
-  /* The body face, which the panel's system-ui would otherwise replace:
-     #craftResult's lines are #log's, set as #log sets them. */
-  #craftResult{ display:flex; flex-direction:column; gap:5px; border-top:1px solid var(--line); padding-top:12px;
+  #craftingList, #deviceControls{ display:flex; flex-direction:column; align-items:flex-start; gap:8px; }
+  #deviceStatus{ font-size:13px; color:var(--ink-dim); }
+  /* A panel's result area (Crafting's #craftResult, Device Options'
+     #deviceResult). The body face, which the panel's system-ui would
+     otherwise replace: its lines are #log's, set as #log sets them. */
+  .log-result{ display:flex; flex-direction:column; gap:5px; border-top:1px solid var(--line); padding-top:12px;
     font-family:Georgia,'Times New Roman',serif; }
-  #craftResult:empty{ display:none; }
+  .log-result:empty{ display:none; }
   #seedRow{ display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink-dim); }
   .full-panel .menu-actions{ align-items:flex-start; }
   #seedValue{ color:var(--ink); user-select:all; -webkit-user-select:all; }
@@ -110,13 +112,13 @@
   #left{ padding:18px 26px; border-right:1px solid var(--line); display:flex; flex-direction:column; gap:14px; }
   #roomDesc{ color:var(--ink-dim); line-height:1.4; margin:0; font-size:15px; }
   #log{ display:flex; flex-direction:column; gap:5px; max-height:110px; overflow-y:auto; }
-  /* #craftResult is a view of #log (see renderCraftResult()), so its lines
+  /* A .log-result is a view of #log (see renderLogResult()), so its lines
      read exactly as they do there. */
-  #log p, #craftResult p{ margin:0; font-size:13.5px; line-height:1.35; color:var(--ink-dim); }
-  #log p.fresh, #craftResult p.fresh{ color:var(--ink); }
-  #log p.sys, #craftResult p.sys{ font-style:italic; color:var(--accent); font-family:system-ui,sans-serif; font-size:12px; }
-  #log p.warn, #craftResult p.warn{ color:var(--warn); font-family:system-ui,sans-serif; font-size:12px; }
-  #log p.good, #craftResult p.good{ color:var(--good); font-family:system-ui,sans-serif; font-size:12px; }
+  #log p, .log-result p{ margin:0; font-size:13.5px; line-height:1.35; color:var(--ink-dim); }
+  #log p.fresh, .log-result p.fresh{ color:var(--ink); }
+  #log p.sys, .log-result p.sys{ font-style:italic; color:var(--accent); font-family:system-ui,sans-serif; font-size:12px; }
+  #log p.warn, .log-result p.warn{ color:var(--warn); font-family:system-ui,sans-serif; font-size:12px; }
+  #log p.good, .log-result p.good{ color:var(--good); font-family:system-ui,sans-serif; font-size:12px; }
   .logcount{ color:var(--ink-faint); font-size:12px; margin-left:5px; }
   .actions-group h2{ font-family:system-ui,sans-serif; font-size:12px; text-transform:uppercase;
     letter-spacing:.08em; color:var(--ink-faint); margin:0 0 8px; }
@@ -223,7 +225,15 @@
   <h2>Crafting <button class="panel-close">✕</button></h2>
   <div class="full-panel-body">
     <div id="craftingList"></div>
-    <div id="craftResult"></div>
+    <div id="craftResult" class="log-result"></div>
+  </div>
+</section>
+<section id="devicePanel" class="full-panel" tabindex="-1">
+  <h2><span id="deviceTitle"></span> <button class="panel-close">✕</button></h2>
+  <div class="full-panel-body">
+    <div id="deviceStatus"></div>
+    <div id="deviceControls"></div>
+    <div id="deviceResult" class="log-result"></div>
   </div>
 </section>
 <section id="optionsPanel" class="full-panel" tabindex="-1">
@@ -259,7 +269,7 @@
       <ul class="itemlist" id="invList"></ul>
     </div>
     <div class="panel" id="worldPanel">
-      <h2>Here <span class="sub" id="worldWeight"></span></h2>
+      <h2>Here <span class="sub"><span id="worldWeight"></span><button id="deviceOptionsBtn" class="mini" style="display:none;"></button></span></h2>
       <div class="tabs" id="worldTabs"></div>
       <ul class="itemlist" id="worldList"></ul>
     </div>
@@ -336,7 +346,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.6.5" };
+  const GAME_CONFIG = { VERSION: "0.7.0" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -507,7 +517,6 @@
   //                 that floor's locationId. Required on every room.
   // Optional environmental properties:
   //   sleepSpot      e.g. "couch"/"bed" — enables the Sleep action
-  //   hasStove       room has a working stove (heat source, no fire needed)
   //   cannotHaveFire room may not host a campfire
   //   fishable       room supports the Go Fishing action
   //   hasTree        room has a choppable tree
@@ -522,6 +531,19 @@
   // CONTAINER SCHEMA:
   //   { id, name, capacityKg, items: [] }
   //   Optional: locked, breakTag (tag required to force it open)
+  //   Optional: tags — capability tags, with the same field, shape and
+  //     vocabulary as an item's (see ITEM DATA SCHEMA): a tag means the same
+  //     thing on a container as on an item. Read through hasTag(). Read by a
+  //     mechanic today:
+  //       heat    the container is a heat source's cooking space, a stove's
+  //               or a campfire's. getHeatContainer() finds it by this tag,
+  //               and Cook works on what is in it.
+  //       device  the container has controls beyond take and store, kept in
+  //               its Device Options panel (renderDevicePanel()). The Here
+  //               panel's header offers that panel while its tab is selected.
+  //     A container carrying both is the room's stove (roomStove()).
+  //     Authored containers carry their tags in WORLD DATA. The campfire's
+  //     container is created by doBuildFire(), which gives it `heat`.
   //   Optional (spawn pools — see SPAWN_POOLS below):
   //     spawnPools       string[] of SPAWN_POOLS ids this container draws
   //                      from. Absence means the container is never
@@ -560,10 +582,14 @@
   //     tags          capability tags used by mechanics instead of name
   //                   checks. Read by a mechanic today: blunt, cutting,
   //                   chopping, fishing, tackle, fire-starter, battery,
-  //                   can-opening. `can-opening` means "can get a can
-  //                   open", not "is a can opener" — doOpen() asks
+  //                   can-opening, device. `can-opening` means "can get a
+  //                   can open", not "is a can opener" — doOpen() asks
   //                   hasTool() for it, so every item that could work a lid
-  //                   off carries it, not just the dedicated tool.
+  //                   off carries it, not just the dedicated tool. `device`
+  //                   means the item has controls beyond take and store,
+  //                   kept in its Device Options panel: getItemActions()
+  //                   offers that panel in place of the battery controls.
+  //                   Containers carry tags too (see CONTAINER SCHEMA).
   //                   Declared, with no consumer yet: blade, prying, heat
   //                   — an item carrying one of these makes a claim nothing
   //                   currently acts on, which is correct to write and not
@@ -664,7 +690,7 @@
     wrench: { name:"Wrench", category:"Tool", unitWeight:0.8, tags:["blunt"] },
     master_key: { name:"Master key", category:"Key", unitWeight:0.03, masterKey:true, building:"acorn" },
     building_ledger: { name:"Building ledger", category:"Literature", unitWeight:0.5 },
-    portable_radio: { name:"Portable radio", category:"Electronics", unitWeight:0.4, on:false, hasBatteries:true, durability:{ current:100, max:100, mode:"time" }, drainRate:100/2880 },
+    portable_radio: { name:"Portable radio", category:"Electronics", unitWeight:0.4, tags:["device"], on:false, hasBatteries:true, durability:{ current:100, max:100, mode:"time" }, drainRate:100/2880 },
     tow_chain: { name:"Tow chain", category:"Materials", unitWeight:2.0 },
     owners_manual: { name:"Owner's manual", category:"Literature", unitWeight:0.2 },
     potato_chips: { name:"Potato chips", category:"Food", unitWeight:0.15, restores:{hunger:10}, verb:"Eat" },
@@ -1361,9 +1387,9 @@
     },
     kitchen: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Kitchen", shelter:"full",
       desc:"Grease and old coffee grounds. The fridge hums no more, and something inside it has clearly given up. The gas stove still works — no power needed to light it.",
-      hasStove:true, cannotHaveFire:true, floorCap:50, floor:[],
+      cannotHaveFire:true, floorCap:50, floor:[],
       containers:[
-        { id:"stove", name:"Stove", capacityKg:8, spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
+        { id:"stove", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
           { id:"pot_of_spoiled_stew", qty:1 }
         ])},
         { id:"cabinets", name:"Cabinets", capacityKg:15, spawnPools:["kitchen_nonperishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
@@ -1462,9 +1488,9 @@
     },
     twobee_kitchen: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2B", room:"Kitchen", shelter:"full",
       desc:"Same layout as yours, messier. Dishes still sit in the sink.",
-      hasStove:true, cannotHaveFire:true, floorCap:50, floor:[],
+      cannotHaveFire:true, floorCap:50, floor:[],
       containers:[
-        { id:"stove", name:"Stove", capacityKg:8, spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
+        { id:"stove", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
           { id:"burnt_saucepan", qty:1 } ])},
         { id:"cabinets", name:"Cabinets", capacityKg:15, spawnPools:["kitchen_nonperishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
           { id:"canned_corn", qty:2 },
@@ -1563,9 +1589,9 @@
     },
     onea_kitchen: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1A", room:"Kitchen", shelter:"full",
       desc:"A family kitchen, cluttered with kids' cups and a calendar still turned to two months ago.",
-      hasStove:true, cannotHaveFire:true, floorCap:50, floor:[],
+      cannotHaveFire:true, floorCap:50, floor:[],
       containers:[
-        { id:"stove1a", name:"Stove", capacityKg:8, spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
+        { id:"stove1a", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
           { id:"kids_plastic_bowl", qty:1 } ])},
         { id:"kitchen1a", name:"Kitchen Shelf", capacityKg:15, spawnPools:["kitchen_nonperishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
           { id:"bottled_water", qty:3 },
@@ -1622,9 +1648,9 @@
     },
     onebee: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1B", room:null, shelter:"full",
       desc:"The superintendent's unit — half apartment, half workshop. Someone clearly used this place to fix things. A small gas stove sits in the corner.",
-      hasStove:true, cannotHaveFire:true, floorCap:50, floor:[],
+      cannotHaveFire:true, floorCap:50, floor:[],
       containers:[
-        { id:"stove", name:"Stove", capacityKg:8, spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
+        { id:"stove", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
           { id:"dented_saucepan", qty:1 }
         ])},
         { id:"toolcabinet", name:"Tool Cabinet", capacityKg:25, spawnPools:["tools_general","tools_workshop","cleaning_supplies"], spawnRolled:true, items:itemsFromRegistry([
@@ -3738,6 +3764,11 @@
   let state = makeDefaultState();
   let gameOver = false; // UI-only: never saved — a loaded save always resumes alive
   let detailItem = null; // UI-only: { uid, side } — resolved fresh via findItemByUid(), safe against list mutation
+  // What the Device Options panel is open on, or null when it is closed:
+  // { kind:"item", uid } or { kind:"container", id }. Identity only, never an
+  // index or a kept object: resolveDeviceTarget() looks it up again on every
+  // render. UI-only and never saved, like detailItem.
+  let deviceTarget = null;
   // The open menu layers, bottom to top — the item pop-up, the drawer, a
   // full-screen panel. UI-only and never saved, like detailItem. See
   // openLayer() in EVENTS / UI HELPERS for what an entry holds.
@@ -3746,6 +3777,8 @@
   // #log's own <p> elements, never copies of their text, so the result area
   // is a view of the log rather than a second history. UI-only.
   let craftResult = [];
+  // The same, for the last control run from the Device Options panel.
+  let deviceResult = [];
   // Whether the last render() drew the game-over screen. UI-only. Game over
   // closes every layer once, on the render that first draws it, so the
   // drawer can still be opened and used afterwards (see render()).
@@ -4051,14 +4084,19 @@
       }
     });
   }
+  // Whether an item or a container carries a capability tag. The one test
+  // for "carries this tag": the two share a field and a vocabulary (see
+  // CONTAINER SCHEMA), so they share the reader too, and every tag check below
+  // goes through it.
+  function hasTag(thing, tag){ return !!(thing && thing.tags && thing.tags.includes(tag)); }
   function countByTag(tag){
-    return invPools().reduce((sum,list)=> sum + list.filter(it=>it.tags && it.tags.includes(tag)).reduce((s,it)=>s+it.qty,0), 0);
+    return invPools().reduce((sum,list)=> sum + list.filter(it=>hasTag(it, tag)).reduce((s,it)=>s+it.qty,0), 0);
   }
   function consumeByTag(tag, qty){
     let remaining = qty;
     invPools().forEach(list=>{
       for(let i=list.length-1; i>=0 && remaining>0; i--){
-        if(!list[i].tags || !list[i].tags.includes(tag)) continue;
+        if(!hasTag(list[i], tag)) continue;
         const take = Math.min(list[i].qty, remaining);
         list[i].qty -= take; remaining -= take;
         if(list[i].qty <= 0) list.splice(i,1);
@@ -4069,7 +4107,7 @@
   // already uses, because consumeMatchUse() below has to be able to splice it.
   function findFireStarter(){
     for(const list of invPools()){
-      const index = list.findIndex(it=> it.tags && it.tags.includes("fire-starter")
+      const index = list.findIndex(it=> hasTag(it, "fire-starter")
                                      && it.durability && it.durability.current>0);
       if(index>=0) return { list, index, item:list[index] };
     }
@@ -4136,7 +4174,7 @@
     return c ? { items:c.items, capacityKg:c.capacityKg } : null;
   }
   function hasTool(tag){
-    return invPools().some(list => list.some(it => it.tags && it.tags.includes(tag)));
+    return invPools().some(list => list.some(it => hasTag(it, tag)));
   }
   function hasWatch(){
     return invPools().some(list => list.some(it => it.isWatch));
@@ -4355,29 +4393,13 @@
         actions.push({ label, onClick:()=>doToggleLock(it.doorId) });
       }
     }
-    if(it.durability && it.durability.mode === "time"){
-      if(it.hasBatteries !== false){
-        actions.push({ label: it.on ? "Turn off" : "Turn on", onClick:()=>{
-          it.on = !it.on;
-          // Silent: the detail view already reads "— On" / "— Off".
-          render();
-        }});
-        actions.push({ label:"Remove batteries", onClick:()=>{
-          it.hasBatteries = false;
-          it.on = false;
-          giveItem(itemFromRegistry({ id:"spare_batteries", qty:1 }));
-          // Silent: the batteries appear in inventory and the detail view
-          // reads "No batteries installed".
-          render();
-        }});
-      }
-      if(countByTag("battery") >= 1) actions.push({ label:"Replace batteries", onClick:()=>{
-        consumeByTag("battery", 1);
-        it.durability.current = it.durability.max;
-        it.hasBatteries = true;
-        // Silent: the detail view's charge readout jumps to 100%.
-        render();
-      }});
+    // A device keeps its controls in its Device Options panel, so the pop-up
+    // offers the panel instead of them. Anything else that runs on batteries
+    // (the flashlight) keeps them here.
+    if(hasTag(it, "device")){
+      actions.push({ label:DEVICE_OPTIONS_LABEL, onClick:()=> openDevicePanel({ kind:"item", uid:ensureUid(it) }) });
+    } else {
+      batteryActions(it).forEach(a=> actions.push(a));
     }
     if(it.itemId === "campfire_kit"){
       actions.push({ label:"Disassemble", onClick:()=>{
@@ -4388,6 +4410,39 @@
         render();
       }});
     }
+    return actions;
+  }
+  // The controls of anything that runs on batteries: Turn on/off, Remove
+  // batteries, Replace batteries. Defined once, for both places they are
+  // shown: the item pop-up, for an item not tagged `device`, and a device's
+  // Device Options panel. Offered for durability mode "time" only, which is
+  // what runs on batteries, and empty for anything else. The closures act on
+  // the object `it` passed in, so a caller resolves it fresh on every render.
+  function batteryActions(it){
+    const actions = [];
+    if(!it.durability || it.durability.mode !== "time") return actions;
+    if(it.hasBatteries !== false){
+      actions.push({ label: it.on ? "Turn off" : "Turn on", onClick:()=>{
+        it.on = !it.on;
+        // Silent: the status line already reads "— On" / "— Off".
+        render();
+      }});
+      actions.push({ label:"Remove batteries", onClick:()=>{
+        it.hasBatteries = false;
+        it.on = false;
+        giveItem(itemFromRegistry({ id:"spare_batteries", qty:1 }));
+        // Silent: the batteries appear in inventory and the status line
+        // reads "No batteries installed".
+        render();
+      }});
+    }
+    if(countByTag("battery") >= 1) actions.push({ label:"Replace batteries", onClick:()=>{
+      consumeByTag("battery", 1);
+      it.durability.current = it.durability.max;
+      it.hasBatteries = true;
+      // Silent: the status line's charge readout jumps to 100%.
+      render();
+    }});
     return actions;
   }
   // ==================================================
@@ -4960,15 +5015,22 @@
     }
     render();
   }
-  function ensureHeatContainer(room, id, name, capacityKg){
+  // Creates the container with `tags` when the room has none with this id.
+  // One that already exists is returned as it is. Its only caller is
+  // doBuildFire(): a stove's container is authored, and lighting it creates
+  // nothing (see doLightStove()).
+  function ensureHeatContainer(room, id, name, capacityKg, tags){
     let c = room.containers.find(x=>x.id===id);
-    if(!c){ c = { id, name, capacityKg, items:[] }; room.containers.push(c); }
+    if(!c){ c = { id, name, capacityKg, tags, items:[] }; room.containers.push(c); }
     return c;
   }
+  // Lights the room's stove, the authored container roomStove() finds. It
+  // never creates a container: making one by id is how 1A's kitchen, whose
+  // stove is `stove1a`, grew a second, empty "Stove" tab when lit (#177).
   function doLightStove(){
-    if(!consumeMatchUse()) return;
     const room = world[state.currentRoom];
-    ensureHeatContainer(room, "stove", "Stove", HEAT_CONTAINER_CAPACITY_KG);
+    if(!roomStove(room)) return;
+    if(!consumeMatchUse()) return;
     room.heatActive = true;
     advanceTime(LIGHT_STOVE_MIN);
     log("You light the stove.", "good");
@@ -4998,7 +5060,7 @@
       consumeFromPools("firewood", FIRE_BUILD_WOOD);
       room.fireMinutesLeft = FIRE_BUILD_WOOD * FIRE_MINUTES_PER_WOOD;
     }
-    ensureHeatContainer(room, "campfire", "Campfire", HEAT_CONTAINER_CAPACITY_KG);
+    ensureHeatContainer(room, "campfire", "Campfire", HEAT_CONTAINER_CAPACITY_KG, ["heat"]);
     room.heatActive = true;
     advanceTime(BUILD_FIRE_MIN);
     log(firstTime ? "You set up the campfire kit and get a fire going."
@@ -5022,6 +5084,9 @@
   function doDismantleCampfire(){
     const room = world[state.currentRoom];
     if(!room.campfireBuilt || room.heatActive) return;
+    // By id, not by tag: "campfire" is the id doBuildFire() gives the
+    // container it creates. Code assigns it, nothing authors it, so this is
+    // not a name check.
     const container = room.containers.find(c=>c.id==="campfire");
     if(container){
       container.items.forEach(it=> addToList(room.floor, it));
@@ -5035,8 +5100,16 @@
     log(`You break down the campfire, salvaging ${refund} firewood from it.`, "good");
     render();
   }
+  // The room's cooking space: its first container tagged `heat`, a stove's
+  // or a campfire's (see CONTAINER SCHEMA).
   function getHeatContainer(room){
-    return room.containers.find(c=> c.id==="stove" || c.id==="campfire");
+    return room.containers.find(c=> hasTag(c, "heat"));
+  }
+  // The room's stove: its container tagged both `device` and `heat`, or null.
+  // Every question about a stove asks this. A room has one exactly when this
+  // finds it, since there is no room flag for it.
+  function roomStove(room){
+    return room.containers.find(c=> hasTag(c, "device") && hasTag(c, "heat")) || null;
   }
   function doCookInContainer(containerId, recipeId){
     const room = world[state.currentRoom];
@@ -5292,6 +5365,7 @@
     world = nextWorld;
     doors = nextDoors; windows = nextWindows;
     detailItem = null;
+    deviceTarget = null;
     gameOver = false;
     invTab = "inventory";
     worldTab = "floor";
@@ -5403,7 +5477,7 @@
     "cutting", "blunt", "can-opening", "heat", "prying"];
   // Whether the registry entry for `id` carries `tag`, the test every tag
   // count on the dev seam applies.
-  function registryCarriesTag(id, tag){ const def = ITEM_REGISTRY[id]; return !!(def && def.tags && def.tags.includes(tag)); }
+  function registryCarriesTag(id, tag){ return hasTag(ITEM_REGISTRY[id], tag); }
   // Every container in `world` that still rolls — carries spawnPools and has
   // not had spawnRolled set — as [{ roomId, container }], car containers
   // included, in room order. The one definition of "a container that still
@@ -5669,6 +5743,7 @@
     doors = makeDefaultDoors();
     windows = makeDefaultWindows();
     detailItem = null;
+    deviceTarget = null;
     invTab = "inventory";
     worldTab = "floor";
     _uidCounter = 1;
@@ -5723,8 +5798,8 @@
   // full-screen panel over the drawer. layerStack holds the open ones bottom
   // to top, each as { el, hide, back }: the layer's root element, what
   // closing it does, and where focus goes when it closes. Esc closes the top
-  // one only. Nothing here knows which layers exist, so a new one (#161's
-  // device panel) is one more openLayer() call.
+  // one only. Nothing here knows which layers exist: the Device Options panel
+  // is one more openLayer() call (see openDevicePanel()).
   function layerOpen(el){ return layerStack.some(l => l.el === el); }
   // The enabled, rendered controls in a layer, in document order.
   function focusablesIn(el){
@@ -5770,10 +5845,13 @@
     while(layerStack.length) closeLayer(layerStack[layerStack.length - 1].el);
   }
   // The same element if it is still there; otherwise the rebuilt .itemname
-  // for the same item; otherwise nowhere, without error.
+  // for the same item; otherwise whatever `back.find()` finds, for a return
+  // point that is neither (a pop-up button rebuilt while a layer covered it);
+  // otherwise nowhere, without error.
   function restoreFocus(back){
     let target = back.el && back.el.isConnected && !back.el.disabled ? back.el : null;
     if(!target && back.uid) target = itemNameButton(back.uid);
+    if(!target && back.find) target = back.find();
     if(target) target.focus({ preventScroll:true });
     else if(document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
   }
@@ -5842,6 +5920,38 @@
   document.querySelectorAll(".full-panel .panel-close").forEach(btn=>{
     btn.addEventListener("click", ()=> closeLayer(btn.closest(".full-panel")));
   });
+  // The Device Options panel, for an item or a room fixture tagged `device`
+  // (see renderDevicePanel()). A full-screen panel like the hub's, in its own
+  // element rather than a FULL_PANELS entry, because it opens from the play
+  // area rather than from the drawer: it opens the drawer first, if that is
+  // not already open, and stacks over it. Closing it, by ✕ or Esc, closes
+  // the drawer it opened in the same step, so the player lands back where
+  // they opened it: on the item's pop-up, or on play. Focus goes back to the
+  // Device Options control that opened it, found again by label if the
+  // pop-up was rebuilt meanwhile.
+  const DEVICE_OPTIONS_LABEL = "Device Options";
+  const devicePanel = document.getElementById("devicePanel");
+  const deviceOptionsBtn = document.getElementById("deviceOptionsBtn");
+  deviceOptionsBtn.textContent = DEVICE_OPTIONS_LABEL;
+  function openDevicePanel(target){
+    if(layerOpen(devicePanel)) return;
+    const back = { el:null, uid:null, find: target.kind === "item"
+      ? ()=> layerOpen(itemPop) && Array.from(itemPop.querySelectorAll("button")).find(b => b.textContent === DEVICE_OPTIONS_LABEL) || null
+      : ()=> deviceOptionsBtn };
+    deviceTarget = target;
+    deviceResult = [];
+    // Drawn before it opens, so openLayer() has a first control to focus.
+    renderDevicePanel();
+    const openedDrawer = !layerOpen(sideMenu);
+    if(openedDrawer) openMenu();
+    openLayer(devicePanel, ()=> devicePanel.classList.add("open"), ()=>{
+      devicePanel.classList.remove("open");
+      deviceTarget = null;
+      deviceResult = [];
+      renderDeviceResult();
+      if(openedDrawer) closeMenu();
+    }, back);
+  }
   // The drawer's hub row, in order: one entry per button, giving its label
   // and the FULL_PANELS id it opens. An entry that opens nothing is a
   // placeholder, disabled and carrying HUB_PLACEHOLDER_HINT, so whether a
@@ -6619,6 +6729,16 @@
       el.appendChild(li);
     });
   }
+  // An item's durability as the player reads it: uses left, or, for anything
+  // on batteries, its charge and whether it is on. The one statement of that
+  // line, shown by the item pop-up and, as a device's status line, by its
+  // Device Options panel.
+  function durabilityText(it){
+    if(it.durability.mode === "uses") return `${Math.round(it.durability.current)}/${it.durability.max} uses`;
+    return it.hasBatteries === false
+      ? "No batteries installed"
+      : `${Math.round(100*it.durability.current/it.durability.max)}% charge${it.on ? " — On" : " — Off"}`;
+  }
   // The item detail view: a pop-up at the tapped item's row. It shows what
   // the view always has (name, category and weight, durability, sealed
   // state), then getItemActions(), one per line. getItemActions() stays the
@@ -6650,11 +6770,7 @@
       box.appendChild(statsLine);
       if(it.durability){
         const durLine = document.createElement("div");
-        durLine.textContent = it.durability.mode === "uses"
-          ? `${Math.round(it.durability.current)}/${it.durability.max} uses`
-          : it.hasBatteries === false
-            ? "No batteries installed"
-            : `${Math.round(100*it.durability.current/it.durability.max)}% charge${it.on ? " — On" : " — Off"}`;
+        durLine.textContent = durabilityText(it);
         box.appendChild(durLine);
       }
       if(it.sealed !== undefined){
@@ -6736,35 +6852,111 @@
     });
     renderCraftResult();
   }
-  // doCraft() is not changed and doesn't report what it wrote, so the click
-  // handler reads #log on either side of it. What the craft wrote is every
-  // <p> that wasn't there before, plus the last one if its text changed:
-  // log() updates the last entry in place rather than appending when its key
-  // repeats, as a second identical craft does with its ×2.
-  function craftFromPanel(recipeId){
+  // What an action wrote to #log. The actions a panel runs (doCraft(), a
+  // device's controls) don't report what they wrote, so this reads #log on
+  // either side of one. What it wrote is every <p> that wasn't there before,
+  // plus the last one if its text changed: log() updates the last entry in
+  // place rather than appending when its key repeats, as a second identical
+  // craft does with its ×2. Crafting and Device Options both capture their
+  // result areas through here.
+  function logWrittenBy(action){
     const logDiv = document.getElementById("log");
     const before = new Set(logDiv.children);
     const last = logDiv.lastElementChild;
     const lastText = last ? last.textContent : null;
-    doCraft(recipeId);
+    action();
+    return Array.from(logDiv.children).filter(p => !before.has(p) || (p === last && p.textContent !== lastText));
+  }
+  // A panel's result area: what its last action wrote, in #log's order and
+  // wording and nothing older: a craft's line, a giveItem() "drops to the
+  // floor" warning, anything the action's advanceTime() logged. It is drawn
+  // from the live <p>s each time, so an entry updated in place shows in its
+  // updated form, and one #log has since dropped isn't shown. Replaced by the
+  // panel's next action; cleared when the panel closes.
+  function renderLogResult(box, entries){
+    const logDiv = document.getElementById("log");
+    box.innerHTML = "";
+    entries.forEach(p=>{ if(p.parentNode === logDiv) box.appendChild(p.cloneNode(true)); });
+  }
+  function craftFromPanel(recipeId){
+    const written = logWrittenBy(()=> doCraft(recipeId));
     // A craft that ended the run has already closed every layer, this one
     // included.
     if(!layerOpen(FULL_PANELS.crafting.el)) return;
-    craftResult = Array.from(logDiv.children).filter(p => !before.has(p) || (p === last && p.textContent !== lastText));
+    craftResult = written;
     renderCraftResult();
   }
-  // The result area: what the last craft wrote, in #log's order and wording
-  // and nothing older: the craft line, a giveItem() "drops to the floor"
-  // warning, anything that craft's advanceTime() logged. It is drawn from the
-  // live <p>s each time, so an entry updated in place shows in its updated
-  // form, and one #log has since dropped isn't shown. Replaced by the next
-  // craft; cleared when the panel closes.
-  function renderCraftResult(){
-    const box = document.getElementById("craftResult");
-    const logDiv = document.getElementById("log");
-    box.innerHTML = "";
-    craftResult.forEach(p=>{ if(p.parentNode === logDiv) box.appendChild(p.cloneNode(true)); });
+  function renderCraftResult(){ renderLogResult(document.getElementById("craftResult"), craftResult); }
+  // What deviceTarget points at now, looked up again by identity: an item by
+  // its _uid, anywhere findItemByUid() can reach; a container by its id,
+  // among the current room's containers. Either must still carry `device`.
+  // null when the target no longer resolves, which closes the panel.
+  function resolveDeviceTarget(){
+    if(!deviceTarget) return null;
+    if(deviceTarget.kind === "item"){
+      const found = findItemByUid(deviceTarget.uid);
+      return found && hasTag(found.item, "device") ? { item:found.item } : null;
+    }
+    const room = world[state.currentRoom];
+    const container = room.containers.find(c=> c.id === deviceTarget.id);
+    return container && hasTag(container, "device") ? { room, container } : null;
   }
+  // The Device Options panel (see openDevicePanel()): a heading, a status
+  // line, the controls, and the result area. Drawn by every render(), as the
+  // item pop-up is, so it follows whatever its controls change, and it stays
+  // open after a control runs. For an item, the status line is the pop-up's
+  // (durabilityText()) and the controls are batteryActions(), so neither is
+  // stated twice. For the stove, the room's heatActive is its On/Off, and
+  // Light / Turn off are the actions the Here group used to offer.
+  function renderDevicePanel(){
+    const target = resolveDeviceTarget();
+    if(!target){ closeLayer(devicePanel); return; }
+    rebuildKeepingFocus(devicePanel, ()=>{
+      const title = document.getElementById("deviceTitle");
+      const status = document.getElementById("deviceStatus");
+      const controls = document.getElementById("deviceControls");
+      controls.innerHTML = "";
+      if(target.item){
+        const it = target.item;
+        title.textContent = it.name;
+        status.textContent = it.durability ? durabilityText(it) : "";
+        batteryActions(it).forEach(a=>{
+          controls.appendChild(actionButton(a.label, ()=> runDeviceControl(a.onClick)));
+        });
+      } else {
+        const room = target.room;
+        title.textContent = target.container.name;
+        status.textContent = "";
+        // The stove, the one fixture device today. A fixture tagged `device`
+        // without `heat` would draw only its name until it gains controls.
+        if(!hasTag(target.container, "heat")) return;
+        // Functional UI text, held to clarity; retunable.
+        status.textContent = room.heatActive ? "On" : "Off";
+        if(room.heatActive){
+          controls.appendChild(actionButton("Turn off the stove", ()=> runDeviceControl(doExtinguish)));
+        } else if(hasMatchUses()){
+          controls.appendChild(actionButton("Light the stove " + fmtDuration(LIGHT_STOVE_MIN), ()=> runDeviceControl(doLightStove)));
+        } else {
+          // Says the one thing that is missing, so a spent last
+          // fire-starter reads as a cause rather than as the control quietly
+          // disappearing.
+          controls.appendChild(hereNote("Nothing you're carrying will light it."));
+        }
+      }
+    });
+    renderDeviceResult();
+  }
+  // Runs one of the panel's controls and shows what it wrote. A control that
+  // wrote nothing, as the battery controls never do, empties the result area:
+  // it holds the last control's lines, and that control had none.
+  function runDeviceControl(action){
+    const written = logWrittenBy(action);
+    // A control that ended the run has already closed every layer.
+    if(!layerOpen(devicePanel)) return;
+    deviceResult = written;
+    renderDeviceResult();
+  }
+  function renderDeviceResult(){ renderLogResult(document.getElementById("deviceResult"), deviceResult); }
   function renderLocationPanel(){
     const room = world[state.currentRoom];
     document.getElementById("locLabel").textContent = roomLabel(room);
@@ -6875,19 +7067,18 @@
     if(room.fishable && hasTool("fishing") && hasTool("tackle")){
       hereBox.appendChild(actionButton("Go fishing " + fmtDuration(FISH_DURATION_MIN), doFish));
     }
-    // Both notes say the one thing that is missing, so a spent last
+    // The note says the one thing that is missing, so a spent last
     // fire-starter reads as a cause rather than as the action quietly
-    // disappearing. The campfire one is gated on canBuildFire() on purpose:
-    // a player with no kit and no firewood is not being denied a fire by the
-    // missing match, and saying so would be wrong. Functional UI text, held
-    // to clarity rather than to the game's descriptive tone; both retunable.
-    // The two can never both appear in one room today — every hasStove room
-    // also carries cannotHaveFire — but neither note assumes that.
-    if(room.hasStove && !room.heatActive && hasMatchUses()){
-      hereBox.appendChild(actionButton("Light the stove " + fmtDuration(LIGHT_STOVE_MIN), doLightStove));
-    } else if(room.hasStove && !room.heatActive){
-      hereBox.appendChild(hereNote("Nothing you're carrying will light it."));
-    }
+    // disappearing. It is gated on canBuildFire() on purpose: a player with
+    // no kit and no firewood is not being denied a fire by the missing match,
+    // and saying so would be wrong. Functional UI text, held to clarity rather
+    // than to the game's descriptive tone; retunable.
+    // The stove is not here: lighting it and turning it off are its Device
+    // Options (renderDevicePanel()). Every room roomStove() finds a stove in
+    // also carries cannotHaveFire today, so a stove and a campfire never share
+    // a room, but nothing here assumes that: "Put out the fire" below reads
+    // roomStove() and is offered only where it finds none.
+    const stove = roomStove(room);
     if(!room.cannotHaveFire && !room.heatActive && hasMatchUses() && canBuildFire(room)){
       const label = !room.campfireBuilt ? "Set up the campfire kit"
         : (room.fireMinutesLeft > 0 ? "Relight the fire" : "Build a campfire");
@@ -6899,7 +7090,7 @@
       hereBox.appendChild(actionButton("Dismantle the campfire " + fmtDuration(DISMANTLE_CAMPFIRE_MIN), doDismantleCampfire, "locked"));
     }
     if(room.heatActive){
-      hereBox.appendChild(actionButton(room.hasStove ? "Turn off the stove" : "Put out the fire", doExtinguish));
+      if(!stove) hereBox.appendChild(actionButton("Put out the fire", doExtinguish));
       // Offered only while a firewood buys its full FIRE_MINUTES_PER_WOOD:
       // within one piece of the cap, doAddFuel()'s Math.min would clip the
       // surplus and the wood would be spent for less than it is worth.
@@ -6983,6 +7174,14 @@
     const currentWorld = worldSlot(room, worldTab);
     document.getElementById("worldWeight").textContent =
       totalWeight(currentWorld.items).toFixed(2) + " / " + currentWorld.capacityKg + " kg";
+    // A room fixture's Device Options, beside the weight: the selected tab is
+    // the focus, the way the Inventory header's Unequip follows its tab. Shown
+    // only while that tab is a container tagged `device`.
+    const tabContainer = room.containers.find(c=> c.id === worldTab);
+    if(tabContainer && hasTag(tabContainer, "device")){
+      deviceOptionsBtn.style.display = "";
+      deviceOptionsBtn.onclick = ()=> openDevicePanel({ kind:"container", id:tabContainer.id });
+    } else { deviceOptionsBtn.style.display = "none"; }
     renderItemList(document.getElementById("worldList"), currentWorld.items, [
       // Disabled rather than hidden, for the reason given at the detail
       // view's Take family in getItemActions(): the item can be taken, just
@@ -7017,6 +7216,7 @@
       document.getElementById("worldTabs").innerHTML = "";
       document.getElementById("worldList").innerHTML = "";
       document.getElementById("worldWeight").textContent = "";
+      deviceOptionsBtn.style.display = "none";
       // The catalogue goes blank with the rest, as the old Craft panel's body
       // did: Crafting can still be opened after death, and offers nothing
       // (#183 asks whether it should say more).
@@ -7040,6 +7240,7 @@
     // After both item lists: the pop-up anchors to a row they just drew.
     renderItemPop();
     renderCraftingPanel();
+    renderDevicePanel();
     renderMap();
   }
 

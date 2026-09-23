@@ -18,6 +18,258 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.7.0 — Device Options: a `device` tag, container tags, and the stove's controls in their own panel
+
+Implements: handoffs/device-options.md
+
+Implements #161 and #177 in full, per `handoffs/device-options.md`. This is
+layer 3 of the three-layer item model. A new `device` tag marks things whose
+controls go beyond take and store. The portable radio and the four stoves carry
+it, and their controls move into a full-screen Device Options panel. Containers
+gain `tags`, with the same field, shape and vocabulary as items. Heat containers
+are now found by a `heat` tag instead of by id, which fixes #177 at the root.
+`room.hasStove` is removed. This is **MINOR**: the new tags live on registry
+items and authored containers, and a save carries deep copies of both, so
+`SAVE_KEY` rotates from `ashfall_save_v0.6` to `ashfall_save_v0.7`.
+**Existing browser saves stop auto-loading.**
+
+**New**
+
+- **`hasTag(thing, tag)`** (INVENTORY / ITEM SYSTEM) answers "does this item or
+  container carry this tag?". `hasTool()`, `countByTag()`, `consumeByTag()`,
+  `findFireStarter()` and `registryCarriesTag()` now call it. Their behaviour is
+  unchanged, and no `tags.includes` remains outside it.
+- **The `device` tag** means the thing has controls beyond take and store, kept
+  in Device Options. For an item tagged `device`, `getItemActions()` offers one
+  action, **"Device Options"**, in place of the battery controls. An item that
+  runs on batteries but isn't tagged (the flashlight) keeps its controls in the
+  pop-up, as before.
+- **`batteryActions(it)`** is the one definition of Turn on/off, Remove
+  batteries and Replace batteries. The pop-up (flashlight) and the device panel
+  (radio) both call it. It returns nothing unless the item's durability mode is
+  `"time"`. The availability rules and the controls' silence are unchanged.
+- **Container tags** read by a mechanic:
+  - `heat`: a heat source's cooking space. Stoves and campfires.
+  - `device`: the container has Device Options. Stoves only.
+- **`getHeatContainer(room)`** returns the room's first container tagged
+  `heat`. **`roomStove(room)`** returns its container tagged both `device` and
+  `heat`, or null. Every stove question now asks `roomStove()`.
+- **`doLightStove()`** returns without effect if `roomStove()` finds nothing.
+  Otherwise it spends a fire-starter use, sets `heatActive`, spends
+  `LIGHT_STOVE_MIN` and logs "You light the stove.", as before. It no longer
+  calls `ensureHeatContainer()` and never creates a container.
+- **`ensureHeatContainer()`** takes a fifth parameter, `tags`, set on the
+  container when it creates one. An existing container is returned unchanged.
+  `doBuildFire()` passes `["heat"]`, and is now the only caller.
+
+**New content**
+
+- `portable_radio` gains `tags:["device"]`. No other item changes.
+- The four authored stove containers gain `tags:["device","heat"]`: `kitchen`,
+  `twobee_kitchen` and `onebee` at `id:"stove"`, and `onea_kitchen` at
+  `id:"stove1a"`. `stove1a` is not renamed, because the tag makes it work.
+
+**Fixed**
+
+- **#177, 1A's kitchen.** The root cause was that heat containers were found by
+  id. `doLightStove()` called `ensureHeatContainer(room, "stove", …)`, which
+  found no `"stove"` beside 1A's `stove1a` and created a second, empty "Stove"
+  tab. `getHeatContainer()`, looking for `"stove"` or `"campfire"`, then saw
+  only that empty tab, so Cook never saw the real one. Both now read tags. 1A
+  keeps one Stove tab after lighting, and Cook finds `stove1a`.
+
+**Removed**
+
+- `hasStove` is removed from the four rooms and the ROOM SCHEMA comment. Its
+  readers in `renderHereActionsPanel()` now ask `roomStove()`.
+- The Here group loses "Light the stove", its note "Nothing you're carrying
+  will light it." and "Turn off the stove". All three are now in the stove's
+  Device Options. "Put out the fire" now shows while `heatActive` and
+  `roomStove()` finds nothing: the campfire. "Add fuel to the fire", "Cook the
+  …" and every campfire control are unchanged.
+
+**UI**
+
+- **The Device Options panel** (`#devicePanel`) is a full-screen `.full-panel`
+  over the drawer. Opening it opens the drawer, if that is not already open, and
+  stacks above it. Closing it by ✕ or Esc closes the drawer it opened in the
+  same step. You land back on the item's pop-up (for the radio) or on play (for
+  the stove). Focus returns to the Device Options control that opened it. Game
+  over, Load and Restart close it with every other layer. It closes by itself if
+  its target no longer resolves.
+- **Radio.** The panel shows the item's name, the pop-up's status line (`No
+  batteries installed` or `N% charge — On/Off`) and `batteryActions()`. The
+  radio's pop-up keeps its status line and shows "Device Options" in place of
+  its three controls.
+- **Stove.**
+  - The panel shows the container's name ("Stove") and the status `On` or `Off`,
+    from `room.heatActive`.
+  - Its one control: "Light the stove (0:05)" when you have a fire-starter, the
+    note "Nothing you're carrying will light it." when you don't, or "Turn off
+    the stove" while lit.
+  - You reach it from a **"Device Options"** `button.mini` in the Here panel's
+    header, beside the weight. The button shows only while the selected Here tab
+    is a container tagged `device`. It follows the Inventory header's
+    `#unequipBtn` pattern.
+- **The panel stays open after a control runs.** Its result area, `#deviceResult`,
+  shows what that control wrote to `#log`, through the same mechanism as
+  Crafting's (see Organization / Structural). The radio's controls write nothing,
+  so after one the area is empty and the status line carries the change.
+- **1B's stove sits behind the unit's search.** `onebee` has
+  `searchLabel:"Search the unit"`, and until it is searched the Here panel lists
+  no containers. Its Stove tab, and so its Device Options, appear only after the
+  search. Before this pass "Light the stove" sat in the Here group and ignored
+  the search. See Open questions.
+
+**Organization / Structural**
+
+- `craftFromPanel()`'s read of `#log` is now `logWrittenBy(action)`, and
+  `renderCraftResult()`'s drawing is now `renderLogResult(box, entries)`.
+  Crafting and Device Options both use them, so there is one capture mechanism.
+  Crafting's behaviour is unchanged.
+- The result-area CSS moved from `#craftResult` to a shared `.log-result`
+  class, carried by `#craftResult` and `#deviceResult`.
+- `renderItemPop()`'s durability ternary is now `durabilityText(it)`. The device
+  panel's status line uses the same function.
+- `restoreFocus()` takes an optional `back.find()`, tried after `el` and `uid`.
+  It finds the pop-up's "Device Options" button again after a render rebuilt it
+  while the device panel covered it.
+- New UI-only variables, never saved: `deviceTarget` (`{ kind:"item", uid }` or
+  `{ kind:"container", id }`, beside `detailItem`) and `deviceResult` (beside
+  `craftResult`). `applyLoadedData()` and `doRestart()` clear `deviceTarget`
+  where they clear `detailItem`.
+
+**Documentation**
+
+- CONTAINER SCHEMA documents `tags`, with `heat` and `device` and what reads
+  each. The ITEM DATA SCHEMA tag list adds `device`. The ROOM SCHEMA drops
+  `hasStove`. The layer-stack comment names the device panel, and
+  `renderHereActionsPanel()`'s fire-note comment now describes `roomStove()`
+  instead of the removed field. New comments on `ensureHeatContainer()`,
+  `doLightStove()`, `getHeatContainer()`, `roomStove()` and the campfire's
+  id lookup in `doDismantleCampfire()`.
+- Filed #188: 1B's stove can't be lit until "Search the unit", though the
+  description shows it. Nothing else was deferred.
+
+**Validation performed**
+
+- `git diff origin/main...HEAD -- ashfall.html` shows the changes above and
+  nothing else. `hasStove` appears nowhere in the file.
+- Exercised in headless Chromium against saves built from the running game:
+  - **1A (#177).** One Stove tab before and after lighting. A raw fish placed in
+    `stove1a` offered "Cook the raw fish" and cooked there.
+  - **The header button.** Shown only on the Stove tab, hidden on Floor and on
+    Kitchen Shelf.
+  - **The stove's panel.** Off → Light → On, with "You light the stove." in the
+    result area. Turn off replaced it with "You put it out.". The Here group
+    offered no stove control and no "Put out the fire" while the stove was lit.
+  - **Closing.** Esc, and separately ✕, closed the panel and the drawer, cleared
+    the result area and returned focus to the header button.
+  - **The radio's panel.** Turn on, Remove batteries and Replace batteries each
+    updated the status line and left the result area empty. The pop-up stayed
+    open beneath and followed. Esc returned to the pop-up with focus on its
+    "Device Options".
+  - **The flashlight.** Its pop-up still offers Turn on and Remove batteries,
+    and no Device Options.
+  - **No fire-starter.** The stove's note showed.
+  - **Campfire.** It still offers "Put out the fire", its container is saved
+    with `tags:["heat"]`, and its tab shows no Device Options.
+  - **Closing paths.** A Load reached while the panel was open closed the panel
+    and the drawer. So did a fatal Light at 0 hunger and thirst (game over), and
+    the header button was hidden.
+  - **1B.** Floor only before the search; the Stove tab and its button after.
+  - **Phone width.** At 390×844 the Here header fits with no horizontal scroll.
+  - No page errors. `validateItemRegistry()`, `validateLocations()` and
+    `validateRoomSchema()` are clean, and `validateReachability()` reports no
+    authoring problems.
+- **Re-verified before implementing, against v0.6.5. All held:**
+  - The hub pass had shipped. Its pop-up renders `getItemActions()` and stays
+    open beneath the drawer.
+  - The layer stack exists (Esc closes the top layer; focus moves in on open
+    and back on close).
+  - Crafting's result area captures by reading `#log` around the action.
+  - The battery block was one block, gated on `durability.mode === "time"`.
+  - No container carried `tags`.
+  - `hasStove` appeared only in the schema comment, the four rooms and the
+    here-actions code.
+  - The five fire functions matched the handoff's description.
+  - Every stove room carried `cannotHaveFire` and one authored container named
+    "Stove".
+  - Cook was still a Here-group button, since #178 has not shipped.
+  - `#unequipBtn` was still the context-button pattern.
+  - `SAVE_KEY` had not rotated since v0.6.3 (v0.6.4 and v0.6.5 were PATCH), so
+    this pass's rotation is the first since then.
+- One statement outside that checklist did not hold: the handoff says none of
+  the four stove rooms has a `searchLabel`, but `onebee` does. Tom was asked
+  before any code was written; see below.
+
+**Open questions / decisions resolved**
+
+- **1B's search (asked during implementation).** With the stove's controls moved
+  out of the Here group, 1B's stove can't be lit until the unit is searched.
+  Tom chose to ship that as specced and track it in #188.
+- **Implementation choices the handoff left open:**
+  - The tag helper is `hasTag(thing, tag)`. The existing tag readers were
+    rewritten to call it.
+  - The stove helper is `roomStove(room)`.
+  - The device target is `{ kind:"item", uid } | { kind:"container", id }`,
+    resolved again on every render by `resolveDeviceTarget()`. A container
+    target must be in the current room and both kinds must still carry `device`.
+  - `ensureHeatContainer()` takes tags as a fifth parameter.
+  - The device panel has its own element, `#devicePanel`, and is not a
+    `FULL_PANELS` entry. It opens from the play area and has to open and close
+    the drawer with itself, which `openPanel()` doesn't do. It shares the
+    `.full-panel` class and the `.panel-close` wiring.
+- **The panel closes only the drawer it opened.** If the drawer was already
+  open, which only keyboard Tab can arrange, closing the panel leaves it open.
+  That is the handoff's "back to where it was opened from", applied to that case.
+- **The stove's content is gated on `heat`.** A fixture tagged `device` without
+  `heat` would draw only its name, never the stove's controls. None exists
+  today.
+
+**Notes / assumptions**
+
+- Retunable functional text: "Device Options" (one constant,
+  `DEVICE_OPTIONS_LABEL`, which also labels the header button) and the stove's
+  status "On" / "Off".
+- **Imported pre-0.7 saves** load with the existing version warning and no
+  container tags. No load-time backfill runs (Tom, #161 option (b)). In such a
+  save:
+  - stoves have no Device Options and can't be lit;
+  - a lit stove shows "Put out the fire" in the Here group;
+  - a campfire container built before the import has no `heat` tag, so Cook
+    doesn't find it, even after a relight, since `ensureHeatContainer()`
+    returns the existing container unchanged.
+
+**Explicitly out of scope**
+
+- #178 (passive cooking) and #179 (burning, unattended fires). Cook is not
+  touched.
+- #180 (the walkie-talkie's `battery` tag) and #181 (devices draining outside
+  the inventory). `applyWorldTicking()` is unchanged.
+- New devices (a TV, a car radio, a walkie-talkie as a device). Those are
+  content.
+- #15's `movable` / `disassemblable` flags, #128's container `kind`, #96's
+  `roomHasHeat()`, and the campfire as a device.
+- A load-time backfill of tags into old saves.
+- #78, accessibility.
+
+**Sections touched**
+
+- ITEM DATA / WORLD DATA (definition data and schema comments)
+- INVENTORY / ITEM SYSTEM (`hasTag()`, `getItemActions()`, `batteryActions()`)
+- FIRE / COOKING
+- PERSISTENCE (clearing `deviceTarget` on load and restart; the dev seam's
+  `registryCarriesTag()`)
+- EVENTS / UI HELPERS (`openDevicePanel()`, `restoreFocus()`)
+- RENDERING (the device panel, the Here header button, the Here group, the
+  shared result area)
+- `<style>` and the markup
+
+**Version**: `GAME_CONFIG.VERSION` `"0.6.5"` → `"0.7.0"`
+
+---
+
 ## v0.6.5 — Portrait layout, compact action buttons, tighter line spacing
 
 Implements: handoffs/portrait-layout.md
