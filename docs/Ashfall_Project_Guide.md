@@ -486,7 +486,9 @@ validated:
 Do **not** file an issue to record what this session *shipped*, and don't
 close the fulfilled issue by hand — `Closes #NN` does it on merge.
 
-Merging the PR is what ships the version. Tag the merge commit `vX.Y.Z`.
+Merging the PR is what ships the version. Tom tags the merge commit
+`vX.Y.Z` and pushes the tag by hand; the session's final message ends with
+the commands for it — `CLAUDE.md`'s wrap-time checklist, item 6.
 
 ### Validation
 
