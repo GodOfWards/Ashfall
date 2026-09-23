@@ -108,11 +108,11 @@
   #gaitBar button:disabled{ opacity:.4; cursor:not-allowed; }
   main{ flex:1; display:grid; grid-template-columns:1fr 320px; }
   #left{ padding:18px 26px; border-right:1px solid var(--line); display:flex; flex-direction:column; gap:14px; }
-  #roomDesc{ color:var(--ink-dim); line-height:1.6; margin:0; font-size:15px; }
+  #roomDesc{ color:var(--ink-dim); line-height:1.4; margin:0; font-size:15px; }
   #log{ display:flex; flex-direction:column; gap:5px; max-height:110px; overflow-y:auto; }
   /* #craftResult is a view of #log (see renderCraftResult()), so its lines
      read exactly as they do there. */
-  #log p, #craftResult p{ margin:0; font-size:13.5px; line-height:1.5; color:var(--ink-dim); }
+  #log p, #craftResult p{ margin:0; font-size:13.5px; line-height:1.35; color:var(--ink-dim); }
   #log p.fresh, #craftResult p.fresh{ color:var(--ink); }
   #log p.sys, #craftResult p.sys{ font-style:italic; color:var(--accent); font-family:system-ui,sans-serif; font-size:12px; }
   #log p.warn, #craftResult p.warn{ color:var(--warn); font-family:system-ui,sans-serif; font-size:12px; }
@@ -120,11 +120,11 @@
   .logcount{ color:var(--ink-faint); font-size:12px; margin-left:5px; }
   .actions-group h2{ font-family:system-ui,sans-serif; font-size:12px; text-transform:uppercase;
     letter-spacing:.08em; color:var(--ink-faint); margin:0 0 8px; }
-  .actions{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
-  button.action{ font-family:system-ui,sans-serif; font-size:13.5px; background:var(--panel-2);
-    border:1px solid var(--line); color:var(--ink); padding:8px 13px; border-radius:3px; cursor:pointer; }
+  .actions{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+  button.action{ font-family:system-ui,sans-serif; font-size:12.5px; background:var(--panel-2);
+    border:1px solid var(--line); color:var(--ink); padding:6px 10px; border-radius:3px; cursor:pointer; }
   button.action:hover{ border-color:var(--accent-dim); background:#232a33; }
-  button.action .cost{ color:var(--ink-faint); font-size:12px; margin-left:4px; }
+  button.action .cost{ color:var(--ink-faint); font-size:11px; margin-left:3px; }
   button.action.locked{ border-color:var(--danger); color:var(--danger); }
   button.action.blocked{ border-color:var(--danger); color:var(--danger); cursor:not-allowed; }
   /* The control that opens item detail. It is a <button> because that is what
@@ -163,18 +163,24 @@
   button.mini:hover{ border-color:var(--accent-dim); }
   button.mini.equip{ border-color:var(--good); color:var(--good); }
   button.mini.blocked{ border-color:var(--danger); color:var(--danger); cursor:not-allowed; }
-  /* The two-column grid has a 476px floor — 320px of sidebar plus the room
-     description's own minimum — so below that the page scrolls sideways.
-     It stops being usable well before that: at 375px the description reads
-     three words wide. One column from 760px down, then. The breakpoint is a
-     judgment call and retunable: anything from 480 up removes the overflow,
-     760 is where the layout starts being cramped rather than broken.
+  /* One column when the viewport is portrait, the way a phone is held; the
+     two-column grid stays for landscape. A desktop window taller than it is
+     wide takes the one column too, by design (#159). The second clause is a
+     floor: the two-column grid needs 476px — 320px of sidebar plus the room
+     description's own minimum — and below that the page scrolls sideways,
+     so a landscape window narrower than 480px takes the one column as well.
+     480 and the 14px 16px padding, which fits two action buttons to a line
+     on a ~390px screen, are judgment calls and retunable.
      #left's border-right would read as a stray rule down the page once it
      spans the full width, so it becomes the seam between the two stacked
-     columns instead. */
-  @media (max-width:760px){
+     columns instead. The Here panel comes up above Inventory, nearest the
+     Here actions it goes with, and any other sidebar panel follows the two
+     in its existing order; the two-column layout keeps the DOM order. */
+  @media (orientation: portrait), (max-width: 480px){
     main{ grid-template-columns:1fr; }
-    #left{ border-right:none; border-bottom:1px solid var(--line); }
+    #left{ padding:14px 16px; border-right:none; border-bottom:1px solid var(--line); }
+    #worldPanel{ order:-2; }
+    #invPanel{ order:-1; }
   }
 </style>
 </head>
@@ -247,12 +253,12 @@
     <div class="actions-group" id="hereGroup" style="display:none;"><h2>Here</h2><div class="actions" id="hereActions"></div></div>
   </div>
   <div id="sidebar">
-    <div class="panel">
+    <div class="panel" id="invPanel">
       <h2>Inventory <span class="sub"><span id="invWeight"></span><button id="unequipBtn" class="mini" style="display:none;">Unequip</button></span></h2>
       <div class="tabs" id="invTabs"></div>
       <ul class="itemlist" id="invList"></ul>
     </div>
-    <div class="panel">
+    <div class="panel" id="worldPanel">
       <h2>Here <span class="sub" id="worldWeight"></span></h2>
       <div class="tabs" id="worldTabs"></div>
       <ul class="itemlist" id="worldList"></ul>
@@ -330,7 +336,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.6.4" };
+  const GAME_CONFIG = { VERSION: "0.6.5" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
