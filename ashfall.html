@@ -393,7 +393,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.7.5" };
+  const GAME_CONFIG = { VERSION: "0.8.0" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -798,10 +798,10 @@
   //                   food poisoning, as a fraction in [0,1] — the file's
   //                   one probability convention (see chance()). Definition
   //                   data: read from the registry by itemId
-  //                   (foodPoisoningChanceOf()), never copied onto an
-  //                   instance (REGISTRY_ONLY_FIELDS). Saves before 0.8
-  //                   carry an instance copy named `illnessChance`, which
-  //                   nothing reads.
+  //                   (foodEffects()), never copied onto an instance
+  //                   (REGISTRY_ONLY_FIELDS). Saves before 0.8 carry an
+  //                   instance copy named `illnessChance`, which
+  //                   migrateCookingRelease() deletes on load.
   //     masterKey     key unlocks every door in `building`
   //     building      building association for a masterKey
   //     doorId        specific door a (non-master) key unlocks
@@ -6720,14 +6720,13 @@
   }
   // backfillIllnessScale(): companion to backfillItemIds(), run
   // alongside it on every load. Instances written before illnessChance became
-  // a fraction carry it as a percent (the raw fish shipped 35). A value above 1 is
-  // a percent by construction — a legal fraction can never exceed 1 — so the
-  // test is unambiguous and dividing by 100 is exact. Without this, every raw
-  // fish in an imported pre-0.6 save would be a guaranteed illness, since 35
-  // exceeds every value rollValue() can return. forEachItemList() carries it
-  // into `contents`: an unequipped bag holds its items there, and a fish
-  // stowed in one would otherwise surface unrepaired the moment the bag is
-  // equipped again.
+  // a fraction carry it as a percent (the raw fish shipped 35). A value above
+  // 1 is a percent by construction — a legal fraction can never exceed 1 — so
+  // the test is unambiguous and dividing by 100 is exact. forEachItemList()
+  // carries it into `contents`, where an unequipped bag holds its items.
+  // Since 0.8 nothing reads the instance field — food poisoning is read from
+  // the registry — and migrateCookingRelease() deletes it right after this
+  // runs; the repair stays first in that order, as the migration specifies.
   function backfillIllnessScale(){
     forEachItemList(list=> list.forEach(it=>{
       if(it && typeof it.illnessChance === "number" && it.illnessChance > 1){
@@ -6744,6 +6743,76 @@
   // capacity off the inventory.
   function backfillInventoryCap(){
     delete state.inventory.capacityKg;
+  }
+  // migrateCookingRelease(): brings a 0.7 save into the cooking release,
+  // run on every load after the backfills above. A browser save from 0.7
+  // never reaches it — SAVE_KEY rotated with the MINOR bump — but an
+  // imported 0.7 file does, and must load. Idempotent: a save it has already
+  // migrated passes through unchanged.
+  //   Items with a retired id are rebuilt from the registry as what they
+  //   became, keeping qty and _uid (MIGRATED_ITEMS). The spoiled foods come
+  //   back Rotten, and the pot of spoiled stew as a cooking pot of rotten
+  //   stew.
+  //   An instance's `illnessChance`, the copy food poisoning used to be read
+  //   from, is deleted: poisoning is read from the registry now. It runs
+  //   after backfillIllnessScale(), which repairs that same field first.
+  //   The illness timer moves into state.illnesses.
+  //   Rooms gain what the release authored: containers the default world has
+  //   and the loaded room lacks (the freezers), each container's `tags` from
+  //   its default (the fridges'), and `sink`.
+  //   Last, every perishable still without ages is aged from the collapse,
+  //   as a new game's world is (stampMissingAges()).
+  const MIGRATED_ITEMS = {
+    raw_fish:            it=> itemFromRegistry({ id:"fish", qty:it.qty }),
+    cooked_fish:         it=> Object.assign(itemFromRegistry({ id:"fish", qty:it.qty }), { cookState:"cooked" }),
+    spoiled_milk:        it=> rottenItem("milk", it.qty),
+    moldy_bread:         it=> rottenItem("bread", it.qty),
+    rotten_produce:      it=> rottenItem("vegetables", it.qty),
+    rotten_leftovers:    it=> rottenItem("leftovers", it.qty),
+    pot_of_spoiled_stew: it=>{
+      const dish = dishFrom("stew", "cooking_pot", ["meat", "vegetables"], "cooked");
+      dish.ages = [ITEM_REGISTRY[dish.itemId].spoils.rottenAfter];
+      return Object.assign(itemFromRegistry({ id:"cooking_pot", qty:it.qty }), { contents:[dish] });
+    },
+    bottled_water:       it=> Object.assign(itemFromRegistry({ id:"plastic_bottle", qty:it.qty }), { water:{ kind:"clean", fill:1 } })
+  };
+  // `qty` units of `id`, every one of them exactly Rotten.
+  function rottenItem(id, qty){
+    return Object.assign(itemFromRegistry({ id, qty }), { ages: new Array(qty).fill(ITEM_REGISTRY[id].spoils.rottenAfter) });
+  }
+  function migrateCookingRelease(){
+    forEachItemList(list=> list.forEach((it, i)=>{
+      if(!it) return;
+      delete it.illnessChance;
+      const rebuild = it.itemId && MIGRATED_ITEMS[it.itemId];
+      if(!rebuild) return;
+      const next = rebuild(it);
+      if(it._uid) next._uid = it._uid;
+      list[i] = next;
+    }));
+    if(!state.illnesses || typeof state.illnesses !== "object") state.illnesses = {};
+    if(state.illnessMinutesLeft > 0 && !(state.illnesses.food_poisoning > 0))
+      state.illnesses.food_poisoning = state.illnessMinutesLeft;
+    delete state.illnessMinutesLeft;
+    const defaults = makeDefaultWorld();
+    Object.keys(world).forEach(roomId=>{
+      const room = world[roomId], def = defaults[roomId];
+      if(!room || !def) return;
+      if(def.sink) room.sink = true;
+      else delete room.sink;
+      def.containers.forEach((dc, i)=>{
+        const c = room.containers.find(x=> x.id === dc.id);
+        if(c){
+          if(dc.tags) c.tags = dc.tags.slice();
+          return;
+        }
+        // Where the default has it: straight after the container it follows.
+        const before = i > 0 ? room.containers.findIndex(x=> x.id === def.containers[i - 1].id) : -1;
+        room.containers.splice(before + 1, 0, dc);
+      });
+    });
+    stampMissingAges();
+    resyncUidCounter();
   }
   function applyLoadedData(data){
     if(!data || !data.state || !data.world || !data.world[data.state.currentRoom]){
@@ -6794,6 +6863,7 @@
     backfillRoomAddresses();
     backfillIllnessScale();
     backfillInventoryCap();
+    migrateCookingRelease();
     render();
     return true;
   }
@@ -6814,6 +6884,11 @@
   // And any equippable bag (an entry with a slotType) whose `carryFactor` is
   // missing or not in (0,1]. carryFactorOf() would count such a bag at 1,
   // silently; this makes it loud.
+  //
+  // And the cooking release's shapes: a `spoils` whose staleAfter is not
+  // below its rottenAfter, an `ingredient.role` outside INGREDIENT_ROLES, and
+  // a DISH_TEMPLATES template whose `item` is not a dish entry with `cooks`.
+  const INGREDIENT_ROLES = ["meat", "vegetable", "grain"];
   function validateItemRegistry(){
     const missing = [];
     Object.keys(ITEM_REGISTRY).forEach(id=>{
@@ -6831,13 +6906,21 @@
       const f = def.carryFactor;
       if(def.slotType && !(Number.isFinite(f) && f > 0 && f <= 1))
         missing.push(`ITEM_REGISTRY.${id}.carryFactor: ${f} is not a number in (0,1]`);
+      if(def.spoils && !(def.spoils.staleAfter < def.spoils.rottenAfter))
+        missing.push(`ITEM_REGISTRY.${id}.spoils: staleAfter ${def.spoils.staleAfter} is not below rottenAfter ${def.spoils.rottenAfter}`);
+      if(def.ingredient && !INGREDIENT_ROLES.includes(def.ingredient.role))
+        missing.push(`ITEM_REGISTRY.${id}.ingredient.role: "${def.ingredient.role}" is not one of ${INGREDIENT_ROLES.join("/")}`);
     });
     RECIPES.forEach(r=>{
       r.inputs.forEach(inp=>{ if(!ITEM_REGISTRY[inp.id]) missing.push(`RECIPES[${r.id}].inputs: ${inp.id}`); });
       if(!ITEM_REGISTRY[r.output.id]) missing.push(`RECIPES[${r.id}].output: ${r.output.id}`);
     });
+    DISH_TEMPLATES.forEach(t=>{
+      const def = ITEM_REGISTRY[t.item];
+      if(!def || !def.dish || !def.cooks) missing.push(`DISH_TEMPLATES[${t.id}].item: ${t.item} is not a dish entry with cooks`);
+    });
     if(missing.length) console.warn("validateItemRegistry: problems", missing);
-    else console.log("validateItemRegistry: all recipe ids resolve in ITEM_REGISTRY, every foodPoisoningChance is in [0,1], every cooks.minutes is above 0, every bag's carryFactor is in (0,1]");
+    else console.log("validateItemRegistry: all recipe and dish ids resolve in ITEM_REGISTRY, every foodPoisoningChance is in [0,1], every cooks.minutes is above 0, every spoils is ordered, every ingredient role is known, every bag's carryFactor is in (0,1]");
     return missing;
   }
   // validateLocations(): dev-only console helper (not wired to any button
