@@ -744,6 +744,9 @@
   //                   through `overrides`; otherwise the world's items are
   //                   aged from the collapse (stampMissingAges()) and an
   //                   action's are new (asNewlyMade()).
+  //     portion       instance: how much of one unit of food is left — 1,
+  //                   0.75, 0.5 or 0.25, absent = 1 — after Eat 1/2 or 1/4.
+  //                   Never shown; a unit weighs its portion of unitWeight.
   //     disassembleLog the line Disassemble logs for a `disassemble`-tagged
   //                   item, with {qty} standing for the first recipe
   //                   input's quantity. Definition data, read from the
@@ -4201,11 +4204,14 @@
   // ==================================================
   // The only place an item's weight is computed. A stowed bag weighs itself
   // plus everything in its `contents`, and the recursion runs back through
-  // totalWeight(), so bags nested to any depth count in full. An item with
-  // no `contents` weighs exactly qty × unitWeight.
+  // totalWeight(), so bags nested to any depth count in full. A part-eaten
+  // unit weighs its `portion` of a whole one. An item with no `contents`
+  // and no portion weighs exactly qty × unitWeight.
   function itemUnitWeight(it){
-    return it.unitWeight + (Array.isArray(it.contents) ? totalWeight(it.contents) : 0);
+    return it.unitWeight * portionOf(it) + (Array.isArray(it.contents) ? totalWeight(it.contents) : 0);
   }
+  // How much of one unit is left: `portion`, 1 when absent.
+  function portionOf(it){ return typeof it.portion === "number" ? it.portion : 1; }
   function itemWeight(it){ return it.qty * itemUnitWeight(it); }
   function totalWeight(list){ return list.reduce((s,it)=> s + itemWeight(it), 0); }
   // Returns the list entry the item ended up in — the stack it merged into,
@@ -4224,13 +4230,15 @@
   // A cookable item's rows merge only in the same cook state, and raw ones
   // only at the same progress, so two fish put in a stove minutes apart stay
   // two rows until both are cooked. A perishable's rows merge only when every
-  // unit of both is in the same freshness state.
+  // unit of both is in the same freshness state. Part-eaten units merge only
+  // with units as eaten as they are, never with whole ones.
   function sameStackState(a, b){
     return STACKABLE.has(a.category) && a.itemId === b.itemId && a.category === b.category
       && !a.durability && !b.durability && !!a.sealed === !!b.sealed
       && cookStateOf(a) === cookStateOf(b)
       && (cookStateOf(a) !== "raw" || (a.cookMinutes || 0) === (b.cookMinutes || 0))
-      && rowFreshness(a) === rowFreshness(b) && rowFreshness(a) !== "mixed";
+      && rowFreshness(a) === rowFreshness(b) && rowFreshness(a) !== "mixed"
+      && portionOf(a) === portionOf(b);
   }
   // Folds `row` into `target`, an existing row sameStackState() accepts. The
   // one place two rows become one: the units' ages come along, re-sorted
@@ -4591,19 +4599,56 @@
     if(isPerishable(item)) item.ages = new Array(item.qty).fill(0);
     return item;
   }
-  function doConsume(sourceKind, index){
+  // Rationing. A unit can be eaten whole or by the half and the quarter;
+  // what is left of it is its `portion`. EAT_PARTS are the part buttons, each
+  // offered only while it is less than what is left, so a whole unit offers
+  // all three, a half offers Eat and Eat 1/4, and a quarter only Eat.
+  const EAT_PARTS = [ { label:"1/2", amount:0.5 }, { label:"1/4", amount:0.25 } ];
+  // The unit Eat takes from, clicked on row `it` of `list`: among the rows of
+  // the same food — itemId, cook state and freshness — the one with the
+  // least left, and among equals the oldest. So a half-eaten can is finished
+  // before a new one is started, whichever row was clicked.
+  function eatTarget(list, it){
+    const same = list.filter(r=> r.itemId === it.itemId && !r.sealed
+      && cookStateOf(r) === cookStateOf(it) && rowFreshness(r) === rowFreshness(it));
+    return same.sort((a, b)=> portionOf(a) - portionOf(b) || unitAges(b)[0] - unitAges(a)[0])[0] || it;
+  }
+  // Takes `amount` of one unit off `row`. A unit split out of a larger row
+  // goes back into the list with its smaller portion; a lone unit keeps its
+  // row, and _uid, and folds into a matching part-eaten row if there is one.
+  function eatFromRow(list, row, amount){
+    const rest = portionOf(row) - amount;
+    if(rest <= 0){ dropUnits(list, list.indexOf(row), 1); return; }
+    if(row.qty > 1){
+      const unit = dropUnits(list, list.indexOf(row), 1);
+      unit.portion = rest;
+      addToList(list, unit);
+    } else {
+      row.portion = rest;
+      remergeRow(list, row);
+    }
+  }
+  // Eats `amount` of a unit (a fraction; null for whatever is left of it)
+  // from the target eatTarget() picks. Restores and the poisoning chance
+  // scale linearly with the amount, so eating in bites is slightly safer than
+  // eating the whole — accepted. The part line's wording is retunable.
+  function doConsume(sourceKind, index, amount){
     const room = world[state.currentRoom];
     const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
-    const it = getItemAt(src && src.items, index);
-    if(!it || it.sealed) return;
+    const clicked = getItemAt(src && src.items, index);
+    if(!clicked || clicked.sealed) return;
+    const it = eatTarget(src.items, clicked);
     const fx = unitFoodEffects(it);
     if(!fx.restores) return;
-    if(fx.restores.hunger) state.vitals.hunger = clamp(state.vitals.hunger + fx.restores.hunger);
-    if(fx.restores.thirst) state.vitals.thirst = clamp(state.vitals.thirst + fx.restores.thirst);
-    dropUnits(src.items, index, 1);
-    log(`You ${it.verb.toLowerCase()} the ${it.name.toLowerCase()}.`, "good", "consume:" + (it.itemId || it.name));
+    const left = portionOf(it);
+    const a = amount == null ? left : Math.min(amount, left);
+    if(fx.restores.hunger) state.vitals.hunger = clamp(state.vitals.hunger + fx.restores.hunger * a);
+    if(fx.restores.thirst) state.vitals.thirst = clamp(state.vitals.thirst + fx.restores.thirst * a);
+    eatFromRow(src.items, it, a);
+    const verb = it.verb.toLowerCase(), name = it.name.toLowerCase();
+    log(a === 1 ? `You ${verb} the ${name}.` : `You ${verb} some of the ${name}.`, "good", "consume:" + (it.itemId || it.name));
     // After the eating line, so the onset line reads as its consequence.
-    rollFoodPoisoning(fx.poisoning);
+    rollFoodPoisoning(fx.poisoning * a);
     render();
   }
   // Opening is a transformation, not a gate on eating: a sealed can is not
@@ -4731,7 +4776,14 @@
     // the keychain-blocked Take above and the Crafting panel's recipe list
     // (renderCraftingPanel()), which is a catalogue and would become
     // undiscoverable if filtered.
-    if(foodEffects(it).restores && !it.sealed) actions.push({ label: it.verb || "Use", onClick:()=>doConsume(side, index) });
+    if(foodEffects(it).restores && !it.sealed){
+      const verb = it.verb || "Use";
+      const left = portionOf(eatTarget(list, it));
+      actions.push({ label: verb, onClick:()=>doConsume(side, index) });
+      EAT_PARTS.forEach(part=>{
+        if(part.amount < left) actions.push({ label: verb + " " + part.label, onClick:()=>doConsume(side, index, part.amount) });
+      });
+    }
     if(it.sealed && (!it.opensWith || hasTool(it.opensWith)))
       actions.push({ label:"Open", onClick:()=>doOpen(side, index) });
     if(it.category==="Container" && it.slotType && !state[it.slotType])
