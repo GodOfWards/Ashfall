@@ -428,6 +428,43 @@
   // energy over one.
   const DECAY = { hunger:100/(3*MINUTES_PER_DAY), thirst:100/MINUTES_PER_DAY, energy:100/MINUTES_PER_DAY };
   const CAMPFIRE_KIT_COST = 3;
+  // The collapse clock. A run starts START_DAYS_AFTER_COLLAPSE days after the
+  // collapse; grid power and running water fail on their own day after it.
+  // Nothing is stored: minutesSinceCollapse() derives the clock from
+  // state.totalMinutes. Power and water are separate constants on purpose,
+  // since they will be set separately (#149). All three are retunable; the
+  // Day N clock still counts from the start of the run.
+  const START_DAYS_AFTER_COLLAPSE = 2;
+  const POWER_FAILS_DAY = 21;
+  const WATER_FAILS_DAY = 21;
+  // Spoilage rates, as multiples of the rate food ages at room temperature
+  // (see spoilageRate()). A fridge slows ageing while powered, and for
+  // FRIDGE_COAST_MIN after the power fails it still holds some cold; a
+  // freezer stops it while powered and for FREEZER_COAST_MIN after. Balance
+  // values, retunable.
+  const FRIDGE_RATE_POWERED = 0.1;
+  const FRIDGE_RATE_COASTING = 0.25;
+  const FRIDGE_COAST_MIN = 2 * MINUTES_PER_DAY;
+  const FREEZER_COAST_MIN = 5 * MINUTES_PER_DAY;
+  // Rotten food restores this fraction of what it would fresh, and carries a
+  // baseline food-poisoning chance combined with the food's own
+  // (combinePoisoning()). POISONING_TRAIT_MULTIPLIER is a placeholder until
+  // traits (#9) exist, and multiplies the rotten baseline only. Tainted
+  // water's chance is for a full bottle's worth, scaled by the amount drunk.
+  // Balance values, retunable.
+  const ROTTEN_RESTORES_FACTOR = 0.35;
+  const ROTTEN_POISONING_CHANCE = 0.35;
+  const POISONING_TRAIT_MULTIPLIER = 1;
+  const TAINTED_WATER_POISONING_CHANCE = 0.35;
+  // Minutes tainted water must sit in a heated vessel to come out clean.
+  // Retunable.
+  const BOIL_MINUTES = 5;
+  // A dish restores the sum of its ingredients' contributions times
+  // (1 + this). Retunable.
+  const DISH_RESTORES_BONUS = 0.25;
+  // The stove timer's add buttons, in minutes, in the order they are shown.
+  // Retunable.
+  const STOVE_TIMER_STEPS = [5, 10, 30];
   // The roll source's constants (see chance() in CORE UTILITIES). FNV-1a's
   // published 32-bit offset basis and prime — fixed by the algorithm, not
   // tunable. KEY_SEP joins a roll's key parts: the unit separator, a character
@@ -659,10 +696,14 @@
   //     on            powered-equipment on/off state
   //     hasBatteries  powered-equipment battery-installed state
   //     drainRate     durability loss per minute while `on`
-  //     illnessChance chance that eating this item causes illness, as a
-  //                   fraction in [0,1] — the file's one probability
-  //                   convention (see chance()). Pre-0.6 saves carry it as
-  //                   a percent; backfillIllnessScale() repairs them.
+  //     foodPoisoningChance chance that eating one unit of this item causes
+  //                   food poisoning, as a fraction in [0,1] — the file's
+  //                   one probability convention (see chance()). Definition
+  //                   data: read from the registry by itemId
+  //                   (foodPoisoningChanceOf()), never copied onto an
+  //                   instance (REGISTRY_ONLY_FIELDS). Saves before 0.8
+  //                   carry an instance copy named `illnessChance`, which
+  //                   nothing reads.
   //     masterKey     key unlocks every door in `building`
   //     building      building association for a masterKey
   //     doorId        specific door a (non-master) key unlocks
@@ -761,7 +802,7 @@
     campfire_kit: { name:"Campfire Kit", category:"Materials", unitWeight:2.4, tags:["disassemble"],
       disassembleLog:"You untie the bundle — back to {qty} loose firewood." },
     cooked_fish: { name:"Cooked fish", category:"Food", unitWeight:0.35, restores:{hunger:35}, verb:"Eat" },
-    raw_fish: { name:"Raw fish", category:"Food", unitWeight:0.3, restores:{hunger:10}, verb:"Eat", illnessChance:0.35 },
+    raw_fish: { name:"Raw fish", category:"Food", unitWeight:0.3, restores:{hunger:10}, verb:"Eat", foodPoisoningChance:0.35 },
     canned_tuna: { name:"Canned tuna", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat", sealed:true, opensWith:"can-opening" },
     cereal_box: { name:"Box of cereal", category:"Food", unitWeight:0.5, restores:{hunger:15}, verb:"Eat", sealed:true },
     crackers: { name:"Crackers", category:"Food", unitWeight:0.2, restores:{hunger:8}, verb:"Eat" },
@@ -860,6 +901,7 @@
     const def = ITEM_REGISTRY[ref.id];
     if(!def) throw new Error("Unknown item id: " + ref.id);
     const item = JSON.parse(JSON.stringify(def));
+    REGISTRY_ONLY_FIELDS.forEach(f=> delete item[f]);
     item.itemId = ref.id;
     item.qty = ref.qty;
     if(ref.overrides) Object.assign(item, JSON.parse(JSON.stringify(ref.overrides)));
@@ -867,6 +909,18 @@
   }
   function itemsFromRegistry(refs){
     return refs.map(itemFromRegistry);
+  }
+  // Registry fields that are definition data only: every reader looks them
+  // up in ITEM_REGISTRY by itemId (registryEntryOf()), so itemFromRegistry()
+  // leaves them off the instance. A retune then reaches every save, and no
+  // stale copy on an instance is there to be read by mistake.
+  const REGISTRY_ONLY_FIELDS = ["carryFactor", "foodPoisoningChance", "disassembleLog"];
+  // An item's (or a slot's) registry entry, by its itemId, or null for
+  // anything without one: the keychain, an item from a save the registry no
+  // longer knows. The one lookup every registry-read field goes through.
+  function registryEntryOf(thing){
+    const id = thing && thing.itemId;
+    return id && Object.prototype.hasOwnProperty.call(ITEM_REGISTRY, id) ? ITEM_REGISTRY[id] : null;
   }
 
   // CONTAINER_SLOTS / SLOT_LABELS: the equipment slots the player can
@@ -1407,7 +1461,7 @@
   function buildAcornApartments(){
     return {
     living: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Living Room", shelter:"full",
-      desc:"A worn couch faces a dead television. Sunlight through the blinds shows how much dust has settled since anyone last cleaned.",
+      desc:"A worn couch faces a dark television. Sunlight through the blinds shows how much dust has settled since anyone last cleaned.",
       sleepSpot:"couch", cannotHaveFire:true, floorCap:80,
       floor:[],
       containers:[
@@ -1426,7 +1480,7 @@
         { to:"hallway2", label:"Leave the apartment", distanceM:6, doorId:"2a" } ]
     },
     kitchen: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Kitchen", shelter:"full",
-      desc:"Grease and old coffee grounds. The fridge hums no more, and something inside it has clearly given up. The gas stove still works — no power needed to light it.",
+      desc:"Grease and old coffee grounds. The fridge still hums, though something inside it has already given up. The gas stove works too — no power needed to light it.",
       cannotHaveFire:true, floorCap:50, floor:[],
       containers:[
         { id:"stove", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
@@ -1450,7 +1504,7 @@
         { to:"hallway2", label:"Leave the apartment", distanceM:8, doorId:"2a" } ]
     },
     bathroom: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Bathroom", shelter:"full",
-      desc:"A cracked mirror over the sink. The water hasn't run in days, but the cabinet's still worth a look.",
+      desc:"A cracked mirror over the sink. The cabinet under it is still worth a look.",
       cannotHaveFire:true, floorCap:30, floor:[],
       containers:[
         { id:"medcab", name:"Medicine cabinet", capacityKg:5, spawnPools:["medical_otc","hygiene"], spawnRolled:true, items:itemsFromRegistry([
@@ -1628,7 +1682,7 @@
         { to:"hallway1", label:"Leave 1A", distanceM:6, doorId:"1a" } ]
     },
     onea_kitchen: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1A", room:"Kitchen", shelter:"full",
-      desc:"A family kitchen, cluttered with kids' cups and a calendar still turned to two months ago.",
+      desc:"A family kitchen, cluttered with kids' cups and a permission slip on the counter that nobody signed.",
       cannotHaveFire:true, floorCap:50, floor:[],
       containers:[
         { id:"stove1a", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
@@ -1746,7 +1800,7 @@
       exits:[ { to:"oak_hallway1", label:"Leave the apartment", distanceM:6 } ]
     },
     oak_1b: { locationId:"oak_f0", address:"Poplar St", building:"Oak Apartments", area:"1B", room:null, shelter:"full",
-      desc:"The blinds are drawn in here, and a calendar on the wall is still turned to two months back.",
+      desc:"The blinds are drawn in here, and a mug on the desk has grown a skin of cold coffee.",
       sleepSpot:"bed", cannotHaveFire:true, floorCap:50, floor:[],
       containers:[
         { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal","pet_supplies"], items:[] },
@@ -3433,7 +3487,7 @@
         { to:"poplar2nd", label:"Head north toward Poplar St" } ]
     },
     mid_2nd_d_mi: { locationId:"mid_2nd_d_mi", address:"2nd St", area:null, room:"between Dock & Mill", shelter:"none",
-      desc:"2nd St crossing the rail spur at a shallow angle. The crossing lights are dead, but the bell housing's still up there.",
+      desc:"2nd St crossing the rail spur at a shallow angle. The crossing lights blink for a train that isn't coming, but the bell housing's still up there.",
       floorCap:20, floor:[], containers:[],
       exits:[
         { to:"dock2nd", label:"Head south toward Dock St" },
@@ -3777,15 +3831,19 @@
       // after this point derives from it rather than calling here again. Not
       // a missed conversion.
       seed: seed === undefined ? (Math.floor(Math.random() * 4294967296) >>> 0) : (seed >>> 0),
-      // Disambiguates rolls that have no natural key — today only illness on
-      // eating, which is instant and so cannot be keyed on game time. The one
-      // ordering invariant of the roll core: NOTHING REACHABLE FROM render()
-      // MAY ADVANCE rollSeq. A roll placed in a render path would shift every
-      // later illness roll against a save, in a way that is close to
-      // undebuggable. Its only writer is doConsume(), a click handler.
+      // Disambiguates rolls that have no natural key — today only food
+      // poisoning, which is instant and so cannot be keyed on game time. The
+      // one ordering invariant of the roll core: NOTHING REACHABLE FROM
+      // render() MAY ADVANCE rollSeq. A roll placed in a render path would
+      // shift every later poisoning roll against a save, in a way that is
+      // close to undebuggable. Its only writer is rollFoodPoisoning(), called
+      // only from click handlers.
       rollSeq: 0,
       currentRoom:"living", gait:"walk",
-      totalMinutes:0, collapseCount:0, illnessMinutesLeft:0,
+      totalMinutes:0, collapseCount:0,
+      // Running illnesses, keyed by ILLNESSES id: the minutes each has left.
+      // A missing or 0 entry means not ill with it.
+      illnesses:{},
       // lastExertionMinute/lastWakeMinute start far in the past so recovery
       // and Sleep are both available immediately at game start.
       lastExertionMinute:-9999, lastWakeMinute:-9999,
@@ -3892,7 +3950,7 @@
   // reproduces its outcome — and what makes container loot a property of the
   // world rather than of the player's route. A caller picks a key that
   // changes exactly when the outcome should: loot on the container's
-  // identity, fishing on game time, illness on state.rollSeq.
+  // identity, fishing on game time, food poisoning on state.rollSeq.
   //
   // The core takes its seed explicitly: rollValueFor(), chanceFor() and
   // randIntFor() are the real functions, and rollValue(), chance() and
@@ -4080,17 +4138,22 @@
   // or the new one pushed. doOpen() is the only caller that reads it, to
   // point the detail view at the unit it just opened; every other caller
   // ignores it, so the return is additive.
+  // Whether two rows may merge into one: the one merge predicate, which
+  // addToList() asks and every item state a row can carry extends. Only a
+  // stackable category without per-unit durability merges at all, and then
+  // only with a row of the same item in the same state.
+  // `sealed` is compared through `!!` on both sides so undefined and false
+  // count as the same state: an item that was never packaged and one that
+  // has been opened both stack as "not sealed". Without this clause an
+  // opened can merges straight back into the sealed stack it was split out
+  // of, which either opens all of them or loses the unit.
+  function sameStackState(a, b){
+    return STACKABLE.has(a.category) && a.itemId === b.itemId && a.category === b.category
+      && !a.durability && !b.durability && !!a.sealed === !!b.sealed;
+  }
   function addToList(list, item){
-    if(STACKABLE.has(item.category) && !item.durability){
-      // `sealed` is compared through `!!` on both sides so undefined and
-      // false count as the same state: an item that was never packaged and
-      // one that has been opened both stack as "not sealed". Without this
-      // clause an opened can merges straight back into the sealed stack it
-      // was split out of, which either opens all of them or loses the unit.
-      const existing = list.find(i=> i.itemId===item.itemId && i.category===item.category
-                                  && !i.durability && !!i.sealed === !!item.sealed);
-      if(existing){ existing.qty += item.qty; return existing; }
-    }
+    const existing = list.find(i=> sameStackState(i, item));
+    if(existing){ existing.qty += item.qty; return existing; }
     // A new stack entry must get its own identity. `item` here is often a
     // shallow copy of a source item (see doTake/doStore/giveItem) made with
     // `{ ...it, qty:moveQty }` — that spread also copies `_uid`, which would
@@ -4115,6 +4178,36 @@
     list.push(copy);
     return copy;
   }
+  // The unit helpers. Every path that changes a row's qty goes through
+  // takeUnits() or dropUnits(), because a row can carry per-unit state: a
+  // perishable row keeps one age per unit (`ages`, oldest first), so taking
+  // units means taking the oldest ones and leaving the rest. unitsOf() is the
+  // same split without the removal, for a transfer that must check its
+  // destination before it touches the source.
+  //   unitsOf(row, n)          a new item object for n of the row's units: a
+  //                            deep copy, _uid stripped, the row untouched
+  //   takeUnits(row, n)        the same, and removes those units from the row
+  //   dropUnits(list, i, n)    takeUnits(), and splices the row out of the
+  //                            list once it reaches 0
+  function unitsOf(row, n){
+    const copy = JSON.parse(JSON.stringify(row));
+    delete copy._uid;
+    copy.qty = n;
+    if(Array.isArray(row.ages)) copy.ages = row.ages.slice(0, n);
+    return copy;
+  }
+  function takeUnits(row, n){
+    const taken = unitsOf(row, n);
+    row.qty -= n;
+    if(Array.isArray(row.ages)) row.ages = row.ages.slice(n);
+    return taken;
+  }
+  function dropUnits(list, index, n){
+    const row = list[index];
+    const taken = takeUnits(row, n);
+    if(row.qty <= 0) list.splice(index, 1);
+    return taken;
+  }
   function invPools(){
     return [state.inventory.items].concat(
       CONTAINER_SLOTS.map(slot => state[slot] ? state[slot].items : []));
@@ -4138,8 +4231,7 @@
   // anything without one — the keychain, the loose inventory, an unknown or
   // unrepaired slot. Takes a slot or an item; both carry itemId.
   function carryFactorOf(thing){
-    const id = thing && thing.itemId;
-    const def = id && Object.prototype.hasOwnProperty.call(ITEM_REGISTRY, id) ? ITEM_REGISTRY[id] : null;
+    const def = registryEntryOf(thing);
     return def && typeof def.carryFactor === "number" ? def.carryFactor : 1;
   }
   // What the player carries, in kg of load: the loose inventory in full,
@@ -4162,8 +4254,7 @@
       for(let i=list.length-1; i>=0 && remaining>0; i--){
         if(list[i].itemId !== itemId) continue;
         const take = Math.min(list[i].qty, remaining);
-        list[i].qty -= take; remaining -= take;
-        if(list[i].qty <= 0) list.splice(i,1);
+        dropUnits(list, i, take); remaining -= take;
       }
     });
   }
@@ -4181,8 +4272,7 @@
       for(let i=list.length-1; i>=0 && remaining>0; i--){
         if(!hasTag(list[i], tag)) continue;
         const take = Math.min(list[i].qty, remaining);
-        list[i].qty -= take; remaining -= take;
-        if(list[i].qty <= 0) list.splice(i,1);
+        dropUnits(list, i, take); remaining -= take;
       }
     });
   }
@@ -4323,14 +4413,13 @@
     if(!it) return; // stale reference — nothing to take, fail silently and let render() resync
     const moveQty = normalizeQty(qty, it.qty);
     if(moveQty == null) return;
-    const result = addToDestination({ ...it, qty:moveQty });
+    const result = addToDestination(unitsOf(it, moveQty));
     if(!result.ok){
       if(result.reason === "capacity") log("That won't fit — not enough room there.", "warn");
       else if(result.reason === "load") log("You can't carry any more.", "warn");
       return; // no-destination and keychain-restricted stay silent, matching the disabled/hidden button state
     }
-    it.qty -= moveQty;
-    if(it.qty <= 0) src.items.splice(index,1);
+    dropUnits(src.items, index, moveQty);
     // No log line: the item visibly moves between the Here and Inventory
     // panels, so the line only repeated what the screen already showed.
     // The capacity warning above still speaks.
@@ -4348,12 +4437,16 @@
       log("That won't fit there.", "warn");
       return;
     }
-    addToList(dst.items, { ...it, qty:moveQty });
-    it.qty -= moveQty;
-    if(it.qty <= 0) src.items.splice(index,1);
+    addToList(dst.items, dropUnits(src.items, index, moveQty));
     // Silent, as doTake() is: the item visibly moves between the panels.
     // The capacity warning above still speaks.
     render();
+  }
+  // The chance that eating one unit of `it` causes food poisoning, read from
+  // its registry entry, never from the instance.
+  function foodPoisoningChanceOf(it){
+    const def = registryEntryOf(it);
+    return def && def.foodPoisoningChance || 0;
   }
   function doConsume(sourceKind, index){
     const room = world[state.currentRoom];
@@ -4362,25 +4455,10 @@
     if(!it || !it.restores || it.sealed) return;
     if(it.restores.hunger) state.vitals.hunger = clamp(state.vitals.hunger + it.restores.hunger);
     if(it.restores.thirst) state.vitals.thirst = clamp(state.vitals.thirst + it.restores.thirst);
-    it.qty -= 1;
-    if(it.qty <= 0) src.items.splice(index,1);
+    dropUnits(src.items, index, 1);
     log(`You ${it.verb.toLowerCase()} the ${it.name.toLowerCase()}.`, "good", "consume:" + (it.itemId || it.name));
-    // Eating is instant, so three raw fish eaten in the same game minute
-    // share every time-based key; rollSeq tells them apart. The roll and the
-    // advance happen whenever the item can cause illness, even if the player
-    // is already ill and the result is discarded — the order the old
-    // short-circuit consumed draws in. Hoisting the already-ill test into
-    // the outer guard would skip the advance and put rollSeq out of step with
-    // a save taken before the meal. rollSeq cannot be farmed for rerolls: the
-    // only way to advance it is to eat the food and take its roll.
-    if(it.illnessChance){
-      const ill = chance(it.illnessChance, "illness", state.rollSeq);
-      state.rollSeq += 1;
-      if(ill && state.illnessMinutesLeft <= 0){
-        state.illnessMinutesLeft = ILLNESS_DURATION_MIN;
-        log("It doesn't sit right. You can feel it already.", "warn");
-      }
-    }
+    // After the eating line, so the onset line reads as its consequence.
+    rollFoodPoisoning(foodPoisoningChanceOf(it));
     render();
   }
   // Opening is a transformation, not a gate on eating: a sealed can is not
@@ -4395,12 +4473,11 @@
     const it = getItemAt(src && src.items, index);
     if(!it || !it.sealed) return;
     if(it.opensWith && !hasTool(it.opensWith)) return;
-    it.qty -= 1;
-    if(it.qty <= 0) src.items.splice(index, 1);
-    // Through addToList() rather than a direct push: the spread copies
-    // `_uid`, and addToList() is what deep-clones and strips it so the
-    // opened unit gets a fresh identity.
-    const opened = addToList(src.items, { ...it, qty:1, sealed:false });
+    const unit = dropUnits(src.items, index, 1);
+    unit.sealed = false;
+    // Through addToList() rather than a direct push, so the opened unit
+    // merges into an opened stack of the same item where there is one.
+    const opened = addToList(src.items, unit);
     // Follow the opened unit. Without this the detail view closes whenever
     // the last sealed unit is opened, since detailItem would still point at
     // a uid that was just spliced out.
@@ -4549,10 +4626,9 @@
     const it = getItemAt(list, index);
     const recipe = it && disassemblyRecipe(it);
     if(!recipe) return;
-    it.qty -= 1;
-    if(it.qty <= 0) list.splice(index, 1);
+    dropUnits(list, index, 1);
     recipe.inputs.forEach(inp=> giveItem(itemFromRegistry({ id:inp.id, qty:inp.qty })));
-    const def = ITEM_REGISTRY[it.itemId];
+    const def = registryEntryOf(it);
     log(def.disassembleLog
       ? def.disassembleLog.replace("{qty}", recipe.inputs[0].qty)
       : `You take the ${it.name.toLowerCase()} apart.`, "good");
@@ -4708,6 +4784,14 @@
   // What you know without a watch: the day, and roughly where in it you are.
   // Precision is what the watch buys, not all sense of time.
   function getVagueClockText(){ return "Day " + dayNumber() + ", " + timeOfDayBand(); }
+  // How long ago the collapse was, in game minutes: the run's start offset
+  // plus the time played. Derived, never stored. Everything that asks whether
+  // the power or the water is still on reads this, through the two
+  // predicates below; `m` defaults to now so a caller integrating over time
+  // can ask about any other minute.
+  function minutesSinceCollapse(){ return START_DAYS_AFTER_COLLAPSE * MINUTES_PER_DAY + state.totalMinutes; }
+  function powerOn(m = minutesSinceCollapse()){ return m < POWER_FAILS_DAY * MINUTES_PER_DAY; }
+  function waterRunning(m = minutesSinceCollapse()){ return m < WATER_FAILS_DAY * MINUTES_PER_DAY; }
   function getWindowsInRoom(roomId){
     return Object.keys(windows).filter(id=>windows[id].rooms.includes(roomId)).map(id=>Object.assign({id}, windows[id]));
   }
@@ -4954,8 +5038,37 @@
   // minutes per point of Health lost. Balance values, all retunable.
   const STARVATION_MINUTES_PER_HEALTH = 30;
   const DEHYDRATION_MINUTES_PER_HEALTH = 15;
-  const ILLNESS_MINUTES_PER_HEALTH = 20;
-  const ILLNESS_DURATION_MIN = 180;
+  // Every illness, keyed by the id state.illnesses counts it under: how long
+  // it runs, the game minutes per point of Health it drains while it does,
+  // and the line that says it has started. The one definition table, so a new
+  // illness is a new entry here plus whatever starts it. The durations and
+  // rates are balance values, retunable.
+  const ILLNESSES = {
+    food_poisoning: { durationMin:180, minutesPerHealth:20,
+      onsetLog:"It doesn't sit right. You can feel it already." }
+  };
+  // Starts an illness at its full duration and says so, unless it is already
+  // running: a second cause while ill neither extends it nor repeats the line.
+  function startIllness(id){
+    const def = ILLNESSES[id];
+    if(!def || state.illnesses[id] > 0) return;
+    state.illnesses[id] = def.durationMin;
+    log(def.onsetLog, "warn");
+  }
+  // The one roll for food poisoning, and every source of it goes through here.
+  // Eating is instant, so three raw fish eaten in the same game minute share
+  // every time-based key; rollSeq tells them apart. The roll and the advance
+  // happen whenever `p` is above zero, even if the player is already ill and
+  // the result is discarded — the order the old short-circuit consumed draws
+  // in. Hoisting the already-ill test in here would skip the advance and put
+  // rollSeq out of step with a save taken before the meal. rollSeq cannot be
+  // farmed for rerolls: the only way to advance it is to take a roll.
+  function rollFoodPoisoning(p){
+    if(!(p > 0)) return;
+    const hit = chance(p, "food_poisoning", state.rollSeq);
+    state.rollSeq += 1;
+    if(hit) startIllness("food_poisoning");
+  }
   // applyHungerThirst/applyWorldTicking/applyEnergyBaseline are the pieces
   // applyDecay used to do in one shot. They're split out so Sleep (which
   // suspends the awake Energy/Stamina/Fatigue system) can run Hunger/Thirst
@@ -4967,11 +5080,16 @@
     state.vitals.thirst = clamp(state.vitals.thirst - DECAY.thirst*min);
     if(state.vitals.hunger <= 0) state.vitals.health = clamp(state.vitals.health - min/STARVATION_MINUTES_PER_HEALTH);
     if(state.vitals.thirst <= 0) state.vitals.health = clamp(state.vitals.health - min/DEHYDRATION_MINUTES_PER_HEALTH);
-    if(state.illnessMinutesLeft > 0){
-      const tick = Math.min(min, state.illnessMinutesLeft);
-      state.vitals.health = clamp(state.vitals.health - tick/ILLNESS_MINUTES_PER_HEALTH);
-      state.illnessMinutesLeft -= tick;
-    }
+    // Every running illness drains Health at its own rate and counts down. An
+    // id ILLNESSES does not know is left alone.
+    Object.keys(state.illnesses).forEach(id=>{
+      const def = ILLNESSES[id];
+      const left = state.illnesses[id];
+      if(!def || !(left > 0)) return;
+      const tick = Math.min(min, left);
+      state.vitals.health = clamp(state.vitals.health - tick/def.minutesPerHealth);
+      state.illnesses[id] = left - tick;
+    });
   }
   // A device drains wherever it is: carried, stowed in a bag, or left switched
   // on anywhere in the world. Where it is decides only who hears it die: a
@@ -5636,7 +5754,7 @@
   // auditing recipe/registry consistency (see the dev seam at the foot of
   // this file).
   //
-  // It also flags any ITEM_REGISTRY entry whose `illnessChance` is not a
+  // It also flags any ITEM_REGISTRY entry whose `foodPoisoningChance` is not a
   // fraction in [0,1] — a registry fact, so the registry's validator checks
   // it. chance() would clamp such a value at runtime, loudly; this catches it
   // before anyone eats one.
@@ -5648,9 +5766,9 @@
     const missing = [];
     Object.keys(ITEM_REGISTRY).forEach(id=>{
       const def = ITEM_REGISTRY[id];
-      const p = def.illnessChance;
+      const p = def.foodPoisoningChance;
       if(p !== undefined && !(Number.isFinite(p) && p >= 0 && p <= 1))
-        missing.push(`ITEM_REGISTRY.${id}.illnessChance: ${p} is not a number in [0,1]`);
+        missing.push(`ITEM_REGISTRY.${id}.foodPoisoningChance: ${p} is not a number in [0,1]`);
       const f = def.carryFactor;
       if(def.slotType && !(Number.isFinite(f) && f > 0 && f <= 1))
         missing.push(`ITEM_REGISTRY.${id}.carryFactor: ${f} is not a number in (0,1]`);
@@ -5664,7 +5782,7 @@
       if(!ITEM_REGISTRY[r.output.id]) missing.push(`HEAT_RECIPES[${r.id}].output: ${r.output.id}`);
     });
     if(missing.length) console.warn("validateItemRegistry: problems", missing);
-    else console.log("validateItemRegistry: all recipe ids resolve in ITEM_REGISTRY, every illnessChance is in [0,1], every bag's carryFactor is in (0,1]");
+    else console.log("validateItemRegistry: all recipe ids resolve in ITEM_REGISTRY, every foodPoisoningChance is in [0,1], every bag's carryFactor is in (0,1]");
     return missing;
   }
   // validateLocations(): dev-only console helper (not wired to any button
@@ -6937,7 +7055,20 @@
     note.textContent = text;
     return note;
   }
-  function renderItemList(el, list, buttons, side){
+  // The parenthesised state labels shown after an item's name, in a fixed
+  // order: Open, then (as their phases add them) cook state, freshness, and
+  // water. `ctx` carries what a label needs from outside the item. The row
+  // and the item pop-up show them; log lines keep the plain name.
+  // `sealed` is three-valued (see ITEM DATA SCHEMA), and only the opened
+  // state is marked: undefined means the item was never a packaged thing,
+  // and a sealed can reads as the plain name. Hence `=== false` and not a
+  // falsiness test.
+  function itemStateLabels(it, ctx){
+    const labels = [];
+    if(it.sealed === false) labels.push("Open");
+    return labels;
+  }
+  function renderItemList(el, list, buttons, side, ctx){
     el.innerHTML = "";
     if(list.length === 0){ el.innerHTML = '<li class="empty">Nothing here.</li>'; return; }
     list.forEach((it, i)=>{
@@ -6955,15 +7086,13 @@
       if(it._uid) nameEl.dataset.uid = it._uid;
       nameEl.addEventListener("click", ()=>{ detailItem = { uid: ensureUid(it), side }; render(); });
       meta.appendChild(nameEl);
-      // `sealed` is three-valued (see ITEM DATA SCHEMA), and only the opened
-      // state is marked: undefined means the item was never a packaged thing,
-      // and a sealed can reads as the plain name. Hence `=== false` and not a
-      // falsiness test. The suffix sits outside nameEl so the control's text
-      // stays exactly the item's name.
-      if(it.sealed === false){
+      // The state labels sit outside nameEl so the control's text stays
+      // exactly the item's name, which focus-by-label depends on.
+      const labels = itemStateLabels(it, ctx);
+      if(labels.length){
         const stateEl = document.createElement("span");
         stateEl.className = "state";
-        stateEl.textContent = " (Open)";
+        stateEl.textContent = labels.map(l=> ` (${l})`).join("");
         meta.appendChild(stateEl);
       }
       meta.appendChild(document.createTextNode(` ×${it.qty} — ${total} kg `));
@@ -7029,6 +7158,8 @@
       const nameB = document.createElement("b");
       nameB.textContent = it.name;
       nameLine.appendChild(nameB);
+      const labels = itemStateLabels(it, {});
+      if(labels.length) nameLine.appendChild(document.createTextNode(labels.map(l=> ` (${l})`).join("")));
       box.appendChild(nameLine);
       const statsLine = document.createElement("div");
       statsLine.appendChild(document.createTextNode(`${it.category} · ${itemWeight(it).toFixed(2)} kg `));
