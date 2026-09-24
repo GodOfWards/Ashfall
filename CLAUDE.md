@@ -25,6 +25,8 @@ list. Nothing else up front.
 - Individual issues in full, once one is relevant.
 - Recent `CHANGELOG.md` entries — the last few, not the whole file — when what
   shipped recently bears on the design.
+- `docs/canon/` — when the discussion is about lore, or Tom asks. See "The
+  canon is private" below.
 
 **Output:** issues filed as they surface, and — only if the session reaches a
 conclusion — a handoff at `handoffs/<feature-name>.md`, landed on `main` at the
@@ -38,7 +40,7 @@ Implements one handoff.
 
 **Read, before starting:** `ashfall.html`, and the one file at the top level of
 `handoffs/` that specs this work. **Nothing else** — not the changelog, not the
-backlog, not the guides. The top level holds only live handoffs;
+backlog, not the guides, not the canon. The top level holds only live handoffs;
 `handoffs/archive/` is where spent and superseded ones are shelved, and nothing
 is ever implemented from it. The rules below are what make that read-list
 sufficient; they're stated here so implementation never has to open a guide to
@@ -55,6 +57,14 @@ Full detail on both: Project Guide, Part 3.
 **Section layout lives in the source.** The `ARCHITECTURE` comment at the top of
 the script is the source of truth. No document restates that list; check the
 comment.
+
+**The canon is private.** `docs/canon/` holds the world's lore as the designers
+know it: what the collapse was, its timeline, the real places behind the town.
+The game never states it; its text only ever implies a piece of it (see Writing
+game text). A planning session reads it when the discussion is about lore, or
+when Tom asks — never up front. A coding session never reads it: a handoff that
+depends on a canon fact quotes that fact itself. `.rgignore` keeps the folder
+out of repository searches, so it is read by path, on purpose, or not at all.
 
 **Content vs. mechanics stay separated.** A change touches WORLD DATA (content)
 or ACTIONS/SIMULATION (mechanics), and normally not both. Rendering is its own

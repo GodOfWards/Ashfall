@@ -263,6 +263,8 @@ What the code already has that this feature builds on or must account
 for — verified by reading the current WORLD DATA / PLAYER STATE in
 `ashfall.html`, not assumed from memory. This is what lets "Design
 decisions" below reason about real constraints instead of guessed ones.
+A canon fact the work depends on (`docs/canon/`) is quoted here too:
+the coding session never reads the canon, so the handoff carries it.
 
 ## Rules / mechanics
 The actual spec, for anything genuinely settled during planning. Exact

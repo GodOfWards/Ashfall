@@ -294,6 +294,12 @@ bump.
 - `CLAUDE.md` — the rules that bind even when these guides go unread.
 - `docs/` — this guide and its two siblings. Process documentation only;
   nothing a session needs at runtime.
+- `docs/canon/` — the world's private lore: what the collapse was, its
+  timeline, the real places behind the town. The game never states it.
+  Read by a planning session when the discussion is about lore, or when
+  Tom asks; never by a coding session, whose handoff quotes any canon fact
+  the work depends on. Listed in `.rgignore`, so repository searches skip
+  it.
 - `handoffs/<feature-name>.md` — one file per handoff, kept after it
   ships. Its commit date says when it was written; nothing needs deleting.
 - `handoffs/archive/` — the same files once they are no longer live, spent
@@ -381,6 +387,8 @@ discussion starts spends context on material that mostly goes unused.
 - Individual issues in full, once one bears on the discussion.
 - The most recent `CHANGELOG.md` entries — the last few versions, not the
   whole file — when what shipped recently bears on the design.
+- `docs/canon/` when the discussion is about lore, or when Tom asks — not
+  up front, and not as one of the "other docs" below.
 - Other docs (`Ashfall_Handoff_Guide.md` at the wrap, as before) when a
   question reaches them.
 
@@ -453,7 +461,8 @@ drifted out of step with branch-per-session working in the first place.
   under `handoffs/archive/` is out: those have shipped or been superseded,
   and implementing one is the failure the folder exists to prevent.
 
-Nothing else. Not the changelog, not the issue backlog — implementation
+Nothing else. Not the canon — a handoff quotes any canon fact it depends
+on. Not the changelog, not the issue backlog — implementation
 never needs either, and the changelog is long enough that reading it up
 front costs real context for no return. Both come into play at wrap-time,
 below.
