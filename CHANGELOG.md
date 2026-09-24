@@ -18,6 +18,122 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.8.1 — Vessel water guards and vessel button labels
+
+Implements: handoffs/vessel-water-and-labels.md
+
+Implements #224 and #223 in full, per `handoffs/vessel-water-and-labels.md`.
+**Fill at the sink** and **Pour into the <vessel>** are no longer offered when
+they would change nothing or only restart a boil, and two nearby vessels with
+the same name no longer give two identical **Add to** / **Pour into** buttons.
+Nothing is added to `state`, to any saved item or to any saved room, and
+`SAVE_KEY` stays `ashfall_save_v0.8`. **PATCH**, so existing browser saves keep
+loading.
+
+**Fixed**
+
+- **Water went into vessels and bottles that couldn't take more (#224).**
+  `canFillAtSink()` excluded only an item full of **clean** water, so a vessel
+  of tainted water was offered Fill at the sink (it only reset the boil) and a
+  bottle full of tainted water was offered a no-op. Pour into was offered on
+  any vessel that could hold water at all, so it emptied a bottle into a
+  vessel already full of clean water, or restarted a tainted vessel's boil.
+  The new `canTakeWater(it)` is the one predicate both ask: `holdsWaterAtAll(it)`,
+  and either a vessel with no `water` (vessel water is all-or-nothing until
+  #47) or a bottle with no `water` or `water.fill < 1`.
+  - `canFillAtSink()` is now sink + `waterRunning()` + `canTakeWater(it)`.
+    `doFillAtSink()` goes on re-checking it.
+  - The new `canPourInto(bottle, vessel)` is true when the bottle has water it
+    can hold and `vessel` is a vessel that `canTakeWater()`, or one holding
+    **clean** water (and no dish) when the bottle's is **tainted** — kept by
+    Tom's choice, though it only taints the vessel. `getItemActions()` offers
+    Pour into on it, and `doPourIntoVessel()` re-checks it in place of its
+    old `bottle.water` / `holdsWaterAtAll(vessel)` / `vesselDefOf(vessel)`
+    guard. The pour's effect, log line and `addWater()` are unchanged.
+  - `addWater()`'s `delete unit.boilMinutes` is unchanged. It now only runs on
+    a vessel with no water or with clean water, neither of which is boiling.
+- **Same-named vessels gave identical buttons (#223).** Add to / Pour into
+  labelled each vessel by `v.name.toLowerCase()` alone, so two dented
+  saucepans nearby gave two buttons reading the same, and
+  `rebuildKeepingFocus()`, which restores focus by label, could land on the
+  other saucepan's. `nearbyVessels()` now returns `{ vessel, place }` entries:
+  `carried` for a vessel in `invPools()`, `Floor` for `room.floor`, else the
+  container's `name` (a listed container or the heat container), its Here tab
+  label. The new `vesselButtonNames(offered)` takes one action's offered
+  entries and, per action:
+  - gives vessels sharing a name **and** a place one button, on the fullest by
+    `totalWeight(v.contents || [])`, a tie to the first in `nearbyVessels()`
+    order;
+  - appends ` (<place>)` to every button whose vessel name is still on two or
+    more buttons, and leaves every other label as it was.
+
+  `getItemActions()` calls it once for Add to and once for Pour into, then
+  walks `nearbyVessels()` in order, so the buttons keep their old order (Add
+  then Pour, per vessel). No two buttons of one action now share a label.
+
+**UI**
+
+- The item pop-up no longer offers Fill at the sink on a vessel holding any
+  water or on a full bottle of either kind, nor Pour into on a vessel holding
+  water, except a clean-water vessel when the bottle's water is tainted.
+- Where two nearby vessels share a name, their Add to / Pour into buttons read
+  e.g. "Add to the dented saucepan (Stove)", "(Floor)" or "(carried)".
+  Same-named vessels in one place share one button. A vessel whose name is
+  unique nearby keeps today's label.
+
+**Sections touched**
+
+- ACTIONS → INVENTORY / ITEM SYSTEM only: `canFillAtSink()`, the new
+  `canTakeWater()`, `nearbyVessels()`, the new `vesselButtonNames()` and
+  `canPourInto()`, `doPourIntoVessel()` in its main block; `getItemActions()`
+  in its item-detail action list sub-block. No WORLD DATA, no RENDERING
+  function, no PERSISTENCE change.
+
+**Explicitly out of scope**
+
+- #47 (fluid volumes). Vessel water stays all-or-nothing, a pour still empties
+  the bottle whatever its fill, and showing what each vessel holds is #47's.
+- #222 (tunable values of the cooking release).
+- Log lines. The Pour and Add lines don't gain the place.
+- The vessel's own pop-up (`vesselActions()`) and the Crafting panel's Dishes,
+  which have no duplicate-label problem.
+- Floor bags' contents. `nearbyLists()` still doesn't reach them.
+
+**Open questions / decisions resolved**
+
+- **How the place travels with a vessel:** `nearbyVessels()` returns
+  `{ vessel, place }` pairs, as the handoff recommended. It maps each list it
+  walks to a place by identity (`invPools()` membership, `room.floor`, then the
+  room's containers and car containers by `items`), so `nearbyLists()` is
+  unchanged. Its one caller, `getItemActions()`, was updated.
+- **Where grouping lives:** a helper, `vesselButtonNames()`, shared by both
+  actions, returning a `Map` from each vessel given a button to the name its
+  label shows. Names are compared lowercased, since that is what the label
+  shows.
+- **Name of the #224 predicate:** `canTakeWater()`. The pour condition is its
+  own helper, `canPourInto()`, so the offer and `doPourIntoVessel()` read one
+  definition.
+
+**Notes / assumptions**
+
+- **Retunable wording:** the place `carried`, lowercase against the capitalized
+  tab names (`Floor`, `Stove`), is Tom's pick. Functional UI text, held to
+  clarity.
+- Checked in headless Chromium against the kitchen: every row of the handoff's
+  Fill / Pour table, and its label examples (one saucepan; Stove + Floor;
+  carried + Floor + Stove; two on the Floor → one button acting on the fuller
+  one). No page errors.
+
+**Documentation**
+
+- Comments on `canFillAtSink()`, `nearbyVessels()` and `getItemActions()`'s
+  vessel loop updated for the new rules. Nothing was deferred; no new issues
+  filed.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.8.0"` → `"0.8.1"`
+
+---
+
 ## v0.8.0 — The cooking release
 
 Implements: handoffs/cooking-release.md
