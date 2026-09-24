@@ -18,9 +18,11 @@ adopts it.
 
 ## Settled
 
-- **The town is modelled on Henderson, Kentucky**, on the Ohio River across
-  from Evansville, Indiana. How literally the in-game map follows the real
-  town is not yet decided.
+- **The town is Henderson, Kentucky**, on the Ohio River across from
+  Evansville, Indiana, and the world is as real and accurate as it can be
+  made: real names, facts checked against a source (`CLAUDE.md`, "The world
+  is real"). World names written before that rule are being checked
+  (#237).
 - **A run starts a few days after the collapse, at most** (#218). The exact
   figure is a constant in `ashfall.html` and a future world-generation
   option (#149); it is not restated here.
@@ -32,7 +34,6 @@ adopts it.
 - **Why the player is still in town** a few days after (#137).
 - **Why grid power fails when it does** (#220). Proposed, not decided: an
   accumulation of unrepaired faults, area by area, rather than one event.
-- **Real names or stand-ins** for utilities and places.
 
 ## Reference — Henderson's real infrastructure
 

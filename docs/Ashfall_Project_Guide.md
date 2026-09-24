@@ -49,6 +49,21 @@ invented for this doc:
   yours, messier" / "The bed's made, unlike yours") — this reinforces
   that the player has a specific, situated life, not just a spawn point.
 
+### A real place
+
+The town is Henderson, Kentucky, and the world is as real and accurate as
+it can be made. Streets, buildings, businesses, utilities and
+infrastructure carry their real names, and what the game says about them
+— where they are, what they do, how they connect — matches the real town.
+That is checked against a source when it is written, never recalled or
+invented. A fact that can't be confirmed is marked unconfirmed rather
+than filled in with a plausible one. Where the game needs something
+Henderson doesn't have, adding it is a design decision (Part 2).
+
+This sits under the tone rules, not above them. A real name doesn't
+license exposition: a real power plant is still described through what
+its last crew left behind.
+
 ### Writing checklist for new descriptions
 
 When writing a new room, item, or event description:
