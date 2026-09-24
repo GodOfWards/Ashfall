@@ -18,6 +18,256 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.8.2 — Device pop-up and panel polish
+
+Implements: handoffs/device-popup-and-panel-polish.md
+
+Implements #228, #229, #230, #231 and #37 in full, per
+`handoffs/device-popup-and-panel-polish.md`. A polish pass from the v0.8.1
+playtest plus two backlog fixes: device controls move out of the full-screen
+Device Options panel, the item panels' tabs stop moving, a pot of stew lists as
+the stew, repeated save-system lines collapse, and Wide-map street names are
+placed only where they land inside the view. Also #234, decided by Tom during
+this PR's review and outside the handoff: the stove turns on and off without a
+fire-starter. That one is a FIRE / COOKING rule change; everything else is
+rendering. Nothing is added to `state`, to any saved item or to any saved room,
+and `SAVE_KEY` stays `ashfall_save_v0.8`. **PATCH**, so existing browser saves
+keep loading.
+
+**UI**
+
+- **Device controls (#228).** The radio's controls (Turn on/off, Remove
+  batteries, Replace batteries) now sit in its item pop-up, as the
+  flashlight's always have, on both the Here and Inventory sides. The stove's
+  Device Options opens a new **device pop-up**, `#devicePop` with its own
+  transparent `#devicePopBackdrop`, styled as the item pop-up through a shared
+  `.pop` / `.pop-backdrop` class. It holds the stove's name in bold, its
+  `stoveOnText()` and `stoveTimerText()` lines, then Turn on the stove (0:05) /
+  Turn off the stove (see **Stove (reworked)** below), then the `+5 / +10 /
+  +30` row. It hangs from the Here strip at the strip's
+  width, stays open after a control and redraws in place on every `render()`,
+  and closes on an outside tap, on Esc, and when its target stops resolving:
+  leaving the room, switching the Here tab, a load or a restart. Focus returns
+  to Device Options. A control's result is its line in `#log` and nothing
+  else. The `.timer-steps` buttons now share their row evenly
+  (`flex:1 1 0`, no side padding, centred text), because at phone width the
+  pop-up is ~146px wide and `+30` spilled past its edge at natural width.
+- **Tab strips that don't move (#229).** Each item panel's header holds only
+  its title and weight. Below each tab row is a new `.tab-strip`: `#worldStrip`
+  holds `#worldDeviceState` ("Off · Timer: 10", unchanged, stove only) and
+  Device Options, shown only on a `device` container's tab; `#invStrip` holds
+  Unequip, shown only while it was shown before (any slot's tab, the keychain's
+  included). A hidden strip is `display:none` and takes no space. Game over
+  hides both.
+- **A dish shows as the dish (#230).** A vessel holding a dish lists under the
+  dish's name, labels and category, with the vessel-and-dish weight:
+  `Meat and vegetable stew (Cooked) (Stale) ×1 — 4.20 kg (Food)`. Its pop-up's
+  name line is the dish, its stats line `Food · 4.20 kg (4.20 kg each)`, and a
+  new line under it reads `In a cooking pot`. Actions, log lines,
+  `vesselButtonNames()` labels and the Crafting panel are unchanged; an empty
+  vessel, or one holding water or ingredients, still shows as the vessel with
+  its "Holds: …" line. Poured out or eaten up, the row goes back to the
+  vessel's name on the next render, and the pop-up follows by `_uid`.
+- **Save-system lines collapse (#231).** The four save-system `log()` calls
+  pass their own key, `"save"`, `"load"`, `"export"` and `"import"`, with no
+  `LOG_SUMMARIES` entry, so a repeat reads `Progress saved to this browser. ×2`
+  and a save followed by an export stays two lines.
+
+**Fixed**
+
+- **Wide-map street names drawn outside the view (#37).** A name sits
+  `MAP_LABEL_OFFSET` to `MAP_LABEL_OFFSET + MAP_LABEL_CAP` off its street,
+  above a horizontal street and right of a vertical one, but
+  `mapPositionStreetLabels()` counted a street as on screen with an inclusive
+  test on its line alone. A street within 17 units of the top edge
+  (horizontal) or the right edge (vertical) had its names placed wholly
+  outside the box. The test now asks for the new `MAP_LABEL_DEPTH`
+  (`MAP_LABEL_OFFSET + MAP_LABEL_CAP`, 17) on the name's side only:
+  `street.a.y >= box.y + MAP_LABEL_DEPTH` for a horizontal street,
+  `street.a.x <= box.x + box.w - MAP_LABEL_DEPTH` for a vertical one. The
+  other bound is unchanged. `mapLabelMetrics()`'s `clearance` reads the same
+  constant in place of the sum it spelled out. Close view is untouched.
+
+**Removed**
+
+- The full-screen Device Options panel: the `#devicePanel` section, the
+  `#deviceStatus` / `#deviceControls` rules, `openDevicePanel()` and its
+  drawer-opening path, `renderDevicePanel()` (replaced by `renderDevicePop()`),
+  `deviceResult`, `runDeviceControl()`, `renderDeviceResult()`, and the
+  `{ kind:"item" }` shape of `deviceTarget`, whose only shape is now
+  `{ kind:"container", id }`. `.log-result` and `renderLogResult()` stay for
+  Crafting.
+- `getItemActions()`'s `device` branch: it pushes `batteryActions(it)` for
+  every item.
+- `itemStateText()`, folded into the new `itemDisplay()` (below).
+
+**Changed / Reworked**
+
+*Stove (reworked) (#234)*
+
+- The stove needs no fire-starter. `doLightStove()` no longer calls
+  `consumeMatchUse()`, so lighting it neither requires a fire-starter nor
+  spends a use. The device pop-up always offers **Turn on the stove (0:05)**
+  while it is off (it was **Light the stove (0:05)**, offered only while
+  `hasMatchUses()`), and **Turn off the stove** while it is on. The "Nothing
+  you're carrying will light it." note is gone from the stove.
+- Unchanged: `LIGHT_STOVE_MIN` (5 minutes, printed on the button), the log line
+  "You light the stove.", `doExtinguish()`, the timer, and every campfire rule.
+  Building or relighting a campfire still needs and spends a fire-starter use.
+
+*Rendering*
+
+- `itemDisplay(it, ctx)` returns `{ name, state, category, vessel }` and is the
+  one statement of whether an item shows as itself or as its vessel's dish.
+  `renderItemList()`, `renderItemPop()` and the pop-up's "Holds: …" line all
+  read it.
+- `positionItemPop()`'s placement rule is now `placePop(pop, rect)`, taking the
+  anchor's client rect. `positionItemPop()` passes its row;
+  `positionDevicePop()` passes `#worldStrip`. The resize and scroll listeners
+  re-place both.
+- `resolveDeviceTarget()` also returns null unless `worldTab` is still the
+  target container's id.
+
+**New content**
+
+- `portable_radio` drops `tags:["device"]` and now carries no tags. This is the
+  definition data for the item-controls rule above: the tag's only reader on
+  items is gone. `backfillRegistryTags()` strips it from radios in existing
+  saves on load.
+
+**Documentation**
+
+- ITEM DATA SCHEMA: `device` is out of the item tag list, which now says an
+  item's controls sit in its item pop-up and `device` is a container's tag
+  only. CONTAINER SCHEMA: the `device` line names the device pop-up and the
+  Here strip, and `timerMinutes` is set from the device pop-up.
+- Comments that named the Device Options panel were updated: `.full-panel`,
+  `.log-result`, MENU LAYERS, `layerStack`, `deviceTarget`, `batteryActions()`,
+  `durabilityText()`, `logWrittenBy()`, `openCraftingForVessel()`, the stove
+  timer block, `stoveOnText()`, and the Here actions' stove note.
+- Comments on `doLightStove()`, `renderDevicePop()` and `hereNote()` now say
+  the stove needs no fire-starter.
+- Issues: #222's "Timer display" row now names the device pop-up and the Here
+  strip. #234 was filed to record Tom's stove decision and ships here. Nothing
+  was deferred.
+
+**Explicitly out of scope**
+
+- The Device Options label, and the timer's steps and wording. The handoff
+  also kept the stove's control labels. #234, decided after the handoff, changed
+  Light the stove to Turn on the stove.
+- Log size and the 50-entry cap (#29); food subcategories (#219); carried
+  timers (#214); power and appliances as devices (#220), which will follow the
+  item-pop-up rule if they bring `device` items.
+- Close-view building labels, and converging Wide and Close label visibility
+  into one idiom (raised in #37's comments).
+- Any change to what a vessel or dish does, weighs or logs.
+
+**Open questions / decisions resolved**
+
+The handoff left three choices to this session.
+
+1. **Header stability: a fixed height.** Each item panel's header is always
+   two 15px lines tall (`line-height:15px; height:calc(2 * 15px + 2px);
+   align-content:center`), and the weight is `white-space:nowrap`. On a narrow
+   panel the weight wraps whole under the title; where it fits beside it, the
+   one line sits centred in the two-line band. The other option, keeping the
+   weight on the title's line and shortening the title with an ellipsis, cut
+   "INVENTORY" to a few letters at phone width: at 355px the title is ~79px
+   and "37.95 / 13 kg" ~75px against ~146px of room, and at 320px only ~47px
+   would have been left for the title. The cost is ~17px of empty header on a
+   wide screen. Retunable.
+2. **The device pop-up's element: a second element** sharing the item pop-up's
+   styles through `.pop`, as the handoff recommended. Its open state follows
+   `deviceTarget` as the item pop-up's follows `detailItem`: Device Options
+   sets `deviceTarget` and calls `render()`, and `renderDevicePop()` opens the
+   layer if it is closed. Closing it (`hideDevicePop()`) clears `deviceTarget`.
+3. **One display helper:** `itemDisplay()`, with `itemStateText()` folded into
+   it.
+
+**Notes / assumptions**
+
+- **#234.** "Turn on the stove" was chosen to pair with the existing "Turn off
+  the stove". `LIGHT_STOVE_MIN` stays at 5 minutes, although an igniter would
+  plausibly take less, and "You light the stove." is kept. All three are
+  retunable.
+- `In a <vessel name, lowercased>` is functional UI text, retunable. Every
+  vessel name today starts with a consonant, so "a" is always the article.
+- The strips are right-aligned and wrap (`gap:4px 6px`), so on a narrow Here
+  panel "Off · Timer: 0" and Device Options can take two lines. That moves the
+  list, not the tabs.
+
+**Validation performed**
+
+- `git diff origin/main...HEAD -- ashfall.html` is the record of what changed.
+  The script passes `node --check`.
+- **Tab strips** (headless Chromium; panel top to tab-strip top, in px). Here
+  on Floor, Stove and Cabinets; Inventory on Inventory, Keychain and an
+  equipped backpack; each with a light load and a heavy one (`37.95 / 13 kg`,
+  `12.00 / 12 kg` in the bag, `105.00 / 50 kg` on the floor):
+
+  | Viewport | Here: Floor / Cabinets | Here: Stove | Inventory: Inventory | Inventory: Keychain | Inventory: bag |
+  |---|---|---|---|---|---|
+  | 355×770, before | 33 | 92 | 48 | 58 | 62 |
+  | 355×770, after | 51 | 51 | 51 | 51 | 51 |
+  | 1440×900, before | 33 | 43 | 33 | 43 | 43 |
+  | 1440×900, after | 51 | 51 | 51 | 51 | 51 |
+
+  After the change every figure was also 51 at 320×700, 390×844 and
+  1024×768.
+- **Device controls**, driven through the UI at 355×770. Radio, on both
+  sides: Turn on and off, Remove and Replace batteries from the pop-up, no
+  Device Options line, and the `device` tag gone after a load. Stove: Light,
+  each timer step (to `Timer: 45`, the strip following), Turn off, and the
+  "Nothing you're carrying" note with no fire-starter. The pop-up stayed open
+  and updated after each control, drew no result area, sat at the strip's
+  width directly below it, and matched `#itemPop`'s background, border,
+  shadow, padding and font. After #234, every stove (2A, 2B, 1A and 1B
+  kitchens) offered Turn on the stove with and without a fire-starter, and
+  turned on and off. Lighting with matches carried left them at 50/50 uses.
+  The radio and the flashlight had Turn on / Turn off working from the
+  inventory, a worn bag, the floor, a container and a floor bag. It closed on Esc (focus back on Device Options),
+  on an outside tap, on switching the Here tab and on leaving the room.
+- **Dish.** The 2A stove's pot of stew listed and popped up as above; after Eat
+  1/2 it was still the stew; after Pour it out the row read `Cooking pot ×1 —
+  1.20 kg (Tool)` and the open pop-up followed it. A pot of water and a
+  saucepan holding meat listed and popped up as before.
+- **Log.** Save twice gave `×2`; save then export gave two lines; load twice
+  gave `×2`. No page errors throughout.
+- **Map.** #37's sweep, re-taken: all 176 street/mid-block nodes × the four
+  Wide spans, counting each shown name's rendered box against the SVG's box.
+
+  | Span (blocks) | Shown, before | Wholly outside, before | Shown, after | Wholly outside, after |
+  |---|---|---|---|---|
+  | 3 | 1542 | 168 | 1374 | 0 |
+  | 4 | 3171 | 430 | 2741 | 0 |
+  | 5 | 3851 | 205 | 3646 | 0 |
+  | 6 | 4989 | 421 | 4568 | 0 |
+
+  No name was partly outside on either side. Every name wholly inside on
+  `main` was placed identically on the branch (same street, same transform),
+  at every node and span, and the branch placed none that `main` did not.
+
+**Sections touched**
+
+- RENDERING, including MAP: `itemDisplay()`, `renderItemList()`,
+  `renderItemPop()`, `placePop()`, `positionItemPop()`, `renderDevicePop()`,
+  `positionDevicePop()`, `resolveDeviceTarget()`, `renderInventoryPanel()`,
+  `renderWorldItemsPanel()`, `render()`, `mapPositionStreetLabels()`,
+  `mapLabelMetrics()`, `MAP_LABEL_DEPTH`.
+- EVENTS / UI HELPERS: the device pop-up's layer wiring, `positionPops()` and
+  the scroll listener; `openDevicePanel()` removed.
+- INVENTORY / ITEM SYSTEM: `getItemActions()`'s `device` branch.
+- FIRE / COOKING: `doLightStove()` (#234).
+- PERSISTENCE: the four save-system `log()` keys.
+- ITEM DATA / WORLD DATA: the radio's tag and the schema comments.
+- PLAYER STATE: `deviceTarget`'s comment; `deviceResult` removed.
+- The `<style>` block and the markup. No SIMULATION change.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.8.1"` → `"0.8.2"`
+
+---
+
 ## v0.8.1 — Vessel water guards and vessel button labels
 
 Implements: handoffs/vessel-water-and-labels.md
