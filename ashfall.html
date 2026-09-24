@@ -600,7 +600,12 @@
   //       device  the container has controls beyond take and store, kept in
   //               its Device Options panel (renderDevicePanel()). The Here
   //               panel's header offers that panel while its tab is selected.
-  //     A container carrying both is the room's stove (roomStove()).
+  //       fridge  food in it ages slower while the power is on, and for a
+  //               while after (spoilageRate()).
+  //       freezer food in it does not age while the power is on, nor for a
+  //               while after; it reads "(Frozen)" meanwhile.
+  //     A container carrying both heat and device is the room's stove
+  //     (roomStove()).
   //   Optional: timerMinutes — a stove's analog timer, minutes left (absent
   //     = 0). Set from its Device Options, counted down by
   //     tickStoveTimers() whether or not the stove is on.
@@ -618,7 +623,10 @@
   //                      being topped up with rolled loot.
   //     lastRolledMinute state.totalMinutes at the last roll. Not consumed
   //                      by any mechanic yet — reserved for a future
-  //                      respawn cycle (#15).
+  //                      respawn cycle (#15). Perishables never respawn: that
+  //                      cycle must skip any item whose registry entry has
+  //                      `spoils`, or a fridge would restock with fresh food
+  //                      weeks after the power failed.
   //
   // EXIT SCHEMA (one of):
   //   Same-Location:  { to, label, distanceM } — distanceM is hand-authored.
@@ -714,6 +722,28 @@
   //     building      building association for a masterKey
   //     doorId        specific door a (non-master) key unlocks
   //     isWatch       grants access to the clock display
+  //     cooks         { minutes, restores, foodPoisoningChance? } — the item
+  //                   cooks: `minutes` in a lit heat container turn it from
+  //                   Raw to Cooked (cookInHeat()), and `restores` /
+  //                   `foodPoisoningChance` are the Cooked state's (absent
+  //                   chance = 0). The entry's own `restores` and
+  //                   `foodPoisoningChance` are the Raw state's. Definition
+  //                   data, read by itemId (foodEffects()).
+  //     cookState     instance: "raw" or "cooked" on a cookable item, absent
+  //                   = raw.
+  //     cookMinutes   instance: a raw cookable item's progress toward
+  //                   cooks.minutes, absent = 0. Kept when the heat stops or
+  //                   the item is taken out.
+  //     spoils        { staleAfter, rottenAfter } — the item is perishable
+  //                   once unsealed: Fresh below staleAfter minutes of
+  //                   effective age, Stale below rottenAfter, Rotten from
+  //                   there. Definition data, read by itemId.
+  //     ages          instance: a perishable row's effective age per unit, in
+  //                   minutes, oldest first, one per unit (see SPOILAGE in
+  //                   SURVIVAL / TIME SIMULATION). A placement may set it
+  //                   through `overrides`; otherwise the world's items are
+  //                   aged from the collapse (stampMissingAges()) and an
+  //                   action's are new (asNewlyMade()).
   //     disassembleLog the line Disassemble logs for a `disassemble`-tagged
   //                   item, with {qty} standing for the first recipe
   //                   input's quantity. Definition data, read from the
@@ -732,12 +762,14 @@
     box_of_matches: { name:"Box of matches", category:"Materials", unitWeight:0.05, tags:["fire-starter"], durability:{ current:50, max:50, mode:"uses" } },
     photo_album: { name:"Photo album", category:"Literature", unitWeight:0.4 },
     pot_of_spoiled_stew: { name:"Pot of spoiled stew", category:"Misc", unitWeight:1.2 },
-    canned_soup: { name:"Canned soup", category:"Food", unitWeight:0.4, restores:{hunger:25,thirst:5}, verb:"Eat", sealed:true, opensWith:"can-opening" },
+    canned_soup: { name:"Canned soup", category:"Food", unitWeight:0.4, restores:{hunger:25,thirst:5}, verb:"Eat", sealed:true, opensWith:"can-opening",
+      spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
     pasta: { name:"Pasta", category:"Food", unitWeight:0.5, restores:{hunger:30}, verb:"Eat" },
     frying_pan: { name:"Frying pan", category:"Tool", unitWeight:0.9, tags:["blunt"] },
     kitchen_knife: { name:"Kitchen knife", category:"Tool", unitWeight:0.15, tags:["blade","can-opening"] },
     can_opener: { name:"Can opener", category:"Tool", unitWeight:0.1, tags:["can-opening"] },
-    rotten_leftovers: { name:"Rotten leftovers", category:"Misc", unitWeight:0.8 },
+    leftovers: { name:"Leftovers", category:"Food", unitWeight:0.8, restores:{hunger:25}, verb:"Eat",
+      spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
     bottled_water: { name:"Bottled water", category:"Food", unitWeight:0.5, restores:{thirst:30}, verb:"Drink" },
     granola_bars: { name:"Granola bars", category:"Food", unitWeight:0.1, restores:{hunger:15}, verb:"Eat" },
     painkillers: { name:"Painkillers", category:"Medical", unitWeight:0.1 },
@@ -755,10 +787,12 @@
     cloth: { name:"Cloth", category:"Materials", unitWeight:0.1 },
     dead_potted_plant: { name:"Dead potted plant", category:"Misc", unitWeight:2.0 },
     duct_tape: { name:"Duct tape", category:"Materials", unitWeight:0.3 },
-    canned_beans: { name:"Canned beans", category:"Food", unitWeight:0.4, restores:{hunger:22}, verb:"Eat", sealed:true, opensWith:"can-opening" },
+    canned_beans: { name:"Canned beans", category:"Food", unitWeight:0.4, restores:{hunger:22}, verb:"Eat", sealed:true, opensWith:"can-opening",
+      spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
     board_games: { name:"Board games", category:"Misc", unitWeight:1.0 },
     burnt_saucepan: { name:"Burnt saucepan", category:"Misc", unitWeight:0.6 },
-    canned_corn: { name:"Canned corn", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat", sealed:true, opensWith:"can-opening" },
+    canned_corn: { name:"Canned corn", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat", sealed:true, opensWith:"can-opening",
+      spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
     aspirin: { name:"Aspirin", category:"Medical", unitWeight:0.05 },
     work_gloves: { name:"Work gloves", category:"Clothing", unitWeight:0.2 },
     handwritten_note: { name:"Handwritten note", category:"Literature", unitWeight:0.02 },
@@ -808,17 +842,27 @@
     campfire_kit: { name:"Campfire Kit", category:"Materials", unitWeight:2.4, tags:["disassemble"],
       disassembleLog:"You untie the bundle — back to {qty} loose firewood." },
     fish: { name:"Fish", category:"Food", unitWeight:0.3, restores:{hunger:10}, verb:"Eat", foodPoisoningChance:0.35,
-      cooks:{ minutes:15, restores:{hunger:35} } },
-    canned_tuna: { name:"Canned tuna", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat", sealed:true, opensWith:"can-opening" },
+      cooks:{ minutes:15, restores:{hunger:35} },
+      spoils:{ staleAfter:12*60, rottenAfter:1*MINUTES_PER_DAY } },
+    canned_tuna: { name:"Canned tuna", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat", sealed:true, opensWith:"can-opening",
+      spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
     cereal_box: { name:"Box of cereal", category:"Food", unitWeight:0.5, restores:{hunger:15}, verb:"Eat", sealed:true },
     crackers: { name:"Crackers", category:"Food", unitWeight:0.2, restores:{hunger:8}, verb:"Eat" },
     peanut_butter: { name:"Peanut butter", category:"Food", unitWeight:0.5, restores:{hunger:20}, verb:"Eat", sealed:true },
     candy_bar: { name:"Candy bar", category:"Food", unitWeight:0.05, restores:{hunger:5}, verb:"Eat" },
     rice_bag: { name:"Bag of rice", category:"Food", unitWeight:1.0 },
     coffee_grounds: { name:"Coffee grounds", category:"Food", unitWeight:0.3 },
-    spoiled_milk: { name:"Spoiled milk", category:"Food", unitWeight:1.0 },
-    moldy_bread: { name:"Moldy bread", category:"Food", unitWeight:0.4 },
-    rotten_produce: { name:"Rotten produce", category:"Food", unitWeight:0.5 },
+    milk: { name:"Milk", category:"Food", unitWeight:1.0, restores:{thirst:20, hunger:5}, verb:"Drink",
+      spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
+    bread: { name:"Bread", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat",
+      spoils:{ staleAfter:3*MINUTES_PER_DAY, rottenAfter:7*MINUTES_PER_DAY } },
+    vegetables: { name:"Vegetables", category:"Food", unitWeight:0.5, restores:{hunger:10, thirst:2}, verb:"Eat",
+      spoils:{ staleAfter:2*MINUTES_PER_DAY, rottenAfter:5*MINUTES_PER_DAY } },
+    meat: { name:"Meat", category:"Food", unitWeight:0.5, restores:{hunger:10}, verb:"Eat", foodPoisoningChance:0.5,
+      cooks:{ minutes:20, restores:{hunger:40} },
+      spoils:{ staleAfter:12*60, rottenAfter:1*MINUTES_PER_DAY } },
+    ice_cream: { name:"Ice cream", category:"Food", unitWeight:0.5, restores:{hunger:15, thirst:5}, verb:"Eat",
+      spoils:{ staleAfter:6*60, rottenAfter:1*MINUTES_PER_DAY } },
     bar_soap: { name:"Bar of soap", category:"Materials", unitWeight:0.1 },
     toothpaste: { name:"Toothpaste", category:"Materials", unitWeight:0.1 },
     shampoo: { name:"Shampoo", category:"Materials", unitWeight:0.3 },
@@ -850,7 +894,8 @@
     // similar real-world items; retunable.
     // Pet supplies
     dry_pet_food: { name:"Bag of dry pet food", category:"Food", unitWeight:1.5, restores:{hunger:25}, verb:"Eat", sealed:true },
-    canned_pet_food: { name:"Can of pet food", category:"Food", unitWeight:0.4, restores:{hunger:15}, verb:"Eat", sealed:true, opensWith:"can-opening" },
+    canned_pet_food: { name:"Can of pet food", category:"Food", unitWeight:0.4, restores:{hunger:15}, verb:"Eat", sealed:true, opensWith:"can-opening",
+      spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
     pet_leash: { name:"Leash", category:"Misc", unitWeight:0.2 },
     pet_collar: { name:"Pet collar", category:"Misc", unitWeight:0.1 },
     pet_toy: { name:"Chewed-up pet toy", category:"Misc", unitWeight:0.2 },
@@ -858,7 +903,8 @@
     pet_carrier: { name:"Pet carrier", category:"Misc", unitWeight:2.0 },
     // Baby / child items
     diapers: { name:"Pack of diapers", category:"Misc", unitWeight:0.8 },
-    baby_formula: { name:"Can of baby formula", category:"Food", unitWeight:0.6, restores:{hunger:18}, verb:"Eat", sealed:true, opensWith:"can-opening" },
+    baby_formula: { name:"Can of baby formula", category:"Food", unitWeight:0.6, restores:{hunger:18}, verb:"Eat", sealed:true, opensWith:"can-opening",
+      spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
     pacifier: { name:"Pacifier", category:"Misc", unitWeight:0.02 },
     childrens_book: { name:"Children's book", category:"Literature", unitWeight:0.2 },
     toy_action_figure: { name:"Action figure", category:"Misc", unitWeight:0.1 },
@@ -920,7 +966,7 @@
   // up in ITEM_REGISTRY by itemId (registryEntryOf()), so itemFromRegistry()
   // leaves them off the instance. A retune then reaches every save, and no
   // stale copy on an instance is there to be read by mistake.
-  const REGISTRY_ONLY_FIELDS = ["carryFactor", "foodPoisoningChance", "disassembleLog", "cooks"];
+  const REGISTRY_ONLY_FIELDS = ["carryFactor", "foodPoisoningChance", "disassembleLog", "cooks", "spoils"];
   // An item's (or a slot's) registry entry, by its itemId, or null for
   // anything without one: the keychain, an item from a save the registry no
   // longer knows. The one lookup every registry-read field goes through.
@@ -980,27 +1026,35 @@
   //              so `chance:0.55` in a pool with `emptyChance:0.25` means
   //              41% of containers, not 55%. `qtyMin`/`qtyMax` decides how
   //              many of that item spawn once the entry hits.
-  // Every `chance` below is derived, not chosen, with two exceptions. The
-  // v0.5.1 conversion computed each one from the weight/rollCount lottery it
-  // replaced, so that P(appears) carried across entry by entry; that is why
-  // they read 0.245069 rather than 0.25. An ugly six-decimal number here is
-  // still the signal that nobody has picked it — it is a derived figure, not a
-  // judgment. See the v0.5.1 entry in CHANGELOG.md for the model and the
-  // formula.
-  //   The exceptions are the two `screwdriver` entries, in `tools_workshop`
+  // Every `chance` below is derived, not chosen, with the exceptions listed
+  // after this paragraph. The v0.5.1 conversion computed each one from the
+  // weight/rollCount lottery it replaced, so that P(appears) carried across
+  // entry by entry; that is why they read 0.245069 rather than 0.25. An ugly
+  // six-decimal number here is still the signal that nobody has picked it —
+  // it is a derived figure, not a judgment. See the v0.5.1 entry in
+  // CHANGELOG.md for the model and the formula.
+  //   The first exceptions are the two `screwdriver` entries, in `tools_workshop`
   //   (0.20) and `hardware_store` (0.23). The screwdriver postdates the
   //   conversion and has no lottery weight to carry across, so both were
   //   chosen to sit in the band its neighbours already occupy. They are
   //   retunable balance values; the other entries are not, because retuning
   //   one silently breaks the derivation the rest are re-checkable against.
+  //   The whole `kitchen_frozen` pool (meat 0.5, vegetables 0.5, fish 0.3,
+  //   ice cream 0.4, emptyChance 0.2) is chosen too: the freezers postdate the
+  //   conversion. Retunable.
+  //   Replacing an item id keeps its entry's derived chance: the retired
+  //   spoiled foods' entries now name the fresh food they were
+  //   (rotten_leftovers → leftovers, and so on). The trash's leftovers keep
+  //   their old state as well — their `state` pins the unit at the age it
+  //   turns Rotten, so the bin still holds rotten leftovers.
   // Which containers draw from which pools is recorded on the containers
   // themselves, in their `spawnPools` field.
   const SPAWN_POOLS = {
     kitchen_perishable: { emptyChance:0.3, entries:[
-      { itemId:"rotten_leftovers", chance:0.129032, qtyMin:1, qtyMax:1 },
-      { itemId:"spoiled_milk", chance:0.096774, qtyMin:1, qtyMax:1 },
-      { itemId:"moldy_bread", chance:0.096774, qtyMin:1, qtyMax:1 },
-      { itemId:"rotten_produce", chance:0.080645, qtyMin:1, qtyMax:1 },
+      { itemId:"leftovers", chance:0.129032, qtyMin:1, qtyMax:1 },
+      { itemId:"milk", chance:0.096774, qtyMin:1, qtyMax:1 },
+      { itemId:"bread", chance:0.096774, qtyMin:1, qtyMax:1 },
+      { itemId:"vegetables", chance:0.080645, qtyMin:1, qtyMax:1 },
       { itemId:"pot_of_spoiled_stew", chance:0.064516, qtyMin:1, qtyMax:1 },
       { itemId:"fish", chance:0.016129, qtyMin:1, qtyMax:1 },
       { itemId:"fish", key:"fish_cooked", state:{ cookState:"cooked" }, chance:0.016129, qtyMin:1, qtyMax:1 } ]},
@@ -1018,6 +1072,11 @@
       { itemId:"cereal_box", chance:0.124339, qtyMin:1, qtyMax:1 },
       { itemId:"peanut_butter", chance:0.100345, qtyMin:1, qtyMax:1 },
       { itemId:"coffee_grounds", chance:0.100345, qtyMin:1, qtyMax:1 } ]},
+    kitchen_frozen: { emptyChance:0.2, entries:[
+      { itemId:"meat", chance:0.5, qtyMin:1, qtyMax:2 },
+      { itemId:"vegetables", chance:0.5, qtyMin:1, qtyMax:2 },
+      { itemId:"fish", chance:0.3, qtyMin:1, qtyMax:1 },
+      { itemId:"ice_cream", chance:0.4, qtyMin:1, qtyMax:1 } ]},
     kitchen_tools: { emptyChance:0.25, entries:[
       { itemId:"can_opener", chance:0.245069, qtyMin:1, qtyMax:1 },
       { itemId:"frying_pan", chance:0.213018, qtyMin:1, qtyMax:1 },
@@ -1165,7 +1224,7 @@
       { itemId:"empty_soda_can", chance:0.245069, qtyMin:1, qtyMax:1 },
       { itemId:"scrap_metal", chance:0.213018, qtyMin:1, qtyMax:1 },
       { itemId:"metal_pipe", chance:0.179980, qtyMin:1, qtyMax:1 },
-      { itemId:"rotten_leftovers", chance:0.179980, qtyMin:1, qtyMax:1 },
+      { itemId:"leftovers", state:{ ages:[3*MINUTES_PER_DAY] }, chance:0.179980, qtyMin:1, qtyMax:1 },
       { itemId:"dead_potted_plant", chance:0.110947, qtyMin:1, qtyMax:1 } ]},
     fuel_fire: { emptyChance:0.15, entries:[
       { itemId:"firewood", chance:0.498866, qtyMin:1, qtyMax:3 },
@@ -1505,8 +1564,9 @@
         { id:"drawers", name:"Kitchen drawers", capacityKg:10, spawnPools:["kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
           { id:"kitchen_knife", qty:1 },
           { id:"can_opener", qty:1 } ])},
-        { id:"fridge", name:"Fridge", capacityKg:30, spawnPools:["kitchen_perishable"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"rotten_leftovers", qty:1 } ])},
+        { id:"fridge", name:"Fridge", capacityKg:30, tags:["fridge"], spawnPools:["kitchen_perishable"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"leftovers", qty:1, overrides:{ ages:[5*MINUTES_PER_DAY] } } ])},
+        { id:"freezer", name:"Freezer", capacityKg:10, tags:["freezer"], spawnPools:["kitchen_frozen"], items:[] },
         { id:"pantry", name:"Pantry", capacityKg:20, spawnPools:["kitchen_nonperishable"], spawnRolled:true, items:itemsFromRegistry([
           { id:"bottled_water", qty:4 },
           { id:"granola_bars", qty:3 } ])}
@@ -1603,7 +1663,8 @@
           { id:"pasta", qty:1 } ])},
         { id:"drawers", name:"Kitchen drawers", capacityKg:10, spawnPools:["kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
           { id:"kitchen_knife", qty:1 } ])},
-        { id:"fridge", name:"Fridge", capacityKg:30, spawnPools:["kitchen_perishable"], items:[] },
+        { id:"fridge", name:"Fridge", capacityKg:30, tags:["fridge"], spawnPools:["kitchen_perishable"], items:[] },
+        { id:"freezer", name:"Freezer", capacityKg:10, tags:["freezer"], spawnPools:["kitchen_frozen"], items:[] },
         { id:"pantry", name:"Pantry", capacityKg:20, spawnPools:["kitchen_nonperishable"], items:[] }
       ],
       exits:[
@@ -1703,8 +1764,9 @@
           { id:"bottled_water", qty:3 },
           { id:"canned_corn", qty:2 },
           { id:"cloth", qty:2 } ])},
-        { id:"fridge1a", name:"Fridge", capacityKg:30, spawnPools:["kitchen_perishable"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"rotten_leftovers", qty:1 } ])}
+        { id:"fridge1a", name:"Fridge", capacityKg:30, tags:["fridge"], spawnPools:["kitchen_perishable"], spawnRolled:true, items:itemsFromRegistry([
+          { id:"leftovers", qty:1 } ])},
+        { id:"freezer1a", name:"Freezer", capacityKg:10, tags:["freezer"], spawnPools:["kitchen_frozen"], items:[] }
       ],
       exits:[
         { to:"onea", label:"Go to the living room", distanceM:4 },
@@ -4161,17 +4223,22 @@
   // of, which either opens all of them or loses the unit.
   // A cookable item's rows merge only in the same cook state, and raw ones
   // only at the same progress, so two fish put in a stove minutes apart stay
-  // two rows until both are cooked.
+  // two rows until both are cooked. A perishable's rows merge only when every
+  // unit of both is in the same freshness state.
   function sameStackState(a, b){
     return STACKABLE.has(a.category) && a.itemId === b.itemId && a.category === b.category
       && !a.durability && !b.durability && !!a.sealed === !!b.sealed
       && cookStateOf(a) === cookStateOf(b)
-      && (cookStateOf(a) !== "raw" || (a.cookMinutes || 0) === (b.cookMinutes || 0));
+      && (cookStateOf(a) !== "raw" || (a.cookMinutes || 0) === (b.cookMinutes || 0))
+      && rowFreshness(a) === rowFreshness(b) && rowFreshness(a) !== "mixed";
   }
   // Folds `row` into `target`, an existing row sameStackState() accepts. The
-  // one place two rows become one.
+  // one place two rows become one: the units' ages come along, re-sorted
+  // oldest first.
   function mergeRows(target, row){
     target.qty += row.qty;
+    if(Array.isArray(target.ages) || Array.isArray(row.ages))
+      target.ages = (target.ages || []).concat(row.ages || []).sort((x, y)=> y - x);
   }
   function addToList(list, item){
     const existing = list.find(i=> sameStackState(i, item));
@@ -4395,6 +4462,12 @@
   // A floor bag's Here tab key: its _uid, never its floor index, prefixed so
   // it can't be mistaken for an authored container id.
   function floorBagTab(bag){ return "bag:" + ensureUid(bag); }
+  // The authored or car container a Here tab shows, or null for the floor and
+  // a floor bag.
+  function worldTabContainer(room, tab){
+    return room.containers.find(c=> c.id === tab)
+      || (room.carContainers && room.carContainers.find(c=> c.id === tab)) || null;
+  }
   function worldSlot(room, tab){
     if(tab === "floor") return { items:room.floor, capacityKg:room.floorCap };
     // A floor bag holds its items in `contents`, the field an unequipped bag
@@ -4495,12 +4568,35 @@
       return { restores: def.cooks.restores || null, poisoning: def.cooks.foodPoisoningChance || 0 };
     return { restores: def.restores || null, poisoning: def.foodPoisoningChance || 0 };
   }
+  // foodEffects() for the unit that would be eaten next, the row's oldest,
+  // with its freshness applied: Fresh and Stale as they are, Rotten restoring
+  // ROTTEN_RESTORES_FACTOR of it and adding the rotten baseline chance to the
+  // food's own.
+  function unitFoodEffects(it){
+    const fx = foodEffects(it);
+    if(unitFreshness(it) !== "rotten") return fx;
+    return { restores: scaleRestores(fx.restores, ROTTEN_RESTORES_FACTOR),
+      poisoning: combinePoisoning(fx.poisoning, ROTTEN_POISONING_CHANCE * POISONING_TRAIT_MULTIPLIER) };
+  }
+  function scaleRestores(restores, k){
+    if(!restores) return null;
+    const out = {};
+    Object.keys(restores).forEach(v=>{ out[v] = restores[v] * k; });
+    return out;
+  }
+  // Marks an item an action has just made as new: a perishable one starts
+  // every unit at age 0. What distinguishes it from a world item, which
+  // stampMissingAges() ages as if it had sat there since the collapse.
+  function asNewlyMade(item){
+    if(isPerishable(item)) item.ages = new Array(item.qty).fill(0);
+    return item;
+  }
   function doConsume(sourceKind, index){
     const room = world[state.currentRoom];
     const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
     const it = getItemAt(src && src.items, index);
     if(!it || it.sealed) return;
-    const fx = foodEffects(it);
+    const fx = unitFoodEffects(it);
     if(!fx.restores) return;
     if(fx.restores.hunger) state.vitals.hunger = clamp(state.vitals.hunger + fx.restores.hunger);
     if(fx.restores.thirst) state.vitals.thirst = clamp(state.vitals.thirst + fx.restores.thirst);
@@ -4524,6 +4620,8 @@
     if(it.opensWith && !hasTool(it.opensWith)) return;
     const unit = dropUnits(src.items, index, 1);
     unit.sealed = false;
+    // An opened perishable starts at age 0: sealed, it never aged.
+    asNewlyMade(unit);
     // Through addToList() rather than a direct push, so the opened unit
     // merges into an opened stack of the same item where there is one.
     const opened = addToList(src.items, unit);
@@ -5084,7 +5182,7 @@
     worldTab = container.id;
     if(container.spawnPools && !container.spawnRolled){
       rolledLootFor(state.seed, state.currentRoom, container)
-        .forEach(it=> addToList(container.items, it));
+        .forEach(it=>{ stampAges(it, container); addToList(container.items, it); });
       container.spawnRolled = true;
       container.lastRolledMinute = state.totalMinutes;
     }
@@ -5128,6 +5226,125 @@
     state.rollSeq += 1;
     if(hit) startIllness("food_poisoning");
   }
+  // Two independent chances of food poisoning as one: the chance that either
+  // strikes.
+  function combinePoisoning(a, b){ return 1 - (1 - a) * (1 - b); }
+  // SPOILAGE. A perishable item is one whose registry entry carries `spoils`
+  // and that is not sealed: a sealed item does not age. A perishable row
+  // keeps one effective age per unit in `ages`, in minutes, oldest first,
+  // ages.length === qty. A unit is Fresh below `spoils.staleAfter`, Stale
+  // below `spoils.rottenAfter`, and Rotten from there. Effective age grows at
+  // spoilageRate() of the container the item is in or under, so a fridge
+  // slows it and a working freezer stops it.
+  function isPerishable(it){
+    const def = registryEntryOf(it);
+    return !!(def && def.spoils) && it.sealed !== true;
+  }
+  const FRESHNESS_LABELS = { fresh:"Fresh", stale:"Stale", rotten:"Rotten" };
+  function freshnessOfAge(def, age){
+    return age < def.spoils.staleAfter ? "fresh" : age < def.spoils.rottenAfter ? "stale" : "rotten";
+  }
+  function unitAges(it){ return Array.isArray(it.ages) && it.ages.length ? it.ages : [0]; }
+  // The freshness of a row's oldest unit, the one taken or eaten next; null
+  // for anything not perishable.
+  function unitFreshness(it){
+    return isPerishable(it) ? freshnessOfAge(registryEntryOf(it), unitAges(it)[0]) : null;
+  }
+  // The freshness all a row's units share, "mixed" for a row whose units have
+  // drifted apart and not been split yet, null for anything not perishable.
+  function rowFreshness(it){
+    if(!isPerishable(it)) return null;
+    const def = registryEntryOf(it), ages = unitAges(it);
+    const oldest = freshnessOfAge(def, ages[0]);
+    return oldest === freshnessOfAge(def, ages[ages.length - 1]) ? oldest : "mixed";
+  }
+  // How fast food ages in `container` at minute `m` since the collapse, as a
+  // multiple of the rate at room temperature. A fridge runs slow while
+  // powered and a while after; a freezer stops ageing while powered and a
+  // while after; anything else, and no container, is 1.
+  function spoilageRate(container, m){
+    const sinceFailure = m - POWER_FAILS_DAY * MINUTES_PER_DAY;
+    if(hasTag(container, "freezer")) return sinceFailure < FREEZER_COAST_MIN ? 0 : 1;
+    if(hasTag(container, "fridge")){
+      if(powerOn(m)) return FRIDGE_RATE_POWERED;
+      return sinceFailure < FRIDGE_COAST_MIN ? FRIDGE_RATE_COASTING : 1;
+    }
+    return 1;
+  }
+  // Whether a freezer is holding its contents frozen right now: the "(Frozen)"
+  // label reads this.
+  function isFrozenIn(container){
+    return hasTag(container, "freezer") && spoilageRate(container, minutesSinceCollapse()) === 0;
+  }
+  // spoilageRate() integrated over [fromM, toM), minutes since the collapse:
+  // the effective age an item gains there. The rate is constant between the
+  // power failure and the ends of the two coasting windows, so the sum is
+  // exact.
+  function effectiveAge(container, fromM, toM){
+    if(!(toM > fromM)) return 0;
+    const fail = POWER_FAILS_DAY * MINUTES_PER_DAY;
+    const cuts = [fail, fail + FRIDGE_COAST_MIN, fail + FREEZER_COAST_MIN]
+      .filter(c=> c > fromM && c < toM).sort((x, y)=> x - y);
+    let age = 0, at = fromM;
+    cuts.concat([toM]).forEach(next=>{ age += spoilageRate(container, at) * (next - at); at = next; });
+    return age;
+  }
+  // Gives a perishable without `ages` the age it would have if it had sat in
+  // `container` since the collapse. A world item's starting age; an item an
+  // action makes is new instead (asNewlyMade()), and a placement that sets
+  // `ages` itself keeps them.
+  function stampAges(it, container){
+    if(!isPerishable(it) || Array.isArray(it.ages)) return;
+    it.ages = new Array(it.qty).fill(effectiveAge(container, 0, minutesSinceCollapse()));
+  }
+  // stampAges() over every item list, each with its container. Run on a new
+  // game, once the world is built — not inside makeDefaultWorld(), which
+  // must stay free of state — and on load; doOpenContainer() stamps what a
+  // roll adds.
+  function stampMissingAges(){
+    forEachItemList((list, roomId, container)=> list.forEach(it=> stampAges(it, container)));
+  }
+  // Keeps `ages` one per unit, oldest first, whatever wrote the row: a
+  // missing age reads as new.
+  function normalizeAges(row){
+    const ages = (Array.isArray(row.ages) ? row.ages : []).slice(0, row.qty);
+    while(ages.length < row.qty) ages.push(0);
+    row.ages = ages.sort((x, y)=> y - x);
+  }
+  // Splits a row whose units have drifted into different freshness states
+  // into one row per state, oldest first, in place. The row object keeps the
+  // youngest units, so a pop-up open on it stays on the ones that did not
+  // turn.
+  function splitByFreshness(list, row){
+    const def = registryEntryOf(row);
+    while(rowFreshness(row) === "mixed"){
+      const oldest = freshnessOfAge(def, row.ages[0]);
+      const n = row.ages.filter(a=> freshnessOfAge(def, a) === oldest).length;
+      list.splice(list.indexOf(row), 0, takeUnits(row, n));
+    }
+  }
+  // One tick of ageing: every perishable unit grows by its container's
+  // effective age over the step. A row that changes state is split where its
+  // units now differ, and any row that changed folds into a matching row of
+  // its list, so each list holds one row per item and state.
+  function ageFood(dt){
+    const to = minutesSinceCollapse(), from = to - dt;
+    forEachItemList((list, roomId, container)=>{
+      let grow = null, changed = false;
+      list.slice().forEach(row=>{
+        if(!isPerishable(row)) return;
+        if(grow === null) grow = effectiveAge(container, from, to);
+        if(!(grow > 0)) return;
+        normalizeAges(row);
+        const before = rowFreshness(row);
+        row.ages = row.ages.map(a=> a + grow);
+        if(rowFreshness(row) === before) return;
+        splitByFreshness(list, row);
+        changed = true;
+      });
+      if(changed) list.slice().forEach(row=>{ if(list.includes(row) && isPerishable(row)) remergeRow(list, row); });
+    });
+  }
   // applyHungerThirst/applyWorldTicking/applyEnergyBaseline are the pieces
   // applyDecay used to do in one shot. They're split out so Sleep (which
   // suspends the awake Energy/Stamina/Fatigue system) can run Hunger/Thirst
@@ -5155,6 +5372,7 @@
   // carried one is "your", one in the room you are in is "the", and one
   // anywhere else shuts off silently, the way a fire elsewhere goes out.
   function applyWorldTicking(min){
+    ageFood(min);
     forEachItemList((list, roomId)=>{
       list.forEach(it=>{
         if(it.on && it.durability){
@@ -5394,7 +5612,7 @@
     // reproduces the bite, while spending any time first — walking, resting,
     // chopping — moves the minute and genuinely rerolls.
     if(chance(FISH_BITE_CHANCE, "fish", state.currentRoom, state.totalMinutes)){
-      giveItem(itemFromRegistry({ id:"fish", qty:1 }));
+      giveItem(asNewlyMade(itemFromRegistry({ id:"fish", qty:1 })));
       log("Something bites. You reel in a fish.", "good", "fish", "bite");
     } else {
       log("Nothing bites this time.", null, "fish", "miss");
@@ -5519,6 +5737,8 @@
         if(it.cookMinutes < def.cooks.minutes - TICK_EPSILON) return;
         it.cookState = "cooked";
         delete it.cookMinutes;
+        // Cooked food starts Fresh.
+        if(isPerishable(it)) it.ages = new Array(it.qty).fill(0);
         remergeRow(c.items, it);
       });
     });
@@ -5609,20 +5829,23 @@
   // through this rather than walking them by hand: a hand-rolled walk is how a
   // stowed bag's contents gets missed. It reads `state` and `world` at call
   // time. `roomId` says where the list is: the id of the room it is in, or
-  // null when it is carried, and `contents` inherits its bag's answer. A
-  // caller that only needs the list ignores it.
+  // null when it is carried, and `contents` inherits its bag's answer. The
+  // third argument, `container`, is the room container the list is in or
+  // nested under — an authored or car container — or null for the floor, a
+  // floor bag and anything carried. A caller that only needs the list
+  // ignores both.
   function forEachItemList(visit){
-    const walk = (list, roomId)=>{
+    const walk = (list, roomId, container)=>{
       if(!Array.isArray(list)) return;
-      visit(list, roomId);
-      list.forEach(it=>{ if(it && Array.isArray(it.contents)) walk(it.contents, roomId); });
+      visit(list, roomId, container);
+      list.forEach(it=>{ if(it && Array.isArray(it.contents)) walk(it.contents, roomId, container); });
     };
-    invPools().forEach(list=> walk(list, null));
+    invPools().forEach(list=> walk(list, null, null));
     Object.keys(world).forEach(roomId=>{
       const room = world[roomId];
-      walk(room.floor, roomId);
-      (room.containers || []).forEach(c=>walk(c.items, roomId));
-      (room.carContainers || []).forEach(c=>walk(c.items, roomId));
+      walk(room.floor, roomId, null);
+      (room.containers || []).forEach(c=>walk(c.items, roomId, c));
+      (room.carContainers || []).forEach(c=>walk(c.items, roomId, c));
     });
   }
   function resyncUidCounter(){
@@ -6250,6 +6473,7 @@
     world = makeDefaultWorld();
     doors = makeDefaultDoors();
     windows = makeDefaultWindows();
+    stampMissingAges();
     detailItem = null;
     deviceTarget = null;
     invTab = "inventory";
@@ -7195,8 +7419,10 @@
   }
   // The parenthesised state labels shown after an item's name, in a fixed
   // order: Open, then cook state (a cookable item always shows Raw or
-  // Cooked), then freshness, and water. `ctx` carries what a label needs from outside the item. The row
-  // and the item pop-up show them; log lines keep the plain name.
+  // Cooked), then freshness or Frozen, then water. `ctx` carries what a label
+  // needs from outside the item: `ctx.container`, the room container the row
+  // is in, for Frozen. The row and the item pop-up show them; log lines keep
+  // the plain name.
   // `sealed` is three-valued (see ITEM DATA SCHEMA), and only the opened
   // state is marked: undefined means the item was never a packaged thing,
   // and a sealed can reads as the plain name. Hence `=== false` and not a
@@ -7206,6 +7432,9 @@
     if(it.sealed === false) labels.push("Open");
     const cook = cookStateOf(it);
     if(cook) labels.push(cook === "cooked" ? "Cooked" : "Raw");
+    // A perishable always shows its freshness, or Frozen while it sits in a
+    // freezer that is holding it.
+    if(isPerishable(it)) labels.push(ctx && isFrozenIn(ctx.container) ? "Frozen" : FRESHNESS_LABELS[unitFreshness(it)]);
     return labels;
   }
   function renderItemList(el, list, buttons, side, ctx){
@@ -7298,7 +7527,8 @@
       const nameB = document.createElement("b");
       nameB.textContent = it.name;
       nameLine.appendChild(nameB);
-      const labels = itemStateLabels(it, {});
+      const labels = itemStateLabels(it, { container: detailItem.side === "world"
+        ? worldTabContainer(world[state.currentRoom], worldTab) : null });
       if(labels.length) nameLine.appendChild(document.createTextNode(labels.map(l=> ` (${l})`).join("")));
       box.appendChild(nameLine);
       const statsLine = document.createElement("div");
@@ -7734,7 +7964,7 @@
     } else { unequipBtn.style.display = "none"; }
     renderItemList(document.getElementById("invList"), currentInv.items, [
       { label: worldTab === "floor" ? "Place" : "Store", onClick:(i)=> doStore(i) }
-    ], "inv");
+    ], "inv", { container:null });
   }
   function renderWorldItemsPanel(){
     const room = world[state.currentRoom];
@@ -7799,7 +8029,7 @@
       // view's Take family in getItemActions(): the item can be taken, just
       // not into the keychain.
       { label:"Take", disabled:(it)=> invTab === "keychain" && !keychainAllows(it), onClick:(i)=> doTake(i) }
-    ], "world");
+    ], "world", { container: worldTabContainer(room, worldTab) });
   }
   // The seed, as its canonical uint32 — what a typed word hashed to, which is
   // what reproduces the run; a word is lossy, the number is the seed. It lives
@@ -7866,6 +8096,9 @@
 
   document.title = "Ashfall — v" + GAME_CONFIG.VERSION;
   document.getElementById("pageTitle").textContent = "ASHFALL — v" + GAME_CONFIG.VERSION;
+  // The initial boot's world, like doRestart()'s, needs its food aged once
+  // state exists.
+  stampMissingAges();
   log("You wake up in your apartment. Everything's exactly where you left it — for now.");
   mapSetZoomStep(mapZoomStep);
   render();
