@@ -34,15 +34,14 @@
   #hubRow button:hover:not(:disabled){ border-color:var(--accent-dim); }
   #hubRow button:disabled{ color:var(--ink-faint); cursor:not-allowed; opacity:.6; }
   #hubRow .hint{ display:block; font-size:11px; font-style:italic; margin-top:2px; }
-  /* A full-screen panel (Crafting, Options, Device Options) stacked over the
+  /* A full-screen panel (Crafting, Options) stacked over the
      drawer. Above #sideMenu's 20, so it covers the drawer and its backdrop. */
   .full-panel{ position:fixed; inset:0; z-index:30; background:var(--panel); padding:20px 18px;
     overflow-y:auto; font-family:system-ui,sans-serif; display:none; }
   .full-panel.open{ display:block; }
   .full-panel > h2{ font-size:14px; margin:0 0 16px; display:flex; justify-content:space-between; align-items:center; }
   .full-panel-body{ max-width:560px; display:flex; flex-direction:column; gap:16px; }
-  #craftingList, #deviceControls{ display:flex; flex-direction:column; align-items:flex-start; gap:8px; }
-  #deviceStatus{ font-size:13px; color:var(--ink-dim); }
+  #craftingList{ display:flex; flex-direction:column; align-items:flex-start; gap:8px; }
   /* The Crafting panel's search and filters, above the list. The group
      buttons wrap, so the row holds at phone width. */
   #craftFilters{ display:flex; flex-direction:column; gap:8px; }
@@ -59,28 +58,31 @@
   .dish-row{ display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; font-size:12px; color:var(--ink);
     padding:5px 9px; border:1px solid var(--line); border-radius:3px; background:var(--panel-2); }
   .dish-row .cost{ color:var(--ink-faint); font-size:11px; }
-  /* The stove timer's add buttons, side by side. */
-  .timer-steps{ display:flex; gap:6px; }
-  /* A panel's result area (Crafting's #craftResult, Device Options'
-     #deviceResult). The body face, which the panel's system-ui would
-     otherwise replace: its lines are #log's, set as #log sets them. */
+  /* A panel's result area (Crafting's #craftResult). The body face, which
+     the panel's system-ui would otherwise replace: its lines are #log's,
+     set as #log sets them. */
   .log-result{ display:flex; flex-direction:column; gap:5px; border-top:1px solid var(--line); padding-top:12px;
     font-family:Georgia,'Times New Roman',serif; }
   .log-result:empty{ display:none; }
   #seedRow{ display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink-dim); }
   .full-panel .menu-actions{ align-items:flex-start; }
   #seedValue{ color:var(--ink); user-select:all; -webkit-user-select:all; }
-  /* The item pop-up and the transparent layer behind it that takes an
-     outside tap. Both sit below #menuBackdrop's 15: the pop-up belongs to
-     the play area, and opening the drawer covers it rather than closing it. */
-  #itemPopBackdrop{ position:fixed; inset:0; z-index:10; display:none; }
-  #itemPopBackdrop.show{ display:block; }
-  #itemPop{ position:fixed; z-index:11; display:none; background:var(--panel); border:1px solid var(--line);
+  /* A pop-up (the item pop-up, #itemPop, and the device pop-up, #devicePop)
+     and the transparent layer behind each that takes an outside tap. Both
+     sit below #menuBackdrop's 15: a pop-up belongs to the play area, and
+     opening the drawer covers it rather than closing it. */
+  .pop-backdrop{ position:fixed; inset:0; z-index:10; display:none; }
+  .pop-backdrop.show{ display:block; }
+  .pop{ position:fixed; z-index:11; display:none; background:var(--panel); border:1px solid var(--line);
     border-radius:4px; padding:11px 13px; font-family:system-ui,sans-serif; overflow-y:auto;
     box-shadow:0 6px 18px rgba(0,0,0,.45); }
-  #itemPop.open{ display:block; }
+  .pop.open{ display:block; }
   .pop-actions{ display:flex; flex-direction:column; align-items:stretch; gap:6px; }
   .pop-actions button.action{ text-align:left; }
+  /* The stove timer's add buttons, side by side in the device pop-up,
+     sharing the row evenly so all three fit it at phone width. */
+  .timer-steps{ display:flex; gap:6px; }
+  .timer-steps button.action{ flex:1 1 0; min-width:0; padding-left:0; padding-right:0; text-align:center; }
   /* Focus is drawn for keyboard use only, so a click or a tap looks as it
      always has even now that opening and closing a layer moves focus. A
      layer's own root is focusable only as the last place focus can land,
@@ -179,14 +181,25 @@
   .tabs button{ font-size:12px; background:var(--panel-2); border:1px solid var(--line); color:var(--ink-dim);
     padding:4px 8px; min-height:24px; border-radius:3px; cursor:pointer; flex:none; white-space:nowrap; }
   .tabs button.active{ border-color:var(--accent); color:var(--accent); }
+  /* An item panel's header holds its title and its weight, and nothing
+     else, so the tabs under it never move when the tab changes (#229). The
+     weight never breaks inside itself; on a narrow panel it wraps whole onto
+     a second line. The header is always two lines tall, so a weight that
+     wraps on one tab and fits on the next moves nothing: one line sits
+     centred in the space two would take. The 15px line is set here rather
+     than left to the font, so the height is exact. */
   .panel h2{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-faint);
-    margin:0 0 8px; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:2px 6px; }
-  .panel h2 .sub{ color:var(--ink-dim); text-transform:none; letter-spacing:0; font-size:12px; display:flex; align-items:center; gap:6px; }
-  /* The Here header can carry the weight, the stove's state and Device
-     Options at once. On a narrow panel they wrap as whole pieces rather than
-     breaking inside a figure. */
-  #worldPanel h2 .sub{ flex-wrap:wrap; justify-content:flex-end; row-gap:3px; }
-  #worldWeight, #worldDeviceState{ white-space:nowrap; }
+    margin:0 0 8px; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:2px 6px;
+    line-height:15px; height:calc(2 * 15px + 2px); align-content:center; }
+  .panel h2 .sub{ color:var(--ink-dim); text-transform:none; letter-spacing:0; font-size:12px; white-space:nowrap; }
+  /* The strip under an item panel's tabs: what comes and goes with the
+     selected tab, the stove's state and Device Options on the Here side,
+     Unequip on the Inventory side. Hidden, it takes no space, so the list
+     sits where it always has; shown, it moves the list down and never the
+     tabs. */
+  .tab-strip{ display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:4px 6px;
+    margin-bottom:9px; font-size:12px; color:var(--ink-dim); }
+  .tab-strip > span{ white-space:nowrap; }
   ul.itemlist{ list-style:none; margin:0; padding:0; }
   ul.itemlist li{ display:flex; justify-content:space-between; align-items:center; gap:6px;
     padding:6px 0; border-bottom:1px solid rgba(51,56,63,.6); font-size:12px; }
@@ -233,8 +246,10 @@
   <button id="menuToggle">☰ Menu</button>
   <h1 id="pageTitle">ASHFALL</h1>
 </header>
-<div id="itemPopBackdrop"></div>
-<div id="itemPop" tabindex="-1"></div>
+<div id="itemPopBackdrop" class="pop-backdrop"></div>
+<div id="itemPop" class="pop" tabindex="-1"></div>
+<div id="devicePopBackdrop" class="pop-backdrop"></div>
+<div id="devicePop" class="pop" tabindex="-1"></div>
 <div id="menuBackdrop"></div>
 <aside id="sideMenu">
   <h2>Menu <button id="closeMenu">✕</button></h2>
@@ -275,14 +290,6 @@
     <div id="craftResult" class="log-result"></div>
   </div>
 </section>
-<section id="devicePanel" class="full-panel" tabindex="-1">
-  <h2><span id="deviceTitle"></span> <button class="panel-close">✕</button></h2>
-  <div class="full-panel-body">
-    <div id="deviceStatus"></div>
-    <div id="deviceControls"></div>
-    <div id="deviceResult" class="log-result"></div>
-  </div>
-</section>
 <section id="optionsPanel" class="full-panel" tabindex="-1">
   <h2>Options <button class="panel-close">✕</button></h2>
   <div class="full-panel-body">
@@ -311,13 +318,15 @@
   </div>
   <div id="sidebar">
     <div class="panel" id="invPanel">
-      <h2>Inventory <span class="sub"><span id="invWeight"></span><button id="unequipBtn" class="mini" style="display:none;">Unequip</button></span></h2>
+      <h2>Inventory <span class="sub"><span id="invWeight"></span></span></h2>
       <div class="tabs" id="invTabs"></div>
+      <div class="tab-strip" id="invStrip" style="display:none;"><button id="unequipBtn" class="mini">Unequip</button></div>
       <ul class="itemlist" id="invList"></ul>
     </div>
     <div class="panel" id="worldPanel">
-      <h2>Here <span class="sub"><span id="worldWeight"></span><span id="worldDeviceState"></span><button id="deviceOptionsBtn" class="mini" style="display:none;"></button></span></h2>
+      <h2>Here <span class="sub"><span id="worldWeight"></span></span></h2>
       <div class="tabs" id="worldTabs"></div>
+      <div class="tab-strip" id="worldStrip" style="display:none;"><span id="worldDeviceState"></span><button id="deviceOptionsBtn" class="mini"></button></div>
       <ul class="itemlist" id="worldList"></ul>
     </div>
   </div>
@@ -393,7 +402,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.8.1" };
+  const GAME_CONFIG = { VERSION: "0.8.2" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -661,8 +670,9 @@
   //               and what lies in it cooks while the room's heat is on
   //               (cookInHeat()).
   //       device  the container has controls beyond take and store, kept in
-  //               its Device Options panel (renderDevicePanel()). The Here
-  //               panel's header offers that panel while its tab is selected.
+  //               its device pop-up (renderDevicePop()). The strip under the
+  //               Here panel's tabs offers that pop-up while its tab is
+  //               selected.
   //       fridge  food in it ages slower while the power is on, and for a
   //               while after (spoilageRate()).
   //       freezer food in it does not age while the power is on, nor for a
@@ -670,7 +680,7 @@
   //     A container carrying both heat and device is the room's stove
   //     (roomStove()).
   //   Optional: timerMinutes — a stove's analog timer, minutes left (absent
-  //     = 0). Set from its Device Options, counted down by
+  //     = 0). Set from its device pop-up, counted down by
   //     tickStoveTimers() whether or not the stove is on.
   //     Authored containers carry their tags in WORLD DATA. The campfire's
   //     container is created by doBuildFire(), which gives it `heat`.
@@ -718,14 +728,13 @@
   //     tags          capability tags used by mechanics instead of name
   //                   checks. Read by a mechanic today: blunt, cutting,
   //                   chopping, fishing, tackle, fire-starter, battery,
-  //                   can-opening, device, disassemble, blade. `can-opening`
+  //                   can-opening, disassemble, blade. `can-opening`
   //                   means "can get a can open", not "is a can opener" —
   //                   doOpen() asks hasTool() for it, so every item that
   //                   could work a lid off carries it, not just the
-  //                   dedicated tool. `device` means the item has controls
-  //                   beyond take and store, kept in its Device Options
-  //                   panel: getItemActions() offers that panel in place of
-  //                   the battery controls. `disassemble` offers
+  //                   dedicated tool. An item's own controls, such as a
+  //                   radio's, sit in its item pop-up, so `device` is a
+  //                   container's tag only. `disassemble` offers
   //                   Disassemble, which gives back the inputs of the
   //                   RECIPES entry whose output the item is
   //                   (doDisassemble()); on an item no recipe makes, it
@@ -914,7 +923,7 @@
     wrench: { name:"Wrench", category:"Tool", unitWeight:0.8, tags:["blunt"] },
     master_key: { name:"Master key", category:"Key", unitWeight:0.03, masterKey:true, building:"acorn" },
     building_ledger: { name:"Building ledger", category:"Literature", unitWeight:0.5 },
-    portable_radio: { name:"Portable radio", category:"Electronics", unitWeight:0.4, tags:["device"], on:false, hasBatteries:true, durability:{ current:100, max:100, mode:"time" }, drainRate:100/2880 },
+    portable_radio: { name:"Portable radio", category:"Electronics", unitWeight:0.4, on:false, hasBatteries:true, durability:{ current:100, max:100, mode:"time" }, drainRate:100/2880 },
     tow_chain: { name:"Tow chain", category:"Materials", unitWeight:2.0 },
     owners_manual: { name:"Owner's manual", category:"Literature", unitWeight:0.2 },
     potato_chips: { name:"Potato chips", category:"Food", unitWeight:0.15, restores:{hunger:10}, verb:"Eat" },
@@ -4074,12 +4083,12 @@
   let state = makeDefaultState();
   let gameOver = false; // UI-only: never saved — a loaded save always resumes alive
   let detailItem = null; // UI-only: { uid, side } — resolved fresh via findItemByUid(), safe against list mutation
-  // What the Device Options panel is open on, or null when it is closed:
-  // { kind:"item", uid } or { kind:"container", id }. Identity only, never an
-  // index or a kept object: resolveDeviceTarget() looks it up again on every
-  // render. UI-only and never saved, like detailItem.
+  // What the device pop-up is open on, or null when it is closed:
+  // { kind:"container", id }, a room fixture tagged `device`. Identity only,
+  // never an index or a kept object: resolveDeviceTarget() looks it up again
+  // on every render. UI-only and never saved, like detailItem.
   let deviceTarget = null;
-  // The open menu layers, bottom to top — the item pop-up, the drawer, a
+  // The open menu layers, bottom to top — the pop-ups, the drawer, a
   // full-screen panel. UI-only and never saved, like detailItem. See
   // openLayer() in EVENTS / UI HELPERS for what an entry holds.
   let layerStack = [];
@@ -4094,8 +4103,6 @@
   // drawer.
   function defaultCraftFilter(){ return { query:"", group:"all", canMakeOnly:false, vesselUid:null }; }
   let craftFilter = defaultCraftFilter();
-  // The same, for the last control run from the Device Options panel.
-  let deviceResult = [];
   // Whether the last render() drew the game-over screen. UI-only. Game over
   // closes every layer once, on the render that first draws it, so the
   // drawer can still be opened and used afterwards (see render()).
@@ -5236,14 +5243,9 @@
         actions.push({ label, onClick:()=>doToggleLock(it.doorId) });
       }
     }
-    // A device keeps its controls in its Device Options panel, so the pop-up
-    // offers the panel instead of them. Anything else that runs on batteries
-    // (the flashlight) keeps them here.
-    if(hasTag(it, "device")){
-      actions.push({ label:DEVICE_OPTIONS_LABEL, onClick:()=> openDevicePanel({ kind:"item", uid:ensureUid(it) }) });
-    } else {
-      batteryActions(it).forEach(a=> actions.push(a));
-    }
+    // Anything that runs on batteries (the flashlight, the radio) keeps its
+    // controls here.
+    batteryActions(it).forEach(a=> actions.push(a));
     if(disassemblyRecipe(it)) actions.push({ label:"Disassemble", onClick:()=> doDisassemble(list, index) });
     return actions;
   }
@@ -5296,11 +5298,10 @@
     return actions;
   }
   // The controls of anything that runs on batteries: Turn on/off, Remove
-  // batteries, Replace batteries. Defined once, for both places they are
-  // shown: the item pop-up, for an item not tagged `device`, and a device's
-  // Device Options panel. Offered for durability mode "time" only, which is
-  // what runs on batteries, and empty for anything else. The closures act on
-  // the object `it` passed in, so a caller resolves it fresh on every render.
+  // batteries, Replace batteries, shown in its item pop-up. Offered for
+  // durability mode "time" only, which is what runs on batteries, and empty
+  // for anything else. The closures act on the object `it` passed in, so a
+  // caller resolves it fresh on every render.
   function batteryActions(it){
     const actions = [];
     if(!it.durability || it.durability.mode !== "time") return actions;
@@ -6506,7 +6507,7 @@
     return next;
   }
   // The stove timer: an analog kitchen timer on the stove container, in
-  // minutes (`timerMinutes`, absent = 0). Its Device Options add
+  // minutes (`timerMinutes`, absent = 0). Its device pop-up's buttons add
   // STOVE_TIMER_STEPS minutes a press, with no clear, no subtract and no cap.
   // It needs neither the stove on nor power, and turns nothing off. When it
   // runs down it rings, heard anywhere in the stove's building: the player's
@@ -7308,14 +7309,14 @@
   }
 
   function doSaveLocal(){
-    try{ localStorage.setItem(SAVE_KEY, serializeGame()); log("Progress saved to this browser.", "sys"); }
+    try{ localStorage.setItem(SAVE_KEY, serializeGame()); log("Progress saved to this browser.", "sys", "save"); }
     catch(e){ log("Couldn't save to browser storage here — use Export instead.", "warn"); }
   }
   function doLoadLocal(){
     try{
       const raw = localStorage.getItem(SAVE_KEY);
       if(!raw){ log("No saved game found in this browser.", "warn"); return; }
-      if(applyLoadedData(JSON.parse(raw))) log("Progress loaded from this browser.", "sys");
+      if(applyLoadedData(JSON.parse(raw))) log("Progress loaded from this browser.", "sys", "load");
     }catch(e){ log("Couldn't read a save from this browser.", "warn"); }
   }
   function doExportSave(){
@@ -7324,12 +7325,12 @@
     const a = document.createElement("a"); a.href = url; a.download = "ashfall-save.json";
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    log("Save file exported.", "sys");
+    log("Save file exported.", "sys", "export");
   }
   function doImportSave(file){
     const reader = new FileReader();
     reader.onload = ()=>{
-      try{ if(applyLoadedData(JSON.parse(reader.result))) log("Save file imported.", "sys"); }
+      try{ if(applyLoadedData(JSON.parse(reader.result))) log("Save file imported.", "sys", "import"); }
       catch(e){ log("That file couldn't be read as a save.", "warn"); }
     };
     reader.onerror = ()=> log("That file couldn't be read.", "warn");
@@ -7349,12 +7350,13 @@
   // ==================================================
   // EVENTS / UI HELPERS
   // ==================================================
-  // MENU LAYERS. Three kinds stack: the item pop-up, the drawer, and a
-  // full-screen panel over the drawer. layerStack holds the open ones bottom
-  // to top, each as { el, hide, back }: the layer's root element, what
-  // closing it does, and where focus goes when it closes. Esc closes the top
-  // one only. Nothing here knows which layers exist: the Device Options panel
-  // is one more openLayer() call (see openDevicePanel()).
+  // MENU LAYERS. Three kinds stack: a pop-up (the item pop-up or the device
+  // pop-up), the drawer, and a full-screen panel over the drawer. layerStack
+  // holds the open ones bottom to top, each as { el, hide, back }: the
+  // layer's root element, what closing it does, and where focus goes when it
+  // closes. Esc closes the top one only. Nothing here knows which layers
+  // exist: the device pop-up is one more openLayer() call (see
+  // renderDevicePop()).
   function layerOpen(el){ return layerStack.some(l => l.el === el); }
   // The enabled, rendered controls in a layer, in document order.
   function focusablesIn(el){
@@ -7442,12 +7444,27 @@
   // Closing the pop-up is clearing detailItem, so the two never disagree.
   function hideItemPop(){ detailItem = null; itemPop.classList.remove("open"); itemPopBackdrop.classList.remove("show"); }
   itemPopBackdrop.addEventListener("click", ()=> closeLayer(itemPop));
-  window.addEventListener("resize", positionItemPop);
+  // The device pop-up (see renderDevicePop()): a room fixture's controls,
+  // opened by Device Options in the strip under the Here panel's tabs. Its
+  // backdrop works as the item pop-up's does. Closing it is clearing
+  // deviceTarget, as closing the item pop-up is clearing detailItem.
+  const DEVICE_OPTIONS_LABEL = "Device Options";
+  const devicePop = document.getElementById("devicePop");
+  const devicePopBackdrop = document.getElementById("devicePopBackdrop");
+  const deviceOptionsBtn = document.getElementById("deviceOptionsBtn");
+  deviceOptionsBtn.textContent = DEVICE_OPTIONS_LABEL;
+  function showDevicePop(){ devicePop.classList.add("open"); devicePopBackdrop.classList.add("show"); }
+  function hideDevicePop(){ deviceTarget = null; devicePop.classList.remove("open"); devicePopBackdrop.classList.remove("show"); }
+  devicePopBackdrop.addEventListener("click", ()=> closeLayer(devicePop));
+  function positionPops(){ positionItemPop(); positionDevicePop(); }
+  window.addEventListener("resize", positionPops);
   // Capture phase, because scroll doesn't bubble and a scroll inside
-  // #sidebar moves the row as surely as a page scroll does. A scroll inside
-  // the pop-up itself isn't the row moving.
+  // #sidebar moves the anchor as surely as a page scroll does. A scroll
+  // inside a pop-up itself isn't its anchor moving.
   window.addEventListener("scroll", e=>{
-    if(!(e.target instanceof Node && itemPop.contains(e.target))) positionItemPop();
+    const inside = (pop)=> e.target instanceof Node && pop.contains(e.target);
+    if(!inside(itemPop)) positionItemPop();
+    if(!inside(devicePop)) positionDevicePop();
   }, true);
 
   // The drawer.
@@ -7501,43 +7518,11 @@
   document.querySelectorAll(".full-panel .panel-close").forEach(btn=>{
     btn.addEventListener("click", ()=> closeLayer(btn.closest(".full-panel")));
   });
-  // The Device Options panel, for an item or a room fixture tagged `device`
-  // (see renderDevicePanel()). A full-screen panel like the hub's, in its own
-  // element rather than a FULL_PANELS entry, because it opens from the play
-  // area rather than from the drawer: it opens the drawer first, if that is
-  // not already open, and stacks over it. Closing it, by ✕ or Esc, closes
-  // the drawer it opened in the same step, so the player lands back where
-  // they opened it: on the item's pop-up, or on play. Focus goes back to the
-  // Device Options control that opened it, found again by label if the
-  // pop-up was rebuilt meanwhile.
-  const DEVICE_OPTIONS_LABEL = "Device Options";
-  const devicePanel = document.getElementById("devicePanel");
-  const deviceOptionsBtn = document.getElementById("deviceOptionsBtn");
-  deviceOptionsBtn.textContent = DEVICE_OPTIONS_LABEL;
-  function openDevicePanel(target){
-    if(layerOpen(devicePanel)) return;
-    const back = { el:null, uid:null, find: target.kind === "item"
-      ? ()=> layerOpen(itemPop) && Array.from(itemPop.querySelectorAll("button")).find(b => b.textContent === DEVICE_OPTIONS_LABEL) || null
-      : ()=> deviceOptionsBtn };
-    deviceTarget = target;
-    deviceResult = [];
-    // Drawn before it opens, so openLayer() has a first control to focus.
-    renderDevicePanel();
-    const openedDrawer = !layerOpen(sideMenu);
-    if(openedDrawer) openMenu();
-    openLayer(devicePanel, ()=> devicePanel.classList.add("open"), ()=>{
-      devicePanel.classList.remove("open");
-      deviceTarget = null;
-      deviceResult = [];
-      renderDeviceResult();
-      if(openedDrawer) closeMenu();
-    }, back);
-  }
   // Create dish: the Crafting panel opened from a vessel's pop-up, on the
-  // Dishes group with that vessel as its context. Like Device Options, it
-  // opens the drawer first if that is not open, and closing the panel closes
-  // the drawer it opened, landing the player back on the pop-up's Create
-  // dish.
+  // Dishes group with that vessel as its context. It opens from the play
+  // area rather than from the drawer, so it opens the drawer first if that
+  // is not open, and closing the panel closes the drawer it opened, landing
+  // the player back on the pop-up's Create dish.
   function openCraftingForVessel(uid){
     const el = FULL_PANELS.crafting.el;
     if(layerOpen(el)) return;
@@ -7817,6 +7802,12 @@
   // face, against a cap band nearer 11 — so there is no cheap correct reading
   // to take. This stays a chosen number until there is one.
   const MAP_LABEL_CAP = 12;
+  // How far a name's ink reaches off its own street line: MAP_LABEL_OFFSET
+  // to its near edge, a cap height more to its far one. A street is named
+  // only where this much of the view lies on the name's side of its line
+  // (mapPositionStreetLabels()), and it is the band a crossing's name
+  // occupies (clearance, below).
+  const MAP_LABEL_DEPTH = MAP_LABEL_OFFSET + MAP_LABEL_CAP;
   // Breathing room between a name and the end of the stretch it is inset
   // from. Retunable.
   const MAP_LABEL_EDGE_GAP = 5;
@@ -7850,15 +7841,15 @@
       // How close to a crossing a name may sit before it can touch that
       // crossing's own name. A name reaches its own w/2 along its street, and
       // the crossing's name occupies a band from MAP_LABEL_OFFSET to
-      // MAP_LABEL_OFFSET + MAP_LABEL_CAP off the crossing line, so this is
+      // MAP_LABEL_DEPTH off the crossing line, so this is
       // how far past an intersection a name's box can still reach one.
       // A mid-block sits MAP_SPACING/2 away. Under per-street widths the
       // limit is a name wider than
-      // MAP_SPACING - 2 * (MAP_LABEL_OFFSET + MAP_LABEL_CAP) = 96 units, and
+      // MAP_SPACING - 2 * MAP_LABEL_DEPTH = 96 units, and
       // the widest north-south name is "2ND ST" at ~65 — clear by ~31 units
       // by construction, rather than by the coincidence that the one
       // over-wide name happens to run east-west.
-      clearance: w / 2 + MAP_LABEL_OFFSET + MAP_LABEL_CAP
+      clearance: w / 2 + MAP_LABEL_DEPTH
     };
   }
   // What a street keeps when its own measurement fails. Computed once here so
@@ -7970,20 +7961,25 @@
   // placement is relative to the window, not to the street. `node` is the map
   // node the player is on, passed in rather than read from mapLastNode, which
   // renderMap() has not updated yet when the snap branch runs.
+  // A street is named only while its line is inside the box with
+  // MAP_LABEL_DEPTH to spare on the side its names sit, above a horizontal
+  // street and right of a vertical one (mapLabelBox()): a street closer than
+  // that to the top or right edge would have its names drawn wholly outside
+  // the view (#37). The other side needs only the line inside, since the
+  // names run into the view from there.
   function mapPositionStreetLabels(box, node){
     const p0 = LOCATIONS[node];
     const player = mapToSvg(p0.x / 100, p0.y / 100);
     mapStreetLabels.forEach(street=>{
       let positions = [];
       if(street.horizontal){
-        // A horizontal street is on screen only if its single y is
-        if(street.a.y >= box.y && street.a.y <= box.y + box.h){
+        if(street.a.y >= box.y + MAP_LABEL_DEPTH && street.a.y <= box.y + box.h){
           positions = mapLabelPositions(
             Math.max(Math.min(street.a.x, street.b.x), box.x),
             Math.min(Math.max(street.a.x, street.b.x), box.x + box.w),
             street.metrics);
         }
-      } else if(street.a.x >= box.x && street.a.x <= box.x + box.w){
+      } else if(street.a.x >= box.x && street.a.x <= box.x + box.w - MAP_LABEL_DEPTH){
         positions = mapLabelPositions(
           Math.max(Math.min(street.a.y, street.b.y), box.y),
           Math.min(Math.max(street.a.y, street.b.y), box.y + box.h),
@@ -8310,13 +8306,17 @@
     if(water) labels.push(water === "tainted" ? "Tainted" : "Water");
     return labels;
   }
-  // Everything shown after an item's name: its labels, " (Open) (Fresh)", or
-  // for a vessel holding a dish, the dish and the dish's labels, ": Fish stew
-  // (Cooked) (Fresh)".
-  function itemStateText(it, ctx){
+  // What an item shows as, in its list row and its pop-up alike: { name,
+  // state, category, vessel }. `state` is everything shown after the name,
+  // its labels, " (Open) (Fresh)". A vessel holding a dish shows as the dish
+  // — the dish's name, labels and category — and `vessel` is then the
+  // vessel, which only the pop-up names; otherwise it is null. The one
+  // statement of which of the two an item shows as.
+  function itemDisplay(it, ctx){
     const dish = vesselDefOf(it) && dishIn(it);
-    const labels = itemStateLabels(dish || it, ctx).map(l=> ` (${l})`).join("");
-    return dish ? `: ${dish.name}${labels}` : labels;
+    const shown = dish || it;
+    return { name: shown.name, state: itemStateLabels(shown, ctx).map(l=> ` (${l})`).join(""),
+      category: shown.category, vessel: dish ? it : null };
   }
   function renderItemList(el, list, buttons, side, ctx){
     el.innerHTML = "";
@@ -8326,9 +8326,10 @@
       const total = itemWeight(it).toFixed(2);
       const meta = document.createElement("span");
       meta.className = "meta";
+      const shown = itemDisplay(it, ctx);
       const nameEl = document.createElement("button");
       nameEl.className = "itemname";
-      nameEl.textContent = it.name;
+      nameEl.textContent = shown.name;
       // Carried only by an item that already has a _uid: every item the
       // pop-up has been opened on does, and minting one for every row drawn
       // would put a _uid into every save for nothing. It is how the pop-up
@@ -8337,18 +8338,17 @@
       nameEl.addEventListener("click", ()=>{ detailItem = { uid: ensureUid(it), side }; render(); });
       meta.appendChild(nameEl);
       // The state text sits outside nameEl so the control's text stays
-      // exactly the item's name, which focus-by-label depends on.
-      const stateText = itemStateText(it, ctx);
-      if(stateText){
+      // exactly the name shown, which focus-by-label depends on.
+      if(shown.state){
         const stateEl = document.createElement("span");
         stateEl.className = "state";
-        stateEl.textContent = stateText;
+        stateEl.textContent = shown.state;
         meta.appendChild(stateEl);
       }
       meta.appendChild(document.createTextNode(` ×${it.qty} — ${total} kg `));
       const catSpan = document.createElement("span");
       catSpan.className = "cat";
-      catSpan.textContent = `(${it.category})`;
+      catSpan.textContent = `(${shown.category})`;
       meta.appendChild(catSpan);
       li.appendChild(meta);
       const row = document.createElement("span");
@@ -8369,8 +8369,7 @@
   }
   // An item's durability as the player reads it: uses left, or, for anything
   // on batteries, its charge and whether it is on. The one statement of that
-  // line, shown by the item pop-up and, as a device's status line, by its
-  // Device Options panel.
+  // line, shown by the item pop-up.
   function durabilityText(it){
     if(it.durability.mode === "uses") return `${Math.round(it.durability.current)}/${it.durability.max} uses`;
     return it.hasBatteries === false
@@ -8406,19 +8405,27 @@
       box.className = "detailBox";
       const nameLine = document.createElement("div");
       const nameB = document.createElement("b");
-      nameB.textContent = it.name;
-      nameLine.appendChild(nameB);
       const ctx = { container: detailItem.side === "world" ? worldTabContainer(world[state.currentRoom], worldTab) : null };
-      const stateText = itemStateText(it, ctx);
-      if(stateText) nameLine.appendChild(document.createTextNode(stateText));
+      const shown = itemDisplay(it, ctx);
+      nameB.textContent = shown.name;
+      nameLine.appendChild(nameB);
+      if(shown.state) nameLine.appendChild(document.createTextNode(shown.state));
       box.appendChild(nameLine);
+      // The weights are the item's, the vessel and its dish together.
       const statsLine = document.createElement("div");
-      statsLine.appendChild(document.createTextNode(`${it.category} · ${itemWeight(it).toFixed(2)} kg `));
+      statsLine.appendChild(document.createTextNode(`${shown.category} · ${itemWeight(it).toFixed(2)} kg `));
       const eachSpan = document.createElement("span");
       eachSpan.style.color = "var(--ink-faint)";
       eachSpan.textContent = `(${itemUnitWeight(it).toFixed(2)} kg each)`;
       statsLine.appendChild(eachSpan);
       box.appendChild(statsLine);
+      // A dish shown in its vessel's place names the vessel here, and only
+      // here. Functional UI text, retunable.
+      if(shown.vessel){
+        const inLine = document.createElement("div");
+        inLine.textContent = `In a ${shown.vessel.name.toLowerCase()}`;
+        box.appendChild(inLine);
+      }
       if(it.durability){
         const durLine = document.createElement("div");
         durLine.textContent = durabilityText(it);
@@ -8430,12 +8437,12 @@
         box.appendChild(sealLine);
       }
       // A vessel lists what it holds, since its contents are not rows. A
-      // dish is already in its name line.
+      // vessel holding a dish shows as the dish instead.
       if(vesselDefOf(it) && !dishIn(it)){
         const rows = it.contents || [];
         const holds = document.createElement("div");
         holds.textContent = rows.length
-          ? "Holds: " + rows.map(r=> r.name + itemStateText(r, ctx) + " ×" + r.qty).join(", ")
+          ? "Holds: " + rows.map(r=>{ const d = itemDisplay(r, ctx); return d.name + d.state + " ×" + r.qty; }).join(", ")
           : (it.water ? "Holds no food" : "Empty");
         box.appendChild(holds);
         if(it.water){
@@ -8465,33 +8472,37 @@
     else openLayer(itemPop, showItemPop, hideItemPop, { el:null, uid: detailItem.uid });
     positionItemPop();
   }
-  // The pop-up hangs from its item's row, found again by uid on every call.
-  // It opens directly below the row and flips above when below would run off
-  // the bottom of the viewport. It is never wider than the row and never off
-  // either side of the viewport. If neither side has room for all of it, it
-  // takes the roomier side and scrolls inside. It re-runs on every render,
-  // scroll and resize, so it stays attached to its row. POP_MARGIN is how
-  // close it may come to a viewport edge, and is retunable.
+  // A pop-up hangs from its anchor: the item pop-up from its item's row,
+  // the device pop-up from the strip under the Here tabs. It opens directly
+  // below the anchor and flips above when below would run off the bottom of
+  // the viewport. It is never wider than the anchor and never off either
+  // side of the viewport. If neither side has room for all of it, it takes
+  // the roomier side and scrolls inside. `r` is the anchor's client rect,
+  // read fresh by the caller: each pop-up re-runs this on every render,
+  // scroll and resize, so it stays attached. POP_MARGIN is how close it may
+  // come to a viewport edge, and is retunable.
   const POP_MARGIN = 8;
-  function positionItemPop(){
-    if(!detailItem || !layerOpen(itemPop)) return;
-    const name = itemNameButton(detailItem.uid);
-    const row = name && name.closest("li");
-    if(!row) return;
-    const r = row.getBoundingClientRect();
+  function placePop(pop, r){
     const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
     const width = Math.min(r.width, vw - 2 * POP_MARGIN);
-    itemPop.style.width = width + "px";
-    itemPop.style.left = Math.min(Math.max(r.left, POP_MARGIN), vw - POP_MARGIN - width) + "px";
-    itemPop.style.maxHeight = "";
-    const h = itemPop.offsetHeight;
+    pop.style.width = width + "px";
+    pop.style.left = Math.min(Math.max(r.left, POP_MARGIN), vw - POP_MARGIN - width) + "px";
+    pop.style.maxHeight = "";
+    const h = pop.offsetHeight;
     const below = vh - POP_MARGIN - r.bottom, above = r.top - POP_MARGIN;
     let top;
     if(h <= below) top = r.bottom;
     else if(h <= above) top = r.top - h;
-    else if(below >= above){ top = r.bottom; itemPop.style.maxHeight = below + "px"; }
-    else { top = POP_MARGIN; itemPop.style.maxHeight = above + "px"; }
-    itemPop.style.top = top + "px";
+    else if(below >= above){ top = r.bottom; pop.style.maxHeight = below + "px"; }
+    else { top = POP_MARGIN; pop.style.maxHeight = above + "px"; }
+    pop.style.top = top + "px";
+  }
+  // The item pop-up's row, found again by uid on every call.
+  function positionItemPop(){
+    if(!detailItem || !layerOpen(itemPop)) return;
+    const name = itemNameButton(detailItem.uid);
+    const row = name && name.closest("li");
+    if(row) placePop(itemPop, row.getBoundingClientRect());
   }
   // The Crafting panel. Unavailable recipes stay visible and disabled, with
   // their `(needs ...)` string. By default this is a catalogue, not an action
@@ -8644,13 +8655,13 @@
     });
     renderCraftResult();
   }
-  // What an action wrote to #log. The actions a panel runs (doCraft(), a
-  // device's controls) don't report what they wrote, so this reads #log on
+  // What an action wrote to #log. The actions a panel runs (doCraft(), Add
+  // ingredients) don't report what they wrote, so this reads #log on
   // either side of one. What it wrote is every <p> that wasn't there before,
   // plus the last one if its text changed: log() updates the last entry in
   // place rather than appending when its key repeats, as a second identical
-  // craft does with its ×2. Crafting and Device Options both capture their
-  // result areas through here.
+  // craft does with its ×2. The Crafting panel captures its result area
+  // through here.
   function logWrittenBy(action){
     const logDiv = document.getElementById("log");
     const before = new Set(logDiv.children);
@@ -8679,94 +8690,88 @@
     renderCraftResult();
   }
   function renderCraftResult(){ renderLogResult(document.getElementById("craftResult"), craftResult); }
-  // What deviceTarget points at now, looked up again by identity: an item by
-  // its _uid, anywhere findItemByUid() can reach; a container by its id,
-  // among the current room's containers. Either must still carry `device`.
-  // null when the target no longer resolves, which closes the panel.
+  // What deviceTarget points at now, looked up again by identity: a
+  // container by its id, among the current room's containers. It must still
+  // carry `device`, and the Here panel's selected tab must still be its, since
+  // the pop-up hangs from that tab's strip. null when the target no longer
+  // resolves, which closes the pop-up: leaving the room, switching the Here
+  // tab, a load or a restart.
   function resolveDeviceTarget(){
-    if(!deviceTarget) return null;
-    if(deviceTarget.kind === "item"){
-      const found = findItemByUid(deviceTarget.uid);
-      return found && hasTag(found.item, "device") ? { item:found.item } : null;
-    }
+    if(!deviceTarget || worldTab !== deviceTarget.id) return null;
     const room = world[state.currentRoom];
     const container = room.containers.find(c=> c.id === deviceTarget.id);
     return container && hasTag(container, "device") ? { room, container } : null;
   }
-  // The Device Options panel (see openDevicePanel()): a heading, a status
-  // line, the controls, and the result area. Drawn by every render(), as the
-  // item pop-up is, so it follows whatever its controls change, and it stays
-  // open after a control runs. For an item, the status line is the pop-up's
-  // (durabilityText()) and the controls are batteryActions(), so neither is
-  // stated twice. For the stove, the room's heatActive is its On/Off, and
-  // Light / Turn off are the actions the Here group used to offer; below them
-  // sit its timer's add buttons (doAddStoveTimer()).
-  // The stove's two readouts, shared by its Device Options status lines and
-  // the Here panel header: whether it is lit, and the timer rounded up to a
-  // whole minute ("Timer: 0" when unset).
+  // The stove's two readouts, shared by the device pop-up's status lines and
+  // the Here strip: whether it is lit, and the timer rounded up to a whole
+  // minute ("Timer: 0" when unset).
   function stoveOnText(room){ return room.heatActive ? "On" : "Off"; }
   function stoveTimerText(stove){ return "Timer: " + Math.ceil(stove.timerMinutes || 0); }
-  function renderDevicePanel(){
+  // The device pop-up: a room fixture's controls, styled as the item pop-up
+  // is. A bold title line with the fixture's name, its status lines, then
+  // its controls. For the stove, the room's heatActive is its On/Off, Light /
+  // Turn off are the actions the Here group used to offer, and below them sit
+  // its timer's add buttons (doAddStoveTimer()). Whether it is open follows
+  // deviceTarget and nothing else, as the item pop-up's follows detailItem:
+  // Device Options sets it, and render() opens the pop-up. Drawn by every
+  // render(), so it stays open after a control runs and updates in place. A
+  // control's result is its line in #log, and nothing here repeats it.
+  // Closing it, by an outside tap, Esc, or its target no longer resolving,
+  // hands focus back to Device Options.
+  function renderDevicePop(){
     const target = resolveDeviceTarget();
-    if(!target){ closeLayer(devicePanel); return; }
-    rebuildKeepingFocus(devicePanel, ()=>{
-      const title = document.getElementById("deviceTitle");
-      const status = document.getElementById("deviceStatus");
-      const controls = document.getElementById("deviceControls");
-      controls.innerHTML = "";
-      if(target.item){
-        const it = target.item;
-        title.textContent = it.name;
-        status.textContent = it.durability ? durabilityText(it) : "";
-        batteryActions(it).forEach(a=>{
-          controls.appendChild(actionButton(a.label, ()=> runDeviceControl(a.onClick)));
-        });
+    if(!target){ closeLayer(devicePop); return; }
+    const room = target.room;
+    rebuildKeepingFocus(devicePop, ()=>{
+      devicePop.innerHTML = "";
+      const box = document.createElement("div");
+      box.className = "detailBox";
+      const nameLine = document.createElement("div");
+      const nameB = document.createElement("b");
+      nameB.textContent = target.container.name;
+      nameLine.appendChild(nameB);
+      box.appendChild(nameLine);
+      devicePop.appendChild(box);
+      // The stove, the one fixture device today. A fixture tagged `device`
+      // without `heat` would draw only its name until it gains controls.
+      if(!hasTag(target.container, "heat")) return;
+      // Functional UI text, held to clarity; retunable.
+      [stoveOnText(room), stoveTimerText(target.container)].forEach(line=>{
+        const div = document.createElement("div");
+        div.textContent = line;
+        box.appendChild(div);
+      });
+      const controls = document.createElement("div");
+      controls.className = "pop-actions";
+      if(room.heatActive){
+        controls.appendChild(actionButton("Turn off the stove", doExtinguish));
+      } else if(hasMatchUses()){
+        controls.appendChild(actionButton("Light the stove " + fmtDuration(LIGHT_STOVE_MIN), doLightStove));
       } else {
-        const room = target.room;
-        title.textContent = target.container.name;
-        status.innerHTML = "";
-        // The stove, the one fixture device today. A fixture tagged `device`
-        // without `heat` would draw only its name until it gains controls.
-        if(!hasTag(target.container, "heat")) return;
-        // Functional UI text, held to clarity; retunable.
-        [stoveOnText(room), stoveTimerText(target.container)].forEach(line=>{
-          const div = document.createElement("div");
-          div.textContent = line;
-          status.appendChild(div);
-        });
-        if(room.heatActive){
-          controls.appendChild(actionButton("Turn off the stove", ()=> runDeviceControl(doExtinguish)));
-        } else if(hasMatchUses()){
-          controls.appendChild(actionButton("Light the stove " + fmtDuration(LIGHT_STOVE_MIN), ()=> runDeviceControl(doLightStove)));
-        } else {
-          // Says the one thing that is missing, so a spent last
-          // fire-starter reads as a cause rather than as the control quietly
-          // disappearing.
-          controls.appendChild(hereNote("Nothing you're carrying will light it."));
-        }
-        // The timer's buttons, one per step, after Light / Turn off. They
-        // cost no time and log nothing.
-        const timerRow = document.createElement("div");
-        timerRow.className = "timer-steps";
-        STOVE_TIMER_STEPS.forEach(m=>{
-          timerRow.appendChild(actionButton("+" + m, ()=> runDeviceControl(()=> doAddStoveTimer(m))));
-        });
-        controls.appendChild(timerRow);
+        // Says the one thing that is missing, so a spent last
+        // fire-starter reads as a cause rather than as the control quietly
+        // disappearing.
+        controls.appendChild(hereNote("Nothing you're carrying will light it."));
       }
+      // The timer's buttons, one per step, after Light / Turn off. They
+      // cost no time and log nothing.
+      const timerRow = document.createElement("div");
+      timerRow.className = "timer-steps";
+      STOVE_TIMER_STEPS.forEach(m=>{
+        timerRow.appendChild(actionButton("+" + m, ()=> doAddStoveTimer(m)));
+      });
+      controls.appendChild(timerRow);
+      devicePop.appendChild(controls);
     });
-    renderDeviceResult();
+    if(!layerOpen(devicePop)) openLayer(devicePop, showDevicePop, hideDevicePop, { el:deviceOptionsBtn, uid:null });
+    positionDevicePop();
   }
-  // Runs one of the panel's controls and shows what it wrote. A control that
-  // wrote nothing, as the battery controls never do, empties the result area:
-  // it holds the last control's lines, and that control had none.
-  function runDeviceControl(action){
-    const written = logWrittenBy(action);
-    // A control that ended the run has already closed every layer.
-    if(!layerOpen(devicePanel)) return;
-    deviceResult = written;
-    renderDeviceResult();
+  // The device pop-up hangs from the Here strip, which is what holds Device
+  // Options, at the strip's width.
+  function positionDevicePop(){
+    if(!deviceTarget || !layerOpen(devicePop)) return;
+    placePop(devicePop, document.getElementById("worldStrip").getBoundingClientRect());
   }
-  function renderDeviceResult(){ renderLogResult(document.getElementById("deviceResult"), deviceResult); }
   function renderLocationPanel(){
     const room = world[state.currentRoom];
     document.getElementById("locLabel").textContent = roomLabel(room);
@@ -8883,8 +8888,8 @@
     // no kit and no firewood is not being denied a fire by the missing match,
     // and saying so would be wrong. Functional UI text, held to clarity rather
     // than to the game's descriptive tone; retunable.
-    // The stove is not here: lighting it and turning it off are its Device
-    // Options (renderDevicePanel()). Every room roomStove() finds a stove in
+    // The stove is not here: lighting it and turning it off are its device
+    // pop-up's (renderDevicePop()). Every room roomStove() finds a stove in
     // also carries cannotHaveFire today, so a stove and a campfire never share
     // a room, but nothing here assumes that: "Put out the fire" below reads
     // roomStove() and is offered only where it finds none.
@@ -8979,11 +8984,12 @@
         totalWeight(currentInv.items).toFixed(2) + (currentInv.capacityKg ? " / " + currentInv.capacityKg + " kg" : " kg");
       invWeight.style.color = "";
     }
-    const unequipBtn = document.getElementById("unequipBtn");
+    // Unequip, in the strip under the tabs, while the tab is a slot's.
+    const invStrip = document.getElementById("invStrip");
     if(CONTAINER_SLOTS.indexOf(invTab) >= 0){
-      unequipBtn.style.display = "";
-      unequipBtn.onclick = ()=> doUnequip(invTab);
-    } else { unequipBtn.style.display = "none"; }
+      invStrip.style.display = "";
+      document.getElementById("unequipBtn").onclick = ()=> doUnequip(invTab);
+    } else { invStrip.style.display = "none"; }
     renderItemList(document.getElementById("invList"), currentInv.items, [
       { label: worldTab === "floor" ? "Place" : "Store", onClick:(i)=> doStore(i) }
     ], "inv", { container:null });
@@ -9027,17 +9033,18 @@
     const currentWorld = worldSlot(room, worldTab);
     document.getElementById("worldWeight").textContent =
       totalWeight(currentWorld.items).toFixed(2) + " / " + currentWorld.capacityKg + " kg";
-    // A room fixture's Device Options, beside the weight: the selected tab is
-    // the focus, the way the Inventory header's Unequip follows its tab. Shown
-    // only while that tab is a container tagged `device`.
+    // A room fixture's strip, under the tabs: the selected tab is the focus,
+    // the way the Inventory strip's Unequip follows its tab. Shown only while
+    // that tab is a container tagged `device`. It holds the stove's state,
+    // while the stove's tab is selected, then Device Options, which opens the
+    // device pop-up (renderDevicePop()).
+    const worldStrip = document.getElementById("worldStrip");
     const tabContainer = room.containers.find(c=> c.id === worldTab);
     if(tabContainer && hasTag(tabContainer, "device")){
-      deviceOptionsBtn.style.display = "";
-      deviceOptionsBtn.onclick = ()=> openDevicePanel({ kind:"container", id:tabContainer.id });
-    } else { deviceOptionsBtn.style.display = "none"; }
-    // The stove's state, between the weight and its Device Options button,
-    // while its tab is selected.
-    // Hidden when empty, so it adds no gap to the header row.
+      worldStrip.style.display = "";
+      deviceOptionsBtn.onclick = ()=>{ deviceTarget = { kind:"container", id:tabContainer.id }; render(); };
+    } else { worldStrip.style.display = "none"; }
+    // Hidden when empty, so it adds no gap to the strip.
     const deviceState = document.getElementById("worldDeviceState");
     deviceState.textContent = tabContainer && tabContainer === roomStove(room)
       ? stoveOnText(room) + " · " + stoveTimerText(tabContainer) : "";
@@ -9078,12 +9085,11 @@
       document.getElementById("invTabs").innerHTML = "";
       document.getElementById("invList").innerHTML = "";
       document.getElementById("invWeight").textContent = "";
-      document.getElementById("unequipBtn").style.display = "none";
+      document.getElementById("invStrip").style.display = "none";
       document.getElementById("worldTabs").innerHTML = "";
       document.getElementById("worldList").innerHTML = "";
       document.getElementById("worldWeight").textContent = "";
-      document.getElementById("worldDeviceState").textContent = "";
-      deviceOptionsBtn.style.display = "none";
+      document.getElementById("worldStrip").style.display = "none";
       // The catalogue goes blank with the rest, even though the Crafting
       // button is disabled above and the panel cannot be opened. The blanking
       // stays because doCraft() has no gameOver guard: a live recipe button
@@ -9105,10 +9111,11 @@
     renderHereActionsPanel();
     renderInventoryPanel();
     renderWorldItemsPanel();
-    // After both item lists: the pop-up anchors to a row they just drew.
+    // After both item lists: the pop-up anchors to a row they just drew, and
+    // the device pop-up to the Here strip.
     renderItemPop();
+    renderDevicePop();
     renderCraftingPanel();
-    renderDevicePanel();
     renderMap();
   }
 
