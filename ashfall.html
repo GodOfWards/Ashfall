@@ -509,11 +509,6 @@
       inputs:[ {id:"firewood",qty:CAMPFIRE_KIT_COST} ], minutes:15,
       output:{ id:"campfire_kit" } }
   ];
-  const HEAT_RECIPES = [
-    { id:"cook_fish", input:"raw_fish",
-      output:{ id:"cooked_fish" },
-      minutes:15 }
-  ];
   function clamp(v){ return Math.max(0, Math.min(100, v)); }
 
   // ==================================================
@@ -593,7 +588,8 @@
   //     mechanic today:
   //       heat    the container is a heat source's cooking space, a stove's
   //               or a campfire's. getHeatContainer() finds it by this tag,
-  //               and Cook works on what is in it.
+  //               and what lies in it cooks while the room's heat is on
+  //               (cookInHeat()).
   //       device  the container has controls beyond take and store, kept in
   //               its Device Options panel (renderDevicePanel()). The Here
   //               panel's header offers that panel while its tab is selected.
@@ -801,8 +797,8 @@
     bandage: { name:"Bandage", category:"Medical", unitWeight:0.05 },
     campfire_kit: { name:"Campfire Kit", category:"Materials", unitWeight:2.4, tags:["disassemble"],
       disassembleLog:"You untie the bundle — back to {qty} loose firewood." },
-    cooked_fish: { name:"Cooked fish", category:"Food", unitWeight:0.35, restores:{hunger:35}, verb:"Eat" },
-    raw_fish: { name:"Raw fish", category:"Food", unitWeight:0.3, restores:{hunger:10}, verb:"Eat", foodPoisoningChance:0.35 },
+    fish: { name:"Fish", category:"Food", unitWeight:0.3, restores:{hunger:10}, verb:"Eat", foodPoisoningChance:0.35,
+      cooks:{ minutes:15, restores:{hunger:35} } },
     canned_tuna: { name:"Canned tuna", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat", sealed:true, opensWith:"can-opening" },
     cereal_box: { name:"Box of cereal", category:"Food", unitWeight:0.5, restores:{hunger:15}, verb:"Eat", sealed:true },
     crackers: { name:"Crackers", category:"Food", unitWeight:0.2, restores:{hunger:8}, verb:"Eat" },
@@ -914,7 +910,7 @@
   // up in ITEM_REGISTRY by itemId (registryEntryOf()), so itemFromRegistry()
   // leaves them off the instance. A retune then reaches every save, and no
   // stale copy on an instance is there to be read by mistake.
-  const REGISTRY_ONLY_FIELDS = ["carryFactor", "foodPoisoningChance", "disassembleLog"];
+  const REGISTRY_ONLY_FIELDS = ["carryFactor", "foodPoisoningChance", "disassembleLog", "cooks"];
   // An item's (or a slot's) registry entry, by its itemId, or null for
   // anything without one: the keychain, an item from a save the registry no
   // longer knows. The one lookup every registry-read field goes through.
@@ -953,12 +949,18 @@
   // so what a container holds is fixed by the world, not by when it is opened.
   //   emptyChance  0-1 chance the whole pool produces nothing. Rolled once,
   //                ahead of the entries, and gates all of them.
-  //   entries    [{ itemId, chance, qtyMin, qtyMax }] — every entry is
-  //              rolled once, independently of every other, in declaration
-  //              order, so an entry contributes at most one stack per roll
-  //              and items land in the order the pool lists them. A pool
-  //              must not list one itemId twice, nor a container one pool id
-  //              twice: the roll is keyed by those ids, so a repeat would
+  //   entries    [{ itemId, chance, qtyMin, qtyMax, key?, state? }] — every
+  //              entry is rolled once, independently of every other, in
+  //              declaration order, so an entry contributes at most one
+  //              stack per roll and items land in the order the pool lists
+  //              them. `key` is the entry's identity within the pool
+  //              (poolEntryKey()), its itemId when absent: an entry that
+  //              lists an item a second time, in another state, needs one.
+  //              `state` is instance fields applied to the rolled item after
+  //              itemFromRegistry(), genuine per-instance state only, as a
+  //              placement's `overrides` is (a cooked fish's cookState). A
+  //              pool must not list one key twice, nor a container one pool
+  //              id twice: the roll is keyed by those ids, so a repeat would
   //              roll identically (validateReachability() reports both).
   //              `chance` is a number in (0,1] and is CONDITIONAL: it is
   //              the probability this entry appears given the pool did not
@@ -990,8 +992,8 @@
       { itemId:"moldy_bread", chance:0.096774, qtyMin:1, qtyMax:1 },
       { itemId:"rotten_produce", chance:0.080645, qtyMin:1, qtyMax:1 },
       { itemId:"pot_of_spoiled_stew", chance:0.064516, qtyMin:1, qtyMax:1 },
-      { itemId:"raw_fish", chance:0.016129, qtyMin:1, qtyMax:1 },
-      { itemId:"cooked_fish", chance:0.016129, qtyMin:1, qtyMax:1 } ]},
+      { itemId:"fish", chance:0.016129, qtyMin:1, qtyMax:1 },
+      { itemId:"fish", key:"fish_cooked", state:{ cookState:"cooked" }, chance:0.016129, qtyMin:1, qtyMax:1 } ]},
     kitchen_nonperishable: { emptyChance:0.1, entries:[
       { itemId:"canned_soup", chance:0.193774, qtyMin:1, qtyMax:2 },
       { itemId:"bottled_water", chance:0.193774, qtyMin:1, qtyMax:3 },
@@ -4147,13 +4149,23 @@
   // has been opened both stack as "not sealed". Without this clause an
   // opened can merges straight back into the sealed stack it was split out
   // of, which either opens all of them or loses the unit.
+  // A cookable item's rows merge only in the same cook state, and raw ones
+  // only at the same progress, so two fish put in a stove minutes apart stay
+  // two rows until both are cooked.
   function sameStackState(a, b){
     return STACKABLE.has(a.category) && a.itemId === b.itemId && a.category === b.category
-      && !a.durability && !b.durability && !!a.sealed === !!b.sealed;
+      && !a.durability && !b.durability && !!a.sealed === !!b.sealed
+      && cookStateOf(a) === cookStateOf(b)
+      && (cookStateOf(a) !== "raw" || (a.cookMinutes || 0) === (b.cookMinutes || 0));
+  }
+  // Folds `row` into `target`, an existing row sameStackState() accepts. The
+  // one place two rows become one.
+  function mergeRows(target, row){
+    target.qty += row.qty;
   }
   function addToList(list, item){
     const existing = list.find(i=> sameStackState(i, item));
-    if(existing){ existing.qty += item.qty; return existing; }
+    if(existing){ mergeRows(existing, item); return existing; }
     // A new stack entry must get its own identity. `item` here is often a
     // shallow copy of a source item (see doTake/doStore/giveItem) made with
     // `{ ...it, qty:moveQty }` — that spread also copies `_uid`, which would
@@ -4207,6 +4219,17 @@
     const taken = takeUnits(row, n);
     if(row.qty <= 0) list.splice(index, 1);
     return taken;
+  }
+  // A row whose state just changed in place (a fish finishing cooking) may
+  // now match another row in its list: this folds it into that one. Identity
+  // is kept for the player: the row that survives takes the folded row's
+  // _uid when it has none of its own, so a pop-up open on either stays open.
+  function remergeRow(list, row){
+    const target = list.find(o=> o !== row && sameStackState(o, row));
+    if(!target) return;
+    mergeRows(target, row);
+    if(!target._uid && row._uid) target._uid = row._uid;
+    list.splice(list.indexOf(row), 1);
   }
   function invPools(){
     return [state.inventory.items].concat(
@@ -4442,23 +4465,39 @@
     // The capacity warning above still speaks.
     render();
   }
-  // The chance that eating one unit of `it` causes food poisoning, read from
-  // its registry entry, never from the instance.
-  function foodPoisoningChanceOf(it){
+  // A cookable item's cook state, "raw" or "cooked", or null for an item that
+  // does not cook. Cookable means its registry entry carries `cooks`; an
+  // instance without `cookState` is raw.
+  function cookStateOf(it){
     const def = registryEntryOf(it);
-    return def && def.foodPoisoningChance || 0;
+    if(!def || !def.cooks) return null;
+    return it.cookState === "cooked" ? "cooked" : "raw";
+  }
+  // What eating one whole unit of `it` does: { restores, poisoning }. The one
+  // reader of both — Eat, the Eat gate and everything that sums food reads
+  // them here, never from the instance's copied `restores`. A cookable
+  // item's entry holds its Raw state's values and its `cooks` its Cooked
+  // state's. An item the registry does not know keeps its own `restores`.
+  function foodEffects(it){
+    const def = registryEntryOf(it);
+    if(!def) return { restores: it.restores || null, poisoning: 0 };
+    if(cookStateOf(it) === "cooked")
+      return { restores: def.cooks.restores || null, poisoning: def.cooks.foodPoisoningChance || 0 };
+    return { restores: def.restores || null, poisoning: def.foodPoisoningChance || 0 };
   }
   function doConsume(sourceKind, index){
     const room = world[state.currentRoom];
     const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
     const it = getItemAt(src && src.items, index);
-    if(!it || !it.restores || it.sealed) return;
-    if(it.restores.hunger) state.vitals.hunger = clamp(state.vitals.hunger + it.restores.hunger);
-    if(it.restores.thirst) state.vitals.thirst = clamp(state.vitals.thirst + it.restores.thirst);
+    if(!it || it.sealed) return;
+    const fx = foodEffects(it);
+    if(!fx.restores) return;
+    if(fx.restores.hunger) state.vitals.hunger = clamp(state.vitals.hunger + fx.restores.hunger);
+    if(fx.restores.thirst) state.vitals.thirst = clamp(state.vitals.thirst + fx.restores.thirst);
     dropUnits(src.items, index, 1);
     log(`You ${it.verb.toLowerCase()} the ${it.name.toLowerCase()}.`, "good", "consume:" + (it.itemId || it.name));
     // After the eating line, so the onset line reads as its consequence.
-    rollFoodPoisoning(foodPoisoningChanceOf(it));
+    rollFoodPoisoning(fx.poisoning);
     render();
   }
   // Opening is a transformation, not a gate on eating: a sealed can is not
@@ -4584,7 +4623,7 @@
     // the keychain-blocked Take above and the Crafting panel's recipe list
     // (renderCraftingPanel()), which is a catalogue and would become
     // undiscoverable if filtered.
-    if(it.restores && !it.sealed) actions.push({ label: it.verb || "Use", onClick:()=>doConsume(side, index) });
+    if(foodEffects(it).restores && !it.sealed) actions.push({ label: it.verb || "Use", onClick:()=>doConsume(side, index) });
     if(it.sealed && (!it.opensWith || hasTool(it.opensWith)))
       actions.push({ label:"Open", onClick:()=>doOpen(side, index) });
     if(it.category==="Container" && it.slotType && !state[it.slotType])
@@ -4985,8 +5024,9 @@
   // reshuffle every container in the game.
   //
   // rolledPoolFor() is one pool's roll and the only place the three loot key
-  // shapes are written: { empty, items }, where `empty` is the empty gate's
-  // result and `items` the stacks that hit, in declaration order. null for
+  // shapes are written: { empty, items, keys }, where `empty` is the empty
+  // gate's result, `items` the stacks that hit, in declaration order, and
+  // `keys` each stack's entry key (poolEntryKey()), index for index. null for
   // an unknown pool id, which rolls nothing. sampleSeeds() reads entry-level
   // hits by calling it, never by rebuilding a key. rolledLootFor() is its
   // concatenation over the container's spawnPools, in their order.
@@ -4994,16 +5034,25 @@
     const pool = SPAWN_POOLS[poolId];
     if(!pool) return null; // defensive — an unknown pool id contributes nothing
     if(chanceFor(seed, pool.emptyChance, ["loot", roomId, containerId, poolId, "empty"]))
-      return { empty:true, items:[] };
+      return { empty:true, items:[], keys:[] };
     const items = [];
+    const keys = [];
     pool.entries.forEach(entry=>{
-      if(!chanceFor(seed, entry.chance, ["loot", roomId, containerId, poolId, entry.itemId])) return;
+      const key = poolEntryKey(entry);
+      if(!chanceFor(seed, entry.chance, ["loot", roomId, containerId, poolId, key])) return;
       const qty = randIntFor(seed, entry.qtyMin, entry.qtyMax,
-        ["loot", roomId, containerId, poolId, entry.itemId, "qty"]);
-      items.push(itemFromRegistry({ id:entry.itemId, qty }));
+        ["loot", roomId, containerId, poolId, key, "qty"]);
+      const item = itemFromRegistry({ id:entry.itemId, qty });
+      if(entry.state) Object.assign(item, JSON.parse(JSON.stringify(entry.state)));
+      items.push(item);
+      keys.push(key);
     });
-    return { empty:false, items };
+    return { empty:false, items, keys };
   }
+  // A pool entry's identity within its pool: its `key`, or its itemId when it
+  // has none. The roll keys use it, so two entries for one item in different
+  // states (raw and cooked fish) roll independently.
+  function poolEntryKey(entry){ return entry.key || entry.itemId; }
   function rolledLootFor(seed, roomId, container){
     const out = [];
     (container.spawnPools || []).forEach(poolId=>{
@@ -5111,6 +5160,8 @@
     });
     Object.keys(world).forEach(id=>{
       const r = world[id];
+      // Before the fire burns down, so a step the heat was on for counts.
+      if(r.heatActive) cookInHeat(r, min);
       if(r.heatActive && r.fireMinutesLeft != null){
         r.fireMinutesLeft -= min;
         if(r.fireMinutesLeft <= 0){
@@ -5332,7 +5383,7 @@
     // reproduces the bite, while spending any time first — walking, resting,
     // chopping — moves the minute and genuinely rerolls.
     if(chance(FISH_BITE_CHANCE, "fish", state.currentRoom, state.totalMinutes)){
-      giveItem(itemFromRegistry({ id:"raw_fish", qty:1 }));
+      giveItem(itemFromRegistry({ id:"fish", qty:1 }));
       log("Something bites. You reel in a fish.", "good", "fish", "bite");
     } else {
       log("Nothing bites this time.", null, "fish", "miss");
@@ -5435,19 +5486,62 @@
   function roomStove(room){
     return room.containers.find(c=> hasTag(c, "device") && hasTag(c, "heat")) || null;
   }
-  function doCookInContainer(containerId, recipeId){
-    const room = world[state.currentRoom];
-    const container = room.containers.find(c=>c.id===containerId);
-    if(!container) return;
-    const recipe = HEAT_RECIPES.find(r=>r.id===recipeId);
-    if(!recipe) return;
-    const idx = container.items.findIndex(it=>it.itemId===recipe.input);
-    if(idx < 0) return;
-    container.items[idx].qty -= 1;
-    if(container.items[idx].qty <= 0) container.items.splice(idx,1);
-    addToList(container.items, itemFromRegistry({ id: recipe.output.id, qty:1 }));
-    advanceTime(recipe.minutes);
-    log(`The ${ITEM_REGISTRY[recipe.input].name.toLowerCase()} finishes cooking.`, "good", "cook:" + recipe.id);
+  // Cooking is passive: nothing is cooked by a button. Every tick the heat
+  // is on, each raw cookable row lying directly in the room's heat
+  // containers gains `cookMinutes`, and at its entry's `cooks.minutes` it
+  // turns Cooked, drops its progress and folds into any matching cooked row.
+  // The counter stops there in this release; burning (#179) will extend it.
+  // Progress lives on the item, so it holds when the heat stops, and an item
+  // taken out and put back continues from where it was. Nothing is logged,
+  // anywhere: knowing is the player's job, through the stove timer or the
+  // Wait button.
+  // COOK_EPSILON absorbs the float left over when a wait of exactly the
+  // remaining time is stepped in fractional minutes.
+  const COOK_EPSILON = 1e-9;
+  function cookInHeat(room, dt){
+    room.containers.filter(c=> hasTag(c, "heat")).forEach(c=>{
+      c.items.slice().forEach(it=>{
+        if(cookStateOf(it) !== "raw") return;
+        const def = registryEntryOf(it);
+        it.cookMinutes = (it.cookMinutes || 0) + dt;
+        if(it.cookMinutes < def.cooks.minutes - COOK_EPSILON) return;
+        it.cookState = "cooked";
+        delete it.cookMinutes;
+        remergeRow(c.items, it);
+      });
+    });
+  }
+  // What the room's heat is cooking that will finish soonest: { name,
+  // remaining } for the item with the least time left among everything still
+  // progressing in its heat container, or null when nothing is.
+  function soonestCooking(room){
+    const heat = getHeatContainer(room);
+    if(!heat) return null;
+    let best = null;
+    heat.items.forEach(it=>{
+      if(cookStateOf(it) !== "raw") return;
+      const remaining = Math.max(0, registryEntryOf(it).cooks.minutes - (it.cookMinutes || 0));
+      if(!best || remaining < best.remaining) best = { name: it.name.toLowerCase(), remaining };
+    });
+    return best;
+  }
+  // Whether the Wait can be offered: the heat is on, something is cooking,
+  // and the heat will outlast it — always for a stove, which never runs out,
+  // and for a fire only while its fuel covers the wait.
+  function waitForCookingTarget(room){
+    if(!room.heatActive) return null;
+    const next = soonestCooking(room);
+    if(!next) return null;
+    if(room.fireMinutesLeft != null && room.fireMinutesLeft < next.remaining) return null;
+    return next;
+  }
+  // Waits out the soonest-finishing item. Not interruptible (#212). The log
+  // line's wording is retunable.
+  function doWaitForCooking(){
+    const next = waitForCookingTarget(world[state.currentRoom]);
+    if(!next) return;
+    advanceTime(next.remaining);
+    log("You keep an eye on it.", null, "wait");
     render();
   }
   function doChopTree(){
@@ -5669,7 +5763,7 @@
   }
   // backfillIllnessScale(): companion to backfillItemIds(), run
   // alongside it on every load. Instances written before illnessChance became
-  // a fraction carry it as a percent (raw_fish shipped 35). A value above 1 is
+  // a fraction carry it as a percent (the raw fish shipped 35). A value above 1 is
   // a percent by construction — a legal fraction can never exceed 1 — so the
   // test is unambiguous and dividing by 100 is exact. Without this, every raw
   // fish in an imported pre-0.6 save would be a guaranteed illness, since 35
@@ -5747,17 +5841,18 @@
     return true;
   }
   // validateItemRegistry(): dev-only console helper (not wired to any
-  // button or UI, runs nothing automatically). Walks RECIPES/HEAT_RECIPES
+  // button or UI, runs nothing automatically). Walks RECIPES
   // inputs/outputs and confirms every id they reference resolves in
   // ITEM_REGISTRY, logging any that don't. Call it as
   // `ashfallDev.validateItemRegistry()` from the browser console when
   // auditing recipe/registry consistency (see the dev seam at the foot of
   // this file).
   //
-  // It also flags any ITEM_REGISTRY entry whose `foodPoisoningChance` is not a
-  // fraction in [0,1] — a registry fact, so the registry's validator checks
-  // it. chance() would clamp such a value at runtime, loudly; this catches it
-  // before anyone eats one.
+  // It also flags any ITEM_REGISTRY entry whose `foodPoisoningChance`, or
+  // whose `cooks.foodPoisoningChance`, is not a fraction in [0,1], and any
+  // `cooks.minutes` that is not above 0 — registry facts, so the registry's
+  // validator checks them. chance() would clamp a bad chance at runtime,
+  // loudly; this catches it before anyone eats one.
   //
   // And any equippable bag (an entry with a slotType) whose `carryFactor` is
   // missing or not in (0,1]. carryFactorOf() would count such a bag at 1,
@@ -5766,9 +5861,16 @@
     const missing = [];
     Object.keys(ITEM_REGISTRY).forEach(id=>{
       const def = ITEM_REGISTRY[id];
-      const p = def.foodPoisoningChance;
-      if(p !== undefined && !(Number.isFinite(p) && p >= 0 && p <= 1))
-        missing.push(`ITEM_REGISTRY.${id}.foodPoisoningChance: ${p} is not a number in [0,1]`);
+      const fraction = (v, field)=>{
+        if(v !== undefined && !(Number.isFinite(v) && v >= 0 && v <= 1))
+          missing.push(`ITEM_REGISTRY.${id}.${field}: ${v} is not a number in [0,1]`);
+      };
+      fraction(def.foodPoisoningChance, "foodPoisoningChance");
+      if(def.cooks){
+        fraction(def.cooks.foodPoisoningChance, "cooks.foodPoisoningChance");
+        if(!(Number.isFinite(def.cooks.minutes) && def.cooks.minutes > 0))
+          missing.push(`ITEM_REGISTRY.${id}.cooks.minutes: ${def.cooks.minutes} is not a number above 0`);
+      }
       const f = def.carryFactor;
       if(def.slotType && !(Number.isFinite(f) && f > 0 && f <= 1))
         missing.push(`ITEM_REGISTRY.${id}.carryFactor: ${f} is not a number in (0,1]`);
@@ -5777,12 +5879,8 @@
       r.inputs.forEach(inp=>{ if(!ITEM_REGISTRY[inp.id]) missing.push(`RECIPES[${r.id}].inputs: ${inp.id}`); });
       if(!ITEM_REGISTRY[r.output.id]) missing.push(`RECIPES[${r.id}].output: ${r.output.id}`);
     });
-    HEAT_RECIPES.forEach(r=>{
-      if(!ITEM_REGISTRY[r.input]) missing.push(`HEAT_RECIPES[${r.id}].input: ${r.input}`);
-      if(!ITEM_REGISTRY[r.output.id]) missing.push(`HEAT_RECIPES[${r.id}].output: ${r.output.id}`);
-    });
     if(missing.length) console.warn("validateItemRegistry: problems", missing);
-    else console.log("validateItemRegistry: all recipe ids resolve in ITEM_REGISTRY, every foodPoisoningChance is in [0,1], every bag's carryFactor is in (0,1]");
+    else console.log("validateItemRegistry: all recipe ids resolve in ITEM_REGISTRY, every foodPoisoningChance is in [0,1], every cooks.minutes is above 0, every bag's carryFactor is in (0,1]");
     return missing;
   }
   // validateLocations(): dev-only console helper (not wired to any button
@@ -5828,9 +5926,9 @@
   //   firewood         doChopTree(), doDismantleCampfire(), and
   //                    Disassemble, which returns a `disassemble`-tagged
   //                    item's recipe inputs
-  //   raw_fish         doFish()
+  //   fish             doFish(), raw
   //   spare_batteries  the powered-equipment "Remove batteries" action
-  const ACTION_GRANTED_ITEM_IDS = ["firewood", "raw_fish", "spare_batteries"];
+  const ACTION_GRANTED_ITEM_IDS = ["firewood", "fish", "spare_batteries"];
   // The tool tags validateReachability() counts, written down for the same
   // reason. The first seven are what hasTool()/hasMatchUses() actually gate
   // an action on, and they include the `breakTag` values windows (blunt) and
@@ -5867,7 +5965,7 @@
   //   1. dead pools — a SPAWN_POOLS id no container that still rolls draws
   //      from, so nothing it lists can ever spawn;
   //   2. unreachable items — an ITEM_REGISTRY id that is not hand-placed, not
-  //      an entry in a live pool, not a RECIPES/HEAT_RECIPES output and not
+  //      an entry in a live pool, not a RECIPES output and not
   //      in ACTION_GRANTED_ITEM_IDS;
   //   3. per tag in REPORTED_TOOL_TAGS, how many hand-placed instances carry
   //      it and which live pools can yield one, so a content pass can see
@@ -5876,7 +5974,7 @@
   // authoring guard the old integer `weight` could not have, since any
   // positive integer was legal there — and any pool whose `emptyChance` is
   // outside [0,1]. And two collision hazards the keyed loot roll creates (see
-  // rolledLootFor()): a pool listing the same itemId twice, and a container
+  // rolledLootFor()): a pool listing the same entry key twice, and a container
   // listing the same pool id twice. Either pair would share a key and so
   // always roll alike. Neither occurs today.
   //
@@ -5893,13 +5991,14 @@
       const pool = SPAWN_POOLS[poolId];
       if(!(Number.isFinite(pool.emptyChance) && pool.emptyChance >= 0 && pool.emptyChance <= 1))
         report.push(`illegal emptyChance: SPAWN_POOLS.${poolId} has emptyChance ${pool.emptyChance}, which is not a number in [0,1]`);
-      const seenItems = new Set();
+      const seenKeys = new Set();
       pool.entries.forEach(entry=>{
+        const key = poolEntryKey(entry);
         if(!(Number.isFinite(entry.chance) && entry.chance > 0 && entry.chance <= 1))
-          report.push(`illegal chance: SPAWN_POOLS.${poolId} entry ${entry.itemId} has chance ${entry.chance}, which is not a number in (0,1]`);
-        if(seenItems.has(entry.itemId))
-          report.push(`duplicate entry: SPAWN_POOLS.${poolId} lists ${entry.itemId} twice — both share one roll key`);
-        seenItems.add(entry.itemId);
+          report.push(`illegal chance: SPAWN_POOLS.${poolId} entry ${key} has chance ${entry.chance}, which is not a number in (0,1]`);
+        if(seenKeys.has(key))
+          report.push(`duplicate entry: SPAWN_POOLS.${poolId} lists key ${key} twice — both share one roll key`);
+        seenKeys.add(key);
       });
     });
     // Walk a freshly-built default world, never the live one: a loaded save
@@ -5936,7 +6035,6 @@
     const reachable = new Set(Object.keys(placed));
     livePools.forEach(poolId=> SPAWN_POOLS[poolId].entries.forEach(e=> reachable.add(e.itemId)));
     RECIPES.forEach(r=> reachable.add(r.output.id));
-    HEAT_RECIPES.forEach(r=> reachable.add(r.output.id));
     ACTION_GRANTED_ITEM_IDS.forEach(id=> reachable.add(id));
     Object.keys(ITEM_REGISTRY).forEach(id=>{
       if(!reachable.has(id)) report.push(`unreachable item: ${id} — not hand-placed, not in a live pool, not crafted, not action-granted`);
@@ -6042,7 +6140,7 @@
     const hand = handPlacedRows(fresh, makeDefaultState(start >>> 0));
     const handIds = new Set(hand.map(r=> r.itemId));
     const handTags = tagStackCounts(hand);
-    const tally = {}; // poolId -> { trials, empties, hits: itemId -> count }
+    const tally = {}; // poolId -> { trials, empties, hits: entry key -> count }
     Object.keys(SPAWN_POOLS).forEach(poolId=>{ tally[poolId] = { trials:0, empties:0, hits:{} }; });
     const itemSeeds = {};
     Object.keys(ITEM_REGISTRY).forEach(id=>{ itemSeeds[id] = 0; });
@@ -6061,8 +6159,9 @@
           const t = tally[poolId];
           t.trials += 1;
           if(rolled.empty) t.empties += 1;
-          rolled.items.forEach(it=>{
-            t.hits[it.itemId] = (t.hits[it.itemId] || 0) + 1;
+          rolled.items.forEach((it, k)=>{
+            const key = rolled.keys[k];
+            t.hits[key] = (t.hits[key] || 0) + 1;
             ids.add(it.itemId);
             REPORTED_TOOL_TAGS.forEach(tag=>{ if(registryCarriesTag(it.itemId, tag)) tags[tag] += 1; });
           });
@@ -6085,9 +6184,9 @@
         observed:gate.observed, expected:pool.emptyChance, flagged:gate.flagged });
       pool.entries.forEach(e=>{
         const expected = (1 - pool.emptyChance) * e.chance;
-        const hits = t.hits[e.itemId] || 0;
+        const hits = t.hits[poolEntryKey(e)] || 0;
         const r = judge(hits, expected, t.trials);
-        entries.push({ poolId, itemId:e.itemId, rolled, trials:t.trials, hits,
+        entries.push({ poolId, key:poolEntryKey(e), itemId:e.itemId, rolled, trials:t.trials, hits,
           observed:r.observed, expected, flagged:r.flagged });
       });
     });
@@ -7056,8 +7155,8 @@
     return note;
   }
   // The parenthesised state labels shown after an item's name, in a fixed
-  // order: Open, then (as their phases add them) cook state, freshness, and
-  // water. `ctx` carries what a label needs from outside the item. The row
+  // order: Open, then cook state (a cookable item always shows Raw or
+  // Cooked), then freshness, and water. `ctx` carries what a label needs from outside the item. The row
   // and the item pop-up show them; log lines keep the plain name.
   // `sealed` is three-valued (see ITEM DATA SCHEMA), and only the opened
   // state is marked: undefined means the item was never a packaged thing,
@@ -7066,6 +7165,8 @@
   function itemStateLabels(it, ctx){
     const labels = [];
     if(it.sealed === false) labels.push("Open");
+    const cook = cookStateOf(it);
+    if(cook) labels.push(cook === "cooked" ? "Cooked" : "Raw");
     return labels;
   }
   function renderItemList(el, list, buttons, side, ctx){
@@ -7498,14 +7599,10 @@
          && room.fireMinutesLeft <= FIRE_MAX_MIN - FIRE_MINUTES_PER_WOOD){
         hereBox.appendChild(actionButton("Add fuel to the fire", doAddFuel));
       }
-      const heatContainer = getHeatContainer(room);
-      if(heatContainer){
-        HEAT_RECIPES.forEach(recipe=>{
-          if(heatContainer.items.some(it=>it.itemId===recipe.input)){
-            hereBox.appendChild(actionButton(`Cook the ${ITEM_REGISTRY[recipe.input].name.toLowerCase()} ` + fmtDuration(recipe.minutes),
-              ()=> doCookInContainer(heatContainer.id, recipe.id)));
-          }
-        });
+      const cooking = waitForCookingTarget(room);
+      if(cooking){
+        hereBox.appendChild(actionButton(`Wait until the ${cooking.name} is cooked`, doWaitForCooking,
+          { cost: fmtDuration(cooking.remaining) }));
       }
     }
     if(room.hasTree && hasTool("chopping")){
