@@ -393,7 +393,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.8.0" };
+  const GAME_CONFIG = { VERSION: "0.8.1" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -4850,16 +4850,22 @@
     });
   }
   // Sinks. A water-holding item — a bottle — can be filled at the sink of the
-  // room it is in while the water runs, unless it is already full of clean
-  // water. One unit fills, to full; its water is clean unless it already held
+  // room it is in while the water runs, unless it is already full, of either
+  // kind. One unit fills, to full; its water is clean unless it already held
   // tainted water, since any tainted water taints everything it mixes with.
   // Instant. After the water fails the sink gives nothing, and whatever was
   // left in the pipes is #47's. The line's wording is retunable.
-  // A vessel fills too, while it holds no dish and can hold water at all.
+  // A vessel fills too, while it holds no dish and no water.
   function canFillAtSink(it){
     const room = world[state.currentRoom];
-    if(!room.sink || !waterRunning() || !holdsWaterAtAll(it)) return false;
-    return !(waterKindOf(it) === "clean" && (vesselDefOf(it) || it.water.fill === 1));
+    return !!room.sink && waterRunning() && canTakeWater(it);
+  }
+  // Whether an item can take more water: a bottle that is not full, or a
+  // vessel holding none, since a vessel's water is all or nothing (#47).
+  // Filling at the sink and pouring in both ask this.
+  function canTakeWater(it){
+    if(!holdsWaterAtAll(it)) return false;
+    return !it.water || (!vesselDefOf(it) && it.water.fill < 1);
   }
   // Whether an item can take water right now: a bottle always, a vessel with
   // a waterKg while it holds no dish.
@@ -4889,14 +4895,39 @@
   }
   // Vessels within reach of an item: every vessel in the lists crafting
   // reaches (nearbyLists()), and every vessel in the room's heat container,
-  // once each.
+  // once each. Each comes as { vessel, place }, the place being where it was
+  // found: "carried" for the inventory pools, else the Here tab's label —
+  // "Floor", or the container's name.
   function nearbyVessels(){
-    const heat = getHeatContainer(world[state.currentRoom]);
+    const room = world[state.currentRoom];
+    const heat = getHeatContainer(room);
+    const pools = invPools();
+    const containers = room.containers.concat(room.carContainers || []);
+    const placeOf = list=> pools.includes(list) ? "carried"
+      : list === room.floor ? "Floor" : containers.find(c=> c.items === list).name;
     const out = [];
     nearbyLists().concat(heat ? [heat.items] : []).forEach(list=> list.forEach(it=>{
-      if(vesselDefOf(it) && !out.includes(it)) out.push(it);
+      if(vesselDefOf(it) && !out.some(o=> o.vessel === it)) out.push({ vessel:it, place:placeOf(list) });
     }));
     return out;
+  }
+  // The vessel names one action's buttons show, over the nearbyVessels()
+  // entries it is offered on. Vessels sharing a name and a place get one
+  // button, on the fullest of them by contents' weight (a tie to the first),
+  // since nothing yet tells them apart (#47). A name still on two or more
+  // buttons shows each one's place, so no two buttons read the same. Returns
+  // a Map of the vessels given a button to the name their label shows.
+  function vesselButtonNames(offered){
+    const picked = [];
+    offered.forEach(o=>{
+      const same = picked.find(p=> p.name === o.vessel.name.toLowerCase() && p.place === o.place);
+      if(!same) picked.push({ vessel:o.vessel, place:o.place, name:o.vessel.name.toLowerCase() });
+      else if(totalWeight(o.vessel.contents || []) > totalWeight(same.vessel.contents || [])) same.vessel = o.vessel;
+    });
+    return new Map(picked.map(p=>{
+      const clash = picked.filter(q=> q.name === p.name).length > 1;
+      return [p.vessel, clash ? `${p.name} (${p.place})` : p.name];
+    }));
   }
   // The unit adding `it` to a vessel would move, and the row it comes from:
   // the row's oldest unit, or for an ingredient added by the part
@@ -4981,12 +5012,20 @@
     giveItem(row);
     render();
   }
+  // Whether a bottle's water can go into `vessel`: while the vessel can take
+  // water, and into its clean water when the bottle's is tainted, which only
+  // taints it — kept, by choice, as the one pour into water already there.
+  function canPourInto(bottle, vessel){
+    if(!bottle.water || !holdsWaterAtAll(bottle) || !vesselDefOf(vessel)) return false;
+    return canTakeWater(vessel)
+      || (holdsWaterAtAll(vessel) && waterKindOf(vessel) === "clean" && waterKindOf(bottle) === "tainted");
+  }
   // Empties a bottle into a vessel, whatever its fill: the vessel then holds
   // water, tainted if either was. Volumes are #47's. The line's wording is
   // retunable.
   function doPourIntoVessel(list, index, vessel){
     const bottle = getItemAt(list, index);
-    if(!bottle || !bottle.water || !holdsWaterAtAll(vessel) || !vesselDefOf(vessel)) return;
+    if(!bottle || !canPourInto(bottle, vessel)) return;
     addWater(vessel, bottle.water.kind);
     changeOneUnit(list, bottle, u=>{ delete u.water; });
     log(`You pour the water into the ${vessel.name.toLowerCase()}.`);
@@ -5170,13 +5209,17 @@
     }
     vesselActions(it).forEach(a=> actions.push(a));
     // An ingredient offers every vessel within reach that can take it, and a
-    // bottle with water every one that can hold water.
-    if(!vesselDefOf(it)) nearbyVessels().forEach(v=>{
-      const name = v.name.toLowerCase();
-      if(canAddToVessel(list, it, v)) actions.push({ label:`Add to the ${name}`, onClick:()=> doAddToVessel(list, index, v) });
-      if(it.water && holdsWaterAtAll(it) && holdsWaterAtAll(v))
-        actions.push({ label:`Pour into the ${name}`, onClick:()=> doPourIntoVessel(list, index, v) });
-    });
+    // bottle with water every one it can pour into, labelled per
+    // vesselButtonNames().
+    if(!vesselDefOf(it)){
+      const near = nearbyVessels();
+      const add = vesselButtonNames(near.filter(n=> canAddToVessel(list, it, n.vessel)));
+      const pour = vesselButtonNames(near.filter(n=> canPourInto(it, n.vessel)));
+      near.forEach(({ vessel:v })=>{
+        if(add.has(v)) actions.push({ label:`Add to the ${add.get(v)}`, onClick:()=> doAddToVessel(list, index, v) });
+        if(pour.has(v)) actions.push({ label:`Pour into the ${pour.get(v)}`, onClick:()=> doPourIntoVessel(list, index, v) });
+      });
+    }
     if(it.sealed && (!it.opensWith || hasTool(it.opensWith)))
       actions.push({ label:"Open", onClick:()=>doOpen(side, index) });
     if(canFillAtSink(it)) actions.push({ label:"Fill at the sink", onClick:()=>doFillAtSink(side, index) });
