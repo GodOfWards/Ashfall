@@ -585,6 +585,9 @@
   //   heatActive     a fire/stove is currently burning here
   //   fireMinutesLeft remaining fuel minutes for an active fire
   //   campfireBuilt  a campfire structure has been assembled here
+  //   sink           the room has a sink: while the water runs
+  //                  (waterRunning()), a water-holding item can be filled
+  //                  at it (doFillAtSink())
   //
   // CONTAINER SCHEMA:
   //   { id, name, capacityKg, items: [] }
@@ -744,6 +747,13 @@
   //                   through `overrides`; otherwise the world's items are
   //                   aged from the collapse (stampMissingAges()) and an
   //                   action's are new (asNewlyMade()).
+  //     holdsWater    { kg, restores } — the item holds water: `kg` when
+  //                   full, and what drinking a full one restores. A bottle.
+  //                   Definition data, read by itemId.
+  //     water         instance: { kind, fill } — the water an item holds,
+  //                   "clean" or "tainted", and a bottle's fill (1, 0.75,
+  //                   0.5 or 0.25); absent when empty. Shown as its kind,
+  //                   never its level; weighs holdsWater.kg × fill.
   //     portion       instance: how much of one unit of food is left — 1,
   //                   0.75, 0.5 or 0.25, absent = 1 — after Eat 1/2 or 1/4.
   //                   Never shown; a unit weighs its portion of unitWeight.
@@ -773,7 +783,8 @@
     can_opener: { name:"Can opener", category:"Tool", unitWeight:0.1, tags:["can-opening"] },
     leftovers: { name:"Leftovers", category:"Food", unitWeight:0.8, restores:{hunger:25}, verb:"Eat",
       spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
-    bottled_water: { name:"Bottled water", category:"Food", unitWeight:0.5, restores:{thirst:30}, verb:"Drink" },
+    plastic_bottle: { name:"Plastic bottle", category:"Food", unitWeight:0.05, verb:"Drink",
+      holdsWater:{ kg:0.5, restores:{thirst:30} } },
     granola_bars: { name:"Granola bars", category:"Food", unitWeight:0.1, restores:{hunger:15}, verb:"Eat" },
     painkillers: { name:"Painkillers", category:"Medical", unitWeight:0.1 },
     toilet_paper: { name:"Toilet paper", category:"Materials", unitWeight:0.2 },
@@ -969,7 +980,7 @@
   // up in ITEM_REGISTRY by itemId (registryEntryOf()), so itemFromRegistry()
   // leaves them off the instance. A retune then reaches every save, and no
   // stale copy on an instance is there to be read by mistake.
-  const REGISTRY_ONLY_FIELDS = ["carryFactor", "foodPoisoningChance", "disassembleLog", "cooks", "spoils"];
+  const REGISTRY_ONLY_FIELDS = ["carryFactor", "foodPoisoningChance", "disassembleLog", "cooks", "spoils", "holdsWater"];
   // An item's (or a slot's) registry entry, by its itemId, or null for
   // anything without one: the keychain, an item from a save the registry no
   // longer knows. The one lookup every registry-read field goes through.
@@ -1063,7 +1074,7 @@
       { itemId:"fish", key:"fish_cooked", state:{ cookState:"cooked" }, chance:0.016129, qtyMin:1, qtyMax:1 } ]},
     kitchen_nonperishable: { emptyChance:0.1, entries:[
       { itemId:"canned_soup", chance:0.193774, qtyMin:1, qtyMax:2 },
-      { itemId:"bottled_water", chance:0.193774, qtyMin:1, qtyMax:3 },
+      { itemId:"plastic_bottle", state:{ water:{ kind:"clean", fill:1 } }, chance:0.193774, qtyMin:1, qtyMax:3 },
       { itemId:"canned_beans", chance:0.171049, qtyMin:1, qtyMax:2 },
       { itemId:"canned_corn", chance:0.171049, qtyMin:1, qtyMax:2 },
       { itemId:"canned_tuna", chance:0.147906, qtyMin:1, qtyMax:2 },
@@ -1172,7 +1183,7 @@
       { itemId:"walkie_talkie", chance:0.069728, qtyMin:1, qtyMax:1 },
       { itemId:"portable_radio", chance:0.069728, qtyMin:1, qtyMax:1 } ]},
     retail_stock_food: { emptyChance:0.1, entries:[
-      { itemId:"bottled_water", chance:0.309252, qtyMin:1, qtyMax:3 },
+      { itemId:"plastic_bottle", state:{ water:{ kind:"clean", fill:1 } }, chance:0.309252, qtyMin:1, qtyMax:3 },
       { itemId:"candy_bar", chance:0.274647, qtyMin:1, qtyMax:2 },
       { itemId:"potato_chips", chance:0.274647, qtyMin:1, qtyMax:2 },
       { itemId:"canned_corn", chance:0.238925, qtyMin:1, qtyMax:2 },
@@ -1555,7 +1566,7 @@
     },
     kitchen: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Kitchen", shelter:"full",
       desc:"Grease and old coffee grounds. The fridge still hums, though something inside it has already given up. The gas stove works too — no power needed to light it.",
-      cannotHaveFire:true, floorCap:50, floor:[],
+      sink:true, cannotHaveFire:true, floorCap:50, floor:[],
       containers:[
         { id:"stove", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
           { id:"pot_of_spoiled_stew", qty:1 }
@@ -1571,7 +1582,7 @@
           { id:"leftovers", qty:1, overrides:{ ages:[5*MINUTES_PER_DAY] } } ])},
         { id:"freezer", name:"Freezer", capacityKg:10, tags:["freezer"], spawnPools:["kitchen_frozen"], items:[] },
         { id:"pantry", name:"Pantry", capacityKg:20, spawnPools:["kitchen_nonperishable"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"bottled_water", qty:4 },
+          { id:"plastic_bottle", qty:4, overrides:{ water:{ kind:"clean", fill:1 } } },
           { id:"granola_bars", qty:3 } ])}
       ],
       exits:[
@@ -1580,7 +1591,7 @@
     },
     bathroom: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Bathroom", shelter:"full",
       desc:"A cracked mirror over the sink. The cabinet under it is still worth a look.",
-      cannotHaveFire:true, floorCap:30, floor:[],
+      sink:true, cannotHaveFire:true, floorCap:30, floor:[],
       containers:[
         { id:"medcab", name:"Medicine cabinet", capacityKg:5, spawnPools:["medical_otc","hygiene"], spawnRolled:true, items:itemsFromRegistry([
           { id:"bandage", qty:4 },
@@ -1657,7 +1668,7 @@
     },
     twobee_kitchen: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2B", room:"Kitchen", shelter:"full",
       desc:"Same layout as yours, messier. Dishes still sit in the sink.",
-      cannotHaveFire:true, floorCap:50, floor:[],
+      sink:true, cannotHaveFire:true, floorCap:50, floor:[],
       containers:[
         { id:"stove", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
           { id:"burnt_saucepan", qty:1 } ])},
@@ -1676,7 +1687,7 @@
     },
     twobee_bathroom: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2B", room:"Bathroom", shelter:"full",
       desc:"Same cracked-tile bathroom as yours, one floor mirrored.",
-      cannotHaveFire:true, floorCap:30, floor:[],
+      sink:true, cannotHaveFire:true, floorCap:30, floor:[],
       containers:[
         { id:"medcab", name:"Medicine cabinet", capacityKg:5, spawnPools:["medical_otc","hygiene"], spawnRolled:true, items:itemsFromRegistry([
           { id:"bandage", qty:2 },
@@ -1759,12 +1770,12 @@
     },
     onea_kitchen: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1A", room:"Kitchen", shelter:"full",
       desc:"A family kitchen, cluttered with kids' cups and a permission slip on the counter that nobody signed.",
-      cannotHaveFire:true, floorCap:50, floor:[],
+      sink:true, cannotHaveFire:true, floorCap:50, floor:[],
       containers:[
         { id:"stove1a", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
           { id:"kids_plastic_bowl", qty:1 } ])},
         { id:"kitchen1a", name:"Kitchen Shelf", capacityKg:15, spawnPools:["kitchen_nonperishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"bottled_water", qty:3 },
+          { id:"plastic_bottle", qty:3, overrides:{ water:{ kind:"clean", fill:1 } } },
           { id:"canned_corn", qty:2 },
           { id:"cloth", qty:2 } ])},
         { id:"fridge1a", name:"Fridge", capacityKg:30, tags:["fridge"], spawnPools:["kitchen_perishable"], spawnRolled:true, items:itemsFromRegistry([
@@ -1777,7 +1788,7 @@
     },
     onea_bathroom: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1A", room:"Bathroom", shelter:"full",
       desc:"A step stool sits by the sink, sized for someone much shorter than you.",
-      cannotHaveFire:true, floorCap:30, floor:[],
+      sink:true, cannotHaveFire:true, floorCap:30, floor:[],
       containers:[
         { id:"medcab1a", name:"Medicine cabinet", capacityKg:5, spawnPools:["medical_otc","hygiene"], spawnRolled:true, items:itemsFromRegistry([
           { id:"bandage", qty:2 },
@@ -2045,7 +2056,7 @@
         { id:"shelves", name:"Shelves", capacityKg:30, spawnPools:["retail_stock_food","retail_stock_general"], spawnRolled:true, items:itemsFromRegistry([
           { id:"canned_corn", qty:4 },
           { id:"potato_chips", qty:3 },
-          { id:"bottled_water", qty:5 } ])},
+          { id:"plastic_bottle", qty:5, overrides:{ water:{ kind:"clean", fill:1 } } } ])},
         { id:"register", name:"Register Counter", capacityKg:5, spawnPools:["valuables","retail_stock_general"], spawnRolled:true, items:itemsFromRegistry([
           { id:"loose_change", qty:1 },
           { id:"lighter", qty:1 } ])},
@@ -4205,10 +4216,18 @@
   // The only place an item's weight is computed. A stowed bag weighs itself
   // plus everything in its `contents`, and the recursion runs back through
   // totalWeight(), so bags nested to any depth count in full. A part-eaten
-  // unit weighs its `portion` of a whole one. An item with no `contents`
-  // and no portion weighs exactly qty × unitWeight.
+  // unit weighs its `portion` of a whole one, and water adds its own weight.
+  // An item with no `contents`, portion or water weighs exactly qty ×
+  // unitWeight.
   function itemUnitWeight(it){
-    return it.unitWeight * portionOf(it) + (Array.isArray(it.contents) ? totalWeight(it.contents) : 0);
+    return it.unitWeight * portionOf(it) + waterWeightOf(it)
+      + (Array.isArray(it.contents) ? totalWeight(it.contents) : 0);
+  }
+  // The weight of the water one unit holds: a bottle's holdsWater.kg at its
+  // fill.
+  function waterWeightOf(it){
+    const def = it.water && registryEntryOf(it);
+    return def && def.holdsWater ? def.holdsWater.kg * it.water.fill : 0;
   }
   // How much of one unit is left: `portion`, 1 when absent.
   function portionOf(it){ return typeof it.portion === "number" ? it.portion : 1; }
@@ -4231,15 +4250,20 @@
   // only at the same progress, so two fish put in a stove minutes apart stay
   // two rows until both are cooked. A perishable's rows merge only when every
   // unit of both is in the same freshness state. Part-eaten units merge only
-  // with units as eaten as they are, never with whole ones.
+  // with units as eaten as they are, never with whole ones, and bottles only
+  // with bottles holding the same water to the same level.
   function sameStackState(a, b){
     return STACKABLE.has(a.category) && a.itemId === b.itemId && a.category === b.category
       && !a.durability && !b.durability && !!a.sealed === !!b.sealed
       && cookStateOf(a) === cookStateOf(b)
       && (cookStateOf(a) !== "raw" || (a.cookMinutes || 0) === (b.cookMinutes || 0))
       && rowFreshness(a) === rowFreshness(b) && rowFreshness(a) !== "mixed"
-      && portionOf(a) === portionOf(b);
+      && portionOf(a) === portionOf(b)
+      && waterKindOf(a) === waterKindOf(b) && (a.water && a.water.fill) === (b.water && b.water.fill);
   }
+  // The kind of water an item holds, "clean" or "tainted", or null when it
+  // holds none.
+  function waterKindOf(it){ return it.water ? it.water.kind : null; }
   // Folds `row` into `target`, an existing row sameStackState() accepts. The
   // one place two rows become one: the units' ages come along, re-sorted
   // oldest first.
@@ -4608,25 +4632,81 @@
   // the same food — itemId, cook state and freshness — the one with the
   // least left, and among equals the oldest. So a half-eaten can is finished
   // before a new one is started, whichever row was clicked.
+  // For a bottle, the water plays the food's part: which kind it is joins
+  // the match, and its fill is what is left.
   function eatTarget(list, it){
-    const same = list.filter(r=> r.itemId === it.itemId && !r.sealed
-      && cookStateOf(r) === cookStateOf(it) && rowFreshness(r) === rowFreshness(it));
-    return same.sort((a, b)=> portionOf(a) - portionOf(b) || unitAges(b)[0] - unitAges(a)[0])[0] || it;
+    const same = list.filter(r=> r.itemId === it.itemId && consumeProfile(r)
+      && cookStateOf(r) === cookStateOf(it) && rowFreshness(r) === rowFreshness(it)
+      && waterKindOf(r) === waterKindOf(it));
+    return same.sort((a, b)=> consumeProfile(a).left - consumeProfile(b).left
+      || unitAges(b)[0] - unitAges(a)[0])[0] || it;
   }
-  // Takes `amount` of one unit off `row`. A unit split out of a larger row
-  // goes back into the list with its smaller portion; a lone unit keeps its
-  // row, and _uid, and folds into a matching part-eaten row if there is one.
-  function eatFromRow(list, row, amount){
-    const rest = portionOf(row) - amount;
-    if(rest <= 0){ dropUnits(list, list.indexOf(row), 1); return; }
+  // What eating or drinking one whole unit of `it` does, or null when it is
+  // nothing to eat or drink: { left, restores, poisoning, water }. Food is
+  // unitFoodEffects() with its portion left. A bottle is drunk from, not
+  // eaten: its holdsWater restores, tainted water carries
+  // TAINTED_WATER_POISONING_CHANCE, and its fill is what is left. This is
+  // the interim Drink rule, until fluid volumes (#47) replace it.
+  function consumeProfile(it){
+    if(it.sealed) return null;
+    const def = registryEntryOf(it);
+    if(def && def.holdsWater){
+      if(!it.water) return null;
+      return { left: it.water.fill, restores: def.holdsWater.restores, water:true,
+        poisoning: it.water.kind === "tainted" ? TAINTED_WATER_POISONING_CHANCE : 0 };
+    }
+    const fx = unitFoodEffects(it);
+    return fx.restores ? { left: portionOf(it), restores: fx.restores, poisoning: fx.poisoning, water:false } : null;
+  }
+  // Applies `change` to one unit of `row` rather than to the whole row. A
+  // unit split out of a larger row goes back into the list changed; a lone
+  // unit is changed where it is and keeps its row, and _uid. Either way it
+  // then folds into a matching row if there is one. Returns the changed unit.
+  function changeOneUnit(list, row, change){
     if(row.qty > 1){
       const unit = dropUnits(list, list.indexOf(row), 1);
-      unit.portion = rest;
-      addToList(list, unit);
-    } else {
-      row.portion = rest;
-      remergeRow(list, row);
+      change(unit);
+      return addToList(list, unit);
     }
+    change(row);
+    remergeRow(list, row);
+    return row;
+  }
+  // Takes `amount` of one unit off `row`: food's portion, a bottle's fill.
+  // Food eaten to nothing is gone; a bottle drunk dry stays, empty.
+  function eatFromRow(list, row, amount){
+    const water = !!consumeProfile(row).water;
+    const rest = consumeProfile(row).left - amount;
+    if(!water && rest <= 0){ dropUnits(list, list.indexOf(row), 1); return; }
+    changeOneUnit(list, row, unit=>{
+      if(!water) unit.portion = rest;
+      else if(rest > 0) unit.water.fill = rest;
+      else delete unit.water;
+    });
+  }
+  // Sinks. A water-holding item — a bottle — can be filled at the sink of the
+  // room it is in while the water runs, unless it is already full of clean
+  // water. One unit fills, to full; its water is clean unless it already held
+  // tainted water, since any tainted water taints everything it mixes with.
+  // Instant. After the water fails the sink gives nothing, and whatever was
+  // left in the pipes is #47's. The line's wording is retunable.
+  function canFillAtSink(it){
+    const room = world[state.currentRoom];
+    const def = registryEntryOf(it);
+    if(!room.sink || !waterRunning() || !def || !def.holdsWater) return false;
+    return !(waterKindOf(it) === "clean" && it.water.fill === 1);
+  }
+  function doFillAtSink(sourceKind, index){
+    const room = world[state.currentRoom];
+    const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
+    const it = getItemAt(src && src.items, index);
+    if(!it || !canFillAtSink(it)) return;
+    const kind = waterKindOf(it) === "tainted" ? "tainted" : "clean";
+    const filled = changeOneUnit(src.items, it, unit=>{ unit.water = { kind, fill:1 }; });
+    // The pop-up follows the filled bottle, as doOpen()'s follows the opened can.
+    detailItem = { uid: ensureUid(filled), side: sourceKind };
+    log(`You fill the ${it.name.toLowerCase()} at the sink.`);
+    render();
   }
   // Eats `amount` of a unit (a fraction; null for whatever is left of it)
   // from the target eatTarget() picks. Restores and the poisoning chance
@@ -4636,16 +4716,15 @@
     const room = world[state.currentRoom];
     const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
     const clicked = getItemAt(src && src.items, index);
-    if(!clicked || clicked.sealed) return;
+    if(!clicked || !consumeProfile(clicked)) return;
     const it = eatTarget(src.items, clicked);
-    const fx = unitFoodEffects(it);
-    if(!fx.restores) return;
-    const left = portionOf(it);
-    const a = amount == null ? left : Math.min(amount, left);
+    const fx = consumeProfile(it);
+    const a = amount == null ? fx.left : Math.min(amount, fx.left);
     if(fx.restores.hunger) state.vitals.hunger = clamp(state.vitals.hunger + fx.restores.hunger * a);
     if(fx.restores.thirst) state.vitals.thirst = clamp(state.vitals.thirst + fx.restores.thirst * a);
     eatFromRow(src.items, it, a);
-    const verb = it.verb.toLowerCase(), name = it.name.toLowerCase();
+    // What is drunk from a bottle is the water, not the bottle.
+    const verb = it.verb.toLowerCase(), name = fx.water ? "water" : it.name.toLowerCase();
     log(a === 1 ? `You ${verb} the ${name}.` : `You ${verb} some of the ${name}.`, "good", "consume:" + (it.itemId || it.name));
     // After the eating line, so the onset line reads as its consequence.
     rollFoodPoisoning(fx.poisoning * a);
@@ -4776,9 +4855,9 @@
     // the keychain-blocked Take above and the Crafting panel's recipe list
     // (renderCraftingPanel()), which is a catalogue and would become
     // undiscoverable if filtered.
-    if(foodEffects(it).restores && !it.sealed){
+    if(consumeProfile(it)){
       const verb = it.verb || "Use";
-      const left = portionOf(eatTarget(list, it));
+      const left = consumeProfile(eatTarget(list, it)).left;
       actions.push({ label: verb, onClick:()=>doConsume(side, index) });
       EAT_PARTS.forEach(part=>{
         if(part.amount < left) actions.push({ label: verb + " " + part.label, onClick:()=>doConsume(side, index, part.amount) });
@@ -4786,6 +4865,7 @@
     }
     if(it.sealed && (!it.opensWith || hasTool(it.opensWith)))
       actions.push({ label:"Open", onClick:()=>doOpen(side, index) });
+    if(canFillAtSink(it)) actions.push({ label:"Fill at the sink", onClick:()=>doFillAtSink(side, index) });
     if(it.category==="Container" && it.slotType && !state[it.slotType])
       actions.push({ label:"Equip", onClick:()=>doEquip(side, index) });
     if(it.category === "Key"){
@@ -7487,6 +7567,9 @@
     // A perishable always shows its freshness, or Frozen while it sits in a
     // freezer that is holding it.
     if(isPerishable(it)) labels.push(ctx && isFrozenIn(ctx.container) ? "Frozen" : FRESHNESS_LABELS[unitFreshness(it)]);
+    // Water shows its kind, never its level: an empty bottle is the plain name.
+    const water = waterKindOf(it);
+    if(water) labels.push(water === "tainted" ? "Tainted" : "Water");
     return labels;
   }
   function renderItemList(el, list, buttons, side, ctx){
