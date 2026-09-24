@@ -43,6 +43,17 @@
   .full-panel-body{ max-width:560px; display:flex; flex-direction:column; gap:16px; }
   #craftingList, #deviceControls{ display:flex; flex-direction:column; align-items:flex-start; gap:8px; }
   #deviceStatus{ font-size:13px; color:var(--ink-dim); }
+  /* The Crafting panel's search and filters, above the list. The group
+     buttons wrap, so the row holds at phone width. */
+  #craftFilters{ display:flex; flex-direction:column; gap:8px; }
+  #craftSearch{ font:inherit; font-size:13px; background:var(--panel-2); border:1px solid var(--line); color:var(--ink);
+    padding:6px 8px; border-radius:3px; width:100%; }
+  #craftGroups{ display:flex; flex-wrap:wrap; gap:5px; }
+  #craftGroups button{ font-size:12px; background:var(--panel-2); border:1px solid var(--line); color:var(--ink-dim);
+    padding:4px 9px; min-height:24px; border-radius:3px; cursor:pointer; }
+  #craftGroups button.active{ border-color:var(--accent); color:var(--accent); }
+  #craftCanMakeLabel{ font-size:12px; color:var(--ink-dim); display:flex; align-items:center; gap:6px; cursor:pointer; }
+  .craft-empty{ color:var(--ink-faint); font-size:12px; }
   /* The stove timer's add buttons, side by side. */
   .timer-steps{ display:flex; gap:6px; }
   /* A panel's result area (Crafting's #craftResult, Device Options'
@@ -250,6 +261,11 @@
 <section id="craftingPanel" class="full-panel" tabindex="-1">
   <h2>Crafting <button class="panel-close">✕</button></h2>
   <div class="full-panel-body">
+    <div id="craftFilters">
+      <input id="craftSearch" type="search" placeholder="Search" aria-label="Search recipes" autocomplete="off">
+      <div id="craftGroups"></div>
+      <label id="craftCanMakeLabel"><input id="craftCanMake" type="checkbox"> Can make now</label>
+    </div>
     <div id="craftingList"></div>
     <div id="craftResult" class="log-result"></div>
   </div>
@@ -508,13 +524,20 @@
   // was previously a bare 100 written at two call sites, neither of which
   // owns Fatigue.
   const FATIGUE_GAIT_LOCK = 100;
+  // Every recipe, by group: "craft" makes things, "prep" prepares food. An
+  // input may name the cook state a unit must be in (`cookState`); `tool` is
+  // a capability tag the player must carry (hasTool()). `doneLog` is the line
+  // a recipe logs when the default "You craft a …" would not read.
   const RECIPES = [
-    { id:"bandage", label:"Craft a bandage",
+    { id:"bandage", label:"Craft a bandage", group:"craft",
       inputs:[ {id:"cloth",qty:2}, {id:"duct_tape",qty:1} ], minutes:5,
       output:{ id:"bandage" } },
-    { id:"campfire_kit", label:"Craft a campfire kit",
+    { id:"campfire_kit", label:"Craft a campfire kit", group:"craft",
       inputs:[ {id:"firewood",qty:CAMPFIRE_KIT_COST} ], minutes:15,
-      output:{ id:"campfire_kit" } }
+      output:{ id:"campfire_kit" } },
+    { id:"fillet_fish", label:"Fillet the fish", group:"prep",
+      inputs:[ {id:"fish",qty:1,cookState:"raw"} ], tool:"blade", minutes:10,
+      output:{ id:"fish_fillets" }, doneLog:"You fillet the fish." }
   ];
   function clamp(v){ return Math.max(0, Math.min(100, v)); }
 
@@ -658,7 +681,7 @@
   //     tags          capability tags used by mechanics instead of name
   //                   checks. Read by a mechanic today: blunt, cutting,
   //                   chopping, fishing, tackle, fire-starter, battery,
-  //                   can-opening, device, disassemble. `can-opening`
+  //                   can-opening, device, disassemble, blade. `can-opening`
   //                   means "can get a can open", not "is a can opener" —
   //                   doOpen() asks hasTool() for it, so every item that
   //                   could work a lid off carries it, not just the
@@ -671,11 +694,13 @@
   //                   (doDisassemble()); on an item no recipe makes, it
   //                   does nothing.
   //                   Containers carry tags too (see CONTAINER SCHEMA).
-  //                   Declared, with no consumer yet: blade, prying, heat
-  //                   — an item carrying one of these makes a claim nothing
+  //                   `blade` is the tool a recipe's `tool` asks for to
+  //                   cut (Fillet the fish).
+  //                   Declared, with no consumer yet: prying, heat — an
+  //                   item carrying one of these makes a claim nothing
   //                   currently acts on, which is correct to write and not
-  //                   yet load-bearing. `heat`
-  //                   sits in that second group despite having a reader:
+  //                   yet load-bearing. `heat` sits in that second group
+  //                   despite having a reader:
   //                   roomHasHeat() exists, but its only caller is
   //                   canCraft()'s needsHeat branch, which no recipe sets.
   //     durability    { current, max, mode } — mode is "uses" or "time"
@@ -858,6 +883,9 @@
     fish: { name:"Fish", category:"Food", unitWeight:0.3, restores:{hunger:10}, verb:"Eat", foodPoisoningChance:0.35,
       cooks:{ minutes:15, restores:{hunger:35} },
       spoils:{ staleAfter:12*60, rottenAfter:1*MINUTES_PER_DAY } },
+    fish_fillets: { name:"Fish fillets", category:"Food", unitWeight:0.25, restores:{hunger:10}, verb:"Eat", foodPoisoningChance:0.35,
+      cooks:{ minutes:10, restores:{hunger:35} },
+      spoils:{ staleAfter:8*60, rottenAfter:18*60 } },
     canned_tuna: { name:"Canned tuna", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat", sealed:true, opensWith:"can-opening",
       spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
     cereal_box: { name:"Box of cereal", category:"Food", unitWeight:0.5, restores:{hunger:15}, verb:"Eat", sealed:true },
@@ -3963,6 +3991,11 @@
   // #log's own <p> elements, never copies of their text, so the result area
   // is a view of the log rather than a second history. UI-only.
   let craftResult = [];
+  // The Crafting panel's search and filters: the query, the group shown
+  // ("all" or a CRAFT_GROUPS id), and whether only what can be made now is
+  // listed. UI-only, never saved, and reset when the panel closes.
+  function defaultCraftFilter(){ return { query:"", group:"all", canMakeOnly:false }; }
+  let craftFilter = defaultCraftFilter();
   // The same, for the last control run from the Device Options panel.
   let deviceResult = [];
   // Whether the last render() drew the game-over screen. UI-only. Game over
@@ -4472,10 +4505,16 @@
     if(result.reason === "keychain"){
       log(`Your keychain can't hold that — the ${item.name.toLowerCase()} drops to the floor instead.`, "warn");
     } else if(floorFull){
-      log(`No room anywhere — the ${item.name.toLowerCase()} ends up in a heap on the already-cluttered floor.`, "warn");
+      logHeap(item);
     } else {
       log(`No room for the ${item.name.toLowerCase()} — it drops to the floor instead.`, "warn");
     }
+  }
+  // The line for an item landing on a floor already over its floorCap. It
+  // lands there anyway: the floor is where things go when nowhere else will
+  // take them.
+  function logHeap(item){
+    log(`No room anywhere — the ${item.name.toLowerCase()} ends up in a heap on the already-cluttered floor.`, "warn");
   }
   function invSlot(tab){
     if(tab === "inventory") return state.inventory;
@@ -4494,6 +4533,16 @@
   // A floor bag's Here tab key: its _uid, never its floor index, prefixed so
   // it can't be mistaken for an authored container id.
   function floorBagTab(bag){ return "bag:" + ensureUid(bag); }
+  // The room containers the Here panel lists as tabs, in tab order: authored
+  // ones that are unlocked and either searched or shown without a search,
+  // then the car's while it is unlocked. Crafting's reach reads the same
+  // list, so what you can see is what you can craft from.
+  function listedContainers(room){
+    const searched = !room.searchLabel || room.searched;
+    const out = room.containers.filter(c=> !c.locked && (searched || shownWithoutSearch(c)));
+    if(room.carContainers && !room.carLocked) room.carContainers.forEach(c=> out.push(c));
+    return out;
+  }
   // The authored or car container a Here tab shows, or null for the floor and
   // a floor bag.
   function worldTabContainer(room, tab){
@@ -4583,6 +4632,7 @@
   // A cookable item's cook state, "raw" or "cooked", or null for an item that
   // does not cook. Cookable means its registry entry carries `cooks`; an
   // instance without `cookState` is raw.
+  const COOK_STATE_LABELS = { raw:"Raw", cooked:"Cooked" };
   function cookStateOf(it){
     const def = registryEntryOf(it);
     if(!def || !def.cooks) return null;
@@ -5674,24 +5724,75 @@
   // ==================================================
   // CRAFTING
   // ==================================================
+  // Crafting reaches the room, not only your pockets. The item lists it
+  // reaches, in the order a non-perishable input is taken from them: the
+  // inventory pools, then the room's floor, then the containers the Here
+  // panel lists (listedContainers()), authored ones first. Never the inside
+  // of a floor bag or of a vessel, and never a container that has not rolled
+  // yet, which counts as empty: crafting does not trigger a roll.
+  function nearbyLists(){
+    const room = world[state.currentRoom];
+    return invPools().concat([room.floor],
+      listedContainers(room).filter(c=> !(c.spawnPools && !c.spawnRolled)).map(c=> c.items));
+  }
+  // Whether a row can serve as `input`: the same item, in the input's cook
+  // state when it names one.
+  function inputMatches(it, input){
+    return it.itemId === input.id && (!input.cookState || cookStateOf(it) === input.cookState);
+  }
+  function countNearby(input){
+    return nearbyLists().reduce((sum, list)=> sum + list.filter(it=> inputMatches(it, input)).reduce((s, it)=> s + it.qty, 0), 0);
+  }
+  // Takes `input`'s units from nearby and returns them. Perishable units go
+  // oldest first across every list, and a tie goes to the list reached
+  // first; units that do not age go in list order, the inventory's first.
+  // One sort does both, since a unit that does not age sorts as the same age
+  // as every other.
+  function takeNearby(input){
+    const units = [];
+    nearbyLists().forEach((list, li)=> list.forEach(row=>{
+      if(!inputMatches(row, input)) return;
+      const ages = isPerishable(row) ? unitAges(row) : null;
+      for(let u = 0; u < row.qty; u++) units.push({ list, row, li, age: ages ? ages[u] : -1 });
+    }));
+    units.sort((a, b)=> b.age - a.age || a.li - b.li);
+    const perRow = new Map();
+    units.slice(0, input.qty).forEach(u=>{ perRow.set(u.row, { list:u.list, n:(perRow.get(u.row) || { n:0 }).n + 1 }); });
+    const taken = [];
+    // A row's units are kept oldest first, so the n oldest picked from a row
+    // are exactly the n dropUnits() takes.
+    perRow.forEach((pick, row)=> taken.push(dropUnits(pick.list, pick.list.indexOf(row), pick.n)));
+    return taken;
+  }
   function canCraft(recipe){
-    const hasAll = recipe.inputs.every(inp => countInPools(inp.id) >= inp.qty);
+    const hasAll = recipe.inputs.every(inp => countNearby(inp) >= inp.qty);
     if(!hasAll) return false;
-    // Two gates no recipe sets today. They stay because they are the
-    // declared shape a recipe uses to demand a tool or a heat source —
-    // drop them and the next recipe that needs one has to re-add them.
+    // The tool is carried, as every tool check is (hasTool()). The heat gate
+    // is one no recipe sets today; it stays because it is the declared shape
+    // a recipe uses to demand a heat source.
     if(recipe.tool && !hasTool(recipe.tool)) return false;
     if(recipe.needsHeat && !roomHasHeat(world[state.currentRoom])) return false;
     return true;
   }
+  // What a recipe makes lands on the room's floor, always — over floorCap
+  // too, with the heap warning. A perishable output is the same flesh as
+  // what it was made from: it takes the age of the oldest perishable unit
+  // used, and is new only when none was.
   function doCraft(recipeId){
     const recipe = RECIPES.find(r=>r.id===recipeId);
     if(!recipe || !canCraft(recipe)) return;
-    recipe.inputs.forEach(inp=> consumeFromPools(inp.id, inp.qty));
+    const used = [];
+    recipe.inputs.forEach(inp=> takeNearby(inp).forEach(u=> used.push(u)));
     advanceTime(recipe.minutes);
     const crafted = itemFromRegistry({ id: recipe.output.id, qty:1 });
-    giveItem(crafted);
-    log(`You craft a ${crafted.name.toLowerCase()}.`, "good", "craft:" + recipe.output.id);
+    if(isPerishable(crafted)){
+      const ages = used.filter(isPerishable).map(u=> unitAges(u)[0]);
+      crafted.ages = [ages.length ? Math.max(...ages) : 0];
+    }
+    const room = world[state.currentRoom];
+    if(room.floorCap && totalWeight(room.floor) + itemWeight(crafted) > room.floorCap) logHeap(crafted);
+    addToList(room.floor, crafted);
+    log(recipe.doneLog || `You craft a ${crafted.name.toLowerCase()}.`, "good", "craft:" + recipe.output.id);
     render();
   }
   // ==================================================
@@ -6324,9 +6425,10 @@
   //   spare_batteries  the powered-equipment "Remove batteries" action
   const ACTION_GRANTED_ITEM_IDS = ["firewood", "fish", "spare_batteries"];
   // The tool tags validateReachability() counts, written down for the same
-  // reason. The first seven are what hasTool()/hasMatchUses() actually gate
+  // reason. The first eight are what hasTool()/hasMatchUses() actually gate
   // an action on, and they include the `breakTag` values windows (blunt) and
-  // locked storage units (cutting) carry. `heat` is listed because
+  // locked storage units (cutting) carry, and the `tool` a recipe asks for
+  // (blade). `heat` is listed because
   // roomHasHeat() reads it, though its only caller is canCraft()'s needsHeat
   // branch and no recipe sets that. `prying` gates nothing at all and is
   // counted precisely for that reason: renderHereActionsPanel() records that
@@ -6334,7 +6436,7 @@
   // carries it, and #111 is the standing question of whether to gate on it
   // once that stops being true. The count is the evidence that question wants.
   const REPORTED_TOOL_TAGS = ["fire-starter", "fishing", "tackle", "chopping",
-    "cutting", "blunt", "can-opening", "heat", "prying"];
+    "cutting", "blunt", "can-opening", "blade", "heat", "prying"];
   // Whether the registry entry for `id` carries `tag`, the test every tag
   // count on the dev seam applies.
   function registryCarriesTag(id, tag){ return hasTag(ITEM_REGISTRY[id], tag); }
@@ -6774,7 +6876,11 @@
   // each stacks over the drawer, and closing one returns to the drawer.
   // `onClose` is what the panel forgets when it goes.
   const FULL_PANELS = {
-    crafting: { el: document.getElementById("craftingPanel"), onClose(){ craftResult = []; renderCraftResult(); } },
+    crafting: { el: document.getElementById("craftingPanel"), onClose(){
+      craftResult = [];
+      craftFilter = defaultCraftFilter();
+      renderCraftingPanel();
+    } },
     options:  { el: document.getElementById("optionsPanel") }
   };
   function openPanel(id){
@@ -6784,6 +6890,23 @@
       if(p.onClose) p.onClose();
     });
   }
+  // The Crafting panel's filter controls, built once. Each change redraws
+  // the panel only: filtering is a view, and changes nothing in the game.
+  // The group buttons, in order: "all", then one per RECIPES `group`.
+  const CRAFT_GROUPS = [
+    { id:"all", label:"All" },
+    { id:"craft", label:"Crafting" },
+    { id:"prep", label:"Preparation" }
+  ];
+  CRAFT_GROUPS.forEach(g=>{
+    const btn = document.createElement("button");
+    btn.textContent = g.label;
+    btn.dataset.group = g.id;
+    btn.addEventListener("click", ()=>{ craftFilter.group = g.id; renderCraftingPanel(); });
+    document.getElementById("craftGroups").appendChild(btn);
+  });
+  document.getElementById("craftSearch").addEventListener("input", e=>{ craftFilter.query = e.target.value; renderCraftingPanel(); });
+  document.getElementById("craftCanMake").addEventListener("change", e=>{ craftFilter.canMakeOnly = e.target.checked; renderCraftingPanel(); });
   document.querySelectorAll(".full-panel .panel-close").forEach(btn=>{
     btn.addEventListener("click", ()=> closeLayer(btn.closest(".full-panel")));
   });
@@ -7563,7 +7686,7 @@
     const labels = [];
     if(it.sealed === false) labels.push("Open");
     const cook = cookStateOf(it);
-    if(cook) labels.push(cook === "cooked" ? "Cooked" : "Raw");
+    if(cook) labels.push(COOK_STATE_LABELS[cook]);
     // A perishable always shows its freshness, or Frozen while it sits in a
     // freezer that is holding it.
     if(isPerishable(it)) labels.push(ctx && isFrozenIn(ctx.container) ? "Frozen" : FRESHNESS_LABELS[unitFreshness(it)]);
@@ -7733,27 +7856,64 @@
     itemPop.style.top = top + "px";
   }
   // The Crafting panel. Unavailable recipes stay visible and disabled, with
-  // their `(needs ...)` string. This is a catalogue, not an action list:
-  // filtering it to what is currently craftable would make crafting
-  // undiscoverable. The rule that an unperformable action is hidden (see
+  // their `(needs ...)` string. By default this is a catalogue, not an action
+  // list: filtering it to what is currently craftable would make crafting
+  // undiscoverable, so that is a toggle the player turns on, never the
+  // default. The rule that an unperformable action is hidden (see
   // getItemActions()) governs actions on a specific item, not this. Drawn by
   // every render(), open or not, as the sidebar's panels are, so it is
   // current the moment it opens and after every craft.
+  // The search matches a recipe's label or its inputs' names, ignoring case,
+  // and the group buttons (CRAFT_GROUPS) and the toggle narrow it further.
+  // They read RECIPES directly, never a list of their own.
+  // What a recipe asks for, in words: each input with its cook state when it
+  // names one, the tool as the thing it is ("a blade"), and heat. Functional
+  // UI text; retunable.
+  function recipeNeeds(r){
+    const parts = r.inputs.map(inp=> ITEM_REGISTRY[inp.id].name
+      + (inp.cookState ? ` (${COOK_STATE_LABELS[inp.cookState]})` : "") + " ×" + inp.qty);
+    if(r.tool) parts.push("a " + r.tool.replace(/-/g, " "));
+    if(r.needsHeat) parts.push("a heat source");
+    return parts.join(", ");
+  }
+  function recipeShown(r, ok){
+    if(craftFilter.group !== "all" && r.group !== craftFilter.group) return false;
+    if(craftFilter.canMakeOnly && !ok) return false;
+    const q = craftFilter.query.trim().toLowerCase();
+    if(!q) return true;
+    return [r.label].concat(r.inputs.map(inp=> ITEM_REGISTRY[inp.id].name)).some(t=> t.toLowerCase().includes(q));
+  }
   function renderCraftingPanel(){
+    document.getElementById("craftSearch").value = craftFilter.query;
+    document.getElementById("craftCanMake").checked = craftFilter.canMakeOnly;
+    document.querySelectorAll("#craftGroups button").forEach(b=>{
+      const on = b.dataset.group === craftFilter.group;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
     rebuildKeepingFocus(FULL_PANELS.crafting.el, ()=>{
       const list = document.getElementById("craftingList");
       list.innerHTML = "";
       RECIPES.forEach(r=>{
         const ok = canCraft(r);
-        const need = r.inputs.map(inp=>`${ITEM_REGISTRY[inp.id].name} x${inp.qty}`).join(", ")
-          + (r.tool ? `, ${r.tool} tool` : "") + (r.needsHeat ? ", heat source" : "");
+        if(!recipeShown(r, ok)) return;
         const btn = document.createElement("button");
         btn.className = "action" + (ok ? "" : " blocked");
-        btn.innerHTML = `${r.label} <span class="cost">(needs ${need})</span>`;
+        btn.appendChild(document.createTextNode(r.label + " "));
+        const need = document.createElement("span");
+        need.className = "cost";
+        need.textContent = `(needs ${recipeNeeds(r)})`;
+        btn.appendChild(need);
         if(ok){ btn.addEventListener("click", ()=> craftFromPanel(r.id)); }
         else { btn.disabled = true; }
         list.appendChild(btn);
       });
+      if(!list.children.length){
+        const none = document.createElement("div");
+        none.className = "craft-empty";
+        none.textContent = "Nothing matches.";
+        list.appendChild(none);
+      }
     });
     renderCraftResult();
   }
@@ -8114,11 +8274,7 @@
       nameCount.set(bag.name, n);
       worldTabDefs.push([floorBagTab(bag), n > 1 ? bag.name + " " + n : bag.name]);
     });
-    const searched = !room.searchLabel || room.searched;
-    room.containers.forEach(c=>{
-      if(!c.locked && (searched || shownWithoutSearch(c))) worldTabDefs.push([c.id, c.name]);
-    });
-    if(room.carContainers && !room.carLocked) room.carContainers.forEach(c=> worldTabDefs.push([c.id, c.name]));
+    listedContainers(room).forEach(c=> worldTabDefs.push([c.id, c.name]));
     // Before the buttons are built, so the render that drops the open tab
     // also marks Floor active.
     if(!worldTabDefs.find(d=>d[0]===worldTab)) worldTab = "floor";
