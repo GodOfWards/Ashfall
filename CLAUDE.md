@@ -66,6 +66,13 @@ when Tom asks — never up front. A coding session never reads it: a handoff tha
 depends on a canon fact quotes that fact itself. `.rgignore` keeps the folder
 out of repository searches, so it is read by path, on purpose, or not at all.
 
+**The world is real.** The town is Henderson, Kentucky. Streets, places,
+businesses, utilities and infrastructure carry their real names, and what the
+game says about them is accurate — checked against a source when it is written,
+never recalled or invented. A fact that can't be confirmed is marked unconfirmed,
+not filled with a plausible one. Adding something the real town lacks is a
+design decision (see below). Project Guide, Part 1.
+
 **Content vs. mechanics stay separated.** A change touches WORLD DATA (content)
 or ACTIONS/SIMULATION (mechanics), and normally not both. Rendering is its own
 concern — a new way of displaying existing state is neither. If a content
