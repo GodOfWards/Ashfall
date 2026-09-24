@@ -43,6 +43,8 @@
   .full-panel-body{ max-width:560px; display:flex; flex-direction:column; gap:16px; }
   #craftingList, #deviceControls{ display:flex; flex-direction:column; align-items:flex-start; gap:8px; }
   #deviceStatus{ font-size:13px; color:var(--ink-dim); }
+  /* The stove timer's add buttons, side by side. */
+  .timer-steps{ display:flex; gap:6px; }
   /* A panel's result area (Crafting's #craftResult, Device Options'
      #deviceResult). The body face, which the panel's system-ui would
      otherwise replace: its lines are #log's, set as #log sets them. */
@@ -164,6 +166,11 @@
   .panel h2{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-faint);
     margin:0 0 8px; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:2px 6px; }
   .panel h2 .sub{ color:var(--ink-dim); text-transform:none; letter-spacing:0; font-size:12px; display:flex; align-items:center; gap:6px; }
+  /* The Here header can carry the weight, the stove's state and Device
+     Options at once. On a narrow panel they wrap as whole pieces rather than
+     breaking inside a figure. */
+  #worldPanel h2 .sub{ flex-wrap:wrap; justify-content:flex-end; row-gap:3px; }
+  #worldWeight, #worldDeviceState{ white-space:nowrap; }
   ul.itemlist{ list-style:none; margin:0; padding:0; }
   ul.itemlist li{ display:flex; justify-content:space-between; align-items:center; gap:6px;
     padding:6px 0; border-bottom:1px solid rgba(51,56,63,.6); font-size:12px; }
@@ -288,7 +295,7 @@
       <ul class="itemlist" id="invList"></ul>
     </div>
     <div class="panel" id="worldPanel">
-      <h2>Here <span class="sub"><span id="worldWeight"></span><button id="deviceOptionsBtn" class="mini" style="display:none;"></button></span></h2>
+      <h2>Here <span class="sub"><span id="worldWeight"></span><span id="worldDeviceState"></span><button id="deviceOptionsBtn" class="mini" style="display:none;"></button></span></h2>
       <div class="tabs" id="worldTabs"></div>
       <ul class="itemlist" id="worldList"></ul>
     </div>
@@ -594,6 +601,9 @@
   //               its Device Options panel (renderDevicePanel()). The Here
   //               panel's header offers that panel while its tab is selected.
   //     A container carrying both is the room's stove (roomStove()).
+  //   Optional: timerMinutes — a stove's analog timer, minutes left (absent
+  //     = 0). Set from its Device Options, counted down by
+  //     tickStoveTimers() whether or not the stove is on.
   //     Authored containers carry their tags in WORLD DATA. The campfire's
   //     container is created by doBuildFire(), which gives it `heat`.
   //   Optional (spawn pools — see SPAWN_POOLS below):
@@ -5158,6 +5168,7 @@
         }
       });
     });
+    tickStoveTimers(min);
     Object.keys(world).forEach(id=>{
       const r = world[id];
       // Before the fire burns down, so a step the heat was on for counts.
@@ -5495,16 +5506,17 @@
   // taken out and put back continues from where it was. Nothing is logged,
   // anywhere: knowing is the player's job, through the stove timer or the
   // Wait button.
-  // COOK_EPSILON absorbs the float left over when a wait of exactly the
-  // remaining time is stepped in fractional minutes.
-  const COOK_EPSILON = 1e-9;
+  // TICK_EPSILON absorbs the float left over when a duration is stepped in
+  // fractional minutes, so a wait of exactly the remaining time finishes the
+  // cooking, or runs a timer down, that it was sized for.
+  const TICK_EPSILON = 1e-9;
   function cookInHeat(room, dt){
     room.containers.filter(c=> hasTag(c, "heat")).forEach(c=>{
       c.items.slice().forEach(it=>{
         if(cookStateOf(it) !== "raw") return;
         const def = registryEntryOf(it);
         it.cookMinutes = (it.cookMinutes || 0) + dt;
-        if(it.cookMinutes < def.cooks.minutes - COOK_EPSILON) return;
+        if(it.cookMinutes < def.cooks.minutes - TICK_EPSILON) return;
         it.cookState = "cooked";
         delete it.cookMinutes;
         remergeRow(c.items, it);
@@ -5534,6 +5546,33 @@
     if(!next) return null;
     if(room.fireMinutesLeft != null && room.fireMinutesLeft < next.remaining) return null;
     return next;
+  }
+  // The stove timer: an analog kitchen timer on the stove container, in
+  // minutes (`timerMinutes`, absent = 0). Its Device Options add
+  // STOVE_TIMER_STEPS minutes a press, with no clear, no subtract and no cap.
+  // It needs neither the stove on nor power, and turns nothing off. When it
+  // runs down it rings, heard anywhere in the stove's building: the player's
+  // room must have a `building`, and the same one. Otherwise it rings unheard.
+  // The ring's wording is Tom's.
+  function doAddStoveTimer(minutes){
+    const stove = roomStove(world[state.currentRoom]);
+    if(!stove) return;
+    stove.timerMinutes = (stove.timerMinutes || 0) + minutes;
+    // Silent: the timer readout shows the new time.
+    render();
+  }
+  function tickStoveTimers(dt){
+    const here = world[state.currentRoom];
+    Object.keys(world).forEach(id=>{
+      const room = world[id];
+      room.containers.forEach(c=>{
+        if(!(c.timerMinutes > 0)) return;
+        c.timerMinutes -= dt;
+        if(c.timerMinutes > TICK_EPSILON) return;
+        c.timerMinutes = 0;
+        if(here.building && here.building === room.building) log("You hear the ringing sound of the timer.");
+      });
+    });
   }
   // Waits out the soonest-finishing item. Not interruptible (#212). The log
   // line's wording is retunable.
@@ -7408,7 +7447,13 @@
   // open after a control runs. For an item, the status line is the pop-up's
   // (durabilityText()) and the controls are batteryActions(), so neither is
   // stated twice. For the stove, the room's heatActive is its On/Off, and
-  // Light / Turn off are the actions the Here group used to offer.
+  // Light / Turn off are the actions the Here group used to offer; below them
+  // sit its timer's add buttons (doAddStoveTimer()).
+  // The stove's two readouts, shared by its Device Options status lines and
+  // the Here panel header: whether it is lit, and the timer rounded up to a
+  // whole minute ("Timer: 0" when unset).
+  function stoveOnText(room){ return room.heatActive ? "On" : "Off"; }
+  function stoveTimerText(stove){ return "Timer: " + Math.ceil(stove.timerMinutes || 0); }
   function renderDevicePanel(){
     const target = resolveDeviceTarget();
     if(!target){ closeLayer(devicePanel); return; }
@@ -7427,12 +7472,16 @@
       } else {
         const room = target.room;
         title.textContent = target.container.name;
-        status.textContent = "";
+        status.innerHTML = "";
         // The stove, the one fixture device today. A fixture tagged `device`
         // without `heat` would draw only its name until it gains controls.
         if(!hasTag(target.container, "heat")) return;
         // Functional UI text, held to clarity; retunable.
-        status.textContent = room.heatActive ? "On" : "Off";
+        [stoveOnText(room), stoveTimerText(target.container)].forEach(line=>{
+          const div = document.createElement("div");
+          div.textContent = line;
+          status.appendChild(div);
+        });
         if(room.heatActive){
           controls.appendChild(actionButton("Turn off the stove", ()=> runDeviceControl(doExtinguish)));
         } else if(hasMatchUses()){
@@ -7443,6 +7492,14 @@
           // disappearing.
           controls.appendChild(hereNote("Nothing you're carrying will light it."));
         }
+        // The timer's buttons, one per step, after Light / Turn off. They
+        // cost no time and log nothing.
+        const timerRow = document.createElement("div");
+        timerRow.className = "timer-steps";
+        STOVE_TIMER_STEPS.forEach(m=>{
+          timerRow.appendChild(actionButton("+" + m, ()=> runDeviceControl(()=> doAddStoveTimer(m))));
+        });
+        controls.appendChild(timerRow);
       }
     });
     renderDeviceResult();
@@ -7730,6 +7787,13 @@
       deviceOptionsBtn.style.display = "";
       deviceOptionsBtn.onclick = ()=> openDevicePanel({ kind:"container", id:tabContainer.id });
     } else { deviceOptionsBtn.style.display = "none"; }
+    // The stove's state, between the weight and its Device Options button,
+    // while its tab is selected.
+    // Hidden when empty, so it adds no gap to the header row.
+    const deviceState = document.getElementById("worldDeviceState");
+    deviceState.textContent = tabContainer && tabContainer === roomStove(room)
+      ? stoveOnText(room) + " · " + stoveTimerText(tabContainer) : "";
+    deviceState.style.display = deviceState.textContent ? "" : "none";
     renderItemList(document.getElementById("worldList"), currentWorld.items, [
       // Disabled rather than hidden, for the reason given at the detail
       // view's Take family in getItemActions(): the item can be taken, just
@@ -7770,6 +7834,7 @@
       document.getElementById("worldTabs").innerHTML = "";
       document.getElementById("worldList").innerHTML = "";
       document.getElementById("worldWeight").textContent = "";
+      document.getElementById("worldDeviceState").textContent = "";
       deviceOptionsBtn.style.display = "none";
       // The catalogue goes blank with the rest, even though the Crafting
       // button is disabled above and the panel cannot be opened. The blanking
