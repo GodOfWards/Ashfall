@@ -27,9 +27,12 @@ Implements #228, #229, #230, #231 and #37 in full, per
 playtest plus two backlog fixes: device controls move out of the full-screen
 Device Options panel, the item panels' tabs stop moving, a pot of stew lists as
 the stew, repeated save-system lines collapse, and Wide-map street names are
-placed only where they land inside the view. All rendering: nothing is added to
-`state`, to any saved item or to any saved room, and `SAVE_KEY` stays
-`ashfall_save_v0.8`. **PATCH**, so existing browser saves keep loading.
+placed only where they land inside the view. Also #234, decided by Tom during
+this PR's review and outside the handoff: the stove turns on and off without a
+fire-starter. That one is a FIRE / COOKING rule change; everything else is
+rendering. Nothing is added to `state`, to any saved item or to any saved room,
+and `SAVE_KEY` stays `ashfall_save_v0.8`. **PATCH**, so existing browser saves
+keep loading.
 
 **UI**
 
@@ -39,9 +42,9 @@ placed only where they land inside the view. All rendering: nothing is added to
   Device Options opens a new **device pop-up**, `#devicePop` with its own
   transparent `#devicePopBackdrop`, styled as the item pop-up through a shared
   `.pop` / `.pop-backdrop` class. It holds the stove's name in bold, its
-  `stoveOnText()` and `stoveTimerText()` lines, then Light the stove / Turn off
-  the stove (or "Nothing you're carrying will light it."), then the `+5 / +10 /
-  +30` row. Labels are unchanged. It hangs from the Here strip at the strip's
+  `stoveOnText()` and `stoveTimerText()` lines, then Turn on the stove (0:05) /
+  Turn off the stove (see **Stove (reworked)** below), then the `+5 / +10 /
+  +30` row. It hangs from the Here strip at the strip's
   width, stays open after a control and redraws in place on every `render()`,
   and closes on an outside tap, on Esc, and when its target stops resolving:
   leaving the room, switching the Here tab, a load or a restart. Focus returns
@@ -100,6 +103,20 @@ placed only where they land inside the view. All rendering: nothing is added to
 
 **Changed / Reworked**
 
+*Stove (reworked) (#234)*
+
+- The stove needs no fire-starter. `doLightStove()` no longer calls
+  `consumeMatchUse()`, so lighting it neither requires a fire-starter nor
+  spends a use. The device pop-up always offers **Turn on the stove (0:05)**
+  while it is off (it was **Light the stove (0:05)**, offered only while
+  `hasMatchUses()`), and **Turn off the stove** while it is on. The "Nothing
+  you're carrying will light it." note is gone from the stove.
+- Unchanged: `LIGHT_STOVE_MIN` (5 minutes, printed on the button), the log line
+  "You light the stove.", `doExtinguish()`, the timer, and every campfire rule.
+  Building or relighting a campfire still needs and spends a fire-starter use.
+
+*Rendering*
+
 - `itemDisplay(it, ctx)` returns `{ name, state, category, vessel }` and is the
   one statement of whether an item shows as itself or as its vessel's dish.
   `renderItemList()`, `renderItemPop()` and the pop-up's "Holds: …" line all
@@ -128,13 +145,17 @@ placed only where they land inside the view. All rendering: nothing is added to
   `.log-result`, MENU LAYERS, `layerStack`, `deviceTarget`, `batteryActions()`,
   `durabilityText()`, `logWrittenBy()`, `openCraftingForVessel()`, the stove
   timer block, `stoveOnText()`, and the Here actions' stove note.
+- Comments on `doLightStove()`, `renderDevicePop()` and `hereNote()` now say
+  the stove needs no fire-starter.
 - Issues: #222's "Timer display" row now names the device pop-up and the Here
-  strip. Nothing was deferred, and no new issues were filed.
+  strip. #234 was filed to record Tom's stove decision and ships here. Nothing
+  was deferred.
 
 **Explicitly out of scope**
 
-- The Device Options label, the stove's control labels, and the timer's steps
-  and wording.
+- The Device Options label, and the timer's steps and wording. The handoff
+  also kept the stove's control labels. #234, decided after the handoff, changed
+  Light the stove to Turn on the stove.
 - Log size and the 50-entry cap (#29); food subcategories (#219); carried
   timers (#214); power and appliances as devices (#220), which will follow the
   item-pop-up rule if they bring `device` items.
@@ -166,6 +187,10 @@ The handoff left three choices to this session.
 
 **Notes / assumptions**
 
+- **#234.** "Turn on the stove" was chosen to pair with the existing "Turn off
+  the stove". `LIGHT_STOVE_MIN` stays at 5 minutes, although an igniter would
+  plausibly take less, and "You light the stove." is kept. All three are
+  retunable.
 - `In a <vessel name, lowercased>` is functional UI text, retunable. Every
   vessel name today starts with a consonant, so "a" is always the article.
 - The strips are right-aligned and wrap (`gap:4px 6px`), so on a narrow Here
@@ -197,7 +222,11 @@ The handoff left three choices to this session.
   "Nothing you're carrying" note with no fire-starter. The pop-up stayed open
   and updated after each control, drew no result area, sat at the strip's
   width directly below it, and matched `#itemPop`'s background, border,
-  shadow, padding and font. It closed on Esc (focus back on Device Options),
+  shadow, padding and font. After #234, every stove (2A, 2B, 1A and 1B
+  kitchens) offered Turn on the stove with and without a fire-starter, and
+  turned on and off. Lighting with matches carried left them at 50/50 uses.
+  The radio and the flashlight had Turn on / Turn off working from the
+  inventory, a worn bag, the floor, a container and a floor bag. It closed on Esc (focus back on Device Options),
   on an outside tap, on switching the Here tab and on leaving the room.
 - **Dish.** The 2A stove's pot of stew listed and popped up as above; after Eat
   1/2 it was still the stew; after Pour it out the row read `Cooking pot ×1 —
@@ -229,6 +258,7 @@ The handoff left three choices to this session.
 - EVENTS / UI HELPERS: the device pop-up's layer wiring, `positionPops()` and
   the scroll listener; `openDevicePanel()` removed.
 - INVENTORY / ITEM SYSTEM: `getItemActions()`'s `device` branch.
+- FIRE / COOKING: `doLightStove()` (#234).
 - PERSISTENCE: the four save-system `log()` keys.
 - ITEM DATA / WORLD DATA: the radio's tag and the schema comments.
 - PLAYER STATE: `deviceTarget`'s comment; `deviceResult` removed.

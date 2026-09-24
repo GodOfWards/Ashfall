@@ -6198,10 +6198,11 @@
   // Lights the room's stove, the authored container roomStove() finds. It
   // never creates a container: making one by id is how 1A's kitchen, whose
   // stove is `stove1a`, grew a second, empty "Stove" tab when lit (#177).
+  // A gas stove lights itself, so it needs no fire-starter and spends none
+  // (#234): only a campfire does.
   function doLightStove(){
     const room = world[state.currentRoom];
     if(!roomStove(room)) return;
-    if(!consumeMatchUse()) return;
     room.heatActive = true;
     advanceTime(LIGHT_STOVE_MIN);
     log("You light the stove.", "good");
@@ -8275,7 +8276,7 @@
   }
   // The dim line printed where an action would be if something were
   // different — a locked door with no key, sleep on cooldown, nothing to light
-  // a fire or the stove with. One helper rather than the same style literal
+  // a fire with. One helper rather than the same style literal
   // written at every call site.
   function hereNote(text){
     const note = document.createElement("div");
@@ -8709,9 +8710,10 @@
   function stoveTimerText(stove){ return "Timer: " + Math.ceil(stove.timerMinutes || 0); }
   // The device pop-up: a room fixture's controls, styled as the item pop-up
   // is. A bold title line with the fixture's name, its status lines, then
-  // its controls. For the stove, the room's heatActive is its On/Off, Light /
-  // Turn off are the actions the Here group used to offer, and below them sit
-  // its timer's add buttons (doAddStoveTimer()). Whether it is open follows
+  // its controls. For the stove, the room's heatActive is its On/Off, Turn on
+  // / Turn off switch it (doLightStove(), doExtinguish()), always offered
+  // since the stove needs no fire-starter, and below them sit its timer's add
+  // buttons (doAddStoveTimer()). Whether it is open follows
   // deviceTarget and nothing else, as the item pop-up's follows detailItem:
   // Device Options sets it, and render() opens the pop-up. Drawn by every
   // render(), so it stays open after a control runs and updates in place. A
@@ -8743,17 +8745,10 @@
       });
       const controls = document.createElement("div");
       controls.className = "pop-actions";
-      if(room.heatActive){
-        controls.appendChild(actionButton("Turn off the stove", doExtinguish));
-      } else if(hasMatchUses()){
-        controls.appendChild(actionButton("Light the stove " + fmtDuration(LIGHT_STOVE_MIN), doLightStove));
-      } else {
-        // Says the one thing that is missing, so a spent last
-        // fire-starter reads as a cause rather than as the control quietly
-        // disappearing.
-        controls.appendChild(hereNote("Nothing you're carrying will light it."));
-      }
-      // The timer's buttons, one per step, after Light / Turn off. They
+      controls.appendChild(room.heatActive
+        ? actionButton("Turn off the stove", doExtinguish)
+        : actionButton("Turn on the stove " + fmtDuration(LIGHT_STOVE_MIN), doLightStove));
+      // The timer's buttons, one per step, after Turn on / Turn off. They
       // cost no time and log nothing.
       const timerRow = document.createElement("div");
       timerRow.className = "timer-steps";
