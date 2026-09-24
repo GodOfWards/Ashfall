@@ -54,6 +54,11 @@
   #craftGroups button.active{ border-color:var(--accent); color:var(--accent); }
   #craftCanMakeLabel{ font-size:12px; color:var(--ink-dim); display:flex; align-items:center; gap:6px; cursor:pointer; }
   .craft-empty{ color:var(--ink-faint); font-size:12px; }
+  /* A Dishes row: the dish and what it needs, with Add ingredients beside
+     it when there is something to add. Wraps at phone width. */
+  .dish-row{ display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; font-size:12px; color:var(--ink);
+    padding:5px 9px; border:1px solid var(--line); border-radius:3px; background:var(--panel-2); }
+  .dish-row .cost{ color:var(--ink-faint); font-size:11px; }
   /* The stove timer's add buttons, side by side. */
   .timer-steps{ display:flex; gap:6px; }
   /* A panel's result area (Crafting's #craftResult, Device Options'
@@ -539,6 +544,38 @@
       inputs:[ {id:"fish",qty:1,cookState:"raw"} ], tool:"blade", minutes:10,
       output:{ id:"fish_fillets" }, doneLog:"You fillet the fish." }
   ];
+  // Dishes. A vessel's contents and water decide the dish, and nothing else
+  // does: the first template here that matches, in this order, is what forms
+  // when the vessel heats (formDish()). A template names:
+  //   item     the dish's registry entry, whose cooks.minutes is how long the
+  //            dish takes once formed
+  //   vessels  the vessel kinds it forms in
+  //   water    true: the vessel holds clean water (tainted must boil first);
+  //            false: it holds none
+  //   allowed  what may be in it, by ingredient role or by item id
+  //   counts   what counts toward `min` / `exactly`, when narrower than
+  //            `allowed` (a stew may hold grain, but needs two meat or
+  //            vegetables)
+  //   min / exactly  how many units must count. A unit is one add: a quarter
+  //            of rice is one unit.
+  //   named    true: the dish is named for its main ingredients ("Fish
+  //            stew"); false: it keeps the entry's name ("Boiled pasta").
+  // Water and one fish matches nothing: the fish cooks alone, by its own
+  // `cooks`, and the water boils.
+  const DISH_TEMPLATES = [
+    { id:"boiled_pasta", item:"dish_boiled_pasta", vessels:["pot","saucepan"], water:true,
+      allowed:{ ids:["pasta"] }, min:1, named:false },
+    { id:"boiled_rice", item:"dish_boiled_rice", vessels:["pot","saucepan"], water:true,
+      allowed:{ ids:["rice_bag"] }, min:1, named:false },
+    { id:"soup", item:"dish_soup", vessels:["pot","saucepan"], water:true,
+      allowed:{ roles:["vegetable"] }, exactly:1, named:true },
+    { id:"stew", item:"dish_stew", vessels:["pot","saucepan"], water:true,
+      allowed:{ roles:["meat","vegetable","grain"] }, counts:{ roles:["meat","vegetable"] }, min:2, named:true },
+    { id:"roast", item:"dish_roast", vessels:["roasting_pan"], water:false,
+      allowed:{ roles:["meat","vegetable"] }, min:1, named:true },
+    { id:"stir_fry", item:"dish_stir_fry", vessels:["frying_pan","saucepan"], water:false,
+      allowed:{ roles:["meat","vegetable","grain"] }, min:1, named:true }
+  ];
   function clamp(v){ return Math.max(0, Math.min(100, v)); }
 
   // ==================================================
@@ -731,10 +768,29 @@
   //                   onto an instance or a slot, so a retune reaches every
   //                   save.
   //     contents      stored contents when an equipped container is
-  //                   unequipped back into a stowable item. Its items count
-  //                   toward the item's weight (itemUnitWeight()), bags may
-  //                   nest to any depth, and every load-time scan reaches
-  //                   them through forEachItemList()
+  //                   unequipped back into a stowable item, and a vessel's
+  //                   ingredients or its one dish. Its items count toward
+  //                   the item's weight (itemUnitWeight()), bags may nest to
+  //                   any depth, and every load-time scan reaches them
+  //                   through forEachItemList()
+  //     vessel        { kind, capacityKg, waterKg } — the item is a pot or
+  //                   pan: `kind` is what DISH_TEMPLATES match on,
+  //                   `capacityKg` bounds its contents' weight, and
+  //                   `waterKg` is the water it holds when full (0 = none).
+  //                   Definition data, read by itemId.
+  //     ingredient    { role, label, restores?, addPortion? } — the item
+  //                   can go in a vessel: `role` is meat, vegetable or grain,
+  //                   `label` names a dish ("Fish stew"), `restores` is what
+  //                   it contributes to a dish when that differs from eating
+  //                   it, and `addPortion` means it goes in by that part of a
+  //                   unit. Definition data, read by itemId.
+  //     dish          true on a DISH_TEMPLATES template's entry. A dish
+  //                   instance carries what its ingredients decided, genuine
+  //                   per-instance state the `overrides` rule allows: its
+  //                   `name`, `restores`, `foodPoisoning` ({ raw, cooked })
+  //                   and `unitWeight` (buildDish()).
+  //     boilMinutes   instance: how long a vessel's tainted water has boiled,
+  //                   toward BOIL_MINUTES.
   //     on            powered-equipment on/off state
   //     hasBatteries  powered-equipment battery-installed state
   //     drainRate     durability loss per minute while `on`
@@ -799,11 +855,12 @@
     paperback_novel: { name:"Paperback novel", category:"Literature", unitWeight:0.3 },
     box_of_matches: { name:"Box of matches", category:"Materials", unitWeight:0.05, tags:["fire-starter"], durability:{ current:50, max:50, mode:"uses" } },
     photo_album: { name:"Photo album", category:"Literature", unitWeight:0.4 },
-    pot_of_spoiled_stew: { name:"Pot of spoiled stew", category:"Misc", unitWeight:1.2 },
     canned_soup: { name:"Canned soup", category:"Food", unitWeight:0.4, restores:{hunger:25,thirst:5}, verb:"Eat", sealed:true, opensWith:"can-opening",
       spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
-    pasta: { name:"Pasta", category:"Food", unitWeight:0.5, restores:{hunger:30}, verb:"Eat" },
-    frying_pan: { name:"Frying pan", category:"Tool", unitWeight:0.9, tags:["blunt"] },
+    pasta: { name:"Pasta", category:"Food", unitWeight:0.5,
+      ingredient:{ role:"grain", label:"Pasta", restores:{hunger:120}, addPortion:0.25 } },
+    frying_pan: { name:"Frying pan", category:"Tool", unitWeight:0.9, tags:["blunt"],
+      vessel:{ kind:"frying_pan", capacityKg:1, waterKg:0 } },
     kitchen_knife: { name:"Kitchen knife", category:"Tool", unitWeight:0.15, tags:["blade","can-opening"] },
     can_opener: { name:"Can opener", category:"Tool", unitWeight:0.1, tags:["can-opening"] },
     leftovers: { name:"Leftovers", category:"Food", unitWeight:0.8, restores:{hunger:25}, verb:"Eat",
@@ -827,11 +884,14 @@
     dead_potted_plant: { name:"Dead potted plant", category:"Misc", unitWeight:2.0 },
     duct_tape: { name:"Duct tape", category:"Materials", unitWeight:0.3 },
     canned_beans: { name:"Canned beans", category:"Food", unitWeight:0.4, restores:{hunger:22}, verb:"Eat", sealed:true, opensWith:"can-opening",
-      spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
+      spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY },
+      ingredient:{ role:"vegetable", label:"Bean" } },
     board_games: { name:"Board games", category:"Misc", unitWeight:1.0 },
-    burnt_saucepan: { name:"Burnt saucepan", category:"Misc", unitWeight:0.6 },
+    burnt_saucepan: { name:"Burnt saucepan", category:"Tool", unitWeight:0.6,
+      vessel:{ kind:"saucepan", capacityKg:1.5, waterKg:1.0 } },
     canned_corn: { name:"Canned corn", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat", sealed:true, opensWith:"can-opening",
-      spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
+      spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY },
+      ingredient:{ role:"vegetable", label:"Corn" } },
     aspirin: { name:"Aspirin", category:"Medical", unitWeight:0.05 },
     work_gloves: { name:"Work gloves", category:"Clothing", unitWeight:0.2 },
     handwritten_note: { name:"Handwritten note", category:"Literature", unitWeight:0.02 },
@@ -844,7 +904,12 @@
     nails: { name:"Nails", category:"Materials", unitWeight:1.0 },
     scrap_metal: { name:"Scrap metal", category:"Materials", unitWeight:0.5 },
     metal_pipe: { name:"Metal pipe", category:"Tool", unitWeight:1.3, tags:["blunt"] },
-    dented_saucepan: { name:"Dented saucepan", category:"Tool", unitWeight:0.7 },
+    dented_saucepan: { name:"Dented saucepan", category:"Tool", unitWeight:0.7,
+      vessel:{ kind:"saucepan", capacityKg:1.5, waterKg:1.0 } },
+    cooking_pot: { name:"Cooking pot", category:"Tool", unitWeight:1.2,
+      vessel:{ kind:"pot", capacityKg:3, waterKg:2.0 } },
+    roasting_pan: { name:"Roasting pan", category:"Tool", unitWeight:1.5,
+      vessel:{ kind:"roasting_pan", capacityKg:3, waterKg:0 } },
     crowbar: { name:"Crowbar", category:"Tool", unitWeight:2.5, tags:["blunt","prying"] },
     wrench: { name:"Wrench", category:"Tool", unitWeight:0.8, tags:["blunt"] },
     master_key: { name:"Master key", category:"Key", unitWeight:0.03, masterKey:true, building:"acorn" },
@@ -882,27 +947,33 @@
       disassembleLog:"You untie the bundle — back to {qty} loose firewood." },
     fish: { name:"Fish", category:"Food", unitWeight:0.3, restores:{hunger:10}, verb:"Eat", foodPoisoningChance:0.35,
       cooks:{ minutes:15, restores:{hunger:35} },
-      spoils:{ staleAfter:12*60, rottenAfter:1*MINUTES_PER_DAY } },
+      spoils:{ staleAfter:12*60, rottenAfter:1*MINUTES_PER_DAY },
+      ingredient:{ role:"meat", label:"Fish" } },
     fish_fillets: { name:"Fish fillets", category:"Food", unitWeight:0.25, restores:{hunger:10}, verb:"Eat", foodPoisoningChance:0.35,
       cooks:{ minutes:10, restores:{hunger:35} },
-      spoils:{ staleAfter:8*60, rottenAfter:18*60 } },
+      spoils:{ staleAfter:8*60, rottenAfter:18*60 },
+      ingredient:{ role:"meat", label:"Fish" } },
     canned_tuna: { name:"Canned tuna", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat", sealed:true, opensWith:"can-opening",
-      spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
+      spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY },
+      ingredient:{ role:"meat", label:"Tuna" } },
     cereal_box: { name:"Box of cereal", category:"Food", unitWeight:0.5, restores:{hunger:15}, verb:"Eat", sealed:true },
     crackers: { name:"Crackers", category:"Food", unitWeight:0.2, restores:{hunger:8}, verb:"Eat" },
     peanut_butter: { name:"Peanut butter", category:"Food", unitWeight:0.5, restores:{hunger:20}, verb:"Eat", sealed:true },
     candy_bar: { name:"Candy bar", category:"Food", unitWeight:0.05, restores:{hunger:5}, verb:"Eat" },
-    rice_bag: { name:"Bag of rice", category:"Food", unitWeight:1.0 },
+    rice_bag: { name:"Bag of rice", category:"Food", unitWeight:1.0,
+      ingredient:{ role:"grain", label:"Rice", restores:{hunger:120}, addPortion:0.25 } },
     coffee_grounds: { name:"Coffee grounds", category:"Food", unitWeight:0.3 },
     milk: { name:"Milk", category:"Food", unitWeight:1.0, restores:{thirst:20, hunger:5}, verb:"Drink",
       spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
     bread: { name:"Bread", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat",
       spoils:{ staleAfter:3*MINUTES_PER_DAY, rottenAfter:7*MINUTES_PER_DAY } },
     vegetables: { name:"Vegetables", category:"Food", unitWeight:0.5, restores:{hunger:10, thirst:2}, verb:"Eat",
-      spoils:{ staleAfter:2*MINUTES_PER_DAY, rottenAfter:5*MINUTES_PER_DAY } },
+      spoils:{ staleAfter:2*MINUTES_PER_DAY, rottenAfter:5*MINUTES_PER_DAY },
+      ingredient:{ role:"vegetable", label:"Vegetable" } },
     meat: { name:"Meat", category:"Food", unitWeight:0.5, restores:{hunger:10}, verb:"Eat", foodPoisoningChance:0.5,
       cooks:{ minutes:20, restores:{hunger:40} },
-      spoils:{ staleAfter:12*60, rottenAfter:1*MINUTES_PER_DAY } },
+      spoils:{ staleAfter:12*60, rottenAfter:1*MINUTES_PER_DAY },
+      ingredient:{ role:"meat", label:"Meat" } },
     ice_cream: { name:"Ice cream", category:"Food", unitWeight:0.5, restores:{hunger:15, thirst:5}, verb:"Eat",
       spoils:{ staleAfter:6*60, rottenAfter:1*MINUTES_PER_DAY } },
     bar_soap: { name:"Bar of soap", category:"Materials", unitWeight:0.1 },
@@ -983,7 +1054,23 @@
     duffel_bag: { name:"Duffel bag", category:"Container", unitWeight:0.8, slotType:"duffel", slotLabel:"Duffel Bag", capacityKg:18, carryFactor:0.81 },
     purse: { name:"Purse", category:"Container", unitWeight:0.4, slotType:"purse", capacityKg:5, carryFactor:0.85 },
     fanny_pack: { name:"Fanny pack", category:"Container", unitWeight:0.2, slotType:"fannypack", slotLabel:"Fanny Pack", capacityKg:3, carryFactor:0.76 },
-    tote_bag: { name:"Tote bag", category:"Container", unitWeight:0.3, slotType:"tote", slotLabel:"Tote Bag", capacityKg:8, carryFactor:0.85 }
+    tote_bag: { name:"Tote bag", category:"Container", unitWeight:0.3, slotType:"tote", slotLabel:"Tote Bag", capacityKg:8, carryFactor:0.85 },
+    // Dishes: one entry per DISH_TEMPLATES template, made only by formation
+    // in a vessel (formDish()). `name` is the dish word; an instance carries
+    // the name, restores, food-poisoning chances and weight its ingredients
+    // decided (see ITEM DATA SCHEMA). `cooks.minutes` is the template's.
+    dish_boiled_pasta: { name:"Boiled pasta", category:"Food", unitWeight:0, verb:"Eat", dish:true,
+      cooks:{ minutes:10 }, spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
+    dish_boiled_rice: { name:"Boiled rice", category:"Food", unitWeight:0, verb:"Eat", dish:true,
+      cooks:{ minutes:20 }, spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
+    dish_soup: { name:"Soup", category:"Food", unitWeight:0, verb:"Eat", dish:true,
+      cooks:{ minutes:20 }, spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
+    dish_stew: { name:"Stew", category:"Food", unitWeight:0, verb:"Eat", dish:true,
+      cooks:{ minutes:30 }, spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
+    dish_roast: { name:"Roast", category:"Food", unitWeight:0, verb:"Eat", dish:true,
+      cooks:{ minutes:45 }, spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
+    dish_stir_fry: { name:"Stir fry", category:"Food", unitWeight:0, verb:"Eat", dish:true,
+      cooks:{ minutes:10 }, spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } }
   };
   // itemFromRegistry/itemsFromRegistry expand a { id, qty, overrides? }
   // placement reference into a full runtime item object, deep-cloned from
@@ -1008,7 +1095,8 @@
   // up in ITEM_REGISTRY by itemId (registryEntryOf()), so itemFromRegistry()
   // leaves them off the instance. A retune then reaches every save, and no
   // stale copy on an instance is there to be read by mistake.
-  const REGISTRY_ONLY_FIELDS = ["carryFactor", "foodPoisoningChance", "disassembleLog", "cooks", "spoils", "holdsWater"];
+  const REGISTRY_ONLY_FIELDS = ["carryFactor", "foodPoisoningChance", "disassembleLog", "cooks", "spoils", "holdsWater",
+    "vessel", "ingredient", "dish"];
   // An item's (or a slot's) registry entry, by its itemId, or null for
   // anything without one: the keychain, an item from a save the registry no
   // longer knows. The one lookup every registry-read field goes through.
@@ -1083,10 +1171,12 @@
   //   one silently breaks the derivation the rest are re-checkable against.
   //   The whole `kitchen_frozen` pool (meat 0.5, vegetables 0.5, fish 0.3,
   //   ice cream 0.4, emptyChance 0.2) is chosen too: the freezers postdate the
-  //   conversion. Retunable.
+  //   conversion. So are `kitchen_tools`' cooking pot (0.15) and roasting
+  //   pan (0.10), which postdate it as well. Retunable.
   //   Replacing an item id keeps its entry's derived chance: the retired
   //   spoiled foods' entries now name the fresh food they were
-  //   (rotten_leftovers → leftovers, and so on). The trash's leftovers keep
+  //   (rotten_leftovers → leftovers, and so on; the pot of spoiled stew is
+  //   a cooking pot of stew). The trash's leftovers keep
   //   their old state as well — their `state` pins the unit at the age it
   //   turns Rotten, so the bin still holds rotten leftovers.
   // Which containers draw from which pools is recorded on the containers
@@ -1097,7 +1187,11 @@
       { itemId:"milk", chance:0.096774, qtyMin:1, qtyMax:1 },
       { itemId:"bread", chance:0.096774, qtyMin:1, qtyMax:1 },
       { itemId:"vegetables", chance:0.080645, qtyMin:1, qtyMax:1 },
-      { itemId:"pot_of_spoiled_stew", chance:0.064516, qtyMin:1, qtyMax:1 },
+      // A pot of stew someone cooked and never ate, built by the same code
+      // formation uses. A getter, so the dish is built when the entry is
+      // rolled rather than while this table is being defined.
+      { itemId:"cooking_pot", key:"stew_pot", get state(){ return { contents:[ dishFrom("stew", "cooking_pot", ["meat", "vegetables"], "cooked") ] }; },
+        chance:0.064516, qtyMin:1, qtyMax:1 },
       { itemId:"fish", chance:0.016129, qtyMin:1, qtyMax:1 },
       { itemId:"fish", key:"fish_cooked", state:{ cookState:"cooked" }, chance:0.016129, qtyMin:1, qtyMax:1 } ]},
     kitchen_nonperishable: { emptyChance:0.1, entries:[
@@ -1124,7 +1218,9 @@
       { itemId:"frying_pan", chance:0.213018, qtyMin:1, qtyMax:1 },
       { itemId:"kitchen_knife", chance:0.213018, qtyMin:1, qtyMax:1 },
       { itemId:"dented_saucepan", chance:0.145957, qtyMin:1, qtyMax:1 },
-      { itemId:"burnt_saucepan", chance:0.110947, qtyMin:1, qtyMax:1 } ]},
+      { itemId:"burnt_saucepan", chance:0.110947, qtyMin:1, qtyMax:1 },
+      { itemId:"cooking_pot", chance:0.15, qtyMin:1, qtyMax:1 },
+      { itemId:"roasting_pan", chance:0.10, qtyMin:1, qtyMax:1 } ]},
     hygiene: { emptyChance:0.15, entries:[
       { itemId:"toilet_paper", chance:0.236111, qtyMin:1, qtyMax:2 },
       { itemId:"bar_soap", chance:0.208116, qtyMin:1, qtyMax:1 },
@@ -1597,7 +1693,7 @@
       sink:true, cannotHaveFire:true, floorCap:50, floor:[],
       containers:[
         { id:"stove", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"pot_of_spoiled_stew", qty:1 }
+          { id:"cooking_pot", qty:1, overrides:{ contents:[ dishFrom("stew", "cooking_pot", ["meat", "vegetables"], "cooked") ] } }
         ])},
         { id:"cabinets", name:"Cabinets", capacityKg:15, spawnPools:["kitchen_nonperishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
           { id:"canned_soup", qty:3 },
@@ -3994,7 +4090,9 @@
   // The Crafting panel's search and filters: the query, the group shown
   // ("all" or a CRAFT_GROUPS id), and whether only what can be made now is
   // listed. UI-only, never saved, and reset when the panel closes.
-  function defaultCraftFilter(){ return { query:"", group:"all", canMakeOnly:false }; }
+  // `vesselUid` is the vessel Create dish opened the panel on, null from the
+  // drawer.
+  function defaultCraftFilter(){ return { query:"", group:"all", canMakeOnly:false, vesselUid:null }; }
   let craftFilter = defaultCraftFilter();
   // The same, for the last control run from the Device Options panel.
   let deviceResult = [];
@@ -4257,10 +4355,12 @@
       + (Array.isArray(it.contents) ? totalWeight(it.contents) : 0);
   }
   // The weight of the water one unit holds: a bottle's holdsWater.kg at its
-  // fill.
+  // fill, a vessel's waterKg when it holds any.
   function waterWeightOf(it){
     const def = it.water && registryEntryOf(it);
-    return def && def.holdsWater ? def.holdsWater.kg * it.water.fill : 0;
+    if(!def) return 0;
+    if(def.holdsWater) return def.holdsWater.kg * it.water.fill;
+    return def.vessel ? def.vessel.waterKg : 0;
   }
   // How much of one unit is left: `portion`, 1 when absent.
   function portionOf(it){ return typeof it.portion === "number" ? it.portion : 1; }
@@ -4642,10 +4742,13 @@
   // reader of both — Eat, the Eat gate and everything that sums food reads
   // them here, never from the instance's copied `restores`. A cookable
   // item's entry holds its Raw state's values and its `cooks` its Cooked
-  // state's. An item the registry does not know keeps its own `restores`.
+  // state's. An item the registry does not know keeps its own `restores`,
+  // and so does a dish.
   function foodEffects(it){
     const def = registryEntryOf(it);
     if(!def) return { restores: it.restores || null, poisoning: 0 };
+    // A dish's are its own, decided by its ingredients (buildDish()).
+    if(def.dish) return { restores: it.restores || null, poisoning: (it.foodPoisoning || {})[cookStateOf(it)] || 0 };
     if(cookStateOf(it) === "cooked")
       return { restores: def.cooks.restores || null, poisoning: def.cooks.foodPoisoningChance || 0 };
     return { restores: def.restores || null, poisoning: def.foodPoisoningChance || 0 };
@@ -4658,7 +4761,12 @@
     const fx = foodEffects(it);
     if(unitFreshness(it) !== "rotten") return fx;
     return { restores: scaleRestores(fx.restores, ROTTEN_RESTORES_FACTOR),
-      poisoning: combinePoisoning(fx.poisoning, ROTTEN_POISONING_CHANCE * POISONING_TRAIT_MULTIPLIER) };
+      poisoning: combinePoisoning(fx.poisoning, rottenPoisoningTerm(it)) };
+  }
+  // The rotten baseline a unit adds to its own food-poisoning chance: the
+  // baseline when it is Rotten, 0 otherwise.
+  function rottenPoisoningTerm(it){
+    return unitFreshness(it) === "rotten" ? ROTTEN_POISONING_CHANCE * POISONING_TRAIT_MULTIPLIER : 0;
   }
   function scaleRestores(restores, k){
     if(!restores) return null;
@@ -4685,11 +4793,18 @@
   // For a bottle, the water plays the food's part: which kind it is joins
   // the match, and its fill is what is left.
   function eatTarget(list, it){
-    const same = list.filter(r=> r.itemId === it.itemId && consumeProfile(r)
+    return leastLeftRow(list, it, r=>{ const p = consumeProfile(r); return p ? p.left : null; });
+  }
+  // Among the rows of `list` holding the same thing as `it` — itemId, cook
+  // state, freshness and water kind — the one whose `leftOf` is least, and
+  // among equals the oldest; `it` itself when none qualifies. A row whose
+  // `leftOf` is null does not qualify. Eating and adding an ingredient by
+  // the part both pick their unit here.
+  function leastLeftRow(list, it, leftOf){
+    const same = list.filter(r=> r.itemId === it.itemId && leftOf(r) != null
       && cookStateOf(r) === cookStateOf(it) && rowFreshness(r) === rowFreshness(it)
       && waterKindOf(r) === waterKindOf(it));
-    return same.sort((a, b)=> consumeProfile(a).left - consumeProfile(b).left
-      || unitAges(b)[0] - unitAges(a)[0])[0] || it;
+    return same.sort((a, b)=> leftOf(a) - leftOf(b) || unitAges(b)[0] - unitAges(a)[0])[0] || it;
   }
   // What eating or drinking one whole unit of `it` does, or null when it is
   // nothing to eat or drink: { left, restores, poisoning, water }. Food is
@@ -4740,22 +4855,157 @@
   // tainted water, since any tainted water taints everything it mixes with.
   // Instant. After the water fails the sink gives nothing, and whatever was
   // left in the pipes is #47's. The line's wording is retunable.
+  // A vessel fills too, while it holds no dish and can hold water at all.
   function canFillAtSink(it){
     const room = world[state.currentRoom];
+    if(!room.sink || !waterRunning() || !holdsWaterAtAll(it)) return false;
+    return !(waterKindOf(it) === "clean" && (vesselDefOf(it) || it.water.fill === 1));
+  }
+  // Whether an item can take water right now: a bottle always, a vessel with
+  // a waterKg while it holds no dish.
+  function holdsWaterAtAll(it){
     const def = registryEntryOf(it);
-    if(!room.sink || !waterRunning() || !def || !def.holdsWater) return false;
-    return !(waterKindOf(it) === "clean" && it.water.fill === 1);
+    if(def && def.holdsWater) return true;
+    return !!(def && def.vessel && def.vessel.waterKg > 0 && !dishIn(it));
+  }
+  // Puts water of `kind` into one unit: a bottle full to the top, a vessel
+  // full. Any tainted water already there taints it, and new water in a
+  // vessel starts its boil over.
+  function addWater(unit, kind){
+    const k = waterKindOf(unit) === "tainted" ? "tainted" : kind;
+    unit.water = vesselDefOf(unit) ? { kind:k } : { kind:k, fill:1 };
+    delete unit.boilMinutes;
   }
   function doFillAtSink(sourceKind, index){
     const room = world[state.currentRoom];
     const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
     const it = getItemAt(src && src.items, index);
     if(!it || !canFillAtSink(it)) return;
-    const kind = waterKindOf(it) === "tainted" ? "tainted" : "clean";
-    const filled = changeOneUnit(src.items, it, unit=>{ unit.water = { kind, fill:1 }; });
+    const filled = changeOneUnit(src.items, it, unit=> addWater(unit, "clean"));
     // The pop-up follows the filled bottle, as doOpen()'s follows the opened can.
     detailItem = { uid: ensureUid(filled), side: sourceKind };
     log(`You fill the ${it.name.toLowerCase()} at the sink.`);
+    render();
+  }
+  // Vessels within reach of an item: every vessel in the lists crafting
+  // reaches (nearbyLists()), and every vessel in the room's heat container,
+  // once each.
+  function nearbyVessels(){
+    const heat = getHeatContainer(world[state.currentRoom]);
+    const out = [];
+    nearbyLists().concat(heat ? [heat.items] : []).forEach(list=> list.forEach(it=>{
+      if(vesselDefOf(it) && !out.includes(it)) out.push(it);
+    }));
+    return out;
+  }
+  // The unit adding `it` to a vessel would move, and the row it comes from:
+  // the row's oldest unit, or for an ingredient added by the part
+  // (`addPortion`), that much of the unit with the least left, so one bag of
+  // rice is used up before the next is opened.
+  function ingredientAdd(list, it){
+    const part = ingredientOf(it).addPortion;
+    const source = part ? leastLeftRow(list, it, r=> r.sealed ? null : portionOf(r)) : it;
+    const unit = unitsOf(source, 1);
+    if(part) unit.portion = part;
+    return { source, unit };
+  }
+  // Whether `vessel` can take `it` from `list`: an unsealed ingredient, a
+  // vessel with no dish yet, and room for the unit (contents' weight plus
+  // the unit's within capacityKg; water does not count).
+  function canAddToVessel(list, it, vessel){
+    if(it.sealed || !ingredientOf(it) || dishIn(vessel)) return false;
+    const { unit } = ingredientAdd(list, it);
+    return totalWeight(vessel.contents || []) + itemWeight(unit) <= vesselDefOf(vessel).capacityKg + TICK_EPSILON;
+  }
+  // Moves one unit of `it` (or its part) from `list` into `vessel`. The one
+  // way an ingredient goes in, for the pop-up's Add and the Crafting panel's
+  // Add ingredients alike. Returns whether it moved.
+  function moveIntoVessel(list, it, vessel){
+    if(!canAddToVessel(list, it, vessel)) return false;
+    const { source, unit } = ingredientAdd(list, it);
+    const part = ingredientOf(it).addPortion;
+    const rest = part ? portionOf(source) - part : 0;
+    if(rest > 0) changeOneUnit(list, source, u=>{ u.portion = rest; });
+    else dropUnits(list, list.indexOf(source), 1);
+    if(!Array.isArray(vessel.contents)) vessel.contents = [];
+    addToList(vessel.contents, unit);
+    return true;
+  }
+  // moveIntoVessel(), saying so. The line's wording is retunable.
+  function addIngredientTo(list, it, vessel){
+    if(!moveIntoVessel(list, it, vessel)) return false;
+    log(`You add the ${it.name.toLowerCase()} to the ${vessel.name.toLowerCase()}.`);
+    return true;
+  }
+  function doAddToVessel(list, index, vessel){
+    const it = getItemAt(list, index);
+    if(!it || !addIngredientTo(list, it, vessel)) return;
+    render();
+  }
+  // Ingredient rows within reach that could go toward template `t`:
+  // unsealed ones in its counting set, oldest perishable units first and
+  // otherwise in the order crafting reaches lists (nearbyLists()).
+  function templateCandidates(t){
+    const rows = [];
+    nearbyLists().forEach((list, li)=> list.forEach(row=>{
+      if(!row.sealed && inIngredientSet(t.counts || t.allowed, row))
+        rows.push({ list, row, li, age: isPerishable(row) ? unitAges(row)[0] : -1 });
+    }));
+    return rows.sort((a, b)=> b.age - a.age || a.li - b.li);
+  }
+  // Whether Add ingredients has anything to do for `t` in `vessel`: units
+  // still missing, nothing ruling the dish out, and one within reach that
+  // the vessel can take.
+  function canAddMissing(t, vessel){
+    const st = templateStatus(t, vesselDefOf(vessel).kind, vessel.contents || [], waterKindOf(vessel));
+    return !st.blocked && st.need > 0 && templateCandidates(t).some(c=> canAddToVessel(c.list, c.row, vessel));
+  }
+  // Add ingredients: adds what `t` still needs to `vessel` from within reach,
+  // one unit at a time, exactly as Add would. Water is never pulled. It
+  // never chooses the dish: the contents do, when heated.
+  function doAddMissingIngredients(t, vessel){
+    const kind = vesselDefOf(vessel).kind;
+    for(;;){
+      const st = templateStatus(t, kind, vessel.contents || [], waterKindOf(vessel));
+      if(st.blocked || st.need === 0) break;
+      const c = templateCandidates(t).find(x=> canAddToVessel(x.list, x.row, vessel));
+      if(!c || !addIngredientTo(c.list, c.row, vessel)) break;
+    }
+    render();
+  }
+  // Takes one row back out of a vessel that holds no dish yet. Silent, as
+  // Take is: the row visibly leaves the vessel's pop-up.
+  function doTakeOutOfVessel(vessel, row){
+    if(dishIn(vessel) || !vessel.contents || !vessel.contents.includes(row)) return;
+    vessel.contents.splice(vessel.contents.indexOf(row), 1);
+    giveItem(row);
+    render();
+  }
+  // Empties a bottle into a vessel, whatever its fill: the vessel then holds
+  // water, tainted if either was. Volumes are #47's. The line's wording is
+  // retunable.
+  function doPourIntoVessel(list, index, vessel){
+    const bottle = getItemAt(list, index);
+    if(!bottle || !bottle.water || !holdsWaterAtAll(vessel) || !vesselDefOf(vessel)) return;
+    addWater(vessel, bottle.water.kind);
+    changeOneUnit(list, bottle, u=>{ delete u.water; });
+    log(`You pour the water into the ${vessel.name.toLowerCase()}.`);
+    render();
+  }
+  // Silent: the vessel's label loses its water.
+  function doPourOutWater(vessel){
+    if(dishIn(vessel)) return;
+    delete vessel.water;
+    delete vessel.boilMinutes;
+    render();
+  }
+  // A dish never leaves its vessel, so the pot is emptied of it. The line's
+  // wording is retunable.
+  function doPourOutDish(vessel){
+    const dish = dishIn(vessel);
+    if(!dish) return;
+    vessel.contents = [];
+    log(`You pour out the ${dish.name.toLowerCase()}.`);
     render();
   }
   // Eats `amount` of a unit (a fraction; null for whatever is left of it)
@@ -4765,14 +5015,19 @@
   function doConsume(sourceKind, index, amount){
     const room = world[state.currentRoom];
     const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
-    const clicked = getItemAt(src && src.items, index);
+    consumeFromList(src && src.items, index, amount);
+  }
+  // doConsume() on a list already resolved: the tab's list, or a vessel's
+  // contents when its dish is eaten from the pot.
+  function consumeFromList(list, index, amount){
+    const clicked = getItemAt(list, index);
     if(!clicked || !consumeProfile(clicked)) return;
-    const it = eatTarget(src.items, clicked);
+    const it = eatTarget(list, clicked);
     const fx = consumeProfile(it);
     const a = amount == null ? fx.left : Math.min(amount, fx.left);
     if(fx.restores.hunger) state.vitals.hunger = clamp(state.vitals.hunger + fx.restores.hunger * a);
     if(fx.restores.thirst) state.vitals.thirst = clamp(state.vitals.thirst + fx.restores.thirst * a);
-    eatFromRow(src.items, it, a);
+    eatFromRow(list, it, a);
     // What is drunk from a bottle is the water, not the bottle.
     const verb = it.verb.toLowerCase(), name = fx.water ? "water" : it.name.toLowerCase();
     log(a === 1 ? `You ${verb} the ${name}.` : `You ${verb} some of the ${name}.`, "good", "consume:" + (it.itemId || it.name));
@@ -4913,6 +5168,15 @@
         if(part.amount < left) actions.push({ label: verb + " " + part.label, onClick:()=>doConsume(side, index, part.amount) });
       });
     }
+    vesselActions(it).forEach(a=> actions.push(a));
+    // An ingredient offers every vessel within reach that can take it, and a
+    // bottle with water every one that can hold water.
+    if(!vesselDefOf(it)) nearbyVessels().forEach(v=>{
+      const name = v.name.toLowerCase();
+      if(canAddToVessel(list, it, v)) actions.push({ label:`Add to the ${name}`, onClick:()=> doAddToVessel(list, index, v) });
+      if(it.water && holdsWaterAtAll(it) && holdsWaterAtAll(v))
+        actions.push({ label:`Pour into the ${name}`, onClick:()=> doPourIntoVessel(list, index, v) });
+    });
     if(it.sealed && (!it.opensWith || hasTool(it.opensWith)))
       actions.push({ label:"Open", onClick:()=>doOpen(side, index) });
     if(canFillAtSink(it)) actions.push({ label:"Fill at the sink", onClick:()=>doFillAtSink(side, index) });
@@ -4962,6 +5226,31 @@
       ? def.disassembleLog.replace("{qty}", recipe.inputs[0].qty)
       : `You take the ${it.name.toLowerCase()} apart.`, "good");
     render();
+  }
+  // A vessel's own actions. Holding a dish: eat it from the pot, by the
+  // whole and the part, or pour it out. Otherwise: pour out its water, take
+  // out any ingredient, or open the Crafting panel's Dishes on it. Fill at
+  // the sink is getItemActions()'s, shared with bottles.
+  function vesselActions(v){
+    if(!vesselDefOf(v)) return [];
+    const actions = [];
+    const dish = dishIn(v);
+    if(dish){
+      const verb = dish.verb || "Eat";
+      const left = consumeProfile(dish).left;
+      actions.push({ label: verb, onClick:()=> consumeFromList(v.contents, 0) });
+      EAT_PARTS.forEach(part=>{
+        if(part.amount < left) actions.push({ label: verb + " " + part.label, onClick:()=> consumeFromList(v.contents, 0, part.amount) });
+      });
+      actions.push({ label:"Pour it out", onClick:()=> doPourOutDish(v) });
+      return actions;
+    }
+    if(v.water) actions.push({ label:"Pour out the water", onClick:()=> doPourOutWater(v) });
+    (v.contents || []).forEach(row=>{
+      actions.push({ label:`Take out the ${row.name.toLowerCase()}`, onClick:()=> doTakeOutOfVessel(v, row) });
+    });
+    actions.push({ label:"Create dish", onClick:()=> openCraftingForVessel(ensureUid(v)) });
+    return actions;
   }
   // The controls of anything that runs on batteries: Turn on/off, Remove
   // batteries, Replace batteries. Defined once, for both places they are
@@ -5476,6 +5765,7 @@
   // action makes is new instead (asNewlyMade()), and a placement that sets
   // `ages` itself keeps them.
   function stampAges(it, container){
+    (Array.isArray(it.contents) ? it.contents : []).forEach(c=> stampAges(c, container));
     if(!isPerishable(it) || Array.isArray(it.ages)) return;
     it.ages = new Array(it.qty).fill(effectiveAge(container, 0, minutesSinceCollapse()));
   }
@@ -5950,8 +6240,9 @@
   }
   // Cooking is passive: nothing is cooked by a button. Every tick the heat
   // is on, each raw cookable row lying directly in the room's heat
-  // containers gains `cookMinutes`, and at its entry's `cooks.minutes` it
-  // turns Cooked, drops its progress and folds into any matching cooked row.
+  // containers — or in a vessel there — gains `cookMinutes`, and at its
+  // entry's `cooks.minutes` it turns Cooked, drops its progress and folds
+  // into any matching cooked row.
   // The counter stops there in this release; burning (#179) will extend it.
   // Progress lives on the item, so it holds when the heat stops, and an item
   // taken out and put back continues from where it was. Nothing is logged,
@@ -5964,29 +6255,200 @@
   function cookInHeat(room, dt){
     room.containers.filter(c=> hasTag(c, "heat")).forEach(c=>{
       c.items.slice().forEach(it=>{
-        if(cookStateOf(it) !== "raw") return;
-        const def = registryEntryOf(it);
-        it.cookMinutes = (it.cookMinutes || 0) + dt;
-        if(it.cookMinutes < def.cooks.minutes - TICK_EPSILON) return;
-        it.cookState = "cooked";
-        delete it.cookMinutes;
-        // Cooked food starts Fresh.
-        if(isPerishable(it)) it.ages = new Array(it.qty).fill(0);
-        remergeRow(c.items, it);
+        if(vesselDefOf(it)) cookVessel(it, dt);
+        else cookItem(c.items, it, dt);
       });
     });
   }
+  function cookItem(list, it, dt){
+    if(cookStateOf(it) !== "raw") return;
+    it.cookMinutes = (it.cookMinutes || 0) + dt;
+    if(it.cookMinutes < cookMinutesOf(it) - TICK_EPSILON) return;
+    it.cookState = "cooked";
+    delete it.cookMinutes;
+    // Cooked food starts Fresh.
+    if(isPerishable(it)) it.ages = new Array(it.qty).fill(0);
+    remergeRow(list, it);
+  }
+  function cookMinutesOf(it){ return registryEntryOf(it).cooks.minutes; }
+  function cookRemaining(it){ return Math.max(0, cookMinutesOf(it) - (it.cookMinutes || 0)); }
+  // VESSELS AND DISHES. A vessel (registry `vessel`: kind, capacityKg,
+  // waterKg) holds ingredients in its `contents` — or, once a dish has
+  // formed, that one dish — and, when waterKg is above 0, water: `water:
+  // { kind }` while full, absent when not. A vessel has no fill level.
+  function vesselDefOf(it){ const def = registryEntryOf(it); return def && def.vessel || null; }
+  function ingredientOf(it){ const def = registryEntryOf(it); return def && def.ingredient || null; }
+  function isDish(it){ const def = registryEntryOf(it); return !!(def && def.dish); }
+  // The dish a vessel holds, or null while it holds ingredients or nothing.
+  function dishIn(v){
+    const c = v.contents;
+    return Array.isArray(c) && c.length === 1 && isDish(c[0]) ? c[0] : null;
+  }
+  // One entry per unit of `rows`, each the row it belongs to: a template
+  // counts units, and a quarter of rice is one.
+  function contentUnits(rows){
+    const out = [];
+    rows.forEach(r=>{ for(let i = 0; i < r.qty; i++) out.push(r); });
+    return out;
+  }
+  // Whether an ingredient falls in a template's `allowed` or `counts` set.
+  function inIngredientSet(set, it){
+    const ing = ingredientOf(it);
+    if(!ing) return false;
+    return set.ids ? set.ids.includes(it.itemId) : set.roles.includes(ing.role);
+  }
+  // Where a vessel stands against a template: whether the template is for
+  // this kind of vessel, whether something in it rules the dish out, how
+  // many counting units it has of how many it needs, and whether its water
+  // is right. `ready` is the three together: heat it and this dish forms,
+  // unless an earlier template forms first. Tainted water is not ready — it
+  // must boil first — but `waterBoils` says it will be.
+  function templateStatus(t, kind, rows, water){
+    const units = contentUnits(rows);
+    const target = t.exactly != null ? t.exactly : t.min;
+    const blocked = units.some(u=> !inIngredientSet(t.allowed, u))
+      || (t.exactly != null && units.length > t.exactly);
+    const have = units.filter(u=> inIngredientSet(t.counts || t.allowed, u)).length;
+    const waterOk = t.water ? water === "clean" : !water;
+    const applies = t.vessels.includes(kind);
+    return { applies, blocked, have, target, need: Math.max(0, target - have), waterOk,
+      waterBoils: t.water && water === "tainted",
+      ready: applies && !blocked && have >= target && waterOk };
+  }
+  // The template a vessel's contents and water make, the first in order.
+  function matchingTemplate(v){
+    const kind = vesselDefOf(v).kind, rows = v.contents || [], water = waterKindOf(v);
+    return DISH_TEMPLATES.find(t=> templateStatus(t, kind, rows, water).ready) || null;
+  }
+  // One unit's contribution to a dish, in restores: the ingredient's own
+  // `restores` when it has them, else its Cooked restores for a cookable
+  // item, else its restores — at ROTTEN_RESTORES_FACTOR when Rotten, and at
+  // its portion.
+  function ingredientContribution(it){
+    const def = registryEntryOf(it);
+    const base = def.ingredient.restores || (def.cooks && def.cooks.restores) || def.restores || {};
+    const k = (unitFreshness(it) === "rotten" ? ROTTEN_RESTORES_FACTOR : 1) * portionOf(it);
+    return scaleRestores(base, k);
+  }
+  // The one scalar measure of how much a food restores, used to rank and
+  // share out a dish's ingredients.
+  function restoresValue(r){ return (r && r.hunger || 0) + (r && r.thirst || 0); }
+  // A food's own food-poisoning chance in a cook state: a cookable item's
+  // Raw or Cooked chance, anything else's one chance.
+  function ownPoisoning(def, cookState){
+    return cookState === "cooked" && def.cooks ? (def.cooks.foodPoisoningChance || 0) : (def.foodPoisoningChance || 0);
+  }
+  // Builds a dish from `rows` for template `t`, with `waterKg` of water in it.
+  // The one dish builder: formation and the world's spawned stews both come
+  // through here (formDish(), dishFrom()).
+  //   restores       the units' contributions summed, per vital, times
+  //                  (1 + DISH_RESTORES_BONUS)
+  //   foodPoisoning  { raw, cooked }: per state, the unit whose chance is
+  //                  highest — its own for that state, combined with the
+  //                  rotten baseline when Rotten — weighted by that unit's
+  //                  share of what the dish restores
+  //   unitWeight     the rows' weight plus the water's
+  //   name           "<A> stew" or "<A> and <b> stew" from the two labels
+  //                  that contribute most, or the entry's own name for a
+  //                  template that is not `named`
+  function buildDish(t, rows, waterKg){
+    const dish = itemFromRegistry({ id:t.item, qty:1 });
+    const units = contentUnits(rows).map(u=> ({ u, c: ingredientContribution(u) }));
+    const restores = {};
+    units.forEach(({ c })=> Object.keys(c).forEach(v=>{ restores[v] = (restores[v] || 0) + c[v]; }));
+    Object.keys(restores).forEach(v=>{ restores[v] *= 1 + DISH_RESTORES_BONUS; });
+    const total = restoresValue(restores);
+    const chanceIn = (cookState)=>{
+      let best = null;
+      units.forEach(({ u, c })=>{
+        const p = combinePoisoning(ownPoisoning(registryEntryOf(u), cookState), rottenPoisoningTerm(u));
+        if(!best || p > best.p) best = { p, c };
+      });
+      return best && total > 0 ? best.p * restoresValue(best.c) / total : 0;
+    };
+    dish.restores = restores;
+    dish.foodPoisoning = { raw: chanceIn("raw"), cooked: chanceIn("cooked") };
+    dish.unitWeight = totalWeight(rows) + waterKg;
+    dish.portion = 1;
+    if(t.named) dish.name = dishName(t, units);
+    return dish;
+  }
+  // Groups the units by ingredient label, summing what each label
+  // contributes, so a label that repeats counts once; the top one or two
+  // name the dish, first capitalised and second lowercase.
+  function dishName(t, units){
+    const byLabel = new Map();
+    units.forEach(({ u, c })=>{
+      const label = ingredientOf(u).label;
+      byLabel.set(label, (byLabel.get(label) || 0) + restoresValue(c));
+    });
+    const top = Array.from(byLabel.entries()).sort((a, b)=> b[1] - a[1]).slice(0, 2).map(e=> e[0]);
+    const words = top.map((l, i)=> i === 0 ? l.charAt(0).toUpperCase() + l.slice(1) : l.toLowerCase());
+    return words.join(" and ") + " " + ITEM_REGISTRY[t.item].name.toLowerCase();
+  }
+  // A dish made from fresh units of `ids` for template `templateId`, in the
+  // named vessel's water, in `cookState`: the world's pots of stew. It gets
+  // its age like any world item, from stampMissingAges().
+  function dishFrom(templateId, vesselId, ids, cookState){
+    const t = DISH_TEMPLATES.find(x=> x.id === templateId);
+    const dish = buildDish(t, ids.map(id=> itemFromRegistry({ id, qty:1 })),
+      t.water ? ITEM_REGISTRY[vesselId].vessel.waterKg : 0);
+    dish.cookState = cookState;
+    if(cookState === "raw") dish.cookMinutes = 0;
+    return dish;
+  }
+  // Formation: the contents and the water become one raw dish, the vessel's
+  // only content, new and Fresh. From then on nothing can be taken out.
+  function formDish(v, t){
+    const dish = buildDish(t, v.contents || [], t.water ? vesselDefOf(v).waterKg : 0);
+    dish.ages = [0];
+    dish.cookState = "raw";
+    dish.cookMinutes = 0;
+    v.contents = [dish];
+    delete v.water;
+    delete v.boilMinutes;
+  }
+  // One tick of a vessel in a lit heat container. Tainted water boils:
+  // BOIL_MINUTES make it clean, and the count holds when the heat stops. Then
+  // a vessel still without a dish forms one if its contents now match a
+  // template. Then whatever it holds cooks: the dish, or, when nothing
+  // matched, each ingredient by its own `cooks`. Nothing is logged.
+  function cookVessel(v, dt){
+    if(!dishIn(v)){
+      if(waterKindOf(v) === "tainted"){
+        v.boilMinutes = (v.boilMinutes || 0) + dt;
+        if(v.boilMinutes >= BOIL_MINUTES - TICK_EPSILON){ v.water.kind = "clean"; delete v.boilMinutes; }
+      }
+      const t = matchingTemplate(v);
+      if(t) formDish(v, t);
+    }
+    const list = v.contents || [];
+    list.slice().forEach(it=> cookItem(list, it, dt));
+  }
   // What the room's heat is cooking that will finish soonest: { name,
-  // remaining } for the item with the least time left among everything still
-  // progressing in its heat container, or null when nothing is.
+  // remaining, water } for whatever has the least time left among everything
+  // still progressing in its heat container — a raw cookable item, a vessel's
+  // raw dish, one that will form, the ingredients cooking alone in a vessel
+  // no dish matches, or tainted water boiling (`water` true) — or null when
+  // nothing is.
   function soonestCooking(room){
     const heat = getHeatContainer(room);
     if(!heat) return null;
     let best = null;
+    const consider = (name, remaining, water)=>{
+      if(!best || remaining < best.remaining) best = { name, remaining, water:!!water };
+    };
+    const rawRows = (list)=> list.forEach(it=>{ if(cookStateOf(it) === "raw") consider(it.name.toLowerCase(), cookRemaining(it)); });
     heat.items.forEach(it=>{
-      if(cookStateOf(it) !== "raw") return;
-      const remaining = Math.max(0, registryEntryOf(it).cooks.minutes - (it.cookMinutes || 0));
-      if(!best || remaining < best.remaining) best = { name: it.name.toLowerCase(), remaining };
+      if(!vesselDefOf(it)){ rawRows([it]); return; }
+      const dish = dishIn(it);
+      if(dish){ rawRows([dish]); return; }
+      if(waterKindOf(it) === "tainted") consider("water", Math.max(0, BOIL_MINUTES - (it.boilMinutes || 0)), true);
+      const t = matchingTemplate(it);
+      if(t){
+        const water = t.water ? vesselDefOf(it).waterKg : 0;
+        consider(buildDish(t, it.contents || [], water).name.toLowerCase(), cookMinutesOf({ itemId:t.item }));
+      } else rawRows(it.contents || []);
     });
     return best;
   }
@@ -6461,8 +6923,8 @@
   //   1. dead pools — a SPAWN_POOLS id no container that still rolls draws
   //      from, so nothing it lists can ever spawn;
   //   2. unreachable items — an ITEM_REGISTRY id that is not hand-placed, not
-  //      an entry in a live pool, not a RECIPES output and not
-  //      in ACTION_GRANTED_ITEM_IDS;
+  //      an entry in a live pool, not a RECIPES output, not a DISH_TEMPLATES
+  //      dish and not in ACTION_GRANTED_ITEM_IDS;
   //   3. per tag in REPORTED_TOOL_TAGS, how many hand-placed instances carry
   //      it and which live pools can yield one, so a content pass can see
   //      when a verb is down to a single item.
@@ -6531,6 +6993,7 @@
     const reachable = new Set(Object.keys(placed));
     livePools.forEach(poolId=> SPAWN_POOLS[poolId].entries.forEach(e=> reachable.add(e.itemId)));
     RECIPES.forEach(r=> reachable.add(r.output.id));
+    DISH_TEMPLATES.forEach(t=> reachable.add(t.item));
     ACTION_GRANTED_ITEM_IDS.forEach(id=> reachable.add(id));
     Object.keys(ITEM_REGISTRY).forEach(id=>{
       if(!reachable.has(id)) report.push(`unreachable item: ${id} — not hand-placed, not in a live pool, not crafted, not action-granted`);
@@ -6892,11 +7355,13 @@
   }
   // The Crafting panel's filter controls, built once. Each change redraws
   // the panel only: filtering is a view, and changes nothing in the game.
-  // The group buttons, in order: "all", then one per RECIPES `group`.
+  // The group buttons, in order: "all", one per RECIPES `group`, then
+  // "dishes", the DISH_TEMPLATES rows.
   const CRAFT_GROUPS = [
     { id:"all", label:"All" },
     { id:"craft", label:"Crafting" },
-    { id:"prep", label:"Preparation" }
+    { id:"prep", label:"Preparation" },
+    { id:"dishes", label:"Dishes" }
   ];
   CRAFT_GROUPS.forEach(g=>{
     const btn = document.createElement("button");
@@ -6939,6 +7404,30 @@
       deviceTarget = null;
       deviceResult = [];
       renderDeviceResult();
+      if(openedDrawer) closeMenu();
+    }, back);
+  }
+  // Create dish: the Crafting panel opened from a vessel's pop-up, on the
+  // Dishes group with that vessel as its context. Like Device Options, it
+  // opens the drawer first if that is not open, and closing the panel closes
+  // the drawer it opened, landing the player back on the pop-up's Create
+  // dish.
+  function openCraftingForVessel(uid){
+    const el = FULL_PANELS.crafting.el;
+    if(layerOpen(el)) return;
+    const back = { el:null, uid:null, find: ()=> layerOpen(itemPop)
+      && Array.from(itemPop.querySelectorAll("button")).find(b=> b.textContent === "Create dish") || null };
+    craftFilter = defaultCraftFilter();
+    craftFilter.group = "dishes";
+    craftFilter.vesselUid = uid;
+    craftResult = [];
+    // Drawn before it opens, so openLayer() has a first control to focus.
+    renderCraftingPanel();
+    const openedDrawer = !layerOpen(sideMenu);
+    if(openedDrawer) openMenu();
+    openLayer(el, ()=> el.classList.add("open"), ()=>{
+      el.classList.remove("open");
+      FULL_PANELS.crafting.onClose();
       if(openedDrawer) closeMenu();
     }, back);
   }
@@ -7695,6 +8184,14 @@
     if(water) labels.push(water === "tainted" ? "Tainted" : "Water");
     return labels;
   }
+  // Everything shown after an item's name: its labels, " (Open) (Fresh)", or
+  // for a vessel holding a dish, the dish and the dish's labels, ": Fish stew
+  // (Cooked) (Fresh)".
+  function itemStateText(it, ctx){
+    const dish = vesselDefOf(it) && dishIn(it);
+    const labels = itemStateLabels(dish || it, ctx).map(l=> ` (${l})`).join("");
+    return dish ? `: ${dish.name}${labels}` : labels;
+  }
   function renderItemList(el, list, buttons, side, ctx){
     el.innerHTML = "";
     if(list.length === 0){ el.innerHTML = '<li class="empty">Nothing here.</li>'; return; }
@@ -7713,13 +8210,13 @@
       if(it._uid) nameEl.dataset.uid = it._uid;
       nameEl.addEventListener("click", ()=>{ detailItem = { uid: ensureUid(it), side }; render(); });
       meta.appendChild(nameEl);
-      // The state labels sit outside nameEl so the control's text stays
+      // The state text sits outside nameEl so the control's text stays
       // exactly the item's name, which focus-by-label depends on.
-      const labels = itemStateLabels(it, ctx);
-      if(labels.length){
+      const stateText = itemStateText(it, ctx);
+      if(stateText){
         const stateEl = document.createElement("span");
         stateEl.className = "state";
-        stateEl.textContent = labels.map(l=> ` (${l})`).join("");
+        stateEl.textContent = stateText;
         meta.appendChild(stateEl);
       }
       meta.appendChild(document.createTextNode(` ×${it.qty} — ${total} kg `));
@@ -7785,9 +8282,9 @@
       const nameB = document.createElement("b");
       nameB.textContent = it.name;
       nameLine.appendChild(nameB);
-      const labels = itemStateLabels(it, { container: detailItem.side === "world"
-        ? worldTabContainer(world[state.currentRoom], worldTab) : null });
-      if(labels.length) nameLine.appendChild(document.createTextNode(labels.map(l=> ` (${l})`).join("")));
+      const ctx = { container: detailItem.side === "world" ? worldTabContainer(world[state.currentRoom], worldTab) : null };
+      const stateText = itemStateText(it, ctx);
+      if(stateText) nameLine.appendChild(document.createTextNode(stateText));
       box.appendChild(nameLine);
       const statsLine = document.createElement("div");
       statsLine.appendChild(document.createTextNode(`${it.category} · ${itemWeight(it).toFixed(2)} kg `));
@@ -7805,6 +8302,21 @@
         const sealLine = document.createElement("div");
         sealLine.textContent = it.sealed ? "Sealed" : "Opened";
         box.appendChild(sealLine);
+      }
+      // A vessel lists what it holds, since its contents are not rows. A
+      // dish is already in its name line.
+      if(vesselDefOf(it) && !dishIn(it)){
+        const rows = it.contents || [];
+        const holds = document.createElement("div");
+        holds.textContent = rows.length
+          ? "Holds: " + rows.map(r=> r.name + itemStateText(r, ctx) + " ×" + r.qty).join(", ")
+          : (it.water ? "Holds no food" : "Empty");
+        box.appendChild(holds);
+        if(it.water){
+          const waterLine = document.createElement("div");
+          waterLine.textContent = it.water.kind === "tainted" ? "Full of tainted water" : "Full of water";
+          box.appendChild(waterLine);
+        }
       }
       itemPop.appendChild(box);
       const actions = document.createElement("div");
@@ -7883,6 +8395,94 @@
     if(!q) return true;
     return [r.label].concat(r.inputs.map(inp=> ITEM_REGISTRY[inp.id].name)).some(t=> t.toLowerCase().includes(q));
   }
+  // The Dishes rows. From the drawer they are a catalogue, every template
+  // with what it needs in words. Opened by Create dish on a vessel, they are
+  // the templates for that kind of vessel, each saying what the vessel
+  // already holds toward it, what is missing, and whether it is ready to
+  // cook, with Add ingredients where something within reach can fill the
+  // gap. The panel never chooses the dish: the contents do, when heated.
+  // All of it is functional UI text, held to clarity; retunable.
+  const VESSEL_KIND_WORDS = { pot:"pot", saucepan:"saucepan", frying_pan:"frying pan", roasting_pan:"roasting pan" };
+  const ROLE_WORDS = { meat:{ one:"meat", many:"meat" }, vegetable:{ one:"vegetable", many:"vegetables" },
+    grain:{ one:"grain", many:"grains" } };
+  // An ingredient set in words, for `n` of them: "pasta", "meat or
+  // vegetables", "ingredients" for every role at once.
+  function ingredientWords(set, n){
+    if(set.ids) return set.ids.map(id=> ITEM_REGISTRY[id].ingredient.label.toLowerCase()).join(" or ");
+    if(set.roles.length === Object.keys(ROLE_WORDS).length) return n === 1 ? "ingredient" : "ingredients";
+    return set.roles.map((r, i)=> i === set.roles.length - 1 && n !== 1 ? ROLE_WORDS[r].many : ROLE_WORDS[r].one).join(" or ");
+  }
+  // "A pot or saucepan with water, and two or more meat or vegetables".
+  function dishNeedsText(t){
+    const set = t.counts || t.allowed;
+    const vessel = "A " + t.vessels.map(k=> VESSEL_KIND_WORDS[k]).join(" or ") + (t.water ? " with water" : "");
+    const what = set.ids ? ingredientWords(set, t.min)
+      : t.exactly != null ? numberWord(t.exactly) + " " + ingredientWords(set, t.exactly)
+      : numberWord(t.min) + " or more " + ingredientWords(set, 2);
+    return vessel + ", and " + what;
+  }
+  // "holds 1 of 2 · needs one more meat or vegetable, and water", or
+  // "ready to cook".
+  function dishProgressText(t, st, water){
+    if(st.blocked) return "holds something that doesn't belong in it";
+    if(st.ready) return "ready to cook";
+    if(st.need === 0 && st.waterBoils) return "ready once the water boils";
+    const needs = [];
+    if(st.need > 0) needs.push((t.counts || t.allowed).ids
+      ? ingredientWords(t.counts || t.allowed, st.need)
+      : numberWord(st.need) + " more " + ingredientWords(t.counts || t.allowed, st.need));
+    if(t.water && !water) needs.push("water");
+    if(!t.water && water) needs.push("the water poured out");
+    return `holds ${st.have} of ${st.target}` + (needs.length ? " · needs " + needs.join(", and ") : "")
+      + (st.waterBoils ? " · the water will boil first" : "");
+  }
+  // The vessel Create dish opened the panel on, still there and still
+  // holding no dish; null otherwise.
+  function craftVessel(){
+    const found = craftFilter.vesselUid && findItemByUid(craftFilter.vesselUid);
+    return found && vesselDefOf(found.item) && !dishIn(found.item) ? found.item : null;
+  }
+  function dishShown(t, ok){
+    if(craftFilter.group !== "all" && craftFilter.group !== "dishes") return false;
+    if(craftFilter.canMakeOnly && !ok) return false;
+    const q = craftFilter.query.trim().toLowerCase();
+    if(!q) return true;
+    const set = t.counts || t.allowed;
+    const words = [ITEM_REGISTRY[t.item].name].concat(set.ids
+      ? set.ids.map(id=> ITEM_REGISTRY[id].ingredient.label) : set.roles);
+    return words.some(w=> w.toLowerCase().includes(q));
+  }
+  function renderDishRows(list){
+    const vessel = craftVessel();
+    DISH_TEMPLATES.forEach(t=>{
+      const kind = vessel && vesselDefOf(vessel).kind;
+      if(vessel && !t.vessels.includes(kind)) return;
+      const st = vessel && templateStatus(t, kind, vessel.contents || [], waterKindOf(vessel));
+      if(!dishShown(t, !!(st && st.ready))) return;
+      const row = document.createElement("div");
+      row.className = "dish-row";
+      const text = document.createElement("span");
+      text.appendChild(document.createTextNode(ITEM_REGISTRY[t.item].name + " "));
+      const note = document.createElement("span");
+      note.className = "cost";
+      note.textContent = vessel ? `(${dishProgressText(t, st, waterKindOf(vessel))})` : `(needs ${dishNeedsText(t)})`;
+      text.appendChild(note);
+      row.appendChild(text);
+      if(vessel && canAddMissing(t, vessel)){
+        row.appendChild(actionButton("Add ingredients", ()=> dishAddFromPanel(t.id)));
+      }
+      list.appendChild(row);
+    });
+  }
+  // Add ingredients from the panel, showing what it wrote in the result area
+  // as a craft does.
+  function dishAddFromPanel(templateId){
+    const vessel = craftVessel();
+    const t = DISH_TEMPLATES.find(x=> x.id === templateId);
+    if(!vessel || !t) return;
+    craftResult = logWrittenBy(()=> doAddMissingIngredients(t, vessel));
+    renderCraftResult();
+  }
   function renderCraftingPanel(){
     document.getElementById("craftSearch").value = craftFilter.query;
     document.getElementById("craftCanMake").checked = craftFilter.canMakeOnly;
@@ -7908,6 +8508,7 @@
         else { btn.disabled = true; }
         list.appendChild(btn);
       });
+      renderDishRows(list);
       if(!list.children.length){
         const none = document.createElement("div");
         none.className = "craft-empty";
@@ -8183,8 +8784,8 @@
       }
       const cooking = waitForCookingTarget(room);
       if(cooking){
-        hereBox.appendChild(actionButton(`Wait until the ${cooking.name} is cooked`, doWaitForCooking,
-          { cost: fmtDuration(cooking.remaining) }));
+        hereBox.appendChild(actionButton(cooking.water ? "Wait until the water boils" : `Wait until the ${cooking.name} is cooked`,
+          doWaitForCooking, { cost: fmtDuration(cooking.remaining) }));
       }
     }
     if(room.hasTree && hasTool("chopping")){
