@@ -18,6 +18,379 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.8.0 — The cooking release
+
+Implements: handoffs/cooking-release.md
+
+Implements #206, #167, #210, #218, #178, #213, #48, #121, #119, #120, #162 and
+#215 in full, per `handoffs/cooking-release.md`. The release is one MINOR,
+built on one branch in ten phases, one `Phase N:` commit each. Food now
+changes over time. A run starts two days after the collapse, and power and
+running water fail on day 21. Food spoils, slower in a fridge and not at all in
+a working freezer. Cooking happens by itself in a lit stove or campfire, and
+the stove has a timer. Food is eaten by the half and the quarter. Water comes in
+plastic bottles you fill at a sink. Crafting reaches the room and has a
+Preparation group. Pots and pans turn their contents and water into a dish.
+The one illness becomes food poisoning. **MINOR**: `SAVE_KEY` rotates from
+`ashfall_save_v0.7` to `ashfall_save_v0.8`, so a 0.7 browser save does not
+auto-load. An imported 0.7 file loads through `migrateCookingRelease()`.
+
+**New**
+
+- **Collapse clock.** `START_DAYS_AFTER_COLLAPSE` = 2, `POWER_FAILS_DAY` = 21,
+  `WATER_FAILS_DAY` = 21 (separate on purpose, #149). `minutesSinceCollapse()`
+  = `START_DAYS_AFTER_COLLAPSE × MINUTES_PER_DAY + state.totalMinutes`, derived
+  and never stored. `powerOn(m)` / `waterRunning(m)` default `m` to now. The
+  Day N clock still counts from the start of the run.
+- **Food poisoning.** `ILLNESSES` (SURVIVAL / TIME SIMULATION) is the one
+  definition table: `food_poisoning: { durationMin:180, minutesPerHealth:20,
+  onsetLog }`, today's values. `state.illnesses` counts each running illness
+  down, and `applyHungerThirst()` drains Health for each one at its own rate.
+  `startIllness(id)` starts a timer only if that illness isn't already running.
+  Every source rolls through `rollFoodPoisoning(p)`: if `p > 0`, it rolls
+  `chance(p, "food_poisoning", state.rollSeq)` and advances `rollSeq` even when
+  the player is already ill, the old order. `rollSeq`'s render invariant
+  stands. `combinePoisoning(a, b)` = `1 − (1 − a)(1 − b)`.
+- **Item-state core.** Every item state below extends three shared pieces:
+  - `sameStackState(a, b)`, the one merge predicate. It compares `itemId`,
+    `category`, no durability, `!!sealed`, cook state (and a raw row's
+    `cookMinutes`), freshness, `portion`, and water kind and fill.
+    `mergeRows()` concatenates `ages`, oldest first.
+  - Unit helpers. Every path that changes a row's `qty` goes through
+    `takeUnits(row, n)` / `dropUnits(list, i, n)`, which take the oldest
+    units. `unitsOf()` is the same split without removing anything, for a
+    transfer that checks its destination first. `changeOneUnit()` changes one
+    unit, splitting it out of a larger row. `remergeRow()` folds a row whose
+    state changed in place into a matching row, and hands the folded row's
+    `_uid` to the survivor when the survivor has none.
+  - `itemStateLabels(it, ctx)`: Open, cook state, freshness or Frozen, water,
+    in that order, shown in the row's `.state` span and the pop-up's name
+    line. Log lines keep the plain name.
+- **Passive cooking (#178).** A registry entry with `cooks: { minutes,
+  restores, foodPoisoningChance? }` is cookable. Its own `restores` and
+  `foodPoisoningChance` are the Raw state's. An instance carries `cookState`
+  (absent = raw) and, while raw, `cookMinutes`. Each tick the heat is on,
+  `cookInHeat()` advances every raw cookable row lying directly in a `heat`
+  container, or in a vessel there. At `cooks.minutes` the row turns Cooked,
+  starts Fresh (ages reset to 0) and folds into a matching cooked row. The
+  counter stops at completion (#179 will extend it). Progress holds when the
+  heat stops or the item is taken out. Nothing is logged. `foodEffects(it)`
+  is the one reader of restores and poisoning (Eat, the Eat gate, dish maths),
+  always from the registry, never the instance's copies.
+- **Wait until the … is cooked** replaces the Cook buttons. It is offered
+  while the heat is on and something is progressing, and targets the least
+  time left (`soonestCooking()`): a raw item, a vessel's forming or raw dish,
+  ingredients cooking alone, or tainted water ("Wait until the water boils").
+  On a campfire it is offered only while `fireMinutesLeft` covers the wait.
+  It runs `advanceTime(remaining)` and logs "You keep an eye on it." (key
+  `wait`).
+- **Stove timer (#213).** `timerMinutes` on the stove container. Device
+  Options shows "On"/"Off" and "Timer: N" (N = `Math.ceil`), and adds
+  `STOVE_TIMER_STEPS` (+5, +10, +30) minutes per press, with no clear, no
+  subtract and no cap. The presses cost no time and log nothing.
+  `tickStoveTimers()` counts every timer down whether or not the stove is on.
+  At 0 it rings: "You hear the ringing sound of the timer." (plain), heard
+  only when the player's room has a `building` equal to the stove room's.
+- **Spoilage (#48).** An entry with `spoils: { staleAfter, rottenAfter }` is
+  perishable once unsealed. Each row keeps `ages`, one effective age per
+  unit, oldest first. A unit is Fresh, then Stale, then Rotten. Stale has no
+  effect (#216). Rotten restores × `ROTTEN_RESTORES_FACTOR` (0.35), and its
+  poisoning is `combinePoisoning(own, ROTTEN_POISONING_CHANCE ×
+  POISONING_TRAIT_MULTIPLIER)`: a rotten raw fish is 0.5775.
+  `spoilageRate(container, m)` is ×`FRIDGE_RATE_POWERED` (0.1) in a `fridge`
+  while powered, ×`FRIDGE_RATE_COASTING` (0.25) for `FRIDGE_COAST_MIN` (2 d)
+  after the power fails, then 1. A `freezer` is 0 while powered and for
+  `FREEZER_COAST_MIN` (5 d) after, then 1. Anything else is 1.
+  `effectiveAge(container, from, to)` integrates it exactly, split at the
+  power boundaries. `ageFood()` ages every perishable each tick by that
+  integral, splits a row whose units now differ in state (oldest first, in
+  place) and refolds changed rows. `stampMissingAges()` ages world items as if
+  they had sat where they are since the collapse. It runs on a new game (boot
+  and `doRestart()`), on rolled loot in `doOpenContainer()`, and on load.
+  Items an action makes are new (`asNewlyMade()`): a caught fish, an opened
+  can, a dish. At the default start, fridge food is 288 min old, freezer food
+  0, and anything else two days.
+- **Rationing (#121).** A unit carries `portion` (1, 0.75, 0.5, 0.25; absent
+  = 1). Eat eats what is left of one unit. Eat 1/2 and Eat 1/4 (`EAT_PARTS`)
+  are offered only while the part is less than what is left. `eatTarget()`
+  eats from the unit with the least left, among rows of the same item, cook
+  state and freshness, and the oldest among equals, whichever row was clicked.
+  Restores and the poisoning chance scale linearly with the amount. A part
+  logs "You <verb> some of the <name>." under the same key.
+- **Water (Phase 7).** `plastic_bottle` holds `water: { kind, fill }` per its
+  `holdsWater: { kg:0.5, restores:{thirst:30} }`, drunk through the
+  rationing buttons with the fill as the portion (`consumeProfile()`, the
+  interim Drink rule until #47). Tainted water rolls
+  `TAINTED_WATER_POISONING_CHANCE` (0.35) × the amount. A drunk-dry bottle
+  stays, empty. **Fill at the sink** (rooms with `sink`, while
+  `waterRunning()`) fills one unit to full, and any tainted water taints the
+  whole. It is instant, and not offered on an item already full of clean
+  water, nor after day 21.
+- **Reachable crafting (#119).** `nearbyLists()`: the inventory pools, the
+  room's floor, the containers the Here panel lists (`listedContainers()`,
+  now shared with the tab strip) and the open car. Never floor-bag or vessel
+  contents, and never an unrolled container. Recipe inputs may name a
+  `cookState`. `takeNearby()` takes perishable units oldest first across
+  everything nearby, ties to the inventory, and everything else in list
+  order. The tool gate stays carried (`hasTool()`). Output always lands on
+  the room's floor, with the heap line (`logHeap()`, now shared with
+  `giveItem()`) when over `floorCap`.
+- **Preparation (#120).** `RECIPES` carry `group` (`craft` / `prep`) and an
+  optional `doneLog`. New recipe **Fillet the fish**: one raw `fish`,
+  `tool:"blade"` (the tag's first consumer), 10 min → `fish_fillets`. A
+  perishable output takes the age of the oldest perishable unit used, so a
+  fillet is as old as its fish.
+- **Vessels and dishes (#215).** A `vessel: { kind, capacityKg, waterKg }`
+  holds ingredients in `contents`, or once formed, its one dish, plus
+  `water: { kind }` when full. Ingredients carry `ingredient: { role, label,
+  restores?, addPortion? }`. **Add to the <vessel>** moves one unit (a
+  quarter for `addPortion` items), within `capacityKg`. **Take out**,
+  **Pour into** (a bottle, whatever its fill), **Pour out the water** and
+  **Fill at the sink** apply until a dish forms. Tainted water boils clean in
+  `BOIL_MINUTES` (5) on the heat. `DISH_TEMPLATES` is checked in order the
+  first tick the vessel sits in a lit heat container: boiled pasta, boiled
+  rice, soup, stew, roast, stir fry. The first match turns contents and water
+  into one raw dish (`formDish()` → `buildDish()`). Its restores are the
+  ingredients' contributions × (1 + `DISH_RESTORES_BONUS`, 0.25). Its
+  `foodPoisoning: { raw, cooked }` is the riskiest unit's chance × that unit's
+  share. Its name comes from the top one or two labels ("Fish and vegetable
+  stew"), and its weight is the contents plus the water. The dish then cooks
+  like any cookable. It is eaten from the pot by the rationing buttons,
+  poured out with **Pour it out**, and never leaves its vessel.
+- **Create dish** on an empty vessel opens the Crafting panel on **Dishes**
+  with that vessel as context: its templates only, each with what the vessel
+  holds toward it, what is missing and whether it's ready, and **Add
+  ingredients** to pull missing units from nearby (oldest first). Water is
+  never pulled.
+- **`migrateCookingRelease()`**, run last on every load, idempotently.
+  Retired ids are rebuilt from the registry, keeping `qty` and `_uid`
+  (`MIGRATED_ITEMS`). The spoiled foods come back as their fresh ids at
+  exactly Rotten, the stew pot as a cooking pot of Rotten stew, and bottled
+  water as full clean bottles. Instance `illnessChance` is deleted, and
+  `illnessMinutesLeft` becomes `illnesses.food_poisoning`. Missing default
+  containers are added after their predecessor (the freezers), default
+  container `tags` are copied (the fridges), and `sink` is copied. Then
+  `stampMissingAges()`.
+
+**New content**
+
+- Registry: `fish` (replaces `raw_fish` / `cooked_fish`; 0.3 kg, raw hunger
+  10 / 0.35, cooked hunger 35, 15 min, 12 h / 1 d), `fish_fillets`, `meat`,
+  `vegetables`, `milk`, `bread`, `leftovers` (now Food), `ice_cream`,
+  `plastic_bottle`, `cooking_pot`, `roasting_pan`, and the six `dish_*`
+  entries. Opened cans spoil in 1 d / 3 d. Shelf lives and values are the
+  handoff's.
+- `pasta` and `rice_bag` are grain ingredients (hunger 120 a unit, added a
+  quarter at a time). Pasta is no longer edible. The frying pan and both
+  saucepans are vessels, and `burnt_saucepan` is now a Tool. The cans, meat,
+  fish, fillets and vegetables carry `ingredient`.
+- `campfire_kit` gains the `disassemble` tag and `disassembleLog`.
+- Each of the three kitchens gets a `fridge` tag on its fridge and a
+  **Freezer** straight after it (`freezer` / `freezer1a`, 10 kg, draws the new
+  `kitchen_frozen` pool). The three kitchens and three bathrooms get `sink`.
+- `kitchen_frozen` (emptyChance 0.2: meat 0.5, vegetables 0.5, fish 0.3, ice
+  cream 0.4). `kitchen_tools` gains the cooking pot (0.15) and roasting pan
+  (0.10). Every one of these is chosen, not derived, and noted as such in the
+  SPAWN_POOLS comment.
+- `kitchen_perishable`'s spoiled entries name the fresh foods at their old
+  chances. Its fish entries are `fish` and `fish` keyed `fish_cooked` with
+  `state:{ cookState:"cooked" }`, and the stew entry is a `cooking_pot` keyed
+  `stew_pot` holding a cooked stew. Every `bottled_water` pool entry and
+  placement is a full clean `plastic_bottle`.
+- The 2A stove holds a cooking pot of cooked meat and vegetable stew (hunger
+  62.5, thirst 2.5). At the start it is two days old, so Stale. The 2A
+  fridge's leftovers are placed at `ages:[5 d]`, already Rotten.
+- Six room texts rewritten for the new start: the 2A living room, kitchen and
+  bathroom, the 1A kitchen, Oak 1B, and the 2nd St rail crossing.
+
+**Changed / Reworked**
+
+- *Disassemble (#167).* Offered for any `disassemble`-tagged item that a
+  `RECIPES` entry outputs. It returns every input of that recipe at full
+  quantity, and logs the registry's `disassembleLog` with `{qty}` replaced by
+  the first input's quantity, or "You take the <name> apart." if the item has
+  none. The kit's line is unchanged in play.
+- *Dismantle (#210).* Refunds `CAMPFIRE_DISMANTLE_BASE_WOOD` (1) plus
+  `Math.floor(fireMinutesLeft / FIRE_MINUTES_PER_WOOD)`. A burnt-out fire
+  gives 1, and one put out right after building from a kit gives 3.
+- *Crafted items* land on the floor, not in the open inventory tab.
+- *Registry-only fields.* `REGISTRY_ONLY_FIELDS` (`carryFactor`,
+  `foodPoisoningChance`, `disassembleLog`, `cooks`, `spoils`, `holdsWater`,
+  `vessel`, `ingredient`, `dish`) are left off instances by
+  `itemFromRegistry()` and read through `registryEntryOf()`.
+  `illnessChance` is renamed `foodPoisoningChance` on the registry.
+- *Spawn pool entries* take an optional `key` (the roll key, and the
+  duplicate check, default `itemId`) and `state` (instance fields after
+  `itemFromRegistry()`). `rolledPoolFor()` returns each stack's key, and
+  `sampleSeeds()` tallies by key.
+- *Weight.* `itemUnitWeight()` counts a unit at its `portion` of
+  `unitWeight`, plus water (a bottle's `holdsWater.kg` × fill, a vessel's
+  `waterKg`).
+
+**Fixed**
+
+- **#206: Enter on a Here or Inventory tab dropped focus to the page.** Both
+  tab strips were rebuilt with `innerHTML = ""`, and `rebuildKeepingFocus()`
+  returned early for anything that wasn't an open layer. It now takes an
+  `isLayer` flag (default true), and the strips pass `false`. Focus returns to
+  the tab with the same label, or to the tab now at the same position.
+
+**Removed**
+
+- `HEAT_RECIPES`, `doCookInContainer()` and the "Cook the …" buttons.
+- `ILLNESS_DURATION_MIN`, `ILLNESS_MINUTES_PER_HEALTH` (now in `ILLNESSES`),
+  `state.illnessMinutesLeft` (now `state.illnesses`).
+- Ids `raw_fish`, `cooked_fish`, `spoiled_milk`, `moldy_bread`,
+  `rotten_produce`, `rotten_leftovers`, `pot_of_spoiled_stew`,
+  `bottled_water` (see `MIGRATED_ITEMS`).
+- The `it.itemId === "campfire_kit"` Disassemble branch.
+
+**UI**
+
+- Item names carry state: (Open), (Raw)/(Cooked), (Fresh)/(Stale)/(Rotten)/
+  (Frozen), (Water)/(Tainted), and a vessel with a dish reads "Dented
+  saucepan: Fish stew (Cooked) (Fresh)". A vessel's pop-up lists "Holds: …"
+  and its water.
+- Eat / Drink 1/2 and 1/4. New pop-up actions: Fill at the sink, Add to …,
+  Take out …, Pour into …, Pour out the water, Pour it out, Create dish.
+- Here: the Wait button replaces Cook. With the stove's tab selected, the
+  header reads `On · Timer: 30` between the weight and Device Options, and
+  the header wraps by piece on a narrow panel.
+- Device Options (stove): the Timer line, then +5 / +10 / +30 after Light /
+  Turn off.
+- Crafting panel: a search box, **All · Crafting · Preparation · Dishes**, a
+  **Can make now** toggle, "(needs Fish (Raw) ×1, a blade)" wording, the
+  Dishes catalogue, and vessel context from Create dish. Search and filters
+  are UI-only and reset when the panel closes.
+
+**Documentation**
+
+- The ITEM DATA SCHEMA now covers `cooks`, `cookState`, `cookMinutes`,
+  `spoils`, `ages`, `portion`, `holdsWater`, `water`, `vessel`, `contents`
+  (a vessel's too), `ingredient`, `dish` and a dish's instance fields,
+  `boilMinutes`, `foodPoisoningChance` (renamed, registry-read) and
+  `disassembleLog`. The tag list adds `disassemble`, and `blade` moves to
+  "read by a mechanic today". The CONTAINER SCHEMA adds `fridge`, `freezer`,
+  `timerMinutes` and the note that a future respawn (#15) must skip
+  perishables. The ROOM SCHEMA adds `sink`. SPAWN_POOLS documents `key`,
+  `state` and the chosen chances. The ARCHITECTURE word list names no Cook
+  action and is unchanged.
+- The `CAMPFIRE_DISMANTLE_BASE_WOOD` comment records that the build → put
+  out → dismantle cycle breaks even only because the build burns fuel and
+  the baseline is ≤ 1.
+- Validators: `validateItemRegistry()` checks `foodPoisoningChance` and
+  `cooks.foodPoisoningChance` ∈ [0, 1], `cooks.minutes` > 0, `staleAfter` <
+  `rottenAfter`, `ingredient.role` ∈ `INGREDIENT_ROLES`, and that every
+  `DISH_TEMPLATES` item is a dish entry with `cooks`.
+  `validateReachability()` counts dish entries as reachable and duplicates by
+  key. `ACTION_GRANTED_ITEM_IDS` is `firewood`, `fish` and `spare_batteries`,
+  and `REPORTED_TOOL_TAGS` gains `blade`.
+- Filed: #223 (vessel action labels collide when two vessels share a name)
+  and #224 (Pour into a vessel already full of clean water wastes the
+  bottle). Nothing in the handoff's scope was cut.
+
+**Sections touched**
+
+- CONFIG / CONSTANTS: the new constants, `RECIPES` (groups, fillet),
+  `DISH_TEMPLATES`; `HEAT_RECIPES` removed.
+- WORLD DATA: registry, pools, kitchens and bathrooms, six room texts.
+- PLAYER STATE: `illnesses`.
+- CORE UTILITIES: comments only.
+- INVENTORY / ITEM SYSTEM: merge, units, eating, opening, sinks, vessel
+  actions, actions list.
+- WORLD INTERACTION: collapse clock helpers, `doOpenContainer()` stamping.
+- SURVIVAL / TIME SIMULATION: illness, spoilage, world ticking.
+- CRAFTING: reach, unit choice, output.
+- FIRE / COOKING: cooking tick, Wait, timer, dismantle, vessels and dishes.
+- PERSISTENCE: migration, stamping on restart, dev helpers.
+- EVENTS / UI HELPERS and RENDERING: labels, pop-up, Here actions and
+  header, Device Options, crafting panel, tab-strip focus.
+
+**Explicitly out of scope**
+
+- #179 burning, #214 carried and digital timers, #216 Stale effects, #217
+  freezing and thawing times, #219 food subcategories, #220 power for other
+  appliances, #47 fluid volumes and drinking from vessels or taps, #52
+  tainted water sources, #211 disassembly by category, #96 the propane torch,
+  #149 world-generation options, #137 the hospital opening, #15 respawn (the
+  comment only), #134 / #116 per-unit durability, #89 building ids (the timer
+  compares names), #212 the sidebar Wait. Bowls and serving out of vessels,
+  #119's used-tool-to-inventory rule, the `needsHeat` gate, and the Day N
+  clock are unchanged.
+
+**Open questions / decisions resolved**
+
+- **`rebuildKeepingFocus()`**: a third parameter, `isLayer = true`, rather
+  than a sibling helper. The tab strips pass `false`.
+- **Helper names**: `sameStackState`, `mergeRows`, `unitsOf` / `takeUnits` /
+  `dropUnits`, `changeOneUnit`, `remergeRow`, `itemStateLabels` /
+  `itemStateText`, `foodEffects` / `unitFoodEffects`, `consumeProfile`,
+  `eatTarget` / `leastLeftRow`, `spoilageRate`, `effectiveAge`, `stampAges` /
+  `stampMissingAges`, `ageFood`, `cookInHeat` / `cookItem` / `cookVessel`,
+  `soonestCooking`, `templateStatus`, `buildDish` / `formDish` / `dishFrom`,
+  `nearbyLists` / `takeNearby`, `migrateCookingRelease`.
+- **Owning container**: `forEachItemList()`'s visitor gains a third argument,
+  `container`. Existing callers ignore it.
+- **Crafting panel markup**: `#craftFilters` above the list (a search input,
+  a wrapping row of group buttons, a checkbox), and Dishes rows as `.dish-row`
+  divs. Checked at 390 px.
+- **Wording**: "(needs Cloth ×2, Duct tape ×1)", now with ×. Tools read "a
+  blade". Dishes catalogue: "A pot or saucepan with water, and two or more
+  meat or vegetables", generated from the template. In vessel context: "holds
+  1 of 2 · needs one more meat or vegetable, and water", "ready to cook",
+  "ready once the water boils", "holds something that doesn't belong in it".
+  Drinking logs "You drink the water." (the water, not the bottle). The
+  fillet logs "You fillet the fish." (`doneLog`). The vessel's pop-up reads
+  "Holds: …", "Full of water" / "Full of tainted water", "Empty". All
+  retunable.
+- **Here header**: `On · Timer: N` sits between the weight and Device
+  Options, and hides when empty.
+- **Judgment calls Tom should confirm:**
+  - The trash pool's `rotten_leftovers` entry, which the handoff didn't
+    mention, became `leftovers` with `state:{ ages:[3 d] }`, pinned Rotten,
+    so the bin still holds rotten leftovers.
+  - A part-eaten unit weighs its portion. Without that, adding pasta a
+    quarter at a time would put four full units' weight in the pot and trip
+    its `capacityKg`.
+  - A dish forms and starts cooking in the same tick, so a 30-minute stew is
+    done 30 minutes after it forms.
+  - `CAMPFIRE_DISMANTLE_BASE_WOOD` sits beside the other fire fuel constants
+    in FIRE / COOKING, not in CONFIG / CONSTANTS.
+  - Refilling a vessel restarts its boil.
+  - Pour out the water and Take out are silent, like Take.
+  - A row split by freshness keeps its youngest units (and its `_uid`).
+
+**Notes / assumptions**
+
+- Every number above is the handoff's. #222 is the register of which are
+  Tom's, drafts or placeholders, and the code matches it. `DISH_RESTORES_BONUS`
+  is a placeholder until the bonus is discussed.
+- A 0.7 raw fish carried in an imported save has no age, so it is aged from
+  the collapse like any world item and usually arrives Rotten, as the handoff
+  specifies.
+- Ticking a day costs about 140 ms against v0.7.5's 57 ms in headless
+  Chromium, for ageing every perishable each minute.
+
+**Validation performed**
+
+- Headless Chromium against an instrumented scratch copy (a direct-eval hook,
+  and a spy on `rollFoodPoisoning` for the chance checks), driving the UI
+  and the game's own actions. The shipped file carries no hook. One suite per
+  phase, all re-run on the final build: 21, 20, 27, 16, 24, 12, 24, 29, 46
+  and 24 checks, every one passing. They cover every check the handoff
+  lists, including:
+  - the Take/Store/Open/Eat sequence, diffed against v0.7.5 for identical
+    stacks;
+  - a v0.7.5 export imported, then exported and imported again, byte for
+    byte unchanged;
+  - all four validators and both seed reports, with no page errors.
+- `git diff origin/main...HEAD -- ashfall.html` is the full change. Each
+  phase's commit is `Phase N: …`.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.7.5"` → `"0.8.0"`
+
+---
+
 ## v0.7.5 — Equip load delta, pop-up tab guard
 
 Implements: handoffs/equip-load-pop-up-tab-and-tag-commands.md
