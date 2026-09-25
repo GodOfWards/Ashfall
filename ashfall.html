@@ -726,9 +726,10 @@
   //               reads "(Frozen)" meanwhile. No coasting either (#217).
   //     A container carrying both heat and device is the room's stove
   //     (roomStove()).
-  //   Optional: timerMinutes — a stove's analog timer, minutes left (absent
-  //     = 0). Set from its device pop-up, counted down by
-  //     tickStoveTimers() whether or not the stove is on.
+  //   Optional: timerMinutes — a stove's wind-up timer, minutes left (absent
+  //     = 0). It needs neither power nor a battery. Set from its device
+  //     pop-up, counted down by tickStoveTimers() whether or not the stove
+  //     is on or has power.
   //     Authored containers carry their tags in WORLD DATA. The campfire's
   //     container is created by doBuildFire(), which gives it `heat`.
   //   Optional (spawn pools — see SPAWN_POOLS below):
@@ -7365,10 +7366,12 @@
     if(room.fireMinutesLeft != null && room.fireMinutesLeft < next.remaining) return null;
     return next;
   }
-  // The stove timer: an analog kitchen timer on the stove container, in
+  // The stove timer: a wind-up kitchen timer on the stove container, in
   // minutes (`timerMinutes`, absent = 0). Its device pop-up's buttons add
   // STOVE_TIMER_STEPS minutes a press, with no clear, no subtract and no cap.
-  // It needs neither the stove on nor power, and turns nothing off. When it
+  // It is clockwork, with no battery, so it needs neither the stove on nor
+  // power, and turns nothing off. It is not the range's own electronics,
+  // whose standby draw is `gas_range` in APPLIANCES (#270). When it
   // runs down it rings, heard anywhere in the stove's building: the player's
   // room must have a `building`, and the same one. Otherwise it rings unheard.
   // The ring's wording is Tom's.
