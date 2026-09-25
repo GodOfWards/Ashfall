@@ -1277,6 +1277,9 @@
   //   chosen to sit in the band its neighbours already occupy. They are
   //   retunable balance values; the other entries are not, because retuning
   //   one silently breaks the derivation the rest are re-checkable against.
+  //   So are the meters' four: `multimeter` and `clamp_meter`, each at 0.20
+  //   in both `tools_workshop` and `hardware_store`, chosen beside the
+  //   screwdriver's. They postdate the conversion too. Retunable.
   //   The whole `kitchen_frozen` pool (meat 0.5, vegetables 0.5, fish 0.3,
   //   ice cream 0.4, emptyChance 0.2) is chosen too: the freezers postdate the
   //   conversion. So are `kitchen_tools`' cooking pot (0.15) and roasting
@@ -1399,6 +1402,8 @@
       { itemId:"metal_pipe", chance:0.204082, qtyMin:1, qtyMax:1 },
       { itemId:"box_cutter", chance:0.204082, qtyMin:1, qtyMax:1 },
       { itemId:"screwdriver", chance:0.20, qtyMin:1, qtyMax:1 },
+      { itemId:"multimeter", chance:0.20, qtyMin:1, qtyMax:1 },
+      { itemId:"clamp_meter", chance:0.20, qtyMin:1, qtyMax:1 },
       { itemId:"spare_parts_box", chance:0.204082, qtyMin:1, qtyMax:1 },
       { itemId:"motor_oil", chance:0.204082, qtyMin:1, qtyMax:1 },
       { itemId:"tire_iron", chance:0.164898, qtyMin:1, qtyMax:1 },
@@ -1433,6 +1438,8 @@
       { itemId:"rope", chance:0.264344, qtyMin:1, qtyMax:1 },
       { itemId:"plank", chance:0.229818, qtyMin:1, qtyMax:2 },
       { itemId:"screwdriver", chance:0.23, qtyMin:1, qtyMax:1 },
+      { itemId:"multimeter", chance:0.20, qtyMin:1, qtyMax:1 },
+      { itemId:"clamp_meter", chance:0.20, qtyMin:1, qtyMax:1 },
       { itemId:"paint_can", chance:0.194243, qtyMin:1, qtyMax:1 },
       { itemId:"wrench", chance:0.194243, qtyMin:1, qtyMax:1 },
       { itemId:"crowbar", chance:0.119873, qtyMin:1, qtyMax:1 },
@@ -2414,7 +2421,8 @@
           { id:"crowbar", qty:1 },
           { id:"duct_tape", qty:2 },
           { id:"wrench", qty:1 },
-          { id:"bolt_cutters", qty:1 } ])},
+          { id:"bolt_cutters", qty:1 },
+          { id:"multimeter", qty:1 } ])},
         { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore","electronics"], spawnRolled:true, items:itemsFromRegistry([
           { id:"master_key", qty:1 },
           { id:"building_ledger", qty:1 },
