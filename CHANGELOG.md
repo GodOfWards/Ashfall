@@ -18,6 +18,148 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.9.4 — Power text fixes: load readouts, hall lights, room text in old saves
+
+Implements: handoffs/power-text-and-hall-lights.md
+
+Implements #278, #279, #280 and #277 in full, per
+`handoffs/power-text-and-hall-lights.md`: four small fixes around v0.9.3's
+power text. Room text now follows the definitions in old saves, each switchable
+appliance reads in its own words, Acorn's hall and stair lights are lit
+whenever powered, and one comment's wattage is corrected. No state field is
+added and the save format is unchanged, so this is **PATCH**, and 0.9.3
+browser saves keep loading.
+
+**New**
+
+- `readout:{ on, off }` on every `APPLIANCES` entry that carries
+  `leftOnChance` (#279). `loadStatusText(loadId)` returns `readout.on` while
+  `loadPoweredNow(loadId)`, otherwise `readout.off` plus " · switched on" or
+  " · switched off", by the same `switchOnIn()` call as before.
+  `validateWiring()` reports an entry without `switchless` whose `readout.on`
+  or `readout.off` is not a non-empty string.
+- `hall_light` in `APPLIANCES` (#280): `{ name:"Light", watts:LED_BULB_WATTS,
+  volts:120, switchless:true, nameplate:{ printsWatts:true } }`, a
+  common-area light that is lit whenever power reaches it.
+- `LED_BULB_WATTS = 10` (WORLD DATA, beside `APPLIANCES`), carrying the
+  Champion source ("an LED bulb draws 8–15 W"). `led_light` and `hall_light`
+  both read it, so the figure is written once.
+- `backfillRoomDescs()` (PERSISTENCE, beside `backfillRoomAddresses()`),
+  called in the load path's backfill block right after it (#278). On every
+  load, every room id in `world` that `makeDefaultWorld()` also has takes the
+  defaults' `desc`, unconditionally, as `backfillRegistryTags()` does for
+  tags. A room the defaults lack is left as it is.
+
+**New content**
+
+- Readout words, functional UI text, retunable:
+  - `fridge_freezer`: "Light on" / "Dark" (unchanged: what you observe at a
+    fridge is its door light);
+  - `led_light`: "Lit" / "Dark";
+  - `bath_fan` and `range_hood`: "Running" / "Silent".
+- `hallway2`'s `off` variant is now "A dark corridor. Your door is one of two
+  here, with a small transom window set beside it." — it no longer calls the
+  bulb dead. The `on` variant is unchanged.
+
+**Changed**
+
+- `WIRING.acorn.common`'s four fixtures (`ACORN_HOUSE_ROOMS`) use
+  `appliance:"hall_light"` instead of `led_light`. Load ids are unchanged.
+
+**Fixed**
+
+- A save from before v0.9.3 kept its old room text (#278): `serializeGame()`
+  writes `world` whole, so each room's `desc` travelled in the save and
+  nothing refreshed it. A v0.9.2 save loaded into v0.9.3 showed the 2A
+  kitchen's "The gas stove works too — no power needed to light it."
+  `backfillRoomDescs()` recopies it on load; the save format is untouched.
+- Every switchable load read "Light on" / "Dark" (#279), so a fan or a hood
+  read as a light. Fixed by `readout`.
+- Acorn's hall and stair lights were `led_light`, rolled switched on in only
+  30% of runs (#280). As `hall_light` they are switchless and lit on every run
+  while the grid is up and the House breakers are on.
+
+**UI**
+
+- Exhaust fans and range hoods read "Running", or "Silent · switched on/off",
+  in the device pop-up, the Here strip and the Electrical view. Lights read
+  "Lit", or "Dark · …". The fridge is unchanged.
+- The House circuit's rows in the Electrical view lose their readout and
+  Switch button, as the smoke alarm's rows have none. Nameplate and meter
+  Test stay.
+- A save from v0.9.2 or earlier shows current room text after loading.
+
+**Documentation**
+
+- POWER SCHEMA comment: the `APPLIANCES` schema line now reads
+  `{ name, watts, volts, leftOnChance | switchless, nameplate, readout?,
+  startWatts?, dutyCycle?, cycleMinutes? }`, and `readout` is documented as
+  present exactly when `leftOnChance` is. `hall_light` gets its line (switchless
+  as a design choice, not a sourced fact; retunable) and shares `led_light`'s
+  nameplate line. `led_light`'s line points to `LED_BULB_WATTS`.
+- POWER SCHEMA comment, `gas_range` (#277): "the 372–432 W glow bar" became
+  "the 384–432 W glow bar (a flat one; a round one draws 300–360 W)", per
+  `docs/canon/reference/Electrical.md`. Comment only.
+- `validateWiring()`'s comment lists the new `readout` check.
+- Nothing was deferred; no new issues were filed.
+
+**Open questions / decisions resolved**
+
+- How `hall_light` shares `led_light`'s 10 W: a named constant,
+  `LED_BULB_WATTS`, beside `APPLIANCES`, with the Champion source moved onto
+  it (the handoff's recommendation).
+- One `makeDefaultWorld()` or two on load: `backfillRoomDescs()` builds its
+  own, as every other backfill does. The load path builds one more default
+  world than before.
+
+**Notes / assumptions**
+
+- An older save's `state.power.switches` entries for `acorn.house.light_*`
+  are left in place and ignored: `switchOnIn()` answers `true` for a
+  switchless appliance before reading them, and `setSwitchIn()` never writes
+  one.
+- `hall_light` being switchless is a design choice, not a sourced fact, and
+  retunable.
+
+**Explicitly out of scope**
+
+- #258 (removing the unwired-room fallback), #29 (the log's size and cap),
+  and how the player notices the grid failing (#220). The hall lights going
+  dark is a side effect, and no log line, sign or new room text was added.
+- Readout words for other buildings' appliances; removing `desc` from saves;
+  any room text besides `hallway2`'s `off` variant.
+
+**Validation performed**
+
+- Syntax check of the script (`new Function` over the `<script>` body).
+- `ashfallDev.validateWiring()`: no problems; the 20 unwired rooms warning is
+  unchanged.
+- In headless Chromium: a v0.9.2 save and a save from `main` (v0.9.3), each
+  loaded into this build in the 2A kitchen, show the current text ("…already
+  given up.", without the gas-stove sentence). The `main` save's `hallway2`
+  carried the old "its one bulb dead" text and loads the current one.
+- A fresh run shows `hallway2`'s `on` text while the grid is up, and its new
+  `off` text with `state.totalMinutes` past `POWER_FAILS_DAY`.
+- Electrical view: bathroom and kitchen rows read "Dark · switched off" /
+  "Silent · switched off", and "Lit" / "Running" once switched on; the HOUSE
+  rows show only name and nameplate.
+- `git diff origin/main...HEAD -- ashfall.html`: hunks only in CONFIG
+  (`VERSION`), WORLD DATA (POWER SCHEMA comment, `APPLIANCES`,
+  `WIRING.acorn.common`, `hallway2`), PERSISTENCE (`backfillRoomDescs()`, the
+  load path, `validateWiring()`) and RENDERING (`loadStatusText()`).
+
+**Sections touched**
+
+- WORLD DATA: POWER SCHEMA (`APPLIANCES`, `LED_BULB_WATTS`, the comment),
+  `WIRING.acorn.common`, `hallway2`.
+- PERSISTENCE: `backfillRoomDescs()`, `applyLoadedData()`, `validateWiring()`.
+- RENDERING: `loadStatusText()`.
+- No ACTIONS or SIMULATION code changed.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.9.3"` → `"0.9.4"`
+
+---
+
 ## v0.9.3 — The electrical view, meters and nameplates, and room text that follows power
 
 Implements: handoffs/electrical-view-and-meters.md
