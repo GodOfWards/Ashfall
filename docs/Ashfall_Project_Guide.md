@@ -57,9 +57,11 @@ infrastructure carry their real names, and what the game says about them
 — where they are, what they do, how they connect — matches the real town.
 That is checked against a source when it is written, never recalled or
 invented, and the fact goes into `docs/canon/reference/` with its source, so
-it is found once rather than searched for again. A fact that can't be confirmed is marked unconfirmed rather
-than filled in with a plausible one. Where the game needs something
-Henderson doesn't have, adding it is a design decision (Part 2).
+it is found once rather than searched for again. A fact that isn't there yet
+is asked for or filed as a `Research:` issue. A fact that can't be confirmed
+is marked unconfirmed rather than filled in with a plausible one. Where the
+game needs something Henderson doesn't have, adding it is a design decision
+(Part 2).
 
 This sits under the tone rules, not above them. A real name doesn't
 license exposition: a real power plant is still described through what
@@ -317,8 +319,8 @@ bump.
 - `docs/canon/reference/` — real-world facts, researched once: the real town,
   codes, equipment and figures, each with its source, the date it was checked
   and whether it is confirmed. Read by a planning session whenever it needs a
-  real-world fact, before searching the web, and added to in the same session
-  as anything a search finds. Its `README.md` is the index and the rules.
+  real-world fact, and always first. Its `README.md` is the index and the
+  rules, including what to do when a fact isn't there.
 - Neither is read by a coding session: a handoff quotes any canon fact or
   reference figure the work depends on. `.rgignore` keeps the whole folder out
   of repository searches.
@@ -412,10 +414,14 @@ discussion starts spends context on material that mostly goes unused.
 - `docs/canon/Ashfall_Canon.md` when the discussion is about lore, or when
   Tom asks — not up front, and not as one of the "other docs" below.
 - `docs/canon/reference/` whenever the discussion needs a real-world fact:
-  a code, a rating, a figure, a fact about the real town. Check it before
-  searching the web. What a search finds is added there in the same session,
-  with its source, the date and its status, so it is found once; the issue
-  then points to it rather than repeating it.
+  a code, a rating, a figure, a fact about the real town. Sessions run with
+  limited internet access, so this is where a fact is looked up first. If it
+  isn't there, the session doesn't guess and doesn't search unasked. It
+  either asks Tom for network access to research it now, or files a
+  `Research:` issue (the fact, why it's needed, which issue it blocks) and
+  carries on with the gap marked unconfirmed. Whatever is researched is added
+  there in the same session, with its source, date and status, so it is found
+  once, and the issue points to it rather than repeating it.
 - Other docs (`Ashfall_Handoff_Guide.md` at the wrap, as before) when a
   question reaches them.
 
