@@ -487,6 +487,18 @@ below.
 
 Work on a branch. Never commit directly to `main`.
 
+**Multi-phase handoffs.** A handoff large enough to be built in phases
+(the cooking release and the power foundation are the examples) is
+committed once or more per phase, each message starting `Phase N:`, and
+**the branch is pushed after every phase commit**. A commit that exists
+only inside a session's container is lost if the container is reclaimed
+while the session waits on a usage limit; a pushed one lets the next
+session find the last `Phase N:` commit, re-run its checks and carry on.
+**The pull request is opened only at the wrap.** The repository's CI runs
+on pull requests into `main`, not on pushes, so pushing a branch with no
+open pull request triggers nothing, while every push to an open one
+re-runs the check and notifies whoever is watching it.
+
 **Output — one pull request**, opened once implementation is complete and
 validated:
 
