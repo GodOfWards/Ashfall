@@ -18,6 +18,337 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.9.0 — The power foundation
+
+Implements: handoffs/power-foundation.md
+
+Implements #260, #240, #241 and #243 in full, per
+`handoffs/power-foundation.md`: the first release of the power system designed
+in #220. Power stops being one global date check and becomes a network of
+sources (the grid), distribution (a board, panels, circuits, each behind a
+breaker) and loads, and the rest of the game asks it one question,
+`isPowered(loadId)`. Spoilage is its first reader. The release also carries
+running water following the grid, the door and window shape the building
+passes need, and the electrical rules setting chosen when a run starts. No
+building is wired yet (`WIRING` ships empty, #251 is next), so every room falls
+back to the grid directly and plays as before, except that fridges and
+freezers no longer coast after the grid fails. New persistent state
+(`state.power`, `state.electricalRules`) and a new save format for doors and
+windows: **MINOR**, and `SAVE_KEY` rotates to `ashfall_save_v0.9`. An imported
+v0.8.2 file still loads.
+
+**New**
+
+*The power network (POWER, a sub-section of SURVIVAL / TIME SIMULATION)*
+
+- `expandWiring(wiring, templates)` expands `WIRING` once at startup into
+  `POWER_NET`, a flat table of boards, panels, breakers and loads with stable
+  ids: `acorn.board`, `acorn.board.main`, `acorn.board.2A` (the feeder),
+  `acorn.2A`, `acorn.2A.main`, `acorn.2A.<circuit>`, `acorn.2A.<fixture>`. It
+  also builds `containerLoad` (room id + container id → load id) and
+  `devices` (the panels and boards hanging in each room). It is pure, and a
+  reference that doesn't resolve is skipped and listed in `problems`.
+- `powerSnapshot()` is one look at the network, changing nothing:
+  - a board is live when the grid is and its main is closed;
+  - a panel is live when its board is, and its feeder and main are closed;
+  - a circuit is live when its panel is and its breaker is closed.
+  - A load is **powered** when its switch is on and its circuit is live.
+  - It is **drawing** when it is powered and, for a cycling load, in the on
+    part of its cycle: `((minute + phase) mod cycleMinutes) < dutyCycle ×
+    cycleMinutes`. The phase is `rollValue("power", "cycle", loadId) ×
+    cycleMinutes`, so the kitchens don't all cycle together.
+  - A motor load **starts** when it draws now and didn't in the previous
+    step. For that step's instant check it counts `startWatts`.
+  - A breaker's current is the watts of the drawing loads it feeds ÷ its
+    `volts`: a circuit's own; a panel main's and its feeder's are the
+    panel's; the board main's is the board's. A panel or board treats its
+    loads as balanced across two legs.
+- `resolvePowerStep()` is one step, pure over (network, appliances,
+  `state.power`, rules, grid, minute, dt, previous drawing, seed). Both checks
+  run lowest layer first (circuit, panel main, feeder, board main), looking
+  again after every layer:
+  - **Instant:** a closed breaker whose momentary current exceeds
+    `INSTANT_TRIP_MULTIPLE` (7.5) × its rating trips.
+  - **Heat:** at `f = running current ÷ rating`, heat rises by
+    `dt ÷ t(f)` while `f > 1`, with `t(f) = T200 ÷ (f − 1)^n` and
+    `n = ln(T200 ÷ T135) ÷ ln(0.35)`. That curve passes exactly through
+    UL 489's 135% and 200% points. Otherwise heat drains by
+    `dt ÷ HEAT_COOL_MIN`, never below 0. At 1 the breaker trips. It stays off
+    until reset, and its heat keeps draining, so a reset into a standing
+    overload trips again within a step or two.
+- `stepPower(dt)` runs it every step, first in `applyWorldTicking()`, before
+  `ageFood()`. It writes `state.power` and keeps the result in `powerNow` for
+  render and `isPowered()`. `refreshPower()` rebuilds `powerNow` without a
+  step, and without starting anything, on boot, restart and load.
+- **Simplified rules** (`consultedLayers()`): circuits and feeders are never
+  consulted, every load in a panel's rooms is on that panel, and each panel
+  and the board is one breaker, its main. The instant and heat checks apply to
+  those mains exactly as above.
+- **Trips are heard** (`logTrips()`, wording retunable):
+  - in the room where the tripping breaker's panel or board hangs: "The panel
+    on the wall snaps. A breaker has tripped.";
+  - in a room where a load it fed was running: "Everything in here goes
+    quiet.";
+  - elsewhere, nothing. The grid failing logs nothing (#220).
+- Breakers switch and reset through `switchBreakerIn()` / `resetBreakerIn()`,
+  which the device pop-up's actions (`doSwitchBreaker()`, `doResetBreaker()`)
+  and the dev seam's scripts share.
+
+*Constants (CONFIG / CONSTANTS)*
+
+- `BREAKER_T135_MIN`: 60 min at 50 A or less, 120 above.
+- `BREAKER_T200_MIN`: 2 / 4 / 6 / 8 / 10 min for 0–30 / 31–50 / 51–100 /
+  101–150 / 151–225 A, and 10 min above 225 A. Sourced from UL 489 via ABB's
+  white paper and Castor, *Molded Case Circuit Breaker Basics* (EasyPower),
+  except the above-225 A band, which is flagged.
+- `INSTANT_TRIP_MULTIPLE = 7.5`, a C-curve breaker's typical calibration
+  (band 5–10×, ABB). Applying it to US plug-in breakers is flagged.
+- `HEAT_COOL_MIN = 30`, `SWITCH_LEFT_ON_CHANCE = 0.9` and
+  `PANEL_DEFAULT_VOLTS = 240` are judgment calls, retunable. 240 is flagged,
+  since real apartment buildings are often 120/208 V (#241).
+- `STANDARD_BREAKER_RATINGS`: the NEC 240.6(A) standard ratings for fuses and
+  inverse-time breakers, 15 A to 6000 A. The fuse-only 1 / 3 / 6 / 10 / 601 A
+  are left out.
+
+*Spoilage reads the network (SURVIVAL / TIME SIMULATION)*
+
+- `containerPowered(roomId, container)` returns `isPowered()` of the load the
+  container belongs to, or `gridUp()` when the wiring makes it none. That
+  fallback is how every room behaves in this release.
+- `spoilageRate(container, powered)`: a powered fridge
+  `FRIDGE_RATE_POWERED` (0.1), a powered freezer 0, and anything unpowered 1,
+  from that step on.
+- `ageFood(dt)` ages each step at the current power state. It no longer
+  integrates `effectiveAge()`.
+- `stampAges(it, container, roomId)` keeps an analytic starting age, for a
+  container nobody touched since the collapse. `effectiveAge()` keeps only the
+  grid-failure cut: the powered rate until the failure, then 1. A load whose
+  rolled starting switch is off aged at 1 throughout.
+- `isFrozenIn(container, roomId)` is a freezer that is powered now. The item
+  label `ctx` carries `roomId` for it.
+
+*Water (WORLD INTERACTION)*
+
+- `gridUp(m)` replaces `powerOn(m)`, the same test against
+  `POWER_FAILS_DAY`. `waterRunning(m)` returns `gridUp(m)`. Sinks still stop
+  on day 21: the water follows the grid, not a building's power.
+
+*Doors and windows (WORLD DATA, WORLD INTERACTION)*
+
+- Windows gain `climbable` (default false; `2a-transom` and `1b-alley` set
+  it) and may have one room, a window to the outside.
+  `getExitsForRoom()` adds a climb exit only for a window that is climbable,
+  has two rooms, and isn't closed. Open, Close and Break stay offered on every
+  window.
+- Doors gain `lockable` (default true; false means no key action and no
+  locked note) and `open` (default false). A locked door is always closed.
+  `open` has no reader yet besides its own actions: it is laid down for
+  carbon monoxide (#248). Movement is unchanged.
+- `doOpenDoor()` / `doCloseDoor()`: instant, logging "You open the … door." /
+  "You pull the … door shut.".
+- `doToggleLock()` closes an open door as it locks it, logging "You close the
+  door and lock it."
+
+**New content**
+
+- `APPLIANCES` with one entry, `fridge_freezer`: 150 W running, 525 W at a
+  start (3.5×), 120 V, duty cycle 0.35, a 60-minute cycle. It is the
+  appliance behind every kitchen's Fridge and Freezer pair.
+  - 150 W sits in the measured 100–250 W range (Champion's chart: 150–400 W).
+  - 3.5× is the 3–4× rule of thumb.
+  - 0.35 sits in the measured 33–40% at about 70 °F.
+  - The 60-minute cycle is a judgment call, not sourced, and retunable.
+  - This is definition data for the mechanic's first reader. No room,
+    placement or description changed.
+- `WIRING_TEMPLATES` and `WIRING`, both empty. Their shapes are in the POWER
+  SCHEMA comment.
+
+**UI**
+
+- **Here tabs:** a room where a panel or board hangs gets a tab for each,
+  after its containers, labelled by the device's `name`. They hold no items:
+  no weight, no list, and no Store. The strip shows the device's state:
+  - detailed rules: "Main on" / "Main off", plus " · N tripped";
+  - simplified rules: "On" / "Off".
+  - The strip also carries Device Options.
+- **Device pop-up, detailed rules:** the name, then "Fed by the grid" or "No
+  power", then one row per breaker: MAIN first, then circuits in panel order,
+  or a board's feeders. Each row reads "KITCHEN · 20 A · On" and has one
+  button: Switch off, Switch on, or Reset when tripped. Rows wrap at phone
+  width.
+- **Device pop-up, simplified rules:** the name, "Rating: 100 A", On or Off,
+  and one Switch on / Switch off. A tripped main reads Off, and switching it
+  on resets it.
+- Switching and resetting are instant and log "You switch the KITCHEN breaker
+  off." / "You push the tripped KITCHEN breaker back on.". The change shows
+  in the next step's resolution. No watts appear anywhere.
+- **Here actions:** "Open the … door" / "Close the … door" on every unlocked
+  door `doorsTouchingRoom()` returns, named as the key actions name it.
+- **Options:** "Electrical rules: Detailed" (the current run's, read-only),
+  then "Next run:" with a Detailed / Simplified toggle. The toggle defaults
+  to the current run's rules. Restart game, and the game-over Restart and
+  Replay this seed, apply it to the new run. A restart or a load forgets it,
+  and a fresh page load starts Detailed.
+
+**Changed / Reworked**
+
+*Persistence*
+
+- A save's `doors` is now `{ id: { locked, open } }` and its `windows`
+  `{ id: { state } }` (`savedDoorState()`, `savedWindowState()`). Definitions
+  are never saved.
+- Load and restart rebuild from `makeDefaultDoors()` / `makeDefaultWindows()`
+  through `buildDoors(saved)` / `buildWindows(saved)`, which apply only
+  well-typed saved fields, for ids the definitions still have. A saved id the
+  definitions lack is dropped, and a definition the save lacks keeps its
+  authored default. A v0.8 save's whole door and window objects read the same
+  way; a missing `open` is false.
+- `backfillPowerState()` runs on every load, before the loaded network is
+  resolved. It gives `state.power` its three objects and `electricalRules` a
+  known value. A v0.8 save gets both from `makeDefaultState()`'s spread.
+  Idempotent: importing a v0.8.2 file twice produces byte-identical saves.
+
+**Removed**
+
+- `WATER_FAILS_DAY` (water follows the grid) and `powerOn()` (now `gridUp()`).
+- `FRIDGE_RATE_COASTING`, `FRIDGE_COAST_MIN`, `FREEZER_COAST_MIN`, and
+  `effectiveAge()`'s two coast cuts. An unpowered fridge or freezer spoils at
+  room rate at once. Coasting returns with temperature (#217).
+
+**Hardened**
+
+- `validateWiring(wiring = WIRING, templates = WIRING_TEMPLATES)` on the dev
+  seam. It reports the expansion's problems, and anything that doesn't
+  resolve: rooms, a fixture's container ids in its room, appliance ids,
+  circuit volts (120 / 240), circuit roles against the panel's rooms. It also
+  checks every breaker rating is NEC 240.6(A) standard. It returns
+  `{ problems, unwired }`, where `unwired` lists every `shelter:"full"` room no
+  panel serves: all 37 in this release, a warning until #258.
+- `simulatePower(network, minutes, options)` on the dev seam runs the resolver
+  on a supplied `{ wiring, templates?, appliances? }` test network, never the
+  game's, on its own copy of a power state. It takes scripted switch, breaker
+  and reset changes by minute and returns per-minute currents, heat, trips,
+  powered and drawing loads. It is read-only, like the rest of the seam.
+
+**Documentation**
+
+- ARCHITECTURE names POWER as a sub-section of SURVIVAL / TIME SIMULATION,
+  with its definitions in WORLD DATA and `state.power` in PLAYER STATE.
+- New DOOR, WINDOW and POWER SCHEMA blocks in WORLD DATA. `state.power` and
+  `electricalRules` are commented in `makeDefaultState()`.
+- Updated: the collapse-clock comment (no water day; #149's water option is
+  moot while this holds), ROOM SCHEMA's `sink`, CONTAINER SCHEMA's `fridge` /
+  `freezer` ("while its load is powered", coasting deferred to #217), the
+  save-format comment, `deviceTarget`, `resolveDeviceTarget()`, and the dev
+  seam's comment.
+- Filed #264: an appliance's own switch has no in-game control, so once #251
+  wires Acorn, a fridge found switched off (about one in ten) can't be switched
+  on. Nothing else was deferred.
+
+**Explicitly out of scope**
+
+- Any building's wiring: #251 (Acorn, next), #252–#257, #258. `WIRING` ships
+  empty.
+- The stove (#259), room text that follows power (#235), the electrical view
+  (#242), and meters and nameplates (#249).
+- Cords (#244), gasoline (#239), generators (#245), inlets (#246), shock
+  (#247), carbon monoxide (#248), batteries (#261).
+- Noticing the grid fail, faults by area, the grid's schedule, street lights
+  and outdoor grid equipment (#220).
+- Cold-load pickup and coasting (#217) and three-phase service (#256).
+- Placing any window or interior door (#250).
+- Wells, the water tower, treatment and potability (#47, #52).
+- World-generation options (#149) and the New Game screen (#166).
+
+**Sections touched**
+
+CONFIG / CONSTANTS; WORLD DATA (doors, windows, POWER SCHEMA, `APPLIANCES`,
+`WIRING_TEMPLATES`, `WIRING`); PLAYER STATE; INVENTORY / ITEM SYSTEM (the
+Store family on a device tab); WORLD INTERACTION; SURVIVAL / TIME SIMULATION
+(POWER, spoilage, `applyWorldTicking()`); PERSISTENCE; EVENTS / UI HELPERS;
+RENDERING. Mechanics, plus the one definition entry spoilage reads; no
+instance data.
+
+**Open questions / decisions resolved**
+
+The handoff left the following to this session. All are technical, and all
+are retunable:
+
+- **Names:**
+  - functions and constants: `gridUp`, `isPowered`, `containerPowered`,
+    `APPLIANCES`, `WIRING_TEMPLATES`, `WIRING`, `SWITCH_LEFT_ON_CHANCE`,
+    `HEAT_COOL_MIN`, `INSTANT_TRIP_MULTIPLE`, `PANEL_DEFAULT_VOLTS`,
+    `STANDARD_BREAKER_RATINGS`;
+  - node ids as above, with a load named `<building>.<panel>.<fixture key>`.
+    A panel's circuit and fixture keys therefore share one namespace, and a
+    clash is reported.
+  - `fridge_freezer`'s display `name` is "Fridge-freezer", though nothing
+    shows it yet.
+- **Door and window split:** the recommended runtime merge. Runtime `doors` /
+  `windows` keep their merged shape, and only the save's edges change.
+- **Where the resolver's result lives:** `powerNow`, a runtime-only binding in
+  POWER, rebuilt by `refreshPower()` on boot, restart and load. After a load,
+  whatever draws counts as already running, so nothing starts on the first
+  step. `ageFood()` and `stampMissingAges()` take the room from
+  `forEachItemList()`'s `roomId`. `doOpenContainer()` passes
+  `state.currentRoom`, and the item labels' `ctx` gains `roomId`.
+- **Device tabs:** `deviceTarget` gains `{ kind:"panel" | "board", id }`. The
+  tabs join the Here list after `listedContainers()`, keyed `"power:" + id`
+  (`powerTab()`), from `POWER_NET.devices`, never from `room.containers`.
+- **The common panel:** `common` is one more panel entry, expanded as a unit
+  panel is and fed by its own feeder. #251's HOUSE circuit is a panel with
+  one circuit. Circuits hanging straight off the board aren't modelled.
+- **Options control:** a wrapping two-button toggle under a read-only line,
+  styled like the Crafting group buttons; `nextRulesChoice` is UI-only.
+- **Where power sits in ARCHITECTURE:** the recommended POWER sub-block.
+- **A non-lockable door** that a definition or save says is locked is built
+  unlocked (`buildDoors()`).
+- **Simplified rules:** a tripped main reads Off, and its Switch on is the
+  reset. The strip reads On / Off.
+- **A trip seen from both sides:** each line is logged at most once per step.
+  A step that trips one breaker whose panel is here and another whose load
+  was running here logs both.
+
+**Notes / assumptions**
+
+- Trip timing is checked in one-minute steps: 2,430 W on a 15 A / 120 V
+  circuit trips at minute 60, 3,600 W at minute 2, and a 100 A main at 200%
+  at minute 6. Heat reaching 1 within `TICK_EPSILON` counts as 1, absorbing
+  float left over from summing `1 / 60` sixty times.
+- In the unwired world, the step that crosses the grid's failure already ages
+  at 1, since power is read at the step's end. Before this release that
+  minute aged at the powered rate.
+- The Open / Close door actions show in every room a door's exits pass
+  through, so all four of 2A's rooms offer "Open the 2nd Floor door", the way
+  its key actions already did.
+
+**Validation performed**
+
+- Headless Chromium (Playwright) against `file://ashfall.html`, one script
+  per phase, all passing on the final build:
+  - sinks before and after day 21;
+  - door open, close and lock-while-open from both sides;
+  - window open, close, break and climb, and non-climbable and one-room
+    windows never being routes;
+  - save, reload, `localStorage` and export shapes;
+  - the expansion's ids on a test network;
+  - every trip time and check the handoff lists, through `simulatePower()`,
+    across several seeds;
+  - spoilage in the unwired world and on a wired test build: switch off and
+    tripped circuit both age at 1 in the same step;
+  - device tabs, pop-ups and log lines in both rules modes;
+  - the Options choice through restart, save and load.
+- The v0.8.2 import was checked with a real v0.8.2 export made from `main`'s
+  file, with 2A locked, the transom open, and milk and meat in 2A's fridge and
+  freezer. Lock, window and ages survive, and a second import changes
+  nothing.
+- All five validators run clean. `validateWiring()` lists the 37 unwired rooms
+  and no broken references.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.8.2"` → `"0.9.0"`
+
+---
+
 ## v0.8.2 — Device pop-up and panel polish
 
 Implements: handoffs/device-popup-and-panel-polish.md

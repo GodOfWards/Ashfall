@@ -365,7 +365,10 @@
   //   SIMULATION   owns time-dependent consequences (decay, fire burn-down,
   //                collapse from exhaustion, game-over checks). STAMINA/FATIGUE
   //                is a sub-section living inside SURVIVAL/TIME SIMULATION, not
-  //                a separate top-level section.
+  //                a separate top-level section. So is POWER: the network's
+  //                expansion and resolver (expandWiring(), resolvePowerStep(),
+  //                isPowered()). Its definitions (APPLIANCES, WIRING_TEMPLATES,
+  //                WIRING) are WORLD DATA, and state.power is PLAYER STATE.
   //   ACTIONS      perform gameplay operations (move, take, craft, etc.)
   //                and are grouped by the system they belong to:
   //                INVENTORY/ITEM SYSTEM, WORLD INTERACTION, CRAFTING,
@@ -418,7 +421,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.8.2" };
+  const GAME_CONFIG = { VERSION: "0.9.0" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -4218,6 +4221,9 @@
   // ==================================================
   // PLAYER STATE
   // ==================================================
+  // The electrical rules a run can be played under: "detailed", every
+  // breaker and circuit, or "simplified", one breaker per panel (#243).
+  const ELECTRICAL_RULES = ["detailed", "simplified"];
   function makeDefaultState(seed){
     const s = {
       // The run's identity: every roll derives from it (see chance()). Set
@@ -4248,7 +4254,7 @@
       //   heat      { breakerId: number } — the delayed-trip meter, toward 1.
       //             Default: 0.
       power:{ switches:{}, breakers:{}, heat:{} },
-      // "detailed" or "simplified", chosen when the run starts and never
+      // One of ELECTRICAL_RULES, chosen when the run starts and never
       // changed during it (#243). The Options choice applies at a restart.
       electricalRules:"detailed",
       // lastExertionMinute/lastWakeMinute start far in the past so recovery
@@ -6193,7 +6199,8 @@
   // reported in `problems`, which validateWiring() reads.
   //   boards    { id: { id, building, name, room, volts, main, panels:[id] } }
   //   panels    { id: { id, building, board, name, room, volts, main, feeder,
-  //              circuits:[breakerId], loads:[loadId], rooms:[roomId] } }
+  //              circuits:[breakerId], loads:[loadId], roles:{ role: roomId },
+  //              rooms:[roomId] } }
   //   breakers  { id: { id, layer, label, rating, volts, device, room, loads } }
   //             `device` is the panel or board it sits in and `room` the
   //             room that hangs in; `loads` is every load it feeds. `volts`
@@ -6240,7 +6247,7 @@
         const rooms = pd.rooms || {};
         const panel = { id:panelId, building:b, board:boardId, name:pd.name || panelId, room:pd.room,
           volts:main.volts || PANEL_DEFAULT_VOLTS, main:panelMain, feeder:feederId, circuits:[], loads:[],
-          rooms:Array.from(new Set(Object.values(rooms))) };
+          roles:Object.assign({}, rooms), rooms:Array.from(new Set(Object.values(rooms))) };
         net.panels[panelId] = panel;
         board.panels.push(panelId);
         net.breakers[panelMain] = { id:panelMain, layer:"panel", label:"MAIN", rating:main.rating, volts:panel.volts,
@@ -7343,6 +7350,19 @@
   function backfillInventoryCap(){
     delete state.inventory.capacityKg;
   }
+  // backfillPowerState(): the power release's state, repaired in place on
+  // every load, before the loaded network is first resolved. A save from
+  // before it (0.8) has no `power` or `electricalRules` and takes them from
+  // makeDefaultState()'s spread in applyLoadedData(): an empty power state,
+  // so every switch reads its rolled default, and "detailed". This makes
+  // sure a present one has the shape the resolver reads, three plain
+  // objects and a known rules value, dropping anything else. Idempotent.
+  function backfillPowerState(){
+    const obj = (v)=> v && typeof v === "object" && !Array.isArray(v) ? v : {};
+    const p = obj(state.power);
+    state.power = { switches:obj(p.switches), breakers:obj(p.breakers), heat:obj(p.heat) };
+    if(!ELECTRICAL_RULES.includes(state.electricalRules)) state.electricalRules = "detailed";
+  }
   // migrateCookingRelease(): brings a 0.7 save into the cooking release,
   // run on every load after the backfills above. A browser save from 0.7
   // never reaches it — SAVE_KEY rotated with the MINOR bump — but an
@@ -7442,6 +7462,7 @@
     world = nextWorld;
     doors = nextDoors; windows = nextWindows;
     // The loaded run's network, before anything reads it.
+    backfillPowerState();
     refreshPower();
     detailItem = null;
     deviceTarget = null;
@@ -7562,6 +7583,56 @@
     if(problems.length) console.warn("validateRoomSchema: rooms with schema problems", problems);
     else console.log("validateRoomSchema: every room has an address and a legal shelter");
     return problems;
+  }
+  // validateWiring(): dev-only console helper (not wired to any button or
+  // UI, runs nothing automatically), sibling to validateRoomSchema(). Checks
+  // that every WIRING reference resolves (`wiring` and `templates` default
+  // to the game's; pass a test network to check that instead):
+  //   the expansion's own problems (expandWiring()): unknown templates,
+  //     circuits and roles, a panel without a feeder, a feeder without a
+  //     panel, clashing ids;
+  //   every room a board, panel or role names exists, and every container a
+  //     fixture names is in its room;
+  //   every appliance id is in APPLIANCES, every circuit's volts is 120 or
+  //     240, and every circuit's roles are in its panel's rooms;
+  //   every breaker's rating is an NEC 240.6(A) standard size
+  //     (STANDARD_BREAKER_RATINGS).
+  // It also lists every room with shelter "full" that no panel's rooms
+  // include. That list is a warning while buildings are being wired (#250),
+  // and becomes an error in #258. Returns { problems, unwired }. Call it as
+  // `ashfallDev.validateWiring()` from the browser console when auditing.
+  function validateWiring(wiring = WIRING, templates = WIRING_TEMPLATES){
+    const net = expandWiring(wiring, templates);
+    const rooms = makeDefaultWorld();
+    const problems = net.problems.slice();
+    const roomExists = (id, what)=>{ if(!rooms[id]) problems.push(`${what}: room "${id}" does not exist`); };
+    Object.values(net.boards).forEach(b=> roomExists(b.room, b.id));
+    Object.values(net.panels).forEach(p=>{
+      roomExists(p.room, p.id);
+      p.rooms.forEach(id=> roomExists(id, `${p.id} rooms`));
+    });
+    Object.values(net.breakers).forEach(br=>{
+      if(!STANDARD_BREAKER_RATINGS.includes(br.rating))
+        problems.push(`${br.id}: rating ${br.rating} A is not an NEC 240.6(A) standard size`);
+      if(br.layer !== "circuit") return;
+      if(br.volts !== 120 && br.volts !== 240) problems.push(`${br.id}: volts ${br.volts} is not 120 or 240`);
+      const roles = net.panels[br.device].roles;
+      br.roles.forEach(r=>{ if(!roles[r]) problems.push(`${br.id}: role "${r}" has no room in ${br.device}'s rooms`); });
+    });
+    Object.values(net.loads).forEach(l=>{
+      if(!APPLIANCES[l.appliance]) problems.push(`${l.id}: appliance "${l.appliance}" is not in APPLIANCES`);
+      const room = rooms[l.room];
+      l.containers.forEach(cid=>{
+        if(room && !room.containers.some(c=> c.id === cid)) problems.push(`${l.id}: container "${cid}" is not in room "${l.room}"`);
+      });
+    });
+    const wired = new Set();
+    Object.values(net.panels).forEach(p=> p.rooms.forEach(id=> wired.add(id)));
+    const unwired = Object.keys(rooms).filter(id=> rooms[id].shelter === "full" && !wired.has(id));
+    if(problems.length) console.warn("validateWiring: broken references", problems);
+    else console.log("validateWiring: every wiring reference resolves");
+    if(unwired.length) console.warn(`validateWiring: ${unwired.length} fully sheltered room${unwired.length === 1 ? "" : "s"} with no wiring yet (a warning until #258)`, unwired);
+    return { problems, unwired };
   }
   // Items an action produces rather than a container holding them. Written
   // down because validateReachability() cannot derive it: each grant lives
@@ -8241,7 +8312,7 @@
   // changes nothing in this run; Restart game applies it. The labels are
   // functional UI text; the choice moves to a New Game screen with #166.
   const ELECTRICAL_RULES_LABELS = { detailed:"Detailed", simplified:"Simplified" };
-  Object.keys(ELECTRICAL_RULES_LABELS).forEach(rules=>{
+  ELECTRICAL_RULES.forEach(rules=>{
     const btn = document.createElement("button");
     btn.textContent = ELECTRICAL_RULES_LABELS[rules];
     btn.dataset.rules = rules;
@@ -9874,13 +9945,13 @@
   mapSetZoomStep(mapZoomStep);
   render();
 
-  // Dev seam. The four validators and the two seed reports above are local
-  // bindings inside this IIFE, so `validateReachability()` typed into devtools
-  // is a ReferenceError. This is the one deliberate hole in the closure:
-  // read-only reporting helpers, nothing that writes game state, and nothing
-  // else belongs on it.
+  // Dev seam. The five validators, the two seed reports and the power
+  // simulation above are local bindings inside this IIFE, so
+  // `validateReachability()` typed into devtools is a ReferenceError. This is
+  // the one deliberate hole in the closure: read-only reporting helpers,
+  // nothing that writes game state, and nothing else belongs on it.
   window.ashfallDev = { validateItemRegistry, validateLocations, validateRoomSchema, validateReachability,
-    simulateSeed, sampleSeeds, simulatePower };
+    validateWiring, simulateSeed, sampleSeeds, simulatePower };
 })();
 </script>
 </body>
