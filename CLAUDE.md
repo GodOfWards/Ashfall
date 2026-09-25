@@ -25,8 +25,10 @@ list. Nothing else up front.
 - Individual issues in full, once one is relevant.
 - Recent `CHANGELOG.md` entries — the last few, not the whole file — when what
   shipped recently bears on the design.
-- `docs/canon/` — when the discussion is about lore, or Tom asks. See "The
-  canon is private" below.
+- `docs/canon/Ashfall_Canon.md` — when the discussion is about lore, or Tom
+  asks. See "The canon is private" below.
+- `docs/canon/reference/` — whenever the discussion needs a real-world fact.
+  Check it before searching the web, and add to it what a search finds.
 
 **Output:** issues filed as they surface, and — only if the session reaches a
 conclusion — a handoff at `handoffs/<feature-name>.md`, landed on `main` at the
@@ -63,18 +65,26 @@ Full detail on both: Project Guide, Part 3.
 the script is the source of truth. No document restates that list; check the
 comment.
 
-**The canon is private.** `docs/canon/` holds the world's lore as the designers
-know it: what the collapse was, its timeline, the real places behind the town.
-The game never states it; its text only ever implies a piece of it (see Writing
-game text). A planning session reads it when the discussion is about lore, or
-when Tom asks — never up front. A coding session never reads it: a handoff that
-depends on a canon fact quotes that fact itself. `.rgignore` keeps the folder
-out of repository searches, so it is read by path, on purpose, or not at all.
+**The canon is private.** `docs/canon/Ashfall_Canon.md` holds the world's lore
+as the designers know it: what the collapse was, its timeline, the real places
+behind the town. The game never states it; its text only ever implies a piece
+of it (see Writing game text). A planning session reads it when the discussion
+is about lore, or when Tom asks — never up front.
+
+`docs/canon/reference/` holds real-world facts, researched once: the real town,
+codes, equipment, figures, each with its source and the date it was checked.
+A planning session reads it whenever it needs a real-world fact, checks it
+before searching the web, and adds to it what a search finds, in the same
+session. Issues point to it rather than repeating it.
+
+A coding session reads neither: a handoff that depends on a canon fact or a
+reference figure quotes it itself. `.rgignore` keeps the folder out of
+repository searches, so it is read by path, on purpose, or not at all.
 
 **The world is real.** The town is Henderson, Kentucky. Streets, places,
 businesses, utilities and infrastructure carry their real names, and what the
 game says about them is accurate — checked against a source when it is written,
-never recalled or invented. A fact that can't be confirmed is marked unconfirmed,
+never recalled or invented, and recorded in `docs/canon/reference/`. A fact that can't be confirmed is marked unconfirmed,
 not filled with a plausible one. Adding something the real town lacks is a
 design decision (see below). Project Guide, Part 1.
 

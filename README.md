@@ -33,7 +33,7 @@ in the mundane detail — what people left behind, never explained.
 | `ashfall.html` | The whole game. Script sections are mapped by the `ARCHITECTURE` comment at the top. |
 | `CHANGELOG.md` | One entry per version, reverse-chronological. |
 | `docs/` | Project, handoff and changelog guides. |
-| `docs/canon/` | The world's private lore — read only on purpose (see `CLAUDE.md`). |
+| `docs/canon/` | The world's private lore, read only on purpose, and `reference/`, real-world facts researched once (see `CLAUDE.md`). |
 | `handoffs/` | Feature specs. The top level holds only live ones — usually nothing or one file. |
 | `handoffs/archive/` | Spent and superseded specs. Kept, never deleted; never implemented from. |
 | `CLAUDE.md` | Working conventions for contributors. |
