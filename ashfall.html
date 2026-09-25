@@ -1658,6 +1658,27 @@
     industrial:  { name:"Riverside Freight",  anchor:"industrial_f0" }
   };
 
+  // DOOR SCHEMA (one entry per key in the object makeDefaultDoors() returns):
+  //   Definitions are what makeDefaultDoors() authors, and they are never
+  //   saved: a save carries only what changes in play, `{ locked, open }` per
+  //   door id (see savedDoorState() in PERSISTENCE). The runtime `doors`
+  //   object is the two merged (buildDoors()), so every reader sees one shape.
+  //   Definition fields:
+  //     sides     the two rooms the door physically separates
+  //     building  a BUILDINGS id ("acorn"): which master key opens it. Not
+  //               room.building, which holds a name (see ROOM SCHEMA).
+  //     locked    the authored starting lock state
+  //     lockable  optional, default true. false: an interior door with no
+  //               lock, which never locks, offers no key action and never
+  //               shows the locked note.
+  //   Saved fields:
+  //     locked    whether it is locked now; only `locked` gates an exit
+  //     open      whether it stands open, default false. A locked door is
+  //               always closed. Nothing reads `open` yet besides its own
+  //               Open / Close actions: it is laid down ahead of its consumer,
+  //               carbon monoxide (#248), the way ROOM SCHEMA's `shelter` was.
+  //               Movement ignores it: passing through a closed, unlocked
+  //               door leaves it closed.
   function makeDefaultDoors(){
     return {
       "2a": { locked:false, sides:["hallway2","living"], building:"acorn" },
@@ -1667,14 +1688,62 @@
       "1a-patio": { locked:true, sides:["onea_patio","onea"], building:"acorn" }
     };
   }
-  let doors = makeDefaultDoors();
+  // WINDOW SCHEMA (one entry per key in the object makeDefaultWindows()
+  // returns): definitions and saved state split as the doors' do. A save
+  // carries `{ state }` per window id; the runtime `windows` object is the
+  // two merged (buildWindows()).
+  //   Definition fields:
+  //     rooms      one room id, a window to the outside, or two, a window
+  //                between two rooms
+  //     label      what the actions call it ("transom window")
+  //     breakTag   the tool tag Break asks for
+  //     climbable  optional, default false. true: an open or broken window
+  //                with two rooms is a route between them ("Climb through
+  //                the …"). A window that is not climbable, or has one room,
+  //                is never a route, broken or not.
+  //   Saved field:
+  //     state      "closed", "open" or "broken". Open, Close and Break are
+  //                offered on every window, climbable or not.
   function makeDefaultWindows(){
     return {
-      "2a-transom": { state:"closed", rooms:["hallway2","living"], breakTag:"blunt", label:"transom window" },
-      "1b-alley":   { state:"closed", rooms:["alley","onebee"],   breakTag:"blunt", label:"window" }
+      "2a-transom": { state:"closed", rooms:["hallway2","living"], breakTag:"blunt", label:"transom window", climbable:true },
+      "1b-alley":   { state:"closed", rooms:["alley","onebee"],   breakTag:"blunt", label:"window", climbable:true }
     };
   }
-  let windows = makeDefaultWindows();
+  const WINDOW_STATES = ["closed", "open", "broken"];
+  function doorLockable(door){ return door.lockable !== false; }
+  // The runtime doors and windows: the definitions, rebuilt fresh, with the
+  // saved fields of `saved` (a save's `doors` / `windows`, or null for a new
+  // game) applied to the ids the definitions still have. A saved id the
+  // definitions no longer have is dropped; a definition the save lacks keeps
+  // its authored default. A save from before the split (0.8) carries whole
+  // door and window objects, whose `locked` and `state` read the same way; a
+  // missing `open` is false. Only well-typed fields are taken, so a bad value
+  // falls back to the default rather than breaking a door.
+  function buildDoors(saved){
+    const out = makeDefaultDoors();
+    Object.keys(out).forEach(id=>{
+      const d = out[id], s = saved && saved[id];
+      d.open = false;
+      if(s && typeof s === "object"){
+        if(typeof s.locked === "boolean") d.locked = s.locked;
+        if(typeof s.open === "boolean") d.open = s.open;
+      }
+      if(!doorLockable(d)) d.locked = false;
+      if(d.locked) d.open = false;
+    });
+    return out;
+  }
+  function buildWindows(saved){
+    const out = makeDefaultWindows();
+    Object.keys(out).forEach(id=>{
+      const s = saved && saved[id];
+      if(s && typeof s === "object" && WINDOW_STATES.includes(s.state)) out[id].state = s.state;
+    });
+    return out;
+  }
+  let doors = buildDoors(null);
+  let windows = buildWindows(null);
 
   function buildAcornApartments(){
     return {
@@ -5234,11 +5303,11 @@
       actions.push({ label:"Equip", onClick:()=>doEquip(side, index) });
     if(it.category === "Key"){
       if(it.masterKey){
-        doorsTouchingRoom(state.currentRoom).filter(doorId=>doors[doorId].building===it.building).forEach(doorId=>{
+        doorsTouchingRoom(state.currentRoom).filter(doorId=>doors[doorId].building===it.building && doorLockable(doors[doorId])).forEach(doorId=>{
           const label = (doors[doorId].locked ? "Unlock the " : "Lock the ") + doorLabel(doorId, state.currentRoom) + " door";
           actions.push({ label, onClick:()=>doToggleLock(doorId) });
         });
-      } else if(it.doorId && doors[it.doorId] && doorsTouchingRoom(state.currentRoom).includes(it.doorId)){
+      } else if(it.doorId && doors[it.doorId] && doorLockable(doors[it.doorId]) && doorsTouchingRoom(state.currentRoom).includes(it.doorId)){
         const label = (doors[it.doorId].locked ? "Unlock the " : "Lock the ") + doorLabel(it.doorId, state.currentRoom) + " door";
         actions.push({ label, onClick:()=>doToggleLock(it.doorId) });
       }
@@ -5461,10 +5530,12 @@
   function getWindowsInRoom(roomId){
     return Object.keys(windows).filter(id=>windows[id].rooms.includes(roomId)).map(id=>Object.assign({id}, windows[id]));
   }
+  // A window is a route only when it is climbable, joins two rooms, and is
+  // open or broken (see WINDOW SCHEMA).
   function getExitsForRoom(room, roomId){
     const exits = room.exits.filter(e => !e.doorId || !doors[e.doorId].locked);
     getWindowsInRoom(roomId).forEach(w=>{
-      if(w.state !== "closed"){
+      if(w.climbable && w.rooms.length === 2 && w.state !== "closed"){
         const target = w.rooms.find(r=>r!==roomId);
         exits.push({ to:target, label:"Climb through the " + w.label, distanceM:4 });
       }
@@ -5622,10 +5693,32 @@
     log("You smash the " + windows[id].label + " with your tool. No going back from that.", "warn");
     render();
   }
+  // Locking an open door closes it too: a locked door is always closed (see
+  // DOOR SCHEMA).
   function doToggleLock(doorId){
     const d = doors[doorId];
+    if(!doorLockable(d)) return;
+    const wasOpen = d.open;
     d.locked = !d.locked;
-    log(d.locked ? "You lock the door behind you." : "You unlock the door.", "good");
+    if(d.locked) d.open = false;
+    log(!d.locked ? "You unlock the door."
+      : wasOpen ? "You close the door and lock it." : "You lock the door behind you.", "good");
+    render();
+  }
+  // Opening and closing a door, instant like the windows'. Only an unlocked
+  // door opens. The door is named as the key actions name it (doorLabel()).
+  function doOpenDoor(doorId){
+    const d = doors[doorId];
+    if(d.locked || d.open) return;
+    d.open = true;
+    log(`You open the ${doorLabel(doorId, state.currentRoom)} door.`);
+    render();
+  }
+  function doCloseDoor(doorId){
+    const d = doors[doorId];
+    if(!d.open) return;
+    d.open = false;
+    log(`You pull the ${doorLabel(doorId, state.currentRoom)} door shut.`);
     render();
   }
   function doUnlockContainer(containerId){
@@ -6560,12 +6653,28 @@
   // ==================================================
   // PERSISTENCE
   // ==================================================
-  // Save format: { version, state, world, doors, windows }. _uid is not
-  // persisted specially — resyncUidCounter() scans
-  // every item location after a load so newly-created items during the next
-  // session keep getting unique ids, and ensureUid() lazily assigns one to
-  // any loaded item that predates the uid system.
-  function serializeGame(){ return JSON.stringify({ version: GAME_CONFIG.VERSION, state, world, doors, windows }, null, 2); }
+  // Save format: { version, state, world, doors, windows }. `state` and
+  // `world` are written whole; `doors` and `windows` carry only what changes
+  // in play, `{ locked, open }` per door and `{ state }` per window, since
+  // their definitions are rebuilt from WORLD DATA on every load (buildDoors(),
+  // buildWindows()). _uid is not persisted specially — resyncUidCounter()
+  // scans every item location after a load so newly-created items during the
+  // next session keep getting unique ids, and ensureUid() lazily assigns one
+  // to any loaded item that predates the uid system.
+  function savedDoorState(){
+    const out = {};
+    Object.keys(doors).forEach(id=>{ out[id] = { locked: doors[id].locked, open: doors[id].open }; });
+    return out;
+  }
+  function savedWindowState(){
+    const out = {};
+    Object.keys(windows).forEach(id=>{ out[id] = { state: windows[id].state }; });
+    return out;
+  }
+  function serializeGame(){
+    return JSON.stringify({ version: GAME_CONFIG.VERSION, state, world,
+      doors: savedDoorState(), windows: savedWindowState() }, null, 2);
+  }
   // forEachItemList(): calls visit(list, roomId) once for every item array
   // reachable from the current `state` and `world` — the inventory pools,
   // every room's floor, containers and car containers, and the `contents` of
@@ -6879,8 +6988,9 @@
     const base = makeDefaultState();
     const nextState = { ...base, ...data.state, vitals: { ...base.vitals, ...(data.state.vitals || {}) } };
     const nextWorld = data.world;
-    const nextDoors = data.doors || doors;
-    const nextWindows = data.windows || windows;
+    // Rebuilt from the definitions, with the save's fields applied.
+    const nextDoors = buildDoors(data.doors);
+    const nextWindows = buildWindows(data.windows);
     const problems = validateLoadedWorld(nextWorld, nextState);
     if(problems.length){
       console.warn("applyLoadedData: save rejected", problems);
@@ -7300,8 +7410,8 @@
     gameOver = false;
     state = makeDefaultState(seed);
     world = makeDefaultWorld();
-    doors = makeDefaultDoors();
-    windows = makeDefaultWindows();
+    doors = buildDoors(null);
+    windows = buildWindows(null);
     stampMissingAges();
     detailItem = null;
     deviceTarget = null;
@@ -8849,6 +8959,16 @@
       } else {
         hereBox.appendChild(hereNote(`The ${label} door is locked.`));
       }
+    });
+    // Open / Close on every door the room touches, as its key actions are
+    // offered. A locked door offers neither: it has to be unlocked first.
+    doorsTouchingRoom(state.currentRoom).forEach(doorId=>{
+      const d = doors[doorId];
+      if(d.locked) return;
+      const label = doorLabel(doorId, state.currentRoom);
+      hereBox.appendChild(d.open
+        ? actionButton(`Close the ${label} door`, ()=> doCloseDoor(doorId))
+        : actionButton(`Open the ${label} door`, ()=> doOpenDoor(doorId)));
     });
     hereBox.appendChild(actionButton("Rest " + fmtDuration(REST_DURATION_MIN), doRest));
     if(room.sleepSpot){
