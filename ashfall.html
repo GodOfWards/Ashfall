@@ -1707,8 +1707,12 @@
   };
 
   // DOOR SCHEMA (one entry per key in the object makeDefaultDoors() returns):
-  //   Definitions are what makeDefaultDoors() authors, and they are never
-  //   saved: a save carries only what changes in play, `{ locked, open }` per
+  //   Definitions come from two places: the building's own doors, authored
+  //   below (authoredDoors()), and a wired unit's interior doors, which its
+  //   panel's WIRING_TEMPLATES entry carries by role (`doors`, expanded by
+  //   expandOpenings(); see POWER SCHEMA). An exit through a template door
+  //   gets its doorId when the world is built (stampTemplateDoorIds()), so no
+  //   room definition names one. Definitions are never saved: a save carries only what changes in play, `{ locked, open }` per
   //   door id (see savedDoorState() in PERSISTENCE). The runtime `doors`
   //   object is the two merged (buildDoors()), so every reader sees one shape.
   //   Definition fields:
@@ -1727,30 +1731,34 @@
   //               carbon monoxide (#248), the way ROOM SCHEMA's `shelter` was.
   //               Movement ignores it: passing through a closed, unlocked
   //               door leaves it closed.
-  function makeDefaultDoors(){
+  // The building's own doors: the entry doors, one per unit, which no unit
+  // template carries. Every interior door of a wired unit, and 1A's patio
+  // door, comes from its panel's template instead (expandOpenings(), and
+  // `doors` in WIRING_TEMPLATES).
+  function authoredDoors(){
     return {
       "2a": { locked:false, sides:["hallway2","living"], building:"acorn" },
       "2b": { locked:true, sides:["hallway2","twobee"], building:"acorn" },
       "1a": { locked:true, sides:["hallway1","onea"], building:"acorn" },
-      "1b": { locked:true, sides:["hallway1","onebee"], building:"acorn" },
-      "1a-patio": { locked:true, sides:["onea_patio","onea"], building:"acorn" },
-      // Interior doors, with no lock. A balcony door is a sliding door, which
-      // is taken to have none either (retunable).
-      "2a-bedroom": { locked:false, lockable:false, sides:["living","bedroom"], building:"acorn" },
-      "2a-bathroom": { locked:false, lockable:false, sides:["living","bathroom"], building:"acorn" },
-      "2a-bath-bedroom": { locked:false, lockable:false, sides:["bedroom","bathroom"], building:"acorn" },
-      "2a-balcony": { locked:false, lockable:false, sides:["living","balcony"], building:"acorn" },
-      "2b-bedroom": { locked:false, lockable:false, sides:["twobee","twobee_bedroom"], building:"acorn" },
-      "2b-bathroom": { locked:false, lockable:false, sides:["twobee","twobee_bathroom"], building:"acorn" },
-      "2b-bath-bedroom": { locked:false, lockable:false, sides:["twobee_bedroom","twobee_bathroom"], building:"acorn" },
-      "2b-balcony": { locked:false, lockable:false, sides:["twobee","twobee_balcony"], building:"acorn" },
-      "1a-bedroom": { locked:false, lockable:false, sides:["onea","onea_bedroom"], building:"acorn" },
-      "1a-bathroom": { locked:false, lockable:false, sides:["onea","onea_bathroom"], building:"acorn" },
-      "1a-bath-bedroom": { locked:false, lockable:false, sides:["onea_bedroom","onea_bathroom"], building:"acorn" }
+      "1b": { locked:true, sides:["hallway1","onebee"], building:"acorn" }
     };
   }
+  // Every door: the authored ones and the templates' together, lockable doors
+  // ahead of lockless ones, each group in the order it was built. That is the
+  // order doorsForRoom() walks, and so the order the Here panel offers Open
+  // and Close in.
+  function makeDefaultDoors(){
+    const all = Object.assign(authoredDoors(), expandOpenings(WIRING, WIRING_TEMPLATES).doors);
+    const out = {};
+    [true, false].forEach(lockable=> Object.keys(all).forEach(id=>{
+      if(doorLockable(all[id]) === lockable) out[id] = all[id];
+    }));
+    return out;
+  }
   // WINDOW SCHEMA (one entry per key in the object makeDefaultWindows()
-  // returns): definitions and saved state split as the doors' do. A save
+  // returns): definitions and saved state split as the doors' do, and come
+  // from the same two places: the building's own windows (authoredWindows())
+  // and a wired unit's, by role, from its template (`windows`). A save
   // carries `{ state }` per window id; the runtime `windows` object is the
   // two merged (buildWindows()).
   //   Definition fields:
@@ -1765,25 +1773,18 @@
   //   Saved field:
   //     state      "closed", "open" or "broken". Open, Close and Break are
   //                offered on every window, climbable or not.
-  function makeDefaultWindows(){
+  // The building's own windows, which no unit template carries: 2A's transom
+  // onto the hall and 1B's onto the alley. Every other window of a wired unit
+  // comes from its panel's template (expandOpenings(), and `windows` in
+  // WIRING_TEMPLATES).
+  function authoredWindows(){
     return {
       "2a-transom": { state:"closed", rooms:["hallway2","living"], breakTag:"blunt", label:"transom window", climbable:true },
-      "1b-alley":   { state:"closed", rooms:["alley","onebee"],   breakTag:"blunt", label:"window", climbable:true },
-      // One to the outside in each room of 2A, 2B and 1A but the balcony or
-      // patio. Which way each faces is not modelled.
-      "2a-living-window":     { state:"closed", rooms:["living"], breakTag:"blunt", label:"window" },
-      "2a-kitchen-window":    { state:"closed", rooms:["kitchen"], breakTag:"blunt", label:"window" },
-      "2a-bedroom-window":    { state:"closed", rooms:["bedroom"], breakTag:"blunt", label:"window" },
-      "2a-bathroom-window":   { state:"closed", rooms:["bathroom"], breakTag:"blunt", label:"window" },
-      "2b-living-window":     { state:"closed", rooms:["twobee"], breakTag:"blunt", label:"window" },
-      "2b-kitchen-window":    { state:"closed", rooms:["twobee_kitchen"], breakTag:"blunt", label:"window" },
-      "2b-bedroom-window":    { state:"closed", rooms:["twobee_bedroom"], breakTag:"blunt", label:"window" },
-      "2b-bathroom-window":   { state:"closed", rooms:["twobee_bathroom"], breakTag:"blunt", label:"window" },
-      "1a-living-window":     { state:"closed", rooms:["onea"], breakTag:"blunt", label:"window" },
-      "1a-kitchen-window":    { state:"closed", rooms:["onea_kitchen"], breakTag:"blunt", label:"window" },
-      "1a-bedroom-window":    { state:"closed", rooms:["onea_bedroom"], breakTag:"blunt", label:"window" },
-      "1a-bathroom-window":   { state:"closed", rooms:["onea_bathroom"], breakTag:"blunt", label:"window" }
+      "1b-alley":   { state:"closed", rooms:["alley","onebee"],   breakTag:"blunt", label:"window", climbable:true }
     };
+  }
+  function makeDefaultWindows(){
+    return Object.assign(authoredWindows(), expandOpenings(WIRING, WIRING_TEMPLATES).windows);
   }
   const WINDOW_STATES = ["closed", "open", "broken"];
   function doorLockable(door){ return door.lockable !== false; }
@@ -1817,8 +1818,6 @@
     });
     return out;
   }
-  let doors = buildDoors(null);
-  let windows = buildWindows(null);
 
   // POWER SCHEMA. The power network's definitions: never saved, expanded once
   // at startup into the node table the resolver runs on (expandWiring(), in
@@ -1872,7 +1871,8 @@
   };
   // WIRING_TEMPLATES, keyed by id: one unit's layout by room role, so every
   // unit wired the same way shares it.
-  //   { main:{ rating, volts? }, circuits:[…], fixtures:[…] }
+  //   { main:{ rating, volts? }, circuits:[…], fixtures:[…], doors?:[…],
+  //     windows?:[…] }
   //   main      the unit panel's main breaker: rating in A, and `volts`
   //             (PANEL_DEFAULT_VOLTS when absent)
   //   circuits  in panel order: { key, label, rating, volts, roles:[role] }.
@@ -1884,6 +1884,19 @@
   //             fixture is (a fridge-freezer is its room's Fridge and
   //             Freezer), which is how spoilage finds the load a container
   //             belongs to.
+  //   doors     { key, between:[role, role], locked, lockable? }: a door
+  //             between the rooms playing the two roles (DOOR SCHEMA). Its id
+  //             is the panel's id lowercased, then the key ("2a-bedroom"). A
+  //             door whose two roles map to one room is not made, which is
+  //             why a one-room unit has none.
+  //   windows   { key, role, label, breakTag, climbable? }: a window to the
+  //             outside in the room playing `role` (WINDOW SCHEMA), starting
+  //             closed. Its id is the panel's id lowercased, then the role,
+  //             then "window" ("2a-kitchen-window").
+  // The door and window ids must never change: saves key on them.
+  // They are the building's doors and windows, not the network's: nothing in
+  // POWER reads them. They sit on the template because the template is what
+  // says which room plays which role in a unit (expandOpenings()).
   //
   // `apartment`: one flat, by the roles living, kitchen, bathroom, bedroom
   // and balcony (a balcony or a patio). A one-room unit maps every role onto
@@ -1918,6 +1931,22 @@
         { key:"bath_fan",      appliance:"bath_fan",       circuit:"bath",     role:"bathroom" },
         { key:"light_bedroom", appliance:"led_light",      circuit:"bedroom",  role:"bedroom" },
         { key:"smoke_alarm",   appliance:"smoke_alarm",    circuit:"bedroom",  role:"bedroom" }
+      ],
+      // Interior doors, with no lock. A balcony door is a sliding door, which
+      // is taken to have none either (retunable).
+      doors: [
+        { key:"bedroom",      between:["living", "bedroom"],   locked:false, lockable:false },
+        { key:"bathroom",     between:["living", "bathroom"],  locked:false, lockable:false },
+        { key:"bath-bedroom", between:["bedroom", "bathroom"], locked:false, lockable:false },
+        { key:"balcony",      between:["living", "balcony"],   locked:false, lockable:false }
+      ],
+      // One to the outside in each room but the balcony or patio. Which way
+      // each faces is not modelled.
+      windows: [
+        { key:"living",   role:"living",   label:"window", breakTag:"blunt" },
+        { key:"kitchen",  role:"kitchen",  label:"window", breakTag:"blunt" },
+        { key:"bedroom",  role:"bedroom",  label:"window", breakTag:"blunt" },
+        { key:"bathroom", role:"bathroom", label:"window", breakTag:"blunt" }
       ]
     }
   };
@@ -1925,10 +1954,16 @@
   //   board    { name, room, rating, volts?, feeders:[{ panel, label, rating }] }
   //            the complex's main board: the room it hangs in, its main
   //            breaker's rating, and one feeder breaker per panel it feeds.
-  //   panels   [{ id, name, room, template?, layout?, rooms:{ role: roomId } }]
+  //   panels   [{ id, name, room, template?, layout?, rooms:{ role: roomId },
+  //              overrides? }]
   //            each unit's panel: the room it hangs in, and either a
   //            WIRING_TEMPLATES id or an inline `layout` of a template's
   //            shape, with the role → room id map that places it.
+  //            `overrides` is { doors?:{ key: door | null }, windows?:{ key:
+  //            window | null } }, for this unit only: a template door or
+  //            window by its key, replaced by the fields given, laid over the
+  //            template's (an `id` among them replaces the one it would get),
+  //            or null for none.
   //   common   optional, one more panel entry, for the halls and stairs. It
   //            expands exactly as a unit panel does, and the board needs a
   //            feeder for it.
@@ -1970,10 +2005,15 @@
           rooms:{ living:"living", kitchen:"kitchen", bathroom:"bathroom", bedroom:"bedroom", balcony:"balcony" } },
         { id:"2B", name:"Unit 2B panel", room:"twobee_kitchen", template:"apartment",
           rooms:{ living:"twobee", kitchen:"twobee_kitchen", bathroom:"twobee_bathroom", bedroom:"twobee_bedroom", balcony:"twobee_balcony" } },
+        // 1A's balcony door is its patio door, which locks, as it always
+        // has. Its sides are listed patio first, as they always have been.
         { id:"1A", name:"Unit 1A panel", room:"onea_kitchen", template:"apartment",
-          rooms:{ living:"onea", kitchen:"onea_kitchen", bathroom:"onea_bathroom", bedroom:"onea_bedroom", balcony:"onea_patio" } },
+          rooms:{ living:"onea", kitchen:"onea_kitchen", bathroom:"onea_bathroom", bedroom:"onea_bedroom", balcony:"onea_patio" },
+          overrides:{ doors:{ balcony:{ id:"1a-patio", between:["balcony", "living"], locked:true, lockable:true } } } },
+        // 1B's one window is the building's, onto the alley (authoredWindows()).
         { id:"1B", name:"Unit 1B panel", room:"onebee", template:"apartment",
-          rooms:{ living:"onebee", kitchen:"onebee", bathroom:"onebee", bedroom:"onebee", balcony:"onebee" } }
+          rooms:{ living:"onebee", kitchen:"onebee", bathroom:"onebee", bedroom:"onebee", balcony:"onebee" },
+          overrides:{ windows:{ living:null, kitchen:null, bedroom:null, bathroom:null } } }
       ],
       // The halls and stairs: one lighting circuit, a light in each.
       common: { id:"house", name:"House panel", room:"hallway1",
@@ -2002,9 +2042,9 @@
       ],
       exits:[
         { to:"kitchen", label:"Go to the kitchen", distanceM:4 },
-        { to:"bedroom", label:"Go to the bedroom", distanceM:5, doorId:"2a-bedroom" },
-        { to:"bathroom", label:"Go to the bathroom", distanceM:5, doorId:"2a-bathroom" },
-        { to:"balcony", label:"Go to the balcony", distanceM:3, doorId:"2a-balcony" },
+        { to:"bedroom", label:"Go to the bedroom", distanceM:5 },
+        { to:"bathroom", label:"Go to the bathroom", distanceM:5 },
+        { to:"balcony", label:"Go to the balcony", distanceM:3 },
         { to:"hallway2", label:"Leave the apartment", distanceM:6, doorId:"2a" } ]
     },
     kitchen: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Kitchen", shelter:"full",
@@ -2044,8 +2084,8 @@
           { id:"bleach", qty:1 } ])}
       ],
       exits:[
-        { to:"living", label:"Go to the living room", distanceM:5, doorId:"2a-bathroom" },
-        { to:"bedroom", label:"Go to the bedroom", distanceM:3, doorId:"2a-bath-bedroom" },
+        { to:"living", label:"Go to the living room", distanceM:5 },
+        { to:"bedroom", label:"Go to the bedroom", distanceM:3 },
         { to:"hallway2", label:"Leave the apartment", distanceM:7, doorId:"2a" } ]
     },
     bedroom: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Bedroom", shelter:"full",
@@ -2067,8 +2107,8 @@
           { id:"cloth", qty:3 } ])}
       ],
       exits:[
-        { to:"living", label:"Go to the living room", distanceM:5, doorId:"2a-bedroom" },
-        { to:"bathroom", label:"Go to the bathroom", distanceM:3, doorId:"2a-bath-bedroom" },
+        { to:"living", label:"Go to the living room", distanceM:5 },
+        { to:"bathroom", label:"Go to the bathroom", distanceM:3 },
         { to:"hallway2", label:"Leave the apartment", distanceM:7, doorId:"2a" } ]
     },
     balcony: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Balcony", shelter:"partial",
@@ -2080,7 +2120,7 @@
           { id:"rope", qty:1 } ])}
       ],
       exits:[
-        { to:"living", label:"Go to the living room", distanceM:3, doorId:"2a-balcony" },
+        { to:"living", label:"Go to the living room", distanceM:3 },
         { to:"alley", label:"Climb down the fire escape" } ]
     },
     hallway2: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2nd Floor", room:"Hallway", shelter:"full",
@@ -2104,9 +2144,9 @@
       ],
       exits:[
         { to:"twobee_kitchen", label:"Go to the kitchen", distanceM:4 },
-        { to:"twobee_bathroom", label:"Go to the bathroom", distanceM:5, doorId:"2b-bathroom" },
-        { to:"twobee_bedroom", label:"Go to the bedroom", distanceM:5, doorId:"2b-bedroom" },
-        { to:"twobee_balcony", label:"Go to the balcony", distanceM:3, doorId:"2b-balcony" },
+        { to:"twobee_bathroom", label:"Go to the bathroom", distanceM:5 },
+        { to:"twobee_bedroom", label:"Go to the bedroom", distanceM:5 },
+        { to:"twobee_balcony", label:"Go to the balcony", distanceM:3 },
         { to:"hallway2", label:"Leave 2B", distanceM:6, doorId:"2b" } ]
     },
     twobee_kitchen: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2B", room:"Kitchen", shelter:"full",
@@ -2138,8 +2178,8 @@
         { id:"undersink", name:"Under-sink cabinet", capacityKg:10, spawnPools:["hygiene","cleaning_supplies"], items:[] }
       ],
       exits:[
-        { to:"twobee", label:"Go to the living room", distanceM:5, doorId:"2b-bathroom" },
-        { to:"twobee_bedroom", label:"Go to the bedroom", distanceM:3, doorId:"2b-bath-bedroom" },
+        { to:"twobee", label:"Go to the living room", distanceM:5 },
+        { to:"twobee_bedroom", label:"Go to the bedroom", distanceM:3 },
         { to:"hallway2", label:"Leave 2B", distanceM:7, doorId:"2b" } ]
     },
     twobee_bedroom: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2B", room:"Bedroom", shelter:"full",
@@ -2156,8 +2196,8 @@
         { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal","pet_supplies"], items:[] }
       ],
       exits:[
-        { to:"twobee", label:"Go to the living room", distanceM:5, doorId:"2b-bedroom" },
-        { to:"twobee_bathroom", label:"Go to the bathroom", distanceM:3, doorId:"2b-bath-bedroom" },
+        { to:"twobee", label:"Go to the living room", distanceM:5 },
+        { to:"twobee_bathroom", label:"Go to the bathroom", distanceM:3 },
         { to:"hallway2", label:"Leave 2B", distanceM:7, doorId:"2b" } ]
     },
     twobee_balcony: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2B", room:"Balcony", shelter:"partial",
@@ -2168,7 +2208,7 @@
           { id:"rope", qty:1 },
           { id:"duct_tape", qty:1 } ])}
       ],
-      exits:[ { to:"twobee", label:"Go to the living room", distanceM:3, doorId:"2b-balcony" } ]
+      exits:[ { to:"twobee", label:"Go to the living room", distanceM:3 } ]
     },
     stairs2: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2nd Floor", room:"Stairs", shelter:"full",
       desc:"A concrete stairwell, cool and echoing. It goes down at least one more floor.",
@@ -2206,9 +2246,9 @@
       ],
       exits:[
         { to:"onea_kitchen", label:"Go to the kitchen", distanceM:4 },
-        { to:"onea_bathroom", label:"Go to the bathroom", distanceM:5, doorId:"1a-bathroom" },
-        { to:"onea_bedroom", label:"Go to the bedroom", distanceM:5, doorId:"1a-bedroom" },
-        { to:"onea_patio", label:"Go to the patio", distanceM:3, doorId:"1a-patio" },
+        { to:"onea_bathroom", label:"Go to the bathroom", distanceM:5 },
+        { to:"onea_bedroom", label:"Go to the bedroom", distanceM:5 },
+        { to:"onea_patio", label:"Go to the patio", distanceM:3 },
         { to:"hallway1", label:"Leave 1A", distanceM:6, doorId:"1a" } ]
     },
     onea_kitchen: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1A", room:"Kitchen", shelter:"full",
@@ -2238,8 +2278,8 @@
           { id:"childrens_medicine", qty:1 } ])}
       ],
       exits:[
-        { to:"onea", label:"Go to the living room", distanceM:5, doorId:"1a-bathroom" },
-        { to:"onea_bedroom", label:"Go to the bedroom", distanceM:3, doorId:"1a-bath-bedroom" },
+        { to:"onea", label:"Go to the living room", distanceM:5 },
+        { to:"onea_bedroom", label:"Go to the bedroom", distanceM:3 },
         { to:"hallway1", label:"Leave 1A", distanceM:7, doorId:"1a" } ]
     },
     onea_bedroom: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1A", room:"Bedroom", shelter:"full",
@@ -2255,8 +2295,8 @@
           { id:"flashlight", qty:1 } ])}
       ],
       exits:[
-        { to:"onea", label:"Go to the living room", distanceM:5, doorId:"1a-bedroom" },
-        { to:"onea_bathroom", label:"Go to the bathroom", distanceM:3, doorId:"1a-bath-bedroom" },
+        { to:"onea", label:"Go to the living room", distanceM:5 },
+        { to:"onea_bathroom", label:"Go to the bathroom", distanceM:3 },
         { to:"hallway1", label:"Leave 1A", distanceM:7, doorId:"1a" } ]
     },
     onea_patio: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1A", room:"Patio", shelter:"none",
@@ -2268,7 +2308,7 @@
           { id:"nails", qty:1 } ])}
       ],
       exits:[
-        { to:"onea", label:"Go to the living room", distanceM:3, doorId:"1a-patio" },
+        { to:"onea", label:"Go to the living room", distanceM:3 },
         { to:"alley", label:"Go through the back gate", distanceM:6 } ]
     },
     onebee: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1B", room:null, shelter:"full",
@@ -4349,9 +4389,26 @@
       buildSeventhSt(),
       buildNinthSt()
     );
-    return applyComputedDirections(world);
+    return applyComputedDirections(stampTemplateDoorIds(world));
+  }
+  // Gives every exit through a template door its doorId: an exit from one of
+  // the door's two rooms to the other (see DOOR SCHEMA). Run once, as the
+  // world is built; a loaded world keeps the exits its save carries.
+  function stampTemplateDoorIds(world){
+    const doorsById = expandOpenings(WIRING, WIRING_TEMPLATES).doors;
+    Object.keys(doorsById).forEach(id=>{
+      const [a, b] = doorsById[id].sides;
+      [[a, b], [b, a]].forEach(([from, to])=>{
+        ((world[from] && world[from].exits) || []).forEach(e=>{ if(e.to === to) e.doorId = id; });
+      });
+    });
+    return world;
   }
   let world = makeDefaultWorld();
+  // The runtime doors and windows (DOOR SCHEMA, WINDOW SCHEMA). Built here,
+  // below WIRING, because a unit's come from its wiring template.
+  let doors = buildDoors(null);
+  let windows = buildWindows(null);
 
   // ==================================================
   // PLAYER STATE
@@ -6444,6 +6501,65 @@
     });
     return net;
   }
+  // The doors and windows a wiring's unit templates carry (`doors`,
+  // `windows`; see POWER SCHEMA), as DOOR SCHEMA and WINDOW SCHEMA
+  // definitions keyed by id: { doors, windows, problems }. Pure, like
+  // expandWiring(), and a sibling of it because it reads the same panels and
+  // roles; nothing in POWER reads what it returns. A panel's `overrides`
+  // replace or drop its own unit's. A door whose two roles map to one room is
+  // not made. A role with no room, an override key the template lacks, and a
+  // clashing id are skipped or kept first and reported in `problems`, which
+  // validateWiring() reads.
+  function expandOpenings(wiring, templates){
+    const out = { doors:{}, windows:{}, problems:[] };
+    Object.keys(wiring || {}).forEach(b=>{
+      const w = wiring[b] || {};
+      (w.panels || []).concat(w.common ? [w.common] : []).forEach(pd=>{
+        if(!pd || !pd.id) return;
+        const layout = pd.layout || (templates || {})[pd.template];
+        if(!layout) return;
+        const unit = String(pd.id).toLowerCase();
+        const rooms = pd.rooms || {};
+        const ov = pd.overrides || {};
+        const place = (kind, list, build)=>{
+          const byKey = ov[kind] || {};
+          Object.keys(byKey).forEach(k=>{
+            if(!(list || []).some(t=> t.key === k)) out.problems.push(`${b}.${pd.id}: override for ${kind.slice(0, -1)} "${k}", which the template does not have`);
+          });
+          (list || []).forEach(t=>{
+            if(byKey[t.key] === null) return;
+            const spec = Object.assign({}, t, byKey[t.key] || {});
+            const made = build(spec);
+            if(!made) return;
+            if(out[kind][made.id]) out.problems.push(`${b}.${pd.id}: ${kind.slice(0, -1)} id "${made.id}" clashes`);
+            else out[kind][made.id] = made.def;
+          });
+        };
+        place("doors", layout.doors, (d)=>{
+          const sides = (d.between || []).map(r=> rooms[r]);
+          if(sides.length !== 2 || !sides[0] || !sides[1]){
+            out.problems.push(`${b}.${pd.id}: door "${d.key}" has a role with no room`);
+            return null;
+          }
+          if(sides[0] === sides[1]) return null;
+          const def = { locked:!!d.locked, sides, building:b };
+          if(d.lockable === false) def.lockable = false;
+          return { id: d.id || `${unit}-${d.key}`, def };
+        });
+        place("windows", layout.windows, (wd)=>{
+          const room = rooms[wd.role];
+          if(!room){
+            out.problems.push(`${b}.${pd.id}: window "${wd.key}" has a role with no room`);
+            return null;
+          }
+          const def = { state:"closed", rooms:[room], breakTag:wd.breakTag, label:wd.label };
+          if(wd.climbable) def.climbable = true;
+          return { id: wd.id || `${unit}-${wd.role}-window`, def };
+        });
+      });
+    });
+    return out;
+  }
   // The game's network, expanded once. A building WIRING does not name has
   // no nodes here, and its rooms fall back to the grid (containerPowered()).
   const POWER_NET = expandWiring(WIRING, WIRING_TEMPLATES);
@@ -7813,6 +7929,9 @@
   //   the expansion's own problems (expandWiring()): unknown templates,
   //     circuits and roles, a panel without a feeder, a feeder without a
   //     panel, clashing ids;
+  //   the templates' doors and windows (expandOpenings()): a role with no
+  //     room, an override key the template lacks, and an id that clashes with
+  //     another template one or with an authored one;
   //   every room a board, panel or role names exists, and every container a
   //     fixture names is in its room;
   //   every appliance id is in APPLIANCES, every APPLIANCES entry carries
@@ -7826,8 +7945,13 @@
   // `ashfallDev.validateWiring()` from the browser console when auditing.
   function validateWiring(wiring = WIRING, templates = WIRING_TEMPLATES){
     const net = expandWiring(wiring, templates);
+    const openings = expandOpenings(wiring, templates);
     const rooms = makeDefaultWorld();
-    const problems = net.problems.slice();
+    const problems = net.problems.concat(openings.problems);
+    const authored = { doors:authoredDoors(), windows:authoredWindows() };
+    ["doors", "windows"].forEach(kind=> Object.keys(openings[kind]).forEach(id=>{
+      if(authored[kind][id]) problems.push(`template ${kind.slice(0, -1)} "${id}" clashes with an authored one`);
+    }));
     const roomExists = (id, what)=>{ if(!rooms[id]) problems.push(`${what}: room "${id}" does not exist`); };
     Object.keys(APPLIANCES).forEach(id=>{
       const a = APPLIANCES[id];
