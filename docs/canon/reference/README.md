@@ -20,8 +20,10 @@ both are designer knowledge the game never states outright.
     unconfirmed.
 - **What gets researched is added here in the same session,** with its source,
   date and status. A fact found once and left in a conversation or an issue
-  comment will be searched for again. A `Research:` issue is closed by the
-  pull request that adds its facts here.
+  comment will be searched for again. The findings go in the file, not the
+  issue: the issue holds the question, and the pull request that answers it
+  says `Closes #NN`. Leave at most one comment on the issue pointing to the
+  file and section.
 - **Every fact carries its source and the date it was checked.** Its status is
   one of:
   - **Confirmed:** read on the primary source (the maker, the regulator, the
