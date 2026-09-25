@@ -34,6 +34,9 @@
   #hubRow button:hover:not(:disabled){ border-color:var(--accent-dim); }
   #hubRow button:disabled{ color:var(--ink-faint); cursor:not-allowed; opacity:.6; }
   #hubRow .hint{ display:block; font-size:11px; font-style:italic; margin-top:2px; }
+  /* A hub toggle (the Electrical view) is lit while on, as the Crafting
+     group buttons are, and carries its On / Off on its second line. */
+  #hubRow button.active{ border-color:var(--accent); color:var(--accent); }
   /* A full-screen panel (Crafting, Options) stacked over the
      drawer. Above #sideMenu's 20, so it covers the drawer and its backdrop. */
   .full-panel{ position:fixed; inset:0; z-index:30; background:var(--panel); padding:20px 18px;
@@ -220,6 +223,13 @@
   ul.itemlist .cat{ color:var(--ink-faint); font-size:12px; }
   ul.itemlist .state{ color:var(--ink-dim); }
   ul.itemlist .empty{ color:var(--ink-faint); font-style:italic; }
+  /* A circuit tab's rows in the electrical view: a load's name, then its
+     readout and nameplate on lines of their own; and the heading over the
+     loads elsewhere on the circuit, set as a panel heading is. */
+  ul.itemlist .meta > b{ color:var(--ink); }
+  ul.itemlist .line{ display:block; color:var(--ink-dim); }
+  ul.itemlist li.subhead{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-faint);
+    padding-top:10px; }
   .btnrow{ display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; }
   button.mini{ background:#262a30; border:1px solid var(--line); color:var(--ink); font-size:12px;
     padding:4px 7px; min-height:24px; border-radius:3px; cursor:pointer; white-space:nowrap; }
@@ -425,6 +435,10 @@
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
+  // Where the Electrical view's toggle is kept (see electricalView): a player
+  // preference, stored beside the save and never in it, so its key carries no
+  // version and a MINOR bump leaves it as it was.
+  const ELECTRICAL_VIEW_KEY = "ashfall_pref_electrical_view";
   // Floor on the cost of one movement, in game minutes — applied two ways,
   // and the two branches are not a redundancy to be tidied away.
   //
@@ -4548,6 +4562,14 @@
   // Floor.
   let invTab = "inventory";
   let worldTab = "floor";
+  // Whether the Electrical view is on (#242): Inventory lists only what is
+  // tagged `electrical`, and the Here panel shows the room's panels, boards
+  // and circuits instead of its items. A view, and nothing more: nothing in
+  // the simulation reads it. A player preference, kept in localStorage under
+  // ELECTRICAL_VIEW_KEY and never in `state`, so no save or export carries it
+  // and a restart or a load leaves it as it is. Off when storage is missing
+  // or refuses (readElectricalViewPref()).
+  let electricalView = readElectricalViewPref();
 
   // ==================================================
   // CORE UTILITIES
@@ -8408,6 +8430,15 @@
     render();
   }
 
+  // The Electrical view's preference (ELECTRICAL_VIEW_KEY). Every read and
+  // write is guarded: storage can be missing, blocked or full, and then the
+  // view is off and stays in memory only.
+  function readElectricalViewPref(){
+    try{ return localStorage.getItem(ELECTRICAL_VIEW_KEY) === "on"; }catch(e){ return false; }
+  }
+  function writeElectricalViewPref(on){
+    try{ localStorage.setItem(ELECTRICAL_VIEW_KEY, on ? "on" : "off"); }catch(e){ /* kept in memory only */ }
+  }
   function doSaveLocal(){
     try{ localStorage.setItem(SAVE_KEY, serializeGame()); log("Progress saved to this browser.", "sys", "save"); }
     catch(e){ log("Couldn't save to browser storage here — use Export instead.", "warn"); }
@@ -8643,20 +8674,40 @@
     }, back);
   }
   // The drawer's hub row, in order: one entry per button, giving its label
-  // and the FULL_PANELS id it opens. An entry that opens nothing is a
-  // placeholder, disabled and carrying HUB_PLACEHOLDER_HINT, so whether a
-  // button is enabled is whether it opens something, and enabling Health
-  // (#163) or Clothing (#164) is filling in `opens`. A new sub-menu is one
-  // line. The order and the hint's wording are retunable.
+  // and either the FULL_PANELS id it opens or the HUB_TOGGLES id it flips.
+  // An entry that does neither is a placeholder, disabled and carrying
+  // HUB_PLACEHOLDER_HINT, so whether a button is enabled is whether it does
+  // something, and enabling Health (#163) or Clothing (#164) is filling in
+  // `opens`. A new sub-menu is one line. The order and the hint's wording are
+  // retunable; so is Electrical's place in the row.
   const HUB_BUTTONS = [
-    { label:"Crafting", opens:"crafting" },
-    { label:"Health",   opens:null },
-    { label:"Clothing", opens:null },
-    { label:"Options",  opens:"options" }
+    { label:"Crafting",   opens:"crafting" },
+    { label:"Health",     opens:null },
+    { label:"Clothing",   opens:null },
+    { label:"Electrical", toggles:"electrical" },
+    { label:"Options",    opens:"options" }
   ];
   const HUB_PLACEHOLDER_HINT = "Not yet";
-  // Each enabled hub button, keyed by the FULL_PANELS id it opens, so
-  // render() can reach one by what it opens rather than by its label.
+  // The hub row's toggles, by id: what each reads and what flipping it does.
+  // A toggle opens nothing; it shows its state on its second line
+  // (HUB_TOGGLE_HINTS) and is lit while on. Functional UI text, retunable.
+  const HUB_TOGGLE_HINTS = { on:"On", off:"Off" };
+  const HUB_TOGGLES = {
+    // The Electrical view. Turning it off drops a Here tab it showed, so the
+    // panel opens on Floor again, as it does after a move.
+    electrical: {
+      on: ()=> electricalView,
+      flip(){
+        electricalView = !electricalView;
+        writeElectricalViewPref(electricalView);
+        if(!electricalView) worldTab = "floor";
+        render();
+      }
+    }
+  };
+  // Each enabled hub button, keyed by the FULL_PANELS id it opens or the
+  // HUB_TOGGLES id it flips, so render() can reach one by what it does
+  // rather than by its label.
   const hubButtonFor = {};
   HUB_BUTTONS.forEach(b=>{
     const btn = document.createElement("button");
@@ -8664,6 +8715,12 @@
     if(b.opens){
       hubButtonFor[b.opens] = btn;
       btn.addEventListener("click", ()=> openPanel(b.opens));
+    } else if(b.toggles){
+      hubButtonFor[b.toggles] = btn;
+      const hint = document.createElement("span");
+      hint.className = "hint";
+      btn.appendChild(hint);
+      btn.addEventListener("click", ()=> HUB_TOGGLES[b.toggles].flip());
     } else {
       btn.disabled = true;
       const hint = document.createElement("span");
@@ -8673,6 +8730,16 @@
     }
     document.getElementById("hubRow").appendChild(btn);
   });
+  // A toggle's state, drawn on every render(): lit while on, its second line
+  // saying which, and aria-pressed for a screen reader.
+  function renderHubToggles(){
+    Object.keys(HUB_TOGGLES).forEach(id=>{
+      const btn = hubButtonFor[id], on = HUB_TOGGLES[id].on();
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+      btn.querySelector(".hint").textContent = on ? HUB_TOGGLE_HINTS.on : HUB_TOGGLE_HINTS.off;
+    });
+  }
 
   // Options. The prompt's Cancel is the destructive-action guard the old
   // confirm() was, so the protection is kept rather than dropped. Blank is a
@@ -10263,15 +10330,29 @@
       invStrip.style.display = "";
       document.getElementById("unequipBtn").onclick = ()=> doUnequip(invTab);
     } else { invStrip.style.display = "none"; }
-    // No Store while the Here tab is a panel's or a board's: it holds no items.
-    renderItemList(document.getElementById("invList"), currentInv.items, [
-      { label: worldTab === "floor" ? "Place" : "Store", onClick:(i)=> doStore(i),
-        test:()=> !!worldSlot(world[state.currentRoom], worldTab) }
+    // No Store while the Here tab is a panel's or a board's, or a circuit's:
+    // none holds items. The Electrical view's Here tabs are only those.
+    // The Electrical view lists only what is tagged `electrical`, each row
+    // acting on the tab's own list by the item's own index there.
+    const invList = document.getElementById("invList");
+    const shown = electricalView ? currentInv.items.filter(it=> hasTag(it, "electrical")) : currentInv.items;
+    renderItemList(invList, shown, [
+      { label: worldTab === "floor" ? "Place" : "Store", onClick:(i)=> doStore(currentInv.items.indexOf(shown[i])),
+        test:()=> !electricalView && !!worldSlot(world[state.currentRoom], worldTab) }
     ], "inv", { container:null });
+    if(electricalView && !shown.length) invList.innerHTML = `<li class="empty">${ELECTRICAL_EMPTY_INV}</li>`;
   }
+  // The Electrical view's notes, where a list would be: an Inventory tab
+  // with nothing electrical in it, and a room with no panel, board or
+  // circuit to show. The room's says nothing of its wiring: a room no panel
+  // names still takes its power from the grid. Functional UI text,
+  // retunable.
+  const ELECTRICAL_EMPTY_INV = "Nothing electrical.";
+  const ELECTRICAL_EMPTY_HERE = "Nothing electrical to show here.";
   function renderWorldItemsPanel(){
     const room = world[state.currentRoom];
     const worldTabsEl = document.getElementById("worldTabs");
+    if(electricalView){ renderElectricalHere(room, worldTabsEl); return; }
     const worldTabDefs = [["floor","Floor"]];
     // Floor bags straight after Floor, in floor order, searched or not: the
     // bag is on the floor, and Floor is never gated. Bags sharing a name are
@@ -10344,6 +10425,124 @@
       { label:"Take", disabled:(it)=> invTab === "keychain" && !keychainAllows(it), onClick:(i)=> doTake(i) }
     ], "world", { container: worldTabContainer(room, worldTab), roomId: state.currentRoom });
   }
+  // A circuit's Here tab key in the Electrical view, prefixed as a device's
+  // is (powerTab()).
+  function circuitTab(breakerId){ return "circuit:" + breakerId; }
+  const NO_ELECTRICAL_TAB = "circuit:none";
+  // The circuits that serve a room: every circuit breaker whose roles include
+  // a role its panel maps to the room, panel by panel in wiring order, each
+  // panel's in breaker order. Under either rules: simplified rules ignore
+  // the circuit breakers, but the circuits are still how a room's loads are
+  // listed.
+  function circuitsServing(roomId){
+    const out = [];
+    Object.values(POWER_NET.panels).forEach(p=> p.circuits.forEach(id=>{
+      if(POWER_NET.breakers[id].roles.some(r=> p.roles[r] === roomId)) out.push(id);
+    }));
+    return out;
+  }
+  // The Here panel in the Electrical view (#242). Its tabs run upstream
+  // first: the panels and boards hanging here (powerDevicesIn()), each with
+  // the strip and Device Options it has in the normal view, then the circuits
+  // serving the room (circuitsServing()), by their hand-written labels. No
+  // Floor, bag or container tab. A room with none of either shows no tabs,
+  // only ELECTRICAL_EMPTY_HERE. Nothing here changes the simulation: a
+  // switch goes through doSwitchLoad(), a breaker through the device pop-up.
+  function renderElectricalHere(room, worldTabsEl){
+    const devices = powerDevicesIn(state.currentRoom);
+    const circuits = circuitsServing(state.currentRoom);
+    const defs = devices.map(d=> [powerTab(d.id), powerNode(d).name])
+      .concat(circuits.map(id=> [circuitTab(id), POWER_NET.breakers[id].label]));
+    // With no tab to show, the Here tab is none at all, never Floor, so no
+    // item pop-up offers Place onto a floor this view does not show.
+    if(!defs.find(d=> d[0] === worldTab)) worldTab = defs.length ? defs[0][0] : NO_ELECTRICAL_TAB;
+    rebuildKeepingFocus(worldTabsEl, ()=>{
+      worldTabsEl.innerHTML = "";
+      defs.forEach(([key, label])=>{
+        const btn = document.createElement("button");
+        btn.textContent = label;
+        if(worldTab === key) btn.classList.add("active");
+        btn.addEventListener("click", ()=>{ worldTab = key; render(); });
+        worldTabsEl.appendChild(btn);
+      });
+    }, false);
+    revealActiveTab(worldTabsEl);
+    document.getElementById("worldWeight").textContent = "";
+    const worldStrip = document.getElementById("worldStrip");
+    const deviceState = document.getElementById("worldDeviceState");
+    const tabDevice = devices.find(d=> powerTab(d.id) === worldTab);
+    if(tabDevice){
+      worldStrip.style.display = "";
+      deviceOptionsBtn.onclick = ()=>{ deviceTarget = { kind:tabDevice.kind, id:tabDevice.id }; render(); };
+      deviceState.textContent = deviceStripText(tabDevice);
+      deviceState.style.display = "";
+    } else {
+      worldStrip.style.display = "none";
+      deviceState.textContent = "";
+    }
+    const list = document.getElementById("worldList");
+    list.innerHTML = "";
+    if(!defs.length){ list.innerHTML = `<li class="empty">${ELECTRICAL_EMPTY_HERE}</li>`; return; }
+    const circuitId = circuits.find(id=> circuitTab(id) === worldTab);
+    if(circuitId) renderCircuitTab(list, circuitId, state.currentRoom);
+  }
+  // A circuit tab: one row per load on the circuit in this room, then the
+  // loads it feeds elsewhere, by appliance name and the room they are in
+  // (roomLabel()), with no status and no control: they can't be seen from
+  // here. A row here shows the appliance's name and, for a load with a
+  // switch of its own, its readout (loadStatusText()) and one Switch on /
+  // Switch off (doSwitchLoad()). A switchless one (the smoke alarm, the gas
+  // range) shows neither. Watts appear nowhere. Functional UI text,
+  // retunable.
+  function renderCircuitTab(list, circuitId, roomId){
+    const loads = POWER_NET.breakers[circuitId].loads.map(id=> POWER_NET.loads[id]);
+    const line = (parent, text)=>{
+      const span = document.createElement("span");
+      span.className = "line";
+      span.textContent = text;
+      parent.appendChild(span);
+    };
+    loads.filter(l=> l.room === roomId).forEach(l=>{
+      const a = APPLIANCES[l.appliance];
+      const li = document.createElement("li");
+      const meta = document.createElement("span");
+      meta.className = "meta";
+      const name = document.createElement("b");
+      name.textContent = a.name;
+      meta.appendChild(name);
+      if(!a.switchless) line(meta, loadStatusText(l.id));
+      li.appendChild(meta);
+      const row = document.createElement("span");
+      row.className = "btnrow";
+      if(!a.switchless){
+        const on = switchOnIn(state.power, state.seed, l.id, a);
+        const btn = document.createElement("button");
+        btn.className = "mini";
+        btn.textContent = on ? "Switch off" : "Switch on";
+        btn.addEventListener("click", ()=> doSwitchLoad(l.id, !on));
+        row.appendChild(btn);
+      }
+      li.appendChild(row);
+      list.appendChild(li);
+    });
+    const elsewhere = loads.filter(l=> l.room !== roomId);
+    if(!elsewhere.length) return;
+    const head = document.createElement("li");
+    head.className = "subhead";
+    head.textContent = "Elsewhere on this circuit";
+    list.appendChild(head);
+    elsewhere.forEach(l=>{
+      const li = document.createElement("li");
+      const meta = document.createElement("span");
+      meta.className = "meta";
+      const name = document.createElement("b");
+      name.textContent = APPLIANCES[l.appliance].name;
+      meta.appendChild(name);
+      line(meta, world[l.room] ? roomLabel(world[l.room]) : l.room);
+      li.appendChild(meta);
+      list.appendChild(li);
+    });
+  }
   // The seed, as its canonical uint32 — what a typed word hashed to, which is
   // what reproduces the run; a word is lossy, the number is the seed. It lives
   // in Options rather than as a line in Stats, and is drawn ahead of
@@ -10360,6 +10559,7 @@
   }
   function render(){
     renderOptionsPanel();
+    renderHubToggles();
     // Crafting is unavailable once the run is over, and available again the
     // moment it isn't: set on every render, so Restart, Replay this seed and
     // a load after death all re-enable it. No hint line: "You did not
