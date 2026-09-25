@@ -28,7 +28,8 @@ list. Nothing else up front.
 - `docs/canon/Ashfall_Canon.md` — when the discussion is about lore, or Tom
   asks. See "The canon is private" below.
 - `docs/canon/reference/` — whenever the discussion needs a real-world fact.
-  Look there first. If it isn't there, don't guess or search on your own: ask
+  Look there first, and in open `Research:` issues, whose findings may not
+  have merged yet. If it isn't there, don't guess or search on your own: ask
   Tom for network access, or file a `Research:` issue. See "The canon is
   private" below.
 
@@ -76,12 +77,15 @@ is about lore, or when Tom asks — never up front.
 `docs/canon/reference/` holds real-world facts, researched once: the real town,
 codes, equipment, figures, each with its source and the date it was checked.
 A planning session reads it whenever it needs a real-world fact, and looks
-there first: sessions run with limited internet access. A fact that isn't
-there is never guessed or searched for unasked. The session either asks Tom
-for network access to research it now, or files a `Research:` issue (the fact,
-why it's needed, what it blocks) and carries on with the gap marked
-unconfirmed. Whatever is researched is added to the folder in the same
-session, with its source, date and status. Issues point to it rather than
+there first, and in open `Research:` issues: sessions run with limited
+internet access. A fact that isn't there is never guessed or searched for
+unasked. The session either asks Tom for network access to research it now,
+or files a `Research:` issue (the fact, why it's needed, what it blocks) and
+carries on with the gap marked unconfirmed. Whatever is researched is added to
+the folder in the same session, with its source, date and status. If it
+answers a `Research:` issue, it is also written into that issue's body at
+once, so other sessions can read it before the merge, and the pull request
+that adds it closes the issue. Other issues point to the folder rather than
 repeating it.
 
 A coding session reads neither: a handoff that depends on a canon fact or a

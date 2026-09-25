@@ -415,13 +415,17 @@ discussion starts spends context on material that mostly goes unused.
   Tom asks — not up front, and not as one of the "other docs" below.
 - `docs/canon/reference/` whenever the discussion needs a real-world fact:
   a code, a rating, a figure, a fact about the real town. Sessions run with
-  limited internet access, so this is where a fact is looked up first. If it
+  limited internet access, so this is where a fact is looked up first, along
+  with open `Research:` issues, whose findings may not have merged yet. If it
   isn't there, the session doesn't guess and doesn't search unasked. It
   either asks Tom for network access to research it now, or files a
   `Research:` issue (the fact, why it's needed, which issue it blocks) and
   carries on with the gap marked unconfirmed. Whatever is researched is added
   there in the same session, with its source, date and status, so it is found
-  once, and the issue points to it rather than repeating it.
+  once. If it answers a `Research:` issue, it is also written into that
+  issue's body at once, so other sessions can read it before the merge, and
+  the pull request that adds it closes the issue. Other issues point to the
+  folder rather than repeating it.
 - Other docs (`Ashfall_Handoff_Guide.md` at the wrap, as before) when a
   question reaches them.
 
