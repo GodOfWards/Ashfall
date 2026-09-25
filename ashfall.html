@@ -421,7 +421,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.9.0" };
+  const GAME_CONFIG = { VERSION: "0.9.1" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -1730,7 +1730,20 @@
       "2b": { locked:true, sides:["hallway2","twobee"], building:"acorn" },
       "1a": { locked:true, sides:["hallway1","onea"], building:"acorn" },
       "1b": { locked:true, sides:["hallway1","onebee"], building:"acorn" },
-      "1a-patio": { locked:true, sides:["onea_patio","onea"], building:"acorn" }
+      "1a-patio": { locked:true, sides:["onea_patio","onea"], building:"acorn" },
+      // Interior doors, with no lock. A balcony door is a sliding door, which
+      // is taken to have none either (retunable).
+      "2a-bedroom": { locked:false, lockable:false, sides:["living","bedroom"], building:"acorn" },
+      "2a-bathroom": { locked:false, lockable:false, sides:["living","bathroom"], building:"acorn" },
+      "2a-bath-bedroom": { locked:false, lockable:false, sides:["bedroom","bathroom"], building:"acorn" },
+      "2a-balcony": { locked:false, lockable:false, sides:["living","balcony"], building:"acorn" },
+      "2b-bedroom": { locked:false, lockable:false, sides:["twobee","twobee_bedroom"], building:"acorn" },
+      "2b-bathroom": { locked:false, lockable:false, sides:["twobee","twobee_bathroom"], building:"acorn" },
+      "2b-bath-bedroom": { locked:false, lockable:false, sides:["twobee_bedroom","twobee_bathroom"], building:"acorn" },
+      "2b-balcony": { locked:false, lockable:false, sides:["twobee","twobee_balcony"], building:"acorn" },
+      "1a-bedroom": { locked:false, lockable:false, sides:["onea","onea_bedroom"], building:"acorn" },
+      "1a-bathroom": { locked:false, lockable:false, sides:["onea","onea_bathroom"], building:"acorn" },
+      "1a-bath-bedroom": { locked:false, lockable:false, sides:["onea_bedroom","onea_bathroom"], building:"acorn" }
     };
   }
   // WINDOW SCHEMA (one entry per key in the object makeDefaultWindows()
@@ -1752,7 +1765,21 @@
   function makeDefaultWindows(){
     return {
       "2a-transom": { state:"closed", rooms:["hallway2","living"], breakTag:"blunt", label:"transom window", climbable:true },
-      "1b-alley":   { state:"closed", rooms:["alley","onebee"],   breakTag:"blunt", label:"window", climbable:true }
+      "1b-alley":   { state:"closed", rooms:["alley","onebee"],   breakTag:"blunt", label:"window", climbable:true },
+      // One to the outside in each room of 2A, 2B and 1A but the balcony or
+      // patio. Which way each faces is not modelled.
+      "2a-living-window":     { state:"closed", rooms:["living"], breakTag:"blunt", label:"window" },
+      "2a-kitchen-window":    { state:"closed", rooms:["kitchen"], breakTag:"blunt", label:"window" },
+      "2a-bedroom-window":    { state:"closed", rooms:["bedroom"], breakTag:"blunt", label:"window" },
+      "2a-bathroom-window":   { state:"closed", rooms:["bathroom"], breakTag:"blunt", label:"window" },
+      "2b-living-window":     { state:"closed", rooms:["twobee"], breakTag:"blunt", label:"window" },
+      "2b-kitchen-window":    { state:"closed", rooms:["twobee_kitchen"], breakTag:"blunt", label:"window" },
+      "2b-bedroom-window":    { state:"closed", rooms:["twobee_bedroom"], breakTag:"blunt", label:"window" },
+      "2b-bathroom-window":   { state:"closed", rooms:["twobee_bathroom"], breakTag:"blunt", label:"window" },
+      "1a-living-window":     { state:"closed", rooms:["onea"], breakTag:"blunt", label:"window" },
+      "1a-kitchen-window":    { state:"closed", rooms:["onea_kitchen"], breakTag:"blunt", label:"window" },
+      "1a-bedroom-window":    { state:"closed", rooms:["onea_bedroom"], breakTag:"blunt", label:"window" },
+      "1a-bathroom-window":   { state:"closed", rooms:["onea_bathroom"], breakTag:"blunt", label:"window" }
     };
   }
   const WINDOW_STATES = ["closed", "open", "broken"];
@@ -1803,14 +1830,26 @@
   //   dutyCycle, cycleMinutes  present on a cycling load: it draws for
   //                dutyCycle × cycleMinutes of every cycleMinutes
   //   No watts are shown anywhere (#242, #249).
-  // `fridge_freezer` is the appliance behind every kitchen's Fridge and
-  // Freezer pair. Running 150 W, within the measured 100–250 W (Champion's
-  // chart gives 150–400 W); starting 3.5× running, the rule of thumb being
-  // 3–4×; duty cycle 0.35, within the measured 33–40% in a room at about
-  // 70 °F. The 60-minute cycle is a judgment call, not sourced, and
-  // retunable.
+  // Every figure is a pick inside a sourced range, and retunable.
+  //   fridge_freezer  the appliance behind every kitchen's Fridge and Freezer
+  //                   pair. Running 150 W, within the measured 100–250 W
+  //                   (Champion's chart gives 150–400 W); starting 3.5×
+  //                   running, the rule of thumb being 3–4×; duty cycle 0.35,
+  //                   within the measured 33–40% in a room at about 70 °F.
+  //                   The 60-minute cycle is a judgment call, not sourced.
+  //   led_light       10 W: an LED bulb draws 8–15 W (Champion).
+  //   bath_fan        36 W: a bathroom exhaust fan draws 10–50 W, about 36 W
+  //                   on average (Engineer Fix, HomeAlliance).
+  //   range_hood      200 W: 150–300 W on high (Engineer Fix, Storables).
+  //   smoke_alarm     1 W: a hardwired alarm draws 1–2 W on standby (Kidde).
+  // The fan and the hood are motors, but their start surge is left
+  // unmodelled: neither carries `startWatts`.
   const APPLIANCES = {
-    fridge_freezer: { name:"Fridge-freezer", watts:150, startWatts:525, volts:120, dutyCycle:0.35, cycleMinutes:60 }
+    fridge_freezer: { name:"Fridge-freezer", watts:150, startWatts:525, volts:120, dutyCycle:0.35, cycleMinutes:60 },
+    led_light:      { name:"Light",          watts:10,  volts:120 },
+    bath_fan:       { name:"Exhaust fan",    watts:36,  volts:120 },
+    range_hood:     { name:"Range hood",     watts:200, volts:120 },
+    smoke_alarm:    { name:"Smoke alarm",    watts:1,   volts:120 }
   };
   // WIRING_TEMPLATES, keyed by id: one unit's layout by room role, so every
   // unit wired the same way shares it.
@@ -1826,8 +1865,39 @@
   //             fixture is (a fridge-freezer is its room's Fridge and
   //             Freezer), which is how spoilage finds the load a container
   //             belongs to.
-  // None yet: Acorn's pass (#251) defines the first.
-  const WIRING_TEMPLATES = {};
+  //
+  // `apartment`: one flat, by the roles living, kitchen, bathroom, bedroom
+  // and balcony (a balcony or a patio). A one-room unit maps every role onto
+  // its one room. Ratings follow the NEC: two 20 A kitchen countertop
+  // circuits (210.11(C)(1)), a 20 A bathroom circuit (210.11(C)(3)), 15 A for
+  // lighting and room outlets, and a 100 A main, the modern minimum for a
+  // unit. KITCHEN 2 has no fixture: it is the second countertop circuit,
+  // whose load is whatever gets plugged in. There is no laundry circuit and
+  // no water heater, the heater taken to be gas like the stove; that is
+  // unconfirmed. The panel-door labels are a naming choice, retunable.
+  const WIRING_TEMPLATES = {
+    apartment: {
+      main: { rating:100 },
+      circuits: [
+        { key:"kitchen1", label:"KITCHEN 1", rating:20, volts:120, roles:["kitchen"] },
+        { key:"kitchen2", label:"KITCHEN 2", rating:20, volts:120, roles:["kitchen"] },
+        { key:"bath",     label:"BATH",      rating:20, volts:120, roles:["bathroom"] },
+        { key:"lights",   label:"LIGHTS",    rating:15, volts:120, roles:["living", "kitchen", "balcony"] },
+        { key:"bedroom",  label:"BEDROOM",   rating:15, volts:120, roles:["bedroom"] }
+      ],
+      fixtures: [
+        { key:"fridge",        appliance:"fridge_freezer", circuit:"kitchen1", role:"kitchen", containers:["fridge", "freezer"] },
+        { key:"hood",          appliance:"range_hood",     circuit:"lights",   role:"kitchen" },
+        { key:"light_kitchen", appliance:"led_light",      circuit:"lights",   role:"kitchen" },
+        { key:"light_living",  appliance:"led_light",      circuit:"lights",   role:"living" },
+        { key:"light_balcony", appliance:"led_light",      circuit:"lights",   role:"balcony" },
+        { key:"light_bath",    appliance:"led_light",      circuit:"bath",     role:"bathroom" },
+        { key:"bath_fan",      appliance:"bath_fan",       circuit:"bath",     role:"bathroom" },
+        { key:"light_bedroom", appliance:"led_light",      circuit:"bedroom",  role:"bedroom" },
+        { key:"smoke_alarm",   appliance:"smoke_alarm",    circuit:"bedroom",  role:"bedroom" }
+      ]
+    }
+  };
   // WIRING, keyed by BUILDINGS id: one building's network.
   //   board    { name, room, rating, volts?, feeders:[{ panel, label, rating }] }
   //            the complex's main board: the room it hangs in, its main
@@ -1850,9 +1920,48 @@
   //   acorn.2A.<fixture>     a load
   // A panel's circuit and fixture keys share one namespace, and a panel may
   // not be called `board` or `main`; validateWiring() reports a clash.
-  // Empty in this release: no building is wired yet (#250), and a room
-  // nothing wires falls back to the grid directly (containerPowered()).
-  const WIRING = {};
+  // A room nothing wires falls back to the grid directly (containerPowered()).
+  //
+  // `acorn`: 240 V single-phase, as a small four-unit building takes
+  // (PANEL_DEFAULT_VOLTS; bigger apartment buildings are often 120/208 V).
+  // The main board and the house panel hang in the ground-floor hallway, and
+  // each unit's panel inside the unit, in its kitchen (1B's in its one room):
+  // NEC 240.24(B) gives each occupant ready access to the breakers protecting
+  // their unit. 1B plays every role in its one room, so it carries every
+  // fixture the template has. The board's 200 A main is unconfirmed, no
+  // source having been read for a four-unit service; the house panel's 30 A
+  // feeder and main are a judgment call. All three are retunable.
+  const ACORN_HOUSE_ROOMS = ["hallway1", "hallway2", "stairs1", "stairs2"];
+  const WIRING = {
+    acorn: {
+      board: { name:"Main board", room:"hallway1", rating:200,
+        feeders: [
+          { panel:"2A",    label:"2A",    rating:100 },
+          { panel:"2B",    label:"2B",    rating:100 },
+          { panel:"1A",    label:"1A",    rating:100 },
+          { panel:"1B",    label:"1B",    rating:100 },
+          { panel:"house", label:"HOUSE", rating:30 }
+        ] },
+      panels: [
+        { id:"2A", name:"Unit 2A panel", room:"kitchen", template:"apartment",
+          rooms:{ living:"living", kitchen:"kitchen", bathroom:"bathroom", bedroom:"bedroom", balcony:"balcony" } },
+        { id:"2B", name:"Unit 2B panel", room:"twobee_kitchen", template:"apartment",
+          rooms:{ living:"twobee", kitchen:"twobee_kitchen", bathroom:"twobee_bathroom", bedroom:"twobee_bedroom", balcony:"twobee_balcony" } },
+        { id:"1A", name:"Unit 1A panel", room:"onea_kitchen", template:"apartment",
+          rooms:{ living:"onea", kitchen:"onea_kitchen", bathroom:"onea_bathroom", bedroom:"onea_bedroom", balcony:"onea_patio" } },
+        { id:"1B", name:"Unit 1B panel", room:"onebee", template:"apartment",
+          rooms:{ living:"onebee", kitchen:"onebee", bathroom:"onebee", bedroom:"onebee", balcony:"onebee" } }
+      ],
+      // The halls and stairs: one lighting circuit, a light in each.
+      common: { id:"house", name:"House panel", room:"hallway1",
+        layout: {
+          main: { rating:30 },
+          circuits: [ { key:"house", label:"HOUSE", rating:15, volts:120, roles:ACORN_HOUSE_ROOMS.slice() } ],
+          fixtures: ACORN_HOUSE_ROOMS.map(r=> ({ key:`light_${r}`, appliance:"led_light", circuit:"house", role:r }))
+        },
+        rooms: Object.fromEntries(ACORN_HOUSE_ROOMS.map(r=> [r, r])) }
+    }
+  };
 
   function buildAcornApartments(){
     return {
@@ -1870,9 +1979,9 @@
       ],
       exits:[
         { to:"kitchen", label:"Go to the kitchen", distanceM:4 },
-        { to:"bedroom", label:"Go to the bedroom", distanceM:5 },
-        { to:"bathroom", label:"Go to the bathroom", distanceM:5 },
-        { to:"balcony", label:"Go to the balcony", distanceM:3 },
+        { to:"bedroom", label:"Go to the bedroom", distanceM:5, doorId:"2a-bedroom" },
+        { to:"bathroom", label:"Go to the bathroom", distanceM:5, doorId:"2a-bathroom" },
+        { to:"balcony", label:"Go to the balcony", distanceM:3, doorId:"2a-balcony" },
         { to:"hallway2", label:"Leave the apartment", distanceM:6, doorId:"2a" } ]
     },
     kitchen: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Kitchen", shelter:"full",
@@ -1912,8 +2021,8 @@
           { id:"bleach", qty:1 } ])}
       ],
       exits:[
-        { to:"living", label:"Go to the living room", distanceM:5 },
-        { to:"bedroom", label:"Go to the bedroom", distanceM:3 },
+        { to:"living", label:"Go to the living room", distanceM:5, doorId:"2a-bathroom" },
+        { to:"bedroom", label:"Go to the bedroom", distanceM:3, doorId:"2a-bath-bedroom" },
         { to:"hallway2", label:"Leave the apartment", distanceM:7, doorId:"2a" } ]
     },
     bedroom: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Bedroom", shelter:"full",
@@ -1935,8 +2044,8 @@
           { id:"cloth", qty:3 } ])}
       ],
       exits:[
-        { to:"living", label:"Go to the living room", distanceM:5 },
-        { to:"bathroom", label:"Go to the bathroom", distanceM:3 },
+        { to:"living", label:"Go to the living room", distanceM:5, doorId:"2a-bedroom" },
+        { to:"bathroom", label:"Go to the bathroom", distanceM:3, doorId:"2a-bath-bedroom" },
         { to:"hallway2", label:"Leave the apartment", distanceM:7, doorId:"2a" } ]
     },
     balcony: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Balcony", shelter:"partial",
@@ -1948,7 +2057,7 @@
           { id:"rope", qty:1 } ])}
       ],
       exits:[
-        { to:"living", label:"Go to the living room", distanceM:3 },
+        { to:"living", label:"Go to the living room", distanceM:3, doorId:"2a-balcony" },
         { to:"alley", label:"Climb down the fire escape" } ]
     },
     hallway2: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2nd Floor", room:"Hallway", shelter:"full",
@@ -1972,9 +2081,9 @@
       ],
       exits:[
         { to:"twobee_kitchen", label:"Go to the kitchen", distanceM:4 },
-        { to:"twobee_bathroom", label:"Go to the bathroom", distanceM:5 },
-        { to:"twobee_bedroom", label:"Go to the bedroom", distanceM:5 },
-        { to:"twobee_balcony", label:"Go to the balcony", distanceM:3 },
+        { to:"twobee_bathroom", label:"Go to the bathroom", distanceM:5, doorId:"2b-bathroom" },
+        { to:"twobee_bedroom", label:"Go to the bedroom", distanceM:5, doorId:"2b-bedroom" },
+        { to:"twobee_balcony", label:"Go to the balcony", distanceM:3, doorId:"2b-balcony" },
         { to:"hallway2", label:"Leave 2B", distanceM:6, doorId:"2b" } ]
     },
     twobee_kitchen: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2B", room:"Kitchen", shelter:"full",
@@ -2006,8 +2115,8 @@
         { id:"undersink", name:"Under-sink cabinet", capacityKg:10, spawnPools:["hygiene","cleaning_supplies"], items:[] }
       ],
       exits:[
-        { to:"twobee", label:"Go to the living room", distanceM:5 },
-        { to:"twobee_bedroom", label:"Go to the bedroom", distanceM:3 },
+        { to:"twobee", label:"Go to the living room", distanceM:5, doorId:"2b-bathroom" },
+        { to:"twobee_bedroom", label:"Go to the bedroom", distanceM:3, doorId:"2b-bath-bedroom" },
         { to:"hallway2", label:"Leave 2B", distanceM:7, doorId:"2b" } ]
     },
     twobee_bedroom: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2B", room:"Bedroom", shelter:"full",
@@ -2024,8 +2133,8 @@
         { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal","pet_supplies"], items:[] }
       ],
       exits:[
-        { to:"twobee", label:"Go to the living room", distanceM:5 },
-        { to:"twobee_bathroom", label:"Go to the bathroom", distanceM:3 },
+        { to:"twobee", label:"Go to the living room", distanceM:5, doorId:"2b-bedroom" },
+        { to:"twobee_bathroom", label:"Go to the bathroom", distanceM:3, doorId:"2b-bath-bedroom" },
         { to:"hallway2", label:"Leave 2B", distanceM:7, doorId:"2b" } ]
     },
     twobee_balcony: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2B", room:"Balcony", shelter:"partial",
@@ -2036,7 +2145,7 @@
           { id:"rope", qty:1 },
           { id:"duct_tape", qty:1 } ])}
       ],
-      exits:[ { to:"twobee", label:"Go to the living room", distanceM:3 } ]
+      exits:[ { to:"twobee", label:"Go to the living room", distanceM:3, doorId:"2b-balcony" } ]
     },
     stairs2: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2nd Floor", room:"Stairs", shelter:"full",
       desc:"A concrete stairwell, cool and echoing. It goes down at least one more floor.",
@@ -2074,8 +2183,8 @@
       ],
       exits:[
         { to:"onea_kitchen", label:"Go to the kitchen", distanceM:4 },
-        { to:"onea_bathroom", label:"Go to the bathroom", distanceM:5 },
-        { to:"onea_bedroom", label:"Go to the bedroom", distanceM:5 },
+        { to:"onea_bathroom", label:"Go to the bathroom", distanceM:5, doorId:"1a-bathroom" },
+        { to:"onea_bedroom", label:"Go to the bedroom", distanceM:5, doorId:"1a-bedroom" },
         { to:"onea_patio", label:"Go to the patio", distanceM:3, doorId:"1a-patio" },
         { to:"hallway1", label:"Leave 1A", distanceM:6, doorId:"1a" } ]
     },
@@ -2089,9 +2198,9 @@
           { id:"plastic_bottle", qty:3, overrides:{ water:{ kind:"clean", fill:1 } } },
           { id:"canned_corn", qty:2 },
           { id:"cloth", qty:2 } ])},
-        { id:"fridge1a", name:"Fridge", capacityKg:30, tags:["fridge"], spawnPools:["kitchen_perishable"], spawnRolled:true, items:itemsFromRegistry([
+        { id:"fridge", name:"Fridge", capacityKg:30, tags:["fridge"], spawnPools:["kitchen_perishable"], spawnRolled:true, items:itemsFromRegistry([
           { id:"leftovers", qty:1 } ])},
-        { id:"freezer1a", name:"Freezer", capacityKg:10, tags:["freezer"], spawnPools:["kitchen_frozen"], items:[] }
+        { id:"freezer", name:"Freezer", capacityKg:10, tags:["freezer"], spawnPools:["kitchen_frozen"], items:[] }
       ],
       exits:[
         { to:"onea", label:"Go to the living room", distanceM:4 },
@@ -2106,8 +2215,8 @@
           { id:"childrens_medicine", qty:1 } ])}
       ],
       exits:[
-        { to:"onea", label:"Go to the living room", distanceM:5 },
-        { to:"onea_bedroom", label:"Go to the bedroom", distanceM:3 },
+        { to:"onea", label:"Go to the living room", distanceM:5, doorId:"1a-bathroom" },
+        { to:"onea_bedroom", label:"Go to the bedroom", distanceM:3, doorId:"1a-bath-bedroom" },
         { to:"hallway1", label:"Leave 1A", distanceM:7, doorId:"1a" } ]
     },
     onea_bedroom: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1A", room:"Bedroom", shelter:"full",
@@ -2123,8 +2232,8 @@
           { id:"flashlight", qty:1 } ])}
       ],
       exits:[
-        { to:"onea", label:"Go to the living room", distanceM:5 },
-        { to:"onea_bathroom", label:"Go to the bathroom", distanceM:3 },
+        { to:"onea", label:"Go to the living room", distanceM:5, doorId:"1a-bedroom" },
+        { to:"onea_bathroom", label:"Go to the bathroom", distanceM:3, doorId:"1a-bath-bedroom" },
         { to:"hallway1", label:"Leave 1A", distanceM:7, doorId:"1a" } ]
     },
     onea_patio: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1A", room:"Patio", shelter:"none",
@@ -2146,6 +2255,8 @@
         { id:"stove", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
           { id:"dented_saucepan", qty:1 }
         ])},
+        { id:"fridge", name:"Fridge", capacityKg:30, tags:["fridge"], spawnPools:["kitchen_perishable"], items:[] },
+        { id:"freezer", name:"Freezer", capacityKg:10, tags:["freezer"], spawnPools:["kitchen_frozen"], items:[] },
         { id:"toolcabinet", name:"Tool Cabinet", capacityKg:25, spawnPools:["tools_general","tools_workshop","cleaning_supplies"], spawnRolled:true, items:itemsFromRegistry([
           { id:"crowbar", qty:1 },
           { id:"duct_tape", qty:2 },
@@ -6285,7 +6396,8 @@
     });
     return net;
   }
-  // The game's network, expanded once. Empty until a building is wired.
+  // The game's network, expanded once. A building WIRING does not name has
+  // no nodes here, and its rooms fall back to the grid (containerPowered()).
   const POWER_NET = expandWiring(WIRING, WIRING_TEMPLATES);
   // state.power's readers and writers, over any power object so the dev
   // seam's simulation shares them. A default is never written: a writer
@@ -7351,6 +7463,30 @@
   function backfillInventoryCap(){
     delete state.inventory.capacityKg;
   }
+  // backfillRenamedContainers(): run on every load, before
+  // backfillContainerFields() and migrateCookingRelease(), which both match
+  // containers by id. A container whose id changed in the definitions keeps
+  // its old id in a save, so the migration would add the new one beside it,
+  // empty: two Fridge tabs, the old one unwired. This renames the saved
+  // container in place, keeping its items and fields, when its room has the
+  // old id and not the new. Idempotent; a save without the old ids passes
+  // through unchanged.
+  //   onea_kitchen  fridge1a, freezer1a → fridge, freezer, the ids the
+  //                 `apartment` wiring template names
+  const RENAMED_CONTAINERS = {
+    onea_kitchen: { fridge1a:"fridge", freezer1a:"freezer" }
+  };
+  function backfillRenamedContainers(){
+    Object.keys(RENAMED_CONTAINERS).forEach(roomId=>{
+      const room = world[roomId];
+      if(!room || !Array.isArray(room.containers)) return;
+      const renames = RENAMED_CONTAINERS[roomId];
+      Object.keys(renames).forEach(oldId=>{
+        const c = room.containers.find(x=> x && x.id === oldId);
+        if(c && !room.containers.some(x=> x && x.id === renames[oldId])) c.id = renames[oldId];
+      });
+    });
+  }
   // backfillPowerState(): the power release's state, repaired in place on
   // every load, before the loaded network is first resolved. A save from
   // before it (0.8) has no `power` or `electricalRules` and takes them from
@@ -7484,6 +7620,7 @@
     backfillSlotItemIds();
     backfillRegistryTags();
     backfillLocationIds();
+    backfillRenamedContainers();
     backfillContainerFields();
     backfillRoomAddresses();
     backfillIllnessScale();
