@@ -493,6 +493,14 @@
   // counts from the start of the run.
   const START_DAYS_AFTER_COLLAPSE = 2;
   const POWER_FAILS_DAY = 21;
+  // How long a rail crossing's warning lights run on their standby battery
+  // once the grid fails (crossingLit()). US law requires "a standby source of
+  // power … with sufficient capacity to operate the warning system for a
+  // reasonable length of time during a period of primary power interruption"
+  // (49 CFR 234.215, "Standby power system"), and sets no length; 234.251
+  // requires only that it "be tested at least once each month". 24 hours is
+  // unconfirmed and retunable.
+  const CROSSING_STANDBY_MIN = 24 * 60;
   // The power network's figures (see POWER in SURVIVAL / TIME SIMULATION).
   // Breakers, per UL 489 (ABB's white paper on UL 489 breakers; Castor,
   // "Molded Case Circuit Breaker Basics", EasyPower): at 100% of its rating
@@ -675,7 +683,19 @@
   //                 cover). The pass that adds the first consumer also inherits
   //                 shelter's save backfill — backfillRoomAddresses()
   //                 deliberately does not restore it, since nothing reads it.
-  //   desc          description shown to the player
+  //   desc          description shown to the player: a string, or STATE
+  //                 VARIANTS, one text per state of something in the world,
+  //                 { reads, variants:{ state: text } }. `reads` names what
+  //                 picks the text, { kind, … }, a DESC_READERS entry
+  //                 (RENDERING): "load" with its `id`, on while that load is
+  //                 powered (loadPoweredNow()); "grid", on while the grid is
+  //                 up (gridUp()); "crossing", on while a rail crossing's
+  //                 lights are (crossingLit()). Each reader returns one of its
+  //                 own `states`, and `variants` holds a text for every one
+  //                 (validateRoomSchema()). A later reader (weather, time of
+  //                 day, damage) is one more DESC_READERS entry with its own
+  //                 states, and needs nothing new here. Rendering picks the
+  //                 text (roomDescText()); nothing else reads it.
   //   floor         array of loose item objects (see ITEM DATA SCHEMA)
   //   floorCap      maximum loose-item capacity in kg
   //   containers    array of container objects (see CONTAINER SCHEMA)
@@ -2049,7 +2069,9 @@
         { to:"hallway2", label:"Leave the apartment", distanceM:6, doorId:"2a" } ]
     },
     kitchen: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Kitchen", shelter:"full",
-      desc:"Grease and old coffee grounds. The fridge still hums, though something inside it has already given up. The gas stove works too — no power needed to light it.",
+      desc:{ reads:{ kind:"load", id:"acorn.2A.fridge" },
+        variants:{ on:"Grease and old coffee grounds. The fridge still hums, though something inside it has already given up.",
+          off:"Grease and old coffee grounds. The fridge has gone quiet, and something inside it gave up well before it did." } },
       sink:true, cannotHaveFire:true, floorCap:50, floor:[],
       containers:[
         { id:"stove", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
@@ -2125,7 +2147,9 @@
         { to:"alley", label:"Climb down the fire escape" } ]
     },
     hallway2: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2nd Floor", room:"Hallway", shelter:"full",
-      desc:"A dim corridor lit by one flickering bulb. Your door is one of two here, with a small transom window set beside it.",
+      desc:{ reads:{ kind:"load", id:"acorn.house.light_hallway2" },
+        variants:{ on:"A dim corridor lit by one flickering bulb. Your door is one of two here, with a small transom window set beside it.",
+          off:"A dark corridor, its one bulb dead. Your door is one of two here, with a small transom window set beside it." } },
       cannotHaveFire:true, floorCap:100, floor:[], containers:[],
       exits:[
         { to:"living", label:"Enter apartment 2A", distanceM:6, doorId:"2a" },
@@ -2341,7 +2365,9 @@
   function buildOakApartments(){
     return {
     oak_hallway1: { locationId:"oak_f0", address:"Poplar St", building:"Oak Apartments", area:"1st Floor", room:"Hallway", shelter:"full",
-      desc:"Narrower than Acorn's hallway, and darker — half the bulbs are out.",
+      desc:{ reads:{ kind:"grid" },
+        variants:{ on:"Narrower than Acorn's hallway, and darker — half the bulbs are out.",
+          off:"Narrower than Acorn's hallway, and darker — none of the bulbs work now." } },
       cannotHaveFire:true, floorCap:80, floor:[], containers:[],
       exits:[
         { to:"mid_poplar_2_4", label:"Step outside" },
@@ -2833,7 +2859,9 @@
         { to:"mill4th", label:"Head east toward 4th St" } ]
     },
     mill4th: { locationId:"mill4th", address:"Mill St & 4th St", area:null, room:null, shelter:"none",
-      desc:"The corner of Mill and 4th. A weighbridge is set into the pavement, its readout dark.",
+      desc:{ reads:{ kind:"grid" },
+        variants:{ on:"The corner of Mill and 4th. A weighbridge is set into the pavement, its readout showing zeros.",
+          off:"The corner of Mill and 4th. A weighbridge is set into the pavement, its readout dark." } },
       floorCap:100, floor:[], containers:[],
       exits:[
         { to:"mill6th", label:"Head west on Mill St" },
@@ -3290,7 +3318,9 @@
         { to:"mid_4th_mp_p", label:"Step into the block (north)" } ]
     },
     mid_maple_2_4: { locationId:"mid_maple_2_4", address:"Maple St", area:null, room:"between 2nd & 4th", shelter:"none",
-      desc:"Maple St, mostly gravel shoulder and one working streetlight.",
+      desc:{ reads:{ kind:"grid" },
+        variants:{ on:"Maple St, mostly gravel shoulder and one working streetlight.",
+          off:"Maple St, mostly gravel shoulder and one streetlight, out like the rest." } },
       floorCap:20, floor:[], containers:[],
       exits:[
         { to:"maple4th", label:"Head west toward 4th St" },
@@ -3485,7 +3515,9 @@
         { to:"mid_2nd_p_m", label:"Step into the block (north)" } ]
     },
     poplar4th: { locationId:"poplar4th", address:"Poplar St & 4th St", area:null, room:null, shelter:"none",
-      desc:"The last residential stretch before Poplar runs into 4th St. Fewer porch lights than a block ago.",
+      desc:{ reads:{ kind:"grid" },
+        variants:{ on:"The last residential stretch before Poplar runs into 4th St. Fewer porch lights than a block ago.",
+          off:"The last residential stretch before Poplar runs into 4th St. Not a porch light on the block." } },
       floorCap:100, floor:[], containers:[],
       exits:[
         { to:"poplar6th", label:"Head west on Poplar St" },
@@ -3756,7 +3788,9 @@
         { to:"main7th", label:"Head east toward 7th St" } ]
     },
     main7th: { locationId:"main7th", address:"Main St & 7th St", area:null, room:null, shelter:"none",
-      desc:"Main and 7th, where a gas station sits dark on the corner, price signs stuck at numbers that don't matter.",
+      desc:{ reads:{ kind:"grid" },
+        variants:{ on:"Main and 7th, where a gas station's canopy lights still burn over empty pumps, price signs stuck at numbers that don't matter.",
+          off:"Main and 7th, where a gas station sits dark on the corner, price signs stuck at numbers that don't matter." } },
       floorCap:100, floor:[], containers:[],
       exits:[
         { to:"main5th", label:"Head west on Main St" },
@@ -4061,7 +4095,9 @@
         { to:"poplar2nd", label:"Head north toward Poplar St" } ]
     },
     mid_2nd_d_mi: { locationId:"mid_2nd_d_mi", address:"2nd St", area:null, room:"between Dock & Mill", shelter:"none",
-      desc:"2nd St crossing the rail spur at a shallow angle. The crossing lights blink for a train that isn't coming, but the bell housing's still up there.",
+      desc:{ reads:{ kind:"crossing" },
+        variants:{ on:"2nd St crossing the rail spur at a shallow angle. The crossing lights blink for a train that isn't coming, but the bell housing's still up there.",
+          off:"2nd St crossing the rail spur at a shallow angle. The crossing lights are dark, the bell housing still up there." } },
       floorCap:20, floor:[], containers:[],
       exits:[
         { to:"dock2nd", label:"Head south toward Dock St" },
@@ -4108,7 +4144,9 @@
         { to:"water1st", label:"Head north toward Water St" } ]
     },
     mid_1st_mp_p: { locationId:"mid_1st_mp_p", address:"1st St", area:null, room:"between Maple & Poplar", shelter:"none",
-      desc:"1st St running down toward Maple. Fewer houses with lights ever left on.",
+      desc:{ reads:{ kind:"grid" },
+        variants:{ on:"1st St running down toward Maple. Fewer houses with lights ever left on.",
+          off:"1st St running down toward Maple. None of the houses have a light on." } },
       floorCap:20, floor:[], containers:[],
       exits:[
         { to:"maple1st", label:"Head south toward Maple St" },
@@ -5852,6 +5890,11 @@
   function minutesSinceCollapse(){ return START_DAYS_AFTER_COLLAPSE * MINUTES_PER_DAY + state.totalMinutes; }
   function gridUp(m = minutesSinceCollapse()){ return m < POWER_FAILS_DAY * MINUTES_PER_DAY; }
   function waterRunning(m = minutesSinceCollapse()){ return gridUp(m); }
+  // Whether a rail crossing's warning lights are on: while the grid is up,
+  // then on standby for CROSSING_STANDBY_MIN after it fails.
+  function crossingLit(m = minutesSinceCollapse()){
+    return gridUp(m) || m - POWER_FAILS_DAY * MINUTES_PER_DAY < CROSSING_STANDBY_MIN;
+  }
   function getWindowsInRoom(roomId){
     return Object.keys(windows).filter(id=>windows[id].rooms.includes(roomId)).map(id=>Object.assign({id}, windows[id]));
   }
@@ -7907,7 +7950,9 @@
   // validateRoomSchema(): dev-only console helper (not wired to any button or
   // UI, runs nothing automatically), sibling to validateLocations(). Walks
   // every room in world and reports a missing `address`, a missing `shelter`,
-  // or a `shelter` outside the three legal values. A helper is enough here
+  // or a `shelter` outside the three legal values, and a `desc` that is
+  // neither a string nor well-formed state variants (ROOM SCHEMA): a reader
+  // DESC_READERS lacks, a state with no text, a load that does not exist. A helper is enough here
   // because both failures are loud: a missing address renders "undefined" in
   // the location bar of the room you are standing in, on the first frame.
   // Call it as `ashfallDev.validateRoomSchema()` from the browser console
@@ -7919,10 +7964,19 @@
       const room = world[roomId];
       if(!room.address) problems.push(`${roomId}: no address set`);
       if(room.shelter === undefined) problems.push(`${roomId}: no shelter set`);
+      if(room.desc && typeof room.desc === "object"){
+        const reader = DESC_READERS[room.desc.reads && room.desc.reads.kind];
+        if(!reader) problems.push(`${roomId}: desc reads an unknown kind`);
+        else reader.states.forEach(st=>{
+          if(typeof (room.desc.variants || {})[st] !== "string") problems.push(`${roomId}: desc has no text for "${st}"`);
+        });
+        if(room.desc.reads && room.desc.reads.kind === "load" && !POWER_NET.loads[room.desc.reads.id])
+          problems.push(`${roomId}: desc reads load "${room.desc.reads.id}", which does not exist`);
+      } else if(typeof room.desc !== "string") problems.push(`${roomId}: no desc set`);
       else if(!legalShelter.includes(room.shelter)) problems.push(`${roomId}: shelter "${room.shelter}" is not one of ${legalShelter.join("/")}`);
     });
     if(problems.length) console.warn("validateRoomSchema: rooms with schema problems", problems);
-    else console.log("validateRoomSchema: every room has an address and a legal shelter");
+    else console.log("validateRoomSchema: every room has an address, a legal shelter and a well-formed desc");
     return problems;
   }
   // validateWiring(): dev-only console helper (not wired to any button or
@@ -9963,6 +10017,24 @@
     if(!deviceTarget || !layerOpen(devicePop)) return;
     placePop(devicePop, document.getElementById("worldStrip").getBoundingClientRect());
   }
+  // What picks a room's text when its `desc` is state variants (ROOM SCHEMA),
+  // keyed by `reads.kind`: each entry's `states` are the variant keys it
+  // returns, and `read(reads)` which one holds now. Render-safe: each reads a
+  // predicate and writes nothing. A cycling fridge between runs is powered,
+  // not drawing, so the kitchen still hums then (a simplification,
+  // retunable).
+  const DESC_READERS = {
+    load:     { states:["on", "off"], read:(r)=> loadPoweredNow(r.id) ? "on" : "off" },
+    grid:     { states:["on", "off"], read:()=> gridUp() ? "on" : "off" },
+    crossing: { states:["on", "off"], read:()=> crossingLit() ? "on" : "off" }
+  };
+  // A room's description as it reads now.
+  function roomDescText(room){
+    const d = room.desc;
+    if(!d || typeof d !== "object") return d;
+    const reader = DESC_READERS[d.reads && d.reads.kind];
+    return reader ? d.variants[reader.read(d.reads)] : "";
+  }
   function renderLocationPanel(){
     const room = world[state.currentRoom];
     document.getElementById("locLabel").textContent = roomLabel(room);
@@ -9972,7 +10044,7 @@
         ? ` A fire is burning here — roughly ${fmtDuration(room.fireMinutesLeft).replace(/[()]/g,"")} of fuel left.`
         : " A fire is burning here.";
     }
-    document.getElementById("roomDesc").textContent = room.desc + heatNote;
+    document.getElementById("roomDesc").textContent = roomDescText(room) + heatNote;
     document.getElementById("clockLabel").textContent = hasWatch() ? getClockText() : getVagueClockText();
   }
   function renderStatsPanel(){
