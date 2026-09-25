@@ -434,7 +434,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.9.3" };
+  const GAME_CONFIG = { VERSION: "0.9.4" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -1883,8 +1883,8 @@
   // state.power (see PLAYER STATE).
   //
   // APPLIANCES, keyed by id: what a load is.
-  //   { name, watts, volts, leftOnChance | switchless, nameplate, startWatts?,
-  //     dutyCycle?, cycleMinutes? }
+  //   { name, watts, volts, leftOnChance | switchless, nameplate, readout?,
+  //     startWatts?, dutyCycle?, cycleMinutes? }
   //   watts        running draw
   //   volts        120 or 240
   //   leftOnChance 0–1: how likely its own switch is to be found on, rolled
@@ -1893,6 +1893,11 @@
   //   switchless   true: it has no user switch. It is always on, and no
   //                control is offered for it. Every entry carries exactly
   //                one of leftOnChance and switchless (validateWiring()).
+  //   readout      { on, off }: the words for its state (loadStatusText()),
+  //                `on` while it is powered and running, `off` otherwise,
+  //                with its switch's position after it. Present exactly when
+  //                leftOnChance is (validateWiring()): a switchless load's
+  //                readout is never shown. Functional UI text, retunable.
   //   startWatts   the total draw at a start; present on a motor load
   //   dutyCycle, cycleMinutes  present on a cycling load: it draws for
   //                dutyCycle × cycleMinutes of every cycleMinutes
@@ -1914,7 +1919,11 @@
   //                   running, the rule of thumb being 3–4×; duty cycle 0.35,
   //                   within the measured 33–40% in a room at about 70 °F.
   //                   The 60-minute cycle is a judgment call, not sourced.
-  //   led_light       10 W: an LED bulb draws 8–15 W (Champion).
+  //   led_light       LED_BULB_WATTS.
+  //   hall_light      a common-area light, with led_light's bulb. Switchless
+  //                   as a design choice, not a sourced fact: a hall or stair
+  //                   light in a shared building is treated as always on, so
+  //                   it is lit whenever power reaches it. Retunable.
   //   bath_fan        36 W: a bathroom exhaust fan draws 10–50 W, about 36 W
   //                   on average (Engineer Fix, HomeAlliance).
   //   range_hood      200 W: 150–300 W on high (Engineer Fix, Storables).
@@ -1925,8 +1934,9 @@
   //                   watts" (Engineer Fix). Switchless: it is plugged in and
   //                   has no power switch. The spark module's burst while
   //                   igniting is left unmodelled, so no `startWatts`; the
-  //                   372–432 W glow bar is the oven's igniter, and the oven
-  //                   isn't modelled (#259).
+  //                   384–432 W glow bar (a flat one; a round one draws
+  //                   300–360 W) is the oven's igniter, and the oven isn't
+  //                   modelled (#259).
   // The fan and the hood are motors, but their start surge is left
   // unmodelled: neither carries `startWatts`.
   // Nameplates, one real model each:
@@ -1935,7 +1945,7 @@
   //                   Several retailer spec listings agree; Frigidaire's own
   //                   page was not read, so the figure is secondary, not
   //                   confirmed.
-  //   led_light       its own `watts`, printed on the base.
+  //   led_light, hall_light  its own `watts`, printed on the base.
   //   bath_fan        0.9 A: Broan 688, "120 VAC, 0.9 A".
   //   range_hood      2.0 A: Broan 413004, "120V ~ 60 Hz, drawing 2.0 amps".
   //   smoke_alarm     0.04 A: BRK 9120 data sheet, "Operating Current: .04
@@ -1944,12 +1954,19 @@
   //                   Amps". The rating covers its oven igniter and oven,
   //                   which aren't modelled; that is why it sits far above
   //                   the 4 W standby.
+  // One LED bulb's draw, for every appliance that is one: an LED bulb draws
+  // 8–15 W (Champion).
+  const LED_BULB_WATTS = 10;
   const APPLIANCES = {
     fridge_freezer: { name:"Fridge-freezer", watts:150, startWatts:525, volts:120, dutyCycle:0.35, cycleMinutes:60, leftOnChance:0.99,
-      nameplate:{ amps:6 } },
-    led_light:      { name:"Light",          watts:10,  volts:120, leftOnChance:0.3, nameplate:{ printsWatts:true } },
-    bath_fan:       { name:"Exhaust fan",    watts:36,  volts:120, leftOnChance:0.05, nameplate:{ amps:0.9 } },
-    range_hood:     { name:"Range hood",     watts:200, volts:120, leftOnChance:0.05, nameplate:{ amps:2.0 } },
+      nameplate:{ amps:6 }, readout:{ on:"Light on", off:"Dark" } },
+    led_light:      { name:"Light",          watts:LED_BULB_WATTS, volts:120, leftOnChance:0.3, nameplate:{ printsWatts:true },
+      readout:{ on:"Lit", off:"Dark" } },
+    hall_light:     { name:"Light",          watts:LED_BULB_WATTS, volts:120, switchless:true, nameplate:{ printsWatts:true } },
+    bath_fan:       { name:"Exhaust fan",    watts:36,  volts:120, leftOnChance:0.05, nameplate:{ amps:0.9 },
+      readout:{ on:"Running", off:"Silent" } },
+    range_hood:     { name:"Range hood",     watts:200, volts:120, leftOnChance:0.05, nameplate:{ amps:2.0 },
+      readout:{ on:"Running", off:"Silent" } },
     smoke_alarm:    { name:"Smoke alarm",    watts:1,   volts:120, switchless:true, nameplate:{ amps:0.04 } },
     gas_range:      { name:"Gas range",      watts:4,   volts:120, switchless:true, nameplate:{ amps:12 } }
   };
@@ -2113,7 +2130,7 @@
         layout: {
           main: { rating:30 },
           circuits: [ { key:"house", label:"HOUSE", rating:15, volts:120, roles:ACORN_HOUSE_ROOMS.slice() } ],
-          fixtures: ACORN_HOUSE_ROOMS.map(r=> ({ key:`light_${r}`, appliance:"led_light", circuit:"house", role:r }))
+          fixtures: ACORN_HOUSE_ROOMS.map(r=> ({ key:`light_${r}`, appliance:"hall_light", circuit:"house", role:r }))
         },
         rooms: Object.fromEntries(ACORN_HOUSE_ROOMS.map(r=> [r, r])) }
     }
@@ -2221,7 +2238,7 @@
     hallway2: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2nd Floor", room:"Hallway", shelter:"full",
       desc:{ reads:{ kind:"load", id:"acorn.house.light_hallway2" },
         variants:{ on:"A dim corridor lit by one flickering bulb. Your door is one of two here, with a small transom window set beside it.",
-          off:"A dark corridor, its one bulb dead. Your door is one of two here, with a small transom window set beside it." } },
+          off:"A dark corridor. Your door is one of two here, with a small transom window set beside it." } },
       cannotHaveFire:true, floorCap:100, floor:[], containers:[],
       exits:[
         { to:"living", label:"Enter apartment 2A", distanceM:6, doorId:"2a" },
@@ -7784,6 +7801,20 @@
       }
     });
   }
+  // backfillRoomDescs(): companion to backfillRoomAddresses(), run alongside
+  // it on every load. A room's `desc` is static content that nothing mutates
+  // in play (roomDescText() is its only reader); a save carries it only
+  // because serializeGame() writes `world` whole. So every room the defaults
+  // know takes its `desc` from them, unconditionally, the way
+  // backfillRegistryTags() recopies tags: every content pass that edits room
+  // text then reaches existing saves without a migration of its own (#278).
+  // A room the defaults don't know is left as it is.
+  function backfillRoomDescs(){
+    const defaults = makeDefaultWorld();
+    Object.keys(world).forEach(roomId=>{
+      if(world[roomId] && defaults[roomId]) world[roomId].desc = defaults[roomId].desc;
+    });
+  }
   // backfillSlotItemIds(): companion to backfillItemIds(), run
   // alongside it on every load. Saves written before equipment slots carried
   // itemId hold a slot object built by hand from an item's fields — so
@@ -8008,6 +8039,7 @@
     backfillRenamedContainers();
     backfillContainerFields();
     backfillRoomAddresses();
+    backfillRoomDescs();
     backfillIllnessScale();
     backfillInventoryCap();
     migrateCookingRelease();
@@ -8131,7 +8163,8 @@
   //   every room a board, panel or role names exists, and every container a
   //     fixture names is in its room;
   //   every appliance id is in APPLIANCES, every APPLIANCES entry carries
-  //     exactly one of leftOnChance and switchless, and a nameplate rated at
+  //     exactly one of leftOnChance and switchless, a readout with non-empty
+  //     on and off words unless it is switchless, and a nameplate rated at
   //     no less than its own watts (nameplateWatts()), every circuit's volts is
   //     120 or 240, and every circuit's roles are in its panel's rooms;
   //   every breaker's rating is an NEC 240.6(A) standard size
@@ -8153,6 +8186,9 @@
     Object.keys(APPLIANCES).forEach(id=>{
       const a = APPLIANCES[id];
       if(("leftOnChance" in a) === !!a.switchless) problems.push(`appliance ${id}: needs exactly one of leftOnChance and switchless`);
+      const worded = w=> typeof w === "string" && w.length > 0;
+      if(!a.switchless && !(a.readout && worded(a.readout.on) && worded(a.readout.off)))
+        problems.push(`appliance ${id}: needs a readout with non-empty on and off`);
       const rated = nameplateWatts(a);
       if(rated === null) problems.push(`appliance ${id}: no nameplate`);
       else if(rated < a.watts) problems.push(`appliance ${id}: nameplate rated ${rated} W, below its own ${a.watts} W`);
@@ -10081,10 +10117,13 @@
     if(target.breaker && hasTool("current-clamp")) out.push(make("Clamp", ()=> doMeterClamp(target.breaker), cost));
     return out;
   }
+  // A switchable load's readout, in its appliance's own words (`readout`,
+  // APPLIANCES): `on` while it is powered, else `off` and its switch's
+  // position.
   function loadStatusText(loadId){
-    if(loadPoweredNow(loadId)) return "Light on";
-    const l = POWER_NET.loads[loadId];
-    return "Dark · " + (switchOnIn(state.power, state.seed, loadId, APPLIANCES[l.appliance]) ? "switched on" : "switched off");
+    const a = APPLIANCES[POWER_NET.loads[loadId].appliance];
+    if(loadPoweredNow(loadId)) return a.readout.on;
+    return a.readout.off + " · " + (switchOnIn(state.power, state.seed, loadId, a) ? "switched on" : "switched off");
   }
   // The device pop-up: a room fixture's controls, styled as the item pop-up
   // is. A bold title line with the fixture's name, its status lines, then
