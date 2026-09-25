@@ -50,6 +50,11 @@ Work on a branch. Never commit directly to `main`. Output is one pull request �
 see the wrap-time checklist. Read `docs/CHANGELOG_GUIDE.md` **at the wrap, when
 writing the entry** — it is not needed before then.
 
+A handoff built in phases is committed per phase (`Phase N: …`) and the branch
+is pushed after every phase commit, so a paused or reclaimed session loses
+nothing. The pull request opens only at the wrap: CI runs on pull requests, so
+earlier pushes trigger nothing. Project Guide, Part 3.
+
 Full detail on both: Project Guide, Part 3.
 
 ## Rules that bind
