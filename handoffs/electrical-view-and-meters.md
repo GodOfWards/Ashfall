@@ -197,8 +197,10 @@ the range's own electronics (`gas_range`'s standby draw in APPLIANCES).
   requires a grade crossing's warning system to have "a standby source of
   power … with sufficient capacity to operate the warning system for a
   reasonable length of time during a period of primary power interruption"
-  (49 CFR 234.251). No length is set, so one named constant holds it,
-  **24 hours, unconfirmed and retunable**.
+  (49 CFR 234.215, "Standby power system"). 49 CFR 234.251 only requires that
+  standby power "be tested at least once each month". No length is set, so
+  one named constant holds it, **24 hours, unconfirmed and retunable**. Cite
+  234.215 in the comment beside it.
   - The crossing's lights are on while `gridUp()`, or while the time since
     the grid failed is under that standby.
   - This is the only place the standby figure lives.
@@ -291,7 +293,7 @@ stove's strip already shows its state.
 
 | Appliance | Nameplate | Source |
 |---|---|---|
-| `fridge_freezer` | 120 V · 6 A | Frigidaire FFTR1821QW's listed "Amps at 120 Volts: 6", from a retailer listing, because Frigidaire's own page could not be read. **Unconfirmed.** |
+| `fridge_freezer` | 120 V · 6 A | Frigidaire FFTR1821QW: "Amps @ 120 Volts: 6", with a 0.72 kW connected load and a 15 A minimum circuit. Several retailer spec listings agree; Frigidaire's own page wasn't read, so it's **secondary**, not confirmed. |
 | `led_light` | its own `watts`, printed on the base (10 W) | Derived from `watts`, never a second copy (One source of truth). |
 | `bath_fan` | 120 V · 0.9 A | Broan 688: "120 VAC, 0.9 A" |
 | `range_hood` | 120 V · 2.0 A | Broan 413004: "120V ~ 60 Hz, drawing 2.0 amps" |
