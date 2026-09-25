@@ -67,6 +67,14 @@
   #seedRow{ display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink-dim); }
   .full-panel .menu-actions{ align-items:flex-start; }
   #seedValue{ color:var(--ink); user-select:all; -webkit-user-select:all; }
+  /* Options' electrical rules: the current run's, read-only, then the
+     choice for the next run as a two-way toggle styled like the Crafting
+     group buttons. The toggle row wraps, so it holds at phone width. */
+  #rulesBox{ display:flex; flex-direction:column; gap:8px; font-size:13px; color:var(--ink-dim); }
+  #rulesNext{ display:flex; flex-wrap:wrap; align-items:center; gap:5px 6px; }
+  #rulesNext button{ font-size:12px; background:var(--panel-2); border:1px solid var(--line); color:var(--ink-dim);
+    padding:4px 9px; min-height:24px; border-radius:3px; cursor:pointer; }
+  #rulesNext button.active{ border-color:var(--accent); color:var(--accent); }
   /* A pop-up (the item pop-up, #itemPop, and the device pop-up, #devicePop)
      and the transparent layer behind each that takes an outside tap. Both
      sit below #menuBackdrop's 15: a pop-up belongs to the play area, and
@@ -82,6 +90,10 @@
   /* The stove timer's add buttons, side by side in the device pop-up,
      sharing the row evenly so all three fit it at phone width. */
   .timer-steps{ display:flex; gap:6px; }
+  /* A panel's or board's breaker row in the device pop-up: its label,
+     rating and state, and its one button, wrapping at phone width. */
+  .breaker-row{ display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:4px 8px;
+    font-size:12px; color:var(--ink-dim); }
   .timer-steps button.action{ flex:1 1 0; min-width:0; padding-left:0; padding-right:0; text-align:center; }
   /* Focus is drawn for keyboard use only, so a click or a tap looks as it
      always has even now that opening and closing a layer moves focus. A
@@ -294,6 +306,10 @@
   <h2>Options <button class="panel-close">✕</button></h2>
   <div class="full-panel-body">
     <div id="seedRow">Seed: <span id="seedValue"></span><button id="copySeedBtn" class="mini">Copy</button></div>
+    <div id="rulesBox">
+      <div id="rulesNow"></div>
+      <div id="rulesNext"><span>Next run:</span></div>
+    </div>
     <div class="menu-actions"><button id="restartMenuBtn">Restart game</button></div>
   </div>
 </section>
@@ -349,7 +365,10 @@
   //   SIMULATION   owns time-dependent consequences (decay, fire burn-down,
   //                collapse from exhaustion, game-over checks). STAMINA/FATIGUE
   //                is a sub-section living inside SURVIVAL/TIME SIMULATION, not
-  //                a separate top-level section.
+  //                a separate top-level section. So is POWER: the network's
+  //                expansion and resolver (expandWiring(), resolvePowerStep(),
+  //                isPowered()). Its definitions (APPLIANCES, WIRING_TEMPLATES,
+  //                WIRING) are WORLD DATA, and state.power is PLAYER STATE.
   //   ACTIONS      perform gameplay operations (move, take, craft, etc.)
   //                and are grouped by the system they belong to:
   //                INVENTORY/ITEM SYSTEM, WORLD INTERACTION, CRAFTING,
@@ -402,7 +421,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.8.2" };
+  const GAME_CONFIG = { VERSION: "0.9.0" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -466,23 +485,48 @@
   const DECAY = { hunger:100/(3*MINUTES_PER_DAY), thirst:100/MINUTES_PER_DAY, energy:100/MINUTES_PER_DAY };
   const CAMPFIRE_KIT_COST = 3;
   // The collapse clock. A run starts START_DAYS_AFTER_COLLAPSE days after the
-  // collapse; grid power and running water fail on their own day after it.
-  // Nothing is stored: minutesSinceCollapse() derives the clock from
-  // state.totalMinutes. Power and water are separate constants on purpose,
-  // since they will be set separately (#149). All three are retunable; the
-  // Day N clock still counts from the start of the run.
+  // collapse; the grid fails on POWER_FAILS_DAY after it. Nothing is stored:
+  // minutesSinceCollapse() derives the clock from state.totalMinutes. Running
+  // water has no day of its own: the pumps run on the grid, so the water
+  // stops with it (waterRunning() is gridUp()). #149's separate water option
+  // is moot while that holds. Both are retunable; the Day N clock still
+  // counts from the start of the run.
   const START_DAYS_AFTER_COLLAPSE = 2;
   const POWER_FAILS_DAY = 21;
-  const WATER_FAILS_DAY = 21;
-  // Spoilage rates, as multiples of the rate food ages at room temperature
-  // (see spoilageRate()). A fridge slows ageing while powered, and for
-  // FRIDGE_COAST_MIN after the power fails it still holds some cold; a
-  // freezer stops it while powered and for FREEZER_COAST_MIN after. Balance
-  // values, retunable.
+  // The power network's figures (see POWER in SURVIVAL / TIME SIMULATION).
+  // Breakers, per UL 489 (ABB's white paper on UL 489 breakers; Castor,
+  // "Molded Case Circuit Breaker Basics", EasyPower): at 100% of its rating
+  // a breaker never trips; at 135% it trips within BREAKER_T135_MIN; at 200%
+  // within BREAKER_T200_MIN. Each is a list of rating bands, `upTo` amps
+  // inclusive. Above 225 A the 200% table was not read, so its last band
+  // reuses 10 min: a flagged figure, not a sourced one.
+  const BREAKER_T135_MIN = [ { upTo:50, min:60 }, { upTo:Infinity, min:120 } ];
+  const BREAKER_T200_MIN = [ { upTo:30, min:2 }, { upTo:50, min:4 }, { upTo:100, min:6 },
+    { upTo:150, min:8 }, { upTo:225, min:10 }, { upTo:Infinity, min:10 } ];
+  // The instant (magnetic) trip, as a multiple of the rating: the typical
+  // calibration of a C-curve breaker, whose band is 5–10× (ABB). Applying it
+  // to US plug-in panel breakers is an approximation, flagged.
+  const INSTANT_TRIP_MULTIPLE = 7.5;
+  // Judgment calls, retunable: a breaker's heat meter drains fully in
+  // HEAT_COOL_MIN below its rating; an appliance's switch is found on with
+  // SWITCH_LEFT_ON_CHANCE ("random but left on in almost all cases"); a panel
+  // or board without its own `volts` is 240 V. Real apartment buildings are
+  // often 120/208 V (#241), which is why `volts` is a per-panel field for a
+  // building pass to set; the default is flagged.
+  const HEAT_COOL_MIN = 30;
+  const SWITCH_LEFT_ON_CHANCE = 0.9;
+  const PANEL_DEFAULT_VOLTS = 240;
+  // The standard ampere ratings for fuses and inverse-time circuit breakers,
+  // NEC 2023 Table 240.6(A), which made 10 A a standard breaker size (it had
+  // been fuse-only). validateWiring() checks every breaker against it; the
+  // fuse-only ratings (1, 3, 6, 601 A) are left out, since every protective
+  // device here is a breaker.
+  const STANDARD_BREAKER_RATINGS = [10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100, 110, 125, 150, 175,
+    200, 225, 250, 300, 350, 400, 450, 500, 600, 700, 800, 1000, 1200, 1600, 2000, 2500, 3000, 4000, 5000, 6000];
+  // The spoilage rate in a powered fridge, as a multiple of the rate food
+  // ages at room temperature (see spoilageRate()). A powered freezer stops
+  // ageing; anything unpowered ages at 1 at once. Balance value, retunable.
   const FRIDGE_RATE_POWERED = 0.1;
-  const FRIDGE_RATE_COASTING = 0.25;
-  const FRIDGE_COAST_MIN = 2 * MINUTES_PER_DAY;
-  const FREEZER_COAST_MIN = 5 * MINUTES_PER_DAY;
   // Rotten food restores this fraction of what it would fresh, and carries a
   // baseline food-poisoning chance combined with the food's own
   // (combinePoisoning()). POISONING_TRAIT_MULTIPLIER is a placeholder until
@@ -655,8 +699,8 @@
   //   fireMinutesLeft remaining fuel minutes for an active fire
   //   campfireBuilt  a campfire structure has been assembled here
   //   sink           the room has a sink: while the water runs
-  //                  (waterRunning()), a water-holding item can be filled
-  //                  at it (doFillAtSink())
+  //                  (waterRunning(), which follows the grid: gridUp()), a
+  //                  water-holding item can be filled at it (doFillAtSink())
   //
   // CONTAINER SCHEMA:
   //   { id, name, capacityKg, items: [] }
@@ -673,10 +717,11 @@
   //               its device pop-up (renderDevicePop()). The strip under the
   //               Here panel's tabs offers that pop-up while its tab is
   //               selected.
-  //       fridge  food in it ages slower while the power is on, and for a
-  //               while after (spoilageRate()).
-  //       freezer food in it does not age while the power is on, nor for a
-  //               while after; it reads "(Frozen)" meanwhile.
+  //       fridge  food in it ages slower while its load is powered
+  //               (spoilageRate(), containerPowered()). Coasting on its
+  //               cold after the power stops is deferred to #217.
+  //       freezer food in it does not age while its load is powered; it
+  //               reads "(Frozen)" meanwhile. No coasting either (#217).
   //     A container carrying both heat and device is the room's stove
   //     (roomStove()).
   //   Optional: timerMinutes — a stove's analog timer, minutes left (absent
@@ -1658,6 +1703,27 @@
     industrial:  { name:"Riverside Freight",  anchor:"industrial_f0" }
   };
 
+  // DOOR SCHEMA (one entry per key in the object makeDefaultDoors() returns):
+  //   Definitions are what makeDefaultDoors() authors, and they are never
+  //   saved: a save carries only what changes in play, `{ locked, open }` per
+  //   door id (see savedDoorState() in PERSISTENCE). The runtime `doors`
+  //   object is the two merged (buildDoors()), so every reader sees one shape.
+  //   Definition fields:
+  //     sides     the two rooms the door physically separates
+  //     building  a BUILDINGS id ("acorn"): which master key opens it. Not
+  //               room.building, which holds a name (see ROOM SCHEMA).
+  //     locked    the authored starting lock state
+  //     lockable  optional, default true. false: an interior door with no
+  //               lock, which never locks, offers no key action and never
+  //               shows the locked note.
+  //   Saved fields:
+  //     locked    whether it is locked now; only `locked` gates an exit
+  //     open      whether it stands open, default false. A locked door is
+  //               always closed. Nothing reads `open` yet besides its own
+  //               Open / Close actions: it is laid down ahead of its consumer,
+  //               carbon monoxide (#248), the way ROOM SCHEMA's `shelter` was.
+  //               Movement ignores it: passing through a closed, unlocked
+  //               door leaves it closed.
   function makeDefaultDoors(){
     return {
       "2a": { locked:false, sides:["hallway2","living"], building:"acorn" },
@@ -1667,14 +1733,126 @@
       "1a-patio": { locked:true, sides:["onea_patio","onea"], building:"acorn" }
     };
   }
-  let doors = makeDefaultDoors();
+  // WINDOW SCHEMA (one entry per key in the object makeDefaultWindows()
+  // returns): definitions and saved state split as the doors' do. A save
+  // carries `{ state }` per window id; the runtime `windows` object is the
+  // two merged (buildWindows()).
+  //   Definition fields:
+  //     rooms      one room id, a window to the outside, or two, a window
+  //                between two rooms
+  //     label      what the actions call it ("transom window")
+  //     breakTag   the tool tag Break asks for
+  //     climbable  optional, default false. true: an open or broken window
+  //                with two rooms is a route between them ("Climb through
+  //                the …"). A window that is not climbable, or has one room,
+  //                is never a route, broken or not.
+  //   Saved field:
+  //     state      "closed", "open" or "broken". Open, Close and Break are
+  //                offered on every window, climbable or not.
   function makeDefaultWindows(){
     return {
-      "2a-transom": { state:"closed", rooms:["hallway2","living"], breakTag:"blunt", label:"transom window" },
-      "1b-alley":   { state:"closed", rooms:["alley","onebee"],   breakTag:"blunt", label:"window" }
+      "2a-transom": { state:"closed", rooms:["hallway2","living"], breakTag:"blunt", label:"transom window", climbable:true },
+      "1b-alley":   { state:"closed", rooms:["alley","onebee"],   breakTag:"blunt", label:"window", climbable:true }
     };
   }
-  let windows = makeDefaultWindows();
+  const WINDOW_STATES = ["closed", "open", "broken"];
+  function doorLockable(door){ return door.lockable !== false; }
+  // The runtime doors and windows: the definitions, rebuilt fresh, with the
+  // saved fields of `saved` (a save's `doors` / `windows`, or null for a new
+  // game) applied to the ids the definitions still have. A saved id the
+  // definitions no longer have is dropped; a definition the save lacks keeps
+  // its authored default. A save from before the split (0.8) carries whole
+  // door and window objects, whose `locked` and `state` read the same way; a
+  // missing `open` is false. Only well-typed fields are taken, so a bad value
+  // falls back to the default rather than breaking a door.
+  function buildDoors(saved){
+    const out = makeDefaultDoors();
+    Object.keys(out).forEach(id=>{
+      const d = out[id], s = saved && saved[id];
+      d.open = false;
+      if(s && typeof s === "object"){
+        if(typeof s.locked === "boolean") d.locked = s.locked;
+        if(typeof s.open === "boolean") d.open = s.open;
+      }
+      if(!doorLockable(d)) d.locked = false;
+      if(d.locked) d.open = false;
+    });
+    return out;
+  }
+  function buildWindows(saved){
+    const out = makeDefaultWindows();
+    Object.keys(out).forEach(id=>{
+      const s = saved && saved[id];
+      if(s && typeof s === "object" && WINDOW_STATES.includes(s.state)) out[id].state = s.state;
+    });
+    return out;
+  }
+  let doors = buildDoors(null);
+  let windows = buildWindows(null);
+
+  // POWER SCHEMA. The power network's definitions: never saved, expanded once
+  // at startup into the node table the resolver runs on (expandWiring(), in
+  // POWER under SURVIVAL / TIME SIMULATION). What changes in play is
+  // state.power (see PLAYER STATE).
+  //
+  // APPLIANCES, keyed by id: what a load is.
+  //   { name, watts, volts, startWatts?, dutyCycle?, cycleMinutes? }
+  //   watts        running draw
+  //   volts        120 or 240
+  //   startWatts   the total draw at a start; present on a motor load
+  //   dutyCycle, cycleMinutes  present on a cycling load: it draws for
+  //                dutyCycle × cycleMinutes of every cycleMinutes
+  //   No watts are shown anywhere (#242, #249).
+  // `fridge_freezer` is the appliance behind every kitchen's Fridge and
+  // Freezer pair. Running 150 W, within the measured 100–250 W (Champion's
+  // chart gives 150–400 W); starting 3.5× running, the rule of thumb being
+  // 3–4×; duty cycle 0.35, within the measured 33–40% in a room at about
+  // 70 °F. The 60-minute cycle is a judgment call, not sourced, and
+  // retunable.
+  const APPLIANCES = {
+    fridge_freezer: { name:"Fridge-freezer", watts:150, startWatts:525, volts:120, dutyCycle:0.35, cycleMinutes:60 }
+  };
+  // WIRING_TEMPLATES, keyed by id: one unit's layout by room role, so every
+  // unit wired the same way shares it.
+  //   { main:{ rating, volts? }, circuits:[…], fixtures:[…] }
+  //   main      the unit panel's main breaker: rating in A, and `volts`
+  //             (PANEL_DEFAULT_VOLTS when absent)
+  //   circuits  in panel order: { key, label, rating, volts, roles:[role] }.
+  //             `label` is the hand-written one on the panel door
+  //             ("KITCHEN"); `roles` are the rooms, by role, it serves.
+  //   fixtures  { key, appliance, circuit, role, containers?:[id] }: an
+  //             APPLIANCES id on the circuit `circuit`, in the room playing
+  //             `role`. `containers` are the ids of the room containers the
+  //             fixture is (a fridge-freezer is its room's Fridge and
+  //             Freezer), which is how spoilage finds the load a container
+  //             belongs to.
+  // None yet: Acorn's pass (#251) defines the first.
+  const WIRING_TEMPLATES = {};
+  // WIRING, keyed by BUILDINGS id: one building's network.
+  //   board    { name, room, rating, volts?, feeders:[{ panel, label, rating }] }
+  //            the complex's main board: the room it hangs in, its main
+  //            breaker's rating, and one feeder breaker per panel it feeds.
+  //   panels   [{ id, name, room, template?, layout?, rooms:{ role: roomId } }]
+  //            each unit's panel: the room it hangs in, and either a
+  //            WIRING_TEMPLATES id or an inline `layout` of a template's
+  //            shape, with the role → room id map that places it.
+  //   common   optional, one more panel entry, for the halls and stairs. It
+  //            expands exactly as a unit panel does, and the board needs a
+  //            feeder for it.
+  // Rooms are named by room id, never by room.building: the flats above the
+  // shops have no `building`. `name` is what the device's Here tab reads
+  // ("Unit 2A panel", "Main board").
+  // The expansion's ids (expandWiring()), stable because saves key on them:
+  //   acorn.board            the board          acorn.board.main  its main
+  //   acorn.board.2A         the feeder for panel 2A
+  //   acorn.2A               the panel          acorn.2A.main     its main
+  //   acorn.2A.<circuit>     a circuit's breaker
+  //   acorn.2A.<fixture>     a load
+  // A panel's circuit and fixture keys share one namespace, and a panel may
+  // not be called `board` or `main`; validateWiring() reports a clash.
+  // Empty in this release: no building is wired yet (#250), and a room
+  // nothing wires falls back to the grid directly (containerPowered()).
+  const WIRING = {};
 
   function buildAcornApartments(){
     return {
@@ -4044,6 +4222,9 @@
   // ==================================================
   // PLAYER STATE
   // ==================================================
+  // The electrical rules a run can be played under: "detailed", every
+  // breaker and circuit, or "simplified", one breaker per panel (#243).
+  const ELECTRICAL_RULES = ["detailed", "simplified"];
   function makeDefaultState(seed){
     const s = {
       // The run's identity: every roll derives from it (see chance()). Set
@@ -4065,6 +4246,18 @@
       // Running illnesses, keyed by ILLNESSES id: the minutes each has left.
       // A missing or 0 entry means not ill with it.
       illnesses:{},
+      // The power network's state, keyed by the expansion's node ids (see
+      // POWER SCHEMA). Only what differs from its default is stored, so a
+      // building wired after the run started needs nothing written:
+      //   switches  { loadId: bool } — a load's own switch. Default: rolled,
+      //             keyed and pure (switchOnIn()).
+      //   breakers  { breakerId: { on, tripped } }. Default: on, untripped.
+      //   heat      { breakerId: number } — the delayed-trip meter, toward 1.
+      //             Default: 0.
+      power:{ switches:{}, breakers:{}, heat:{} },
+      // One of ELECTRICAL_RULES, chosen when the run starts and never
+      // changed during it (#243). The Options choice applies at a restart.
+      electricalRules:"detailed",
       // lastExertionMinute/lastWakeMinute start far in the past so recovery
       // and Sleep are both available immediately at game start.
       lastExertionMinute:-9999, lastWakeMinute:-9999,
@@ -4084,9 +4277,11 @@
   let gameOver = false; // UI-only: never saved — a loaded save always resumes alive
   let detailItem = null; // UI-only: { uid, side } — resolved fresh via findItemByUid(), safe against list mutation
   // What the device pop-up is open on, or null when it is closed:
-  // { kind:"container", id }, a room fixture tagged `device`. Identity only,
-  // never an index or a kept object: resolveDeviceTarget() looks it up again
-  // on every render. UI-only and never saved, like detailItem.
+  // { kind:"container", id }, a room fixture tagged `device`, or
+  // { kind:"panel" | "board", id }, a panel or board by its POWER_NET node
+  // id. Identity only, never an index or a kept object:
+  // resolveDeviceTarget() looks it up again on every render. UI-only and
+  // never saved, like detailItem.
   let deviceTarget = null;
   // The open menu layers, bottom to top — the pop-ups, the drawer, a
   // full-screen panel. UI-only and never saved, like detailItem. See
@@ -4103,6 +4298,12 @@
   // drawer.
   function defaultCraftFilter(){ return { query:"", group:"all", canMakeOnly:false, vesselUid:null }; }
   let craftFilter = defaultCraftFilter();
+  // The electrical rules Options has chosen for the next run, or null to
+  // follow the current run's, which is the choice's default. UI-only and
+  // never saved: a restart applies it to the new run's
+  // state.electricalRules, and a restart or a load forgets it.
+  let nextRulesChoice = null;
+  function nextElectricalRules(){ return nextRulesChoice || state.electricalRules; }
   // Whether the last render() drew the game-over screen. UI-only. Game over
   // closes every layer once, on the render that first draws it, so the
   // drawer can still be opened and used afterwards (see render()).
@@ -5192,7 +5393,7 @@
         actions.push({ label:"Take Half", disabled: keychainBlocked, onClick:()=>doTake(index, Math.ceil(it.qty/2)) });
       if(splittable && it.qty>1)
         actions.push({ label:"Take 1", disabled: keychainBlocked, onClick:()=>doTake(index,1) });
-    } else {
+    } else if(worldSlot(world[state.currentRoom], worldTab)){
       const verb = worldTab==="floor" ? "Place" : "Store";
       actions.push({ label: verb + " All", onClick:()=>doStore(index) });
       if(splittable && it.qty>=3)
@@ -5234,11 +5435,11 @@
       actions.push({ label:"Equip", onClick:()=>doEquip(side, index) });
     if(it.category === "Key"){
       if(it.masterKey){
-        doorsTouchingRoom(state.currentRoom).filter(doorId=>doors[doorId].building===it.building).forEach(doorId=>{
+        doorsTouchingRoom(state.currentRoom).filter(doorId=>doors[doorId].building===it.building && doorLockable(doors[doorId])).forEach(doorId=>{
           const label = (doors[doorId].locked ? "Unlock the " : "Lock the ") + doorLabel(doorId, state.currentRoom) + " door";
           actions.push({ label, onClick:()=>doToggleLock(doorId) });
         });
-      } else if(it.doorId && doors[it.doorId] && doorsTouchingRoom(state.currentRoom).includes(it.doorId)){
+      } else if(it.doorId && doors[it.doorId] && doorLockable(doors[it.doorId]) && doorsTouchingRoom(state.currentRoom).includes(it.doorId)){
         const label = (doors[it.doorId].locked ? "Unlock the " : "Lock the ") + doorLabel(it.doorId, state.currentRoom) + " door";
         actions.push({ label, onClick:()=>doToggleLock(it.doorId) });
       }
@@ -5448,19 +5649,25 @@
   function getVagueClockText(){ return "Day " + dayNumber() + ", " + timeOfDayBand(); }
   // How long ago the collapse was, in game minutes: the run's start offset
   // plus the time played. Derived, never stored. Everything that asks whether
-  // the power or the water is still on reads this, through the two
-  // predicates below; `m` defaults to now so a caller integrating over time
-  // can ask about any other minute.
+  // the grid or the water is still on reads this, through the two predicates
+  // below; `m` defaults to now so a caller integrating over time can ask
+  // about any other minute.
+  // gridUp() is the grid source's state, the one source the power network
+  // has (see POWER in SURVIVAL / TIME SIMULATION). The water follows the
+  // grid, not a building's power: nothing restores a building's power
+  // without the grid yet, and the rule still holds once generators do (#245).
   function minutesSinceCollapse(){ return START_DAYS_AFTER_COLLAPSE * MINUTES_PER_DAY + state.totalMinutes; }
-  function powerOn(m = minutesSinceCollapse()){ return m < POWER_FAILS_DAY * MINUTES_PER_DAY; }
-  function waterRunning(m = minutesSinceCollapse()){ return m < WATER_FAILS_DAY * MINUTES_PER_DAY; }
+  function gridUp(m = minutesSinceCollapse()){ return m < POWER_FAILS_DAY * MINUTES_PER_DAY; }
+  function waterRunning(m = minutesSinceCollapse()){ return gridUp(m); }
   function getWindowsInRoom(roomId){
     return Object.keys(windows).filter(id=>windows[id].rooms.includes(roomId)).map(id=>Object.assign({id}, windows[id]));
   }
+  // A window is a route only when it is climbable, joins two rooms, and is
+  // open or broken (see WINDOW SCHEMA).
   function getExitsForRoom(room, roomId){
     const exits = room.exits.filter(e => !e.doorId || !doors[e.doorId].locked);
     getWindowsInRoom(roomId).forEach(w=>{
-      if(w.state !== "closed"){
+      if(w.climbable && w.rooms.length === 2 && w.state !== "closed"){
         const target = w.rooms.find(r=>r!==roomId);
         exits.push({ to:target, label:"Climb through the " + w.label, distanceM:4 });
       }
@@ -5618,10 +5825,49 @@
     log("You smash the " + windows[id].label + " with your tool. No going back from that.", "warn");
     render();
   }
+  // Locking an open door closes it too: a locked door is always closed (see
+  // DOOR SCHEMA).
   function doToggleLock(doorId){
     const d = doors[doorId];
+    if(!doorLockable(d)) return;
+    const wasOpen = d.open;
     d.locked = !d.locked;
-    log(d.locked ? "You lock the door behind you." : "You unlock the door.", "good");
+    if(d.locked) d.open = false;
+    log(!d.locked ? "You unlock the door."
+      : wasOpen ? "You close the door and lock it." : "You lock the door behind you.", "good");
+    render();
+  }
+  // Opening and closing a door, instant like the windows'. Only an unlocked
+  // door opens. The door is named as the key actions name it (doorLabel()).
+  function doOpenDoor(doorId){
+    const d = doors[doorId];
+    if(d.locked || d.open) return;
+    d.open = true;
+    log(`You open the ${doorLabel(doorId, state.currentRoom)} door.`);
+    render();
+  }
+  function doCloseDoor(doorId){
+    const d = doors[doorId];
+    if(!d.open) return;
+    d.open = false;
+    log(`You pull the ${doorLabel(doorId, state.currentRoom)} door shut.`);
+    render();
+  }
+  // A breaker in a panel or board, by hand, from its device pop-up. Instant,
+  // and seen by the next step's resolution (stepPower()). The lines are
+  // functional, named by the breaker's hand-written label; retunable.
+  function doSwitchBreaker(id, on){
+    const br = POWER_NET.breakers[id];
+    if(!br) return;
+    switchBreakerIn(state.power, id, on);
+    log(`You switch the ${br.label} breaker ${on ? "on" : "off"}.`);
+    render();
+  }
+  function doResetBreaker(id){
+    const br = POWER_NET.breakers[id];
+    if(!br || !breakerStateIn(state.power, id).tripped) return;
+    resetBreakerIn(state.power, id);
+    log(`You push the tripped ${br.label} breaker back on.`);
     render();
   }
   function doUnlockContainer(containerId){
@@ -5697,7 +5943,7 @@
     worldTab = container.id;
     if(container.spawnPools && !container.spawnRolled){
       rolledLootFor(state.seed, state.currentRoom, container)
-        .forEach(it=>{ stampAges(it, container); addToList(container.items, it); });
+        .forEach(it=>{ stampAges(it, container, state.currentRoom); addToList(container.items, it); });
       container.spawnRolled = true;
       container.lastRolledMinute = state.totalMinutes;
     }
@@ -5773,52 +6019,58 @@
     const oldest = freshnessOfAge(def, ages[0]);
     return oldest === freshnessOfAge(def, ages[ages.length - 1]) ? oldest : "mixed";
   }
-  // How fast food ages in `container` at minute `m` since the collapse, as a
-  // multiple of the rate at room temperature. A fridge runs slow while
-  // powered and a while after; a freezer stops ageing while powered and a
-  // while after; anything else, and no container, is 1.
-  function spoilageRate(container, m){
-    const sinceFailure = m - POWER_FAILS_DAY * MINUTES_PER_DAY;
-    if(hasTag(container, "freezer")) return sinceFailure < FREEZER_COAST_MIN ? 0 : 1;
-    if(hasTag(container, "fridge")){
-      if(powerOn(m)) return FRIDGE_RATE_POWERED;
-      return sinceFailure < FRIDGE_COAST_MIN ? FRIDGE_RATE_COASTING : 1;
-    }
+  // Whether the room container `container`, in room `roomId`, has power:
+  // the load it belongs to, if the wiring makes it one (POWER_NET's
+  // containerLoad), and otherwise the grid directly. That fallback is how a
+  // room nothing wires yet behaves: as it always has, on the grid.
+  function containerPowered(roomId, container){
+    const loadId = container && POWER_NET.containerLoad[roomId + KEY_SEP + container.id];
+    return loadId ? isPowered(loadId) : gridUp();
+  }
+  // How fast food ages in `container`, as a multiple of the rate at room
+  // temperature, given whether its load is `powered`. A powered fridge runs
+  // at FRIDGE_RATE_POWERED and a powered freezer stops ageing; anything
+  // unpowered, anything else, and no container, is 1, from the moment the
+  // power stops. A fridge that coasts on its cold for a while is #217's, with
+  // temperature.
+  function spoilageRate(container, powered){
+    if(hasTag(container, "freezer")) return powered ? 0 : 1;
+    if(hasTag(container, "fridge")) return powered ? FRIDGE_RATE_POWERED : 1;
     return 1;
   }
-  // Whether a freezer is holding its contents frozen right now: the "(Frozen)"
-  // label reads this.
-  function isFrozenIn(container){
-    return hasTag(container, "freezer") && spoilageRate(container, minutesSinceCollapse()) === 0;
+  // Whether a freezer is holding its contents frozen right now, which is
+  // whether it is powered: the "(Frozen)" label reads this.
+  function isFrozenIn(container, roomId){
+    return hasTag(container, "freezer") && containerPowered(roomId, container);
   }
-  // spoilageRate() integrated over [fromM, toM), minutes since the collapse:
-  // the effective age an item gains there. The rate is constant between the
-  // power failure and the ends of the two coasting windows, so the sum is
-  // exact.
-  function effectiveAge(container, fromM, toM){
+  // The effective age an item gains over [fromM, toM), minutes since the
+  // collapse, in `container` in `roomId` if nobody has touched it since the
+  // collapse: at its powered rate until the grid failed, then at 1. Its load's
+  // switch is as it was found, its starting state (switchOnIn() with nothing
+  // stored), and every breaker starts on; a load found switched off has aged
+  // at 1 throughout. An unwired container is on the grid until it fails.
+  function effectiveAge(container, roomId, fromM, toM){
     if(!(toM > fromM)) return 0;
-    const fail = POWER_FAILS_DAY * MINUTES_PER_DAY;
-    const cuts = [fail, fail + FRIDGE_COAST_MIN, fail + FREEZER_COAST_MIN]
-      .filter(c=> c > fromM && c < toM).sort((x, y)=> x - y);
-    let age = 0, at = fromM;
-    cuts.concat([toM]).forEach(next=>{ age += spoilageRate(container, at) * (next - at); at = next; });
-    return age;
+    const loadId = container && POWER_NET.containerLoad[roomId + KEY_SEP + container.id];
+    const wasOn = loadId ? switchOnIn({ switches:{} }, state.seed, loadId) : true;
+    const fail = Math.min(Math.max(POWER_FAILS_DAY * MINUTES_PER_DAY, fromM), toM);
+    return spoilageRate(container, wasOn) * (fail - fromM) + spoilageRate(container, false) * (toM - fail);
   }
   // Gives a perishable without `ages` the age it would have if it had sat in
-  // `container` since the collapse. A world item's starting age; an item an
-  // action makes is new instead (asNewlyMade()), and a placement that sets
-  // `ages` itself keeps them.
-  function stampAges(it, container){
-    (Array.isArray(it.contents) ? it.contents : []).forEach(c=> stampAges(c, container));
+  // `container`, in `roomId`, since the collapse. A world item's starting
+  // age; an item an action makes is new instead (asNewlyMade()), and a
+  // placement that sets `ages` itself keeps them.
+  function stampAges(it, container, roomId){
+    (Array.isArray(it.contents) ? it.contents : []).forEach(c=> stampAges(c, container, roomId));
     if(!isPerishable(it) || Array.isArray(it.ages)) return;
-    it.ages = new Array(it.qty).fill(effectiveAge(container, 0, minutesSinceCollapse()));
+    it.ages = new Array(it.qty).fill(effectiveAge(container, roomId, 0, minutesSinceCollapse()));
   }
   // stampAges() over every item list, each with its container. Run on a new
   // game, once the world is built — not inside makeDefaultWorld(), which
   // must stay free of state — and on load; doOpenContainer() stamps what a
   // roll adds.
   function stampMissingAges(){
-    forEachItemList((list, roomId, container)=> list.forEach(it=> stampAges(it, container)));
+    forEachItemList((list, roomId, container)=> list.forEach(it=> stampAges(it, container, roomId)));
   }
   // Keeps `ages` one per unit, oldest first, whatever wrote the row: a
   // missing age reads as new.
@@ -5839,17 +6091,17 @@
       list.splice(list.indexOf(row), 0, takeUnits(row, n));
     }
   }
-  // One tick of ageing: every perishable unit grows by its container's
-  // effective age over the step. A row that changes state is split where its
-  // units now differ, and any row that changed folds into a matching row of
-  // its list, so each list holds one row per item and state.
+  // One tick of ageing: every perishable unit grows by the step at its
+  // container's rate from the power state now (stepPower() has just run). A
+  // row that changes state is split where its units now differ, and any row
+  // that changed folds into a matching row of its list, so each list holds
+  // one row per item and state.
   function ageFood(dt){
-    const to = minutesSinceCollapse(), from = to - dt;
     forEachItemList((list, roomId, container)=>{
       let grow = null, changed = false;
       list.slice().forEach(row=>{
         if(!isPerishable(row)) return;
-        if(grow === null) grow = effectiveAge(container, from, to);
+        if(grow === null) grow = container ? spoilageRate(container, containerPowered(roomId, container)) * dt : dt;
         if(!(grow > 0)) return;
         normalizeAges(row);
         const before = rowFreshness(row);
@@ -5888,6 +6140,8 @@
   // carried one is "your", one in the room you are in is "the", and one
   // anywhere else shuts off silently, the way a fire elsewhere goes out.
   function applyWorldTicking(min){
+    // The network first: what spoilage reads this step is this step's power.
+    stepPower(min);
     ageFood(min);
     forEachItemList((list, roomId)=>{
       list.forEach(it=>{
@@ -5925,6 +6179,298 @@
       gameOver = true;
       log("Your body finally gives out. This is where it ends.", "warn");
     }
+  }
+  // ==================================================
+  // POWER
+  // ==================================================
+  // The power network: sources (the grid, for now), distribution (a
+  // complex's main board, a unit's panel, branch circuits, each protected by
+  // a breaker) and loads (fixtures and appliances). The rest of the game asks
+  // it one question, isPowered(loadId), and spoilage is its first reader.
+  // Definitions live in WORLD DATA (POWER SCHEMA); what changes in play is
+  // state.power (PLAYER STATE). A sub-section of SURVIVAL / TIME SIMULATION,
+  // the way STAMINA / FATIGUE is.
+  //
+  // The layers a breaker sits in, lowest first: the order every check runs
+  // in.
+  const BREAKER_LAYERS = ["circuit", "panel", "feeder", "board"];
+  // WIRING expanded into a flat table of nodes with stable ids (see POWER
+  // SCHEMA). Pure: the dev seam expands a test network through it
+  // (simulatePower()). A reference that does not resolve is skipped and
+  // reported in `problems`, which validateWiring() reads.
+  //   boards    { id: { id, building, name, room, volts, main, panels:[id] } }
+  //   panels    { id: { id, building, board, name, room, volts, main, feeder,
+  //              circuits:[breakerId], loads:[loadId], roles:{ role: roomId },
+  //              rooms:[roomId] } }
+  //   breakers  { id: { id, layer, label, rating, volts, device, room, loads } }
+  //             `device` is the panel or board it sits in and `room` the
+  //             room that hangs in; `loads` is every load it feeds. `volts`
+  //             divides its watts into amps: a circuit's own, a panel
+  //             main's and its feeder's the panel's, the board main's the
+  //             board's. A panel or board treats its loads as balanced
+  //             across its two legs, so its current is total watts ÷ volts.
+  //   loads     { id: { id, appliance, panel, circuit, room, containers } }
+  //   containerLoad  { roomId + KEY_SEP + containerId: loadId }
+  //   devices   { roomId: [{ kind:"board"|"panel", id }] } — what hangs there
+  //   byLayer   { layer: [breakerId] }
+  function expandWiring(wiring, templates){
+    const net = { boards:{}, panels:{}, breakers:{}, loads:{}, containerLoad:{}, devices:{}, byLayer:{}, problems:[] };
+    const seen = new Set();
+    const claim = (id)=>{
+      if(seen.has(id)) net.problems.push(`duplicate id: ${id}`);
+      seen.add(id);
+      return id;
+    };
+    const hang = (roomId, kind, id)=>{ (net.devices[roomId] = net.devices[roomId] || []).push({ kind, id }); };
+    Object.keys(wiring || {}).forEach(b=>{
+      const w = wiring[b] || {};
+      const bd = w.board;
+      if(!bd){ net.problems.push(`${b}: no board`); return; }
+      const boardId = claim(`${b}.board`);
+      const boardMain = claim(`${boardId}.main`);
+      const board = { id:boardId, building:b, name:bd.name || boardId, room:bd.room,
+        volts:bd.volts || PANEL_DEFAULT_VOLTS, main:boardMain, panels:[] };
+      net.boards[boardId] = board;
+      net.breakers[boardMain] = { id:boardMain, layer:"board", label:"MAIN", rating:bd.rating, volts:board.volts,
+        device:boardId, room:bd.room, loads:[] };
+      hang(bd.room, "board", boardId);
+      const feeders = bd.feeders || [];
+      (w.panels || []).concat(w.common ? [w.common] : []).forEach(pd=>{
+        if(!pd || !pd.id){ net.problems.push(`${b}: a panel has no id`); return; }
+        const layout = pd.layout || (templates || {})[pd.template];
+        if(!layout){ net.problems.push(`${b}.${pd.id}: template "${pd.template}" does not resolve and there is no layout`); return; }
+        const panelId = claim(`${b}.${pd.id}`);
+        const panelMain = claim(`${panelId}.main`);
+        const feederId = claim(`${boardId}.${pd.id}`);
+        const feeder = feeders.find(f=> f.panel === pd.id);
+        if(!feeder) net.problems.push(`${panelId}: the board has no feeder for it`);
+        const main = layout.main || {};
+        const rooms = pd.rooms || {};
+        const panel = { id:panelId, building:b, board:boardId, name:pd.name || panelId, room:pd.room,
+          volts:main.volts || PANEL_DEFAULT_VOLTS, main:panelMain, feeder:feederId, circuits:[], loads:[],
+          roles:Object.assign({}, rooms), rooms:Array.from(new Set(Object.values(rooms))) };
+        net.panels[panelId] = panel;
+        board.panels.push(panelId);
+        net.breakers[panelMain] = { id:panelMain, layer:"panel", label:"MAIN", rating:main.rating, volts:panel.volts,
+          device:panelId, room:pd.room, loads:[] };
+        net.breakers[feederId] = { id:feederId, layer:"feeder", label:feeder ? feeder.label : pd.id,
+          rating:feeder ? feeder.rating : undefined, volts:panel.volts, device:boardId, room:bd.room, loads:[] };
+        hang(pd.room, "panel", panelId);
+        (layout.circuits || []).forEach(c=>{
+          const circuitId = claim(`${panelId}.${c.key}`);
+          net.breakers[circuitId] = { id:circuitId, layer:"circuit", label:c.label, rating:c.rating, volts:c.volts,
+            roles:c.roles || [], device:panelId, room:pd.room, loads:[] };
+          panel.circuits.push(circuitId);
+        });
+        (layout.fixtures || []).forEach(fx=>{
+          const loadId = claim(`${panelId}.${fx.key}`);
+          const circuitId = `${panelId}.${fx.circuit}`;
+          const circuit = net.breakers[circuitId];
+          if(!circuit || circuit.layer !== "circuit") net.problems.push(`${loadId}: circuit "${fx.circuit}" does not resolve`);
+          const roomId = rooms[fx.role];
+          if(!roomId) net.problems.push(`${loadId}: role "${fx.role}" has no room in ${panelId}'s rooms`);
+          net.loads[loadId] = { id:loadId, appliance:fx.appliance, panel:panelId, circuit:circuitId, room:roomId,
+            containers:fx.containers || [] };
+          panel.loads.push(loadId);
+          [circuit && circuitId, panelMain, feederId, boardMain].forEach(id=>{ if(id) net.breakers[id].loads.push(loadId); });
+          if(roomId) (fx.containers || []).forEach(cid=>{ net.containerLoad[roomId + KEY_SEP + cid] = loadId; });
+        });
+      });
+      feeders.forEach(f=>{
+        if(!board.panels.includes(`${b}.${f.panel}`)) net.problems.push(`${boardId}: feeder "${f.label}" names panel "${f.panel}", which does not exist`);
+      });
+    });
+    BREAKER_LAYERS.forEach(layer=>{
+      net.byLayer[layer] = Object.keys(net.breakers).filter(id=> net.breakers[id].layer === layer);
+    });
+    return net;
+  }
+  // The game's network, expanded once. Empty until a building is wired.
+  const POWER_NET = expandWiring(WIRING, WIRING_TEMPLATES);
+  // state.power's readers and writers, over any power object so the dev
+  // seam's simulation shares them. A default is never written: a writer
+  // that returns an entry to its default deletes it.
+  // A load's switch: its stored value, else its rolled starting state,
+  // keyed on the load's id, so it is pure and render-safe.
+  function switchOnIn(power, seed, loadId){
+    const s = power.switches[loadId];
+    return typeof s === "boolean" ? s : chanceFor(seed, SWITCH_LEFT_ON_CHANCE, ["power", "switch", loadId]);
+  }
+  function breakerStateIn(power, id){
+    const b = power.breakers[id];
+    return { on: !(b && b.on === false), tripped: !!(b && b.tripped) };
+  }
+  function setBreakerIn(power, id, on, tripped){
+    if(on && !tripped) delete power.breakers[id];
+    else power.breakers[id] = { on, tripped };
+  }
+  function heatIn(power, id){ return power.heat[id] > 0 ? power.heat[id] : 0; }
+  function setHeatIn(power, id, h){
+    if(h > 0) power.heat[id] = h;
+    else delete power.heat[id];
+  }
+  // What a hand on a breaker does: switching it moves the handle and leaves a
+  // trip as it is; a reset pushes a tripped breaker back on. The device
+  // pop-up and the dev seam's scripts both go through these.
+  function switchBreakerIn(power, id, on){ setBreakerIn(power, id, on, breakerStateIn(power, id).tripped); }
+  function resetBreakerIn(power, id){ setBreakerIn(power, id, true, false); }
+  function breakerClosedIn(power, id){
+    const b = breakerStateIn(power, id);
+    return b.on && !b.tripped;
+  }
+  // The breaker layers a run's rules consult. Simplified rules ignore the
+  // circuits, and each panel and the board is one breaker, its main (#243).
+  function consultedLayers(rules){ return rules === "simplified" ? ["panel", "board"] : BREAKER_LAYERS; }
+  // How long a breaker takes to trip at `f` times its rating (f > 1), in
+  // minutes: t(f) = T200 ÷ (f − 1)^n, with n = ln(T200 ÷ T135) ÷ ln(0.35),
+  // which passes exactly through the 135% and 200% points (see
+  // BREAKER_T135_MIN). A breaker with no usable rating never trips.
+  function bandMinutes(bands, rating){ return bands.find(b=> rating <= b.upTo).min; }
+  function tripMinutes(rating, f){
+    if(!(rating > 0)) return Infinity;
+    const t135 = bandMinutes(BREAKER_T135_MIN, rating), t200 = bandMinutes(BREAKER_T200_MIN, rating);
+    const n = Math.log(t200 / t135) / Math.log(0.35);
+    return t200 / Math.pow(f - 1, n);
+  }
+  // One look at the network at `minute`, changing nothing. Pure: a function
+  // of the expanded network, the appliances, a power state, the rules,
+  // whether the grid is live, the minute, the previous step's `drawing` and
+  // the seed.
+  //   live      board, panel and circuit ids: whether power reaches past
+  //             their breaker. A board is live when the grid is and its
+  //             main is closed; a panel when its board is, and its feeder
+  //             and main are closed; a circuit when its panel is and its
+  //             breaker is closed. Simplified rules skip feeders and
+  //             circuits.
+  //   supplied  panel ids: whether power reaches its main (live but for it)
+  //   powered   load ids: its switch is on and its circuit (simplified: its
+  //             panel) is live. What spoilage asks, through isPowered().
+  //   drawing   load ids: powered, and a cycling load in the on part of its
+  //             cycle, ((minute + phase) mod cycleMinutes) < dutyCycle ×
+  //             cycleMinutes, its phase fixed per load by a keyed roll so
+  //             the kitchens don't all cycle together.
+  //   starting  load ids: a motor load (startWatts) drawing now that was not
+  //             in `prevDrawing`: switched on, its cycle turned on, or its
+  //             circuit came back. No `prevDrawing` means no starts.
+  //   running, momentary  breaker ids: the current through it in amps, from
+  //             the watts of the loads it feeds that are drawing; momentary
+  //             counts a starting load at its startWatts.
+  function powerSnapshot(net, appliances, power, rules, gridLive, minute, prevDrawing, seed){
+    const simple = rules === "simplified";
+    const closed = (id)=> breakerClosedIn(power, id);
+    const live = {}, supplied = {};
+    Object.values(net.boards).forEach(b=>{ live[b.id] = !!gridLive && closed(b.main); });
+    Object.values(net.panels).forEach(p=>{
+      supplied[p.id] = !!live[p.board] && (simple || closed(p.feeder));
+      live[p.id] = supplied[p.id] && closed(p.main);
+      p.circuits.forEach(c=>{ live[c] = live[p.id] && (simple || closed(c)); });
+    });
+    const powered = {}, drawing = {}, starting = {};
+    Object.values(net.loads).forEach(l=>{
+      powered[l.id] = !!(simple ? live[l.panel] : live[l.circuit]) && switchOnIn(power, seed, l.id);
+      const a = appliances[l.appliance];
+      if(!powered[l.id] || !a) return;
+      if(a.dutyCycle !== undefined && a.cycleMinutes > 0){
+        const phase = rollValueFor(seed, ["power", "cycle", l.id]) * a.cycleMinutes;
+        if(!((minute + phase) % a.cycleMinutes < a.dutyCycle * a.cycleMinutes)) return;
+      }
+      drawing[l.id] = true;
+      if(a.startWatts !== undefined && prevDrawing && !prevDrawing[l.id]) starting[l.id] = true;
+    });
+    const running = {}, momentary = {};
+    Object.values(net.breakers).forEach(br=>{
+      let run = 0, mom = 0;
+      br.loads.forEach(id=>{
+        if(!drawing[id]) return;
+        const a = appliances[net.loads[id].appliance];
+        run += a.watts;
+        mom += starting[id] ? a.startWatts : a.watts;
+      });
+      running[br.id] = run / br.volts;
+      momentary[br.id] = mom / br.volts;
+    });
+    return { live, supplied, powered, drawing, starting, running, momentary };
+  }
+  // One step of `dt` minutes ending at `minute`: the snapshot after this
+  // step's trips, plus `power`, the new power state (the one passed in is
+  // never written), and `trips`, [{ id, cause, running }] in the order they
+  // happened, `running` being the loads the breaker fed that were drawing
+  // when it went. Pure, like powerSnapshot(). Each check runs lowest layer
+  // first and looks again after every layer, so a trip below is seen above.
+  //   Instant: a closed breaker whose momentary current exceeds
+  //     INSTANT_TRIP_MULTIPLE × its rating trips at once.
+  //   Heat, the delayed trip: at f = running current ÷ rating, heat rises by
+  //     dt ÷ tripMinutes() while f > 1 and drains by dt ÷ HEAT_COOL_MIN
+  //     otherwise, never below 0. At 1 the breaker trips. Tripped means off
+  //     until reset; its heat keeps draining meanwhile, so a reset with the
+  //     overload still there trips again quickly, as a real breaker does.
+  // A breaker the rules don't consult is left exactly as it is.
+  function resolvePowerStep(net, appliances, power, rules, gridLive, minute, dt, prevDrawing, seed){
+    const p = { switches:Object.assign({}, power.switches), heat:Object.assign({}, power.heat), breakers:{} };
+    Object.keys(power.breakers).forEach(id=>{ p.breakers[id] = Object.assign({}, power.breakers[id]); });
+    const trips = [];
+    const look = ()=> powerSnapshot(net, appliances, p, rules, gridLive, minute, prevDrawing, seed);
+    const trip = (id, cause, snap)=>{
+      setBreakerIn(p, id, breakerStateIn(p, id).on, true);
+      trips.push({ id, cause, running: net.breakers[id].loads.filter(l=> snap.drawing[l]) });
+    };
+    const layers = consultedLayers(rules);
+    layers.forEach(layer=>{
+      const snap = look();
+      net.byLayer[layer].forEach(id=>{
+        if(breakerClosedIn(p, id) && snap.momentary[id] > INSTANT_TRIP_MULTIPLE * net.breakers[id].rating) trip(id, "instant", snap);
+      });
+    });
+    layers.forEach(layer=>{
+      const snap = look();
+      net.byLayer[layer].forEach(id=>{
+        const rating = net.breakers[id].rating;
+        const f = snap.running[id] / rating;
+        let h = heatIn(p, id);
+        h = f > 1 ? h + dt / tripMinutes(rating, f) : Math.max(0, h - dt / HEAT_COOL_MIN);
+        h = Math.min(h, 1);
+        if(h >= 1 - TICK_EPSILON && breakerClosedIn(p, id)){ h = 1; trip(id, "heat", snap); }
+        setHeatIn(p, id, h);
+      });
+    });
+    return Object.assign(look(), { power:p, trips });
+  }
+  // The game's network, now: the last step's result, kept for render and for
+  // isPowered(). Runtime only, never saved. refreshPower() rebuilds it
+  // without a step, and without starting anything, on boot, restart and
+  // load; a switch or breaker changed from its device pop-up shows in the
+  // next step.
+  let powerNow = null;
+  function refreshPower(){
+    powerNow = powerSnapshot(POWER_NET, APPLIANCES, state.power, state.electricalRules, gridUp(),
+      minutesSinceCollapse(), null, state.seed);
+  }
+  // Resolved every step, from applyWorldTicking(), before anything reads it:
+  // the networks are tens of rooms, so there is no cache to keep honest.
+  function stepPower(dt){
+    const r = resolvePowerStep(POWER_NET, APPLIANCES, state.power, state.electricalRules, gridUp(),
+      minutesSinceCollapse(), dt, powerNow ? powerNow.drawing : null, state.seed);
+    state.power = r.power;
+    powerNow = r;
+    logTrips(r.trips);
+  }
+  // A trip is heard where its panel or board hangs, and noticed where
+  // something it fed was running; anywhere else it passes unremarked. The
+  // grid failing logs nothing: noticing it is deferred (#220). One line of
+  // each kind per step. Wording retunable.
+  function logTrips(trips){
+    let atPanel = false, quiet = false;
+    trips.forEach(t=>{
+      if(POWER_NET.breakers[t.id].room === state.currentRoom) atPanel = true;
+      else if(t.running.some(id=> POWER_NET.loads[id].room === state.currentRoom)) quiet = true;
+    });
+    if(atPanel) log("The panel on the wall snaps. A breaker has tripped.", "warn");
+    if(quiet) log("Everything in here goes quiet.", "warn");
+  }
+  // Whether a load has power: its switch is on and its path is live.
+  function isPowered(loadId){
+    if(!powerNow) refreshPower();
+    return !!powerNow.powered[loadId];
   }
   // ==================================================
   // STAMINA / FATIGUE SYSTEM
@@ -6556,12 +7102,28 @@
   // ==================================================
   // PERSISTENCE
   // ==================================================
-  // Save format: { version, state, world, doors, windows }. _uid is not
-  // persisted specially — resyncUidCounter() scans
-  // every item location after a load so newly-created items during the next
-  // session keep getting unique ids, and ensureUid() lazily assigns one to
-  // any loaded item that predates the uid system.
-  function serializeGame(){ return JSON.stringify({ version: GAME_CONFIG.VERSION, state, world, doors, windows }, null, 2); }
+  // Save format: { version, state, world, doors, windows }. `state` and
+  // `world` are written whole; `doors` and `windows` carry only what changes
+  // in play, `{ locked, open }` per door and `{ state }` per window, since
+  // their definitions are rebuilt from WORLD DATA on every load (buildDoors(),
+  // buildWindows()). _uid is not persisted specially — resyncUidCounter()
+  // scans every item location after a load so newly-created items during the
+  // next session keep getting unique ids, and ensureUid() lazily assigns one
+  // to any loaded item that predates the uid system.
+  function savedDoorState(){
+    const out = {};
+    Object.keys(doors).forEach(id=>{ out[id] = { locked: doors[id].locked, open: doors[id].open }; });
+    return out;
+  }
+  function savedWindowState(){
+    const out = {};
+    Object.keys(windows).forEach(id=>{ out[id] = { state: windows[id].state }; });
+    return out;
+  }
+  function serializeGame(){
+    return JSON.stringify({ version: GAME_CONFIG.VERSION, state, world,
+      doors: savedDoorState(), windows: savedWindowState() }, null, 2);
+  }
   // forEachItemList(): calls visit(list, roomId) once for every item array
   // reachable from the current `state` and `world` — the inventory pools,
   // every room's floor, containers and car containers, and the `contents` of
@@ -6789,6 +7351,19 @@
   function backfillInventoryCap(){
     delete state.inventory.capacityKg;
   }
+  // backfillPowerState(): the power release's state, repaired in place on
+  // every load, before the loaded network is first resolved. A save from
+  // before it (0.8) has no `power` or `electricalRules` and takes them from
+  // makeDefaultState()'s spread in applyLoadedData(): an empty power state,
+  // so every switch reads its rolled default, and "detailed". This makes
+  // sure a present one has the shape the resolver reads, three plain
+  // objects and a known rules value, dropping anything else. Idempotent.
+  function backfillPowerState(){
+    const obj = (v)=> v && typeof v === "object" && !Array.isArray(v) ? v : {};
+    const p = obj(state.power);
+    state.power = { switches:obj(p.switches), breakers:obj(p.breakers), heat:obj(p.heat) };
+    if(!ELECTRICAL_RULES.includes(state.electricalRules)) state.electricalRules = "detailed";
+  }
   // migrateCookingRelease(): brings a 0.7 save into the cooking release,
   // run on every load after the backfills above. A browser save from 0.7
   // never reaches it — SAVE_KEY rotated with the MINOR bump — but an
@@ -6875,8 +7450,9 @@
     const base = makeDefaultState();
     const nextState = { ...base, ...data.state, vitals: { ...base.vitals, ...(data.state.vitals || {}) } };
     const nextWorld = data.world;
-    const nextDoors = data.doors || doors;
-    const nextWindows = data.windows || windows;
+    // Rebuilt from the definitions, with the save's fields applied.
+    const nextDoors = buildDoors(data.doors);
+    const nextWindows = buildWindows(data.windows);
     const problems = validateLoadedWorld(nextWorld, nextState);
     if(problems.length){
       console.warn("applyLoadedData: save rejected", problems);
@@ -6886,8 +7462,12 @@
     state = nextState;
     world = nextWorld;
     doors = nextDoors; windows = nextWindows;
+    // The loaded run's network, before anything reads it.
+    backfillPowerState();
+    refreshPower();
     detailItem = null;
     deviceTarget = null;
+    nextRulesChoice = null;
     gameOver = false;
     invTab = "inventory";
     worldTab = "floor";
@@ -7004,6 +7584,56 @@
     if(problems.length) console.warn("validateRoomSchema: rooms with schema problems", problems);
     else console.log("validateRoomSchema: every room has an address and a legal shelter");
     return problems;
+  }
+  // validateWiring(): dev-only console helper (not wired to any button or
+  // UI, runs nothing automatically), sibling to validateRoomSchema(). Checks
+  // that every WIRING reference resolves (`wiring` and `templates` default
+  // to the game's; pass a test network to check that instead):
+  //   the expansion's own problems (expandWiring()): unknown templates,
+  //     circuits and roles, a panel without a feeder, a feeder without a
+  //     panel, clashing ids;
+  //   every room a board, panel or role names exists, and every container a
+  //     fixture names is in its room;
+  //   every appliance id is in APPLIANCES, every circuit's volts is 120 or
+  //     240, and every circuit's roles are in its panel's rooms;
+  //   every breaker's rating is an NEC 240.6(A) standard size
+  //     (STANDARD_BREAKER_RATINGS).
+  // It also lists every room with shelter "full" that no panel's rooms
+  // include. That list is a warning while buildings are being wired (#250),
+  // and becomes an error in #258. Returns { problems, unwired }. Call it as
+  // `ashfallDev.validateWiring()` from the browser console when auditing.
+  function validateWiring(wiring = WIRING, templates = WIRING_TEMPLATES){
+    const net = expandWiring(wiring, templates);
+    const rooms = makeDefaultWorld();
+    const problems = net.problems.slice();
+    const roomExists = (id, what)=>{ if(!rooms[id]) problems.push(`${what}: room "${id}" does not exist`); };
+    Object.values(net.boards).forEach(b=> roomExists(b.room, b.id));
+    Object.values(net.panels).forEach(p=>{
+      roomExists(p.room, p.id);
+      p.rooms.forEach(id=> roomExists(id, `${p.id} rooms`));
+    });
+    Object.values(net.breakers).forEach(br=>{
+      if(!STANDARD_BREAKER_RATINGS.includes(br.rating))
+        problems.push(`${br.id}: rating ${br.rating} A is not an NEC 240.6(A) standard size`);
+      if(br.layer !== "circuit") return;
+      if(br.volts !== 120 && br.volts !== 240) problems.push(`${br.id}: volts ${br.volts} is not 120 or 240`);
+      const roles = net.panels[br.device].roles;
+      br.roles.forEach(r=>{ if(!roles[r]) problems.push(`${br.id}: role "${r}" has no room in ${br.device}'s rooms`); });
+    });
+    Object.values(net.loads).forEach(l=>{
+      if(!APPLIANCES[l.appliance]) problems.push(`${l.id}: appliance "${l.appliance}" is not in APPLIANCES`);
+      const room = rooms[l.room];
+      l.containers.forEach(cid=>{
+        if(room && !room.containers.some(c=> c.id === cid)) problems.push(`${l.id}: container "${cid}" is not in room "${l.room}"`);
+      });
+    });
+    const wired = new Set();
+    Object.values(net.panels).forEach(p=> p.rooms.forEach(id=> wired.add(id)));
+    const unwired = Object.keys(rooms).filter(id=> rooms[id].shelter === "full" && !wired.has(id));
+    if(problems.length) console.warn("validateWiring: broken references", problems);
+    else console.log("validateWiring: every wiring reference resolves");
+    if(unwired.length) console.warn(`validateWiring: ${unwired.length} fully sheltered room${unwired.length === 1 ? "" : "s"} with no wiring yet (a warning until #258)`, unwired);
+    return { problems, unwired };
   }
   // Items an action produces rather than a container holding them. Written
   // down because validateReachability() cannot derive it: each grant lives
@@ -7288,16 +7918,74 @@
     console.log(`sampleSeeds: n ${n}, start ${start}, ${compared.length} rows compared, ${flagged.length} flagged`);
     return { n, start, entries, pools, items, tags };
   }
+  // simulatePower(network, minutes, options): dev-only console helper (not
+  // wired to any button or UI, runs nothing automatically). Runs the power
+  // resolver on a SUPPLIED test network, never the game's, and never touches
+  // game state: its power state is its own copy. What the power release's
+  // resolver, spoilage and device checks are run with.
+  //   network  { wiring, templates?, appliances? }: a WIRING-shaped object,
+  //            the templates it names (WIRING_TEMPLATES when absent), and
+  //            appliances to add to APPLIANCES.
+  //   minutes  how many one-minute steps to run (default 60).
+  //   options  rules    "detailed" (default) or "simplified"
+  //            seed     the seed for switch defaults and cycle phases
+  //                     (default: the current run's, read only)
+  //            start    the minute since the collapse it starts at (default 0)
+  //            grid     true / false, or a function of the minute (default
+  //                     gridUp())
+  //            power    a starting state.power (default empty)
+  //            running  true: whatever draws at the start was already
+  //                     running, so nothing starts on the first step. Default
+  //                     false: everything drawing then starts.
+  //            script   { t: [change] } applied before step t + 1, t counting
+  //                     from 0: { switch: loadId, on }, { breaker: id, on },
+  //                     { reset: id }
+  // Returns { problems, steps, power }: the expansion's problems, then one row
+  // per step, { minute, running, momentary, heat, trips:[{ id, cause }],
+  // powered, drawing:[loadId] }, `minute` counting from 1, and the final power
+  // state. Call it as `ashfallDev.simulatePower({ wiring:{ … } }, 120)`.
+  function simulatePower(network, minutes = 60, options = {}){
+    const nw = network || {};
+    const net = expandWiring(nw.wiring, nw.templates || WIRING_TEMPLATES);
+    const appliances = Object.assign({}, APPLIANCES, nw.appliances || {});
+    const rules = options.rules || "detailed";
+    const seed = options.seed === undefined ? state.seed : options.seed >>> 0;
+    const start = options.start || 0;
+    const grid = typeof options.grid === "boolean" ? ()=> options.grid : (options.grid || ((m)=> gridUp(m)));
+    let power = JSON.parse(JSON.stringify(options.power || { switches:{}, breakers:{}, heat:{} }));
+    let prev = options.running ? powerSnapshot(net, appliances, power, rules, grid(start), start, null, seed).drawing : {};
+    const script = options.script || {};
+    const steps = [];
+    for(let t = 0; t < minutes; t++){
+      (script[t] || []).forEach(c=>{
+        if("switch" in c) power.switches[c.switch] = !!c.on;
+        else if("breaker" in c) switchBreakerIn(power, c.breaker, !!c.on);
+        else if("reset" in c) resetBreakerIn(power, c.reset);
+      });
+      const m = start + t + 1;
+      const r = resolvePowerStep(net, appliances, power, rules, grid(m), m, 1, prev, seed);
+      power = r.power;
+      prev = r.drawing;
+      steps.push({ minute:t + 1, running:r.running, momentary:r.momentary, heat:Object.assign({}, power.heat),
+        trips:r.trips.map(x=> ({ id:x.id, cause:x.cause })), powered:r.powered, drawing:Object.keys(r.drawing) });
+    }
+    return { problems:net.problems, steps, power };
+  }
   // `seed` is optional: undefined starts a fresh world, a uint32 replays that
   // one (see seedFromInput()). Callers wired straight to a click must wrap
   // this in an arrow — a bare doRestart handler would receive the click event
   // as its seed.
   function doRestart(seed){
     gameOver = false;
+    // The rules Options chose for this run, read before the old run goes.
+    const rules = nextElectricalRules();
     state = makeDefaultState(seed);
+    state.electricalRules = rules;
+    nextRulesChoice = null;
     world = makeDefaultWorld();
-    doors = makeDefaultDoors();
-    windows = makeDefaultWindows();
+    doors = buildDoors(null);
+    windows = buildWindows(null);
+    refreshPower();
     stampMissingAges();
     detailItem = null;
     deviceTarget = null;
@@ -7621,6 +8309,17 @@
     } else fallback();
   }
   copySeedBtn.addEventListener("click", copySeed);
+  // The next run's electrical rules, a two-way choice built once. Choosing
+  // changes nothing in this run; Restart game applies it. The labels are
+  // functional UI text; the choice moves to a New Game screen with #166.
+  const ELECTRICAL_RULES_LABELS = { detailed:"Detailed", simplified:"Simplified" };
+  ELECTRICAL_RULES.forEach(rules=>{
+    const btn = document.createElement("button");
+    btn.textContent = ELECTRICAL_RULES_LABELS[rules];
+    btn.dataset.rules = rules;
+    btn.addEventListener("click", ()=>{ nextRulesChoice = rules; renderOptionsPanel(); });
+    document.getElementById("rulesNext").appendChild(btn);
+  });
   document.querySelectorAll("#gaitBar button[data-gait]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       if(gaitLocked() && btn.dataset.gait !== "sneak") return;
@@ -8288,7 +8987,7 @@
   // order: Open, then cook state (a cookable item always shows Raw or
   // Cooked), then freshness or Frozen, then water. `ctx` carries what a label
   // needs from outside the item: `ctx.container`, the room container the row
-  // is in, for Frozen. The row and the item pop-up show them; log lines keep
+  // is in, and `ctx.roomId`, its room, for Frozen. The row and the item pop-up show them; log lines keep
   // the plain name.
   // `sealed` is three-valued (see ITEM DATA SCHEMA), and only the opened
   // state is marked: undefined means the item was never a packaged thing,
@@ -8301,7 +9000,7 @@
     if(cook) labels.push(COOK_STATE_LABELS[cook]);
     // A perishable always shows its freshness, or Frozen while it sits in a
     // freezer that is holding it.
-    if(isPerishable(it)) labels.push(ctx && isFrozenIn(ctx.container) ? "Frozen" : FRESHNESS_LABELS[unitFreshness(it)]);
+    if(isPerishable(it)) labels.push(ctx && isFrozenIn(ctx.container, ctx.roomId) ? "Frozen" : FRESHNESS_LABELS[unitFreshness(it)]);
     // Water shows its kind, never its level: an empty bottle is the plain name.
     const water = waterKindOf(it);
     if(water) labels.push(water === "tainted" ? "Tainted" : "Water");
@@ -8406,7 +9105,8 @@
       box.className = "detailBox";
       const nameLine = document.createElement("div");
       const nameB = document.createElement("b");
-      const ctx = { container: detailItem.side === "world" ? worldTabContainer(world[state.currentRoom], worldTab) : null };
+      const ctx = { container: detailItem.side === "world" ? worldTabContainer(world[state.currentRoom], worldTab) : null,
+        roomId: state.currentRoom };
       const shown = itemDisplay(it, ctx);
       nameB.textContent = shown.name;
       nameLine.appendChild(nameB);
@@ -8692,16 +9392,61 @@
   }
   function renderCraftResult(){ renderLogResult(document.getElementById("craftResult"), craftResult); }
   // What deviceTarget points at now, looked up again by identity: a
-  // container by its id, among the current room's containers. It must still
-  // carry `device`, and the Here panel's selected tab must still be its, since
-  // the pop-up hangs from that tab's strip. null when the target no longer
-  // resolves, which closes the pop-up: leaving the room, switching the Here
-  // tab, a load or a restart.
+  // container by its id, among the current room's containers, which must
+  // still carry `device`; or a panel or board by its node id, among the
+  // devices hanging in the current room (POWER_NET.devices). Either way the
+  // Here panel's selected tab must still be its, since the pop-up hangs from
+  // that tab's strip. null when the target no longer resolves, which closes
+  // the pop-up: leaving the room, switching the Here tab, a load or a
+  // restart.
   function resolveDeviceTarget(){
-    if(!deviceTarget || worldTab !== deviceTarget.id) return null;
+    if(!deviceTarget) return null;
     const room = world[state.currentRoom];
-    const container = room.containers.find(c=> c.id === deviceTarget.id);
-    return container && hasTag(container, "device") ? { room, container } : null;
+    if(deviceTarget.kind === "container"){
+      if(worldTab !== deviceTarget.id) return null;
+      const container = room.containers.find(c=> c.id === deviceTarget.id);
+      return container && hasTag(container, "device") ? { room, container } : null;
+    }
+    if(worldTab !== powerTab(deviceTarget.id)) return null;
+    const device = powerDevicesIn(state.currentRoom).find(d=> d.kind === deviceTarget.kind && d.id === deviceTarget.id);
+    return device ? { room, device } : null;
+  }
+  // The panels and boards hanging in a room, in wiring order, as
+  // [{ kind:"panel"|"board", id }]. Each gets a Here tab after the room's
+  // containers. They are not containers: they come from the wiring, never
+  // from room.containers, and hold no items.
+  function powerDevicesIn(roomId){ return POWER_NET.devices[roomId] || []; }
+  // A device's Here tab key, prefixed so it can't be mistaken for an
+  // authored container id, the way a floor bag's is.
+  function powerTab(nodeId){ return "power:" + nodeId; }
+  function powerNode(device){ return device.kind === "board" ? POWER_NET.boards[device.id] : POWER_NET.panels[device.id]; }
+  // A device's breakers, in the order its pop-up lists them: MAIN first,
+  // then a panel's circuits in panel order, or a board's feeders, one per
+  // panel it feeds.
+  function deviceBreakers(device){
+    const node = powerNode(device);
+    return [node.main].concat(device.kind === "board"
+      ? node.panels.map(id=> POWER_NET.panels[id].feeder)
+      : node.circuits);
+  }
+  // A breaker's state as its row reads it, and whether power reaches the
+  // device, both functional UI text, retunable.
+  function breakerStateText(id){
+    const b = breakerStateIn(state.power, id);
+    return b.tripped ? "Tripped" : b.on ? "On" : "Off";
+  }
+  function deviceFedText(device){
+    const fed = device.kind === "board" ? gridUp() : !!(powerNow && powerNow.supplied[device.id]);
+    return fed ? "Fed by the grid" : "No power";
+  }
+  // What the Here strip reads while a device's tab is selected: under
+  // detailed rules its main and how many of its breakers have tripped, under
+  // simplified rules just On or Off.
+  function deviceStripText(device){
+    const main = breakerClosedIn(state.power, powerNode(device).main);
+    if(state.electricalRules === "simplified") return main ? "On" : "Off";
+    const tripped = deviceBreakers(device).filter(id=> breakerStateIn(state.power, id).tripped).length;
+    return (main ? "Main on" : "Main off") + (tripped ? ` · ${tripped} tripped` : "");
   }
   // The stove's two readouts, shared by the device pop-up's status lines and
   // the Here strip: whether it is lit, and the timer rounded up to a whole
@@ -8726,6 +9471,7 @@
     const room = target.room;
     rebuildKeepingFocus(devicePop, ()=>{
       devicePop.innerHTML = "";
+      if(target.device){ renderPowerDevicePop(target.device); return; }
       const box = document.createElement("div");
       box.className = "detailBox";
       const nameLine = document.createElement("div");
@@ -8760,6 +9506,54 @@
     });
     if(!layerOpen(devicePop)) openLayer(devicePop, showDevicePop, hideDevicePop, { el:deviceOptionsBtn, uid:null });
     positionDevicePop();
+  }
+  // A panel's or board's pop-up, drawn into the device pop-up. Watts never
+  // appear (#242, #249). Detailed rules: the name, whether power reaches it,
+  // then one row per breaker (deviceBreakers()), each its hand-written
+  // label, rating and state and one button: Switch off, Switch on, or Reset
+  // when tripped. Simplified rules: the name, the main's rating, On or Off,
+  // and one Switch on / Switch off; a tripped main reads Off, and switching
+  // it on is its reset. Every control is instant and logs its own line
+  // (doSwitchBreaker(), doResetBreaker()).
+  function renderPowerDevicePop(device){
+    const node = powerNode(device);
+    const box = document.createElement("div");
+    box.className = "detailBox";
+    const nameLine = document.createElement("div");
+    const nameB = document.createElement("b");
+    nameB.textContent = node.name;
+    nameLine.appendChild(nameB);
+    box.appendChild(nameLine);
+    devicePop.appendChild(box);
+    const line = (text)=>{ const div = document.createElement("div"); div.textContent = text; box.appendChild(div); };
+    const controls = document.createElement("div");
+    controls.className = "pop-actions";
+    if(state.electricalRules === "simplified"){
+      const main = POWER_NET.breakers[node.main];
+      const closed = breakerClosedIn(state.power, node.main);
+      line(`Rating: ${main.rating} A`);
+      line(closed ? "On" : "Off");
+      controls.appendChild(closed
+        ? actionButton("Switch off", ()=> doSwitchBreaker(node.main, false))
+        : actionButton("Switch on", ()=> breakerStateIn(state.power, node.main).tripped
+          ? doResetBreaker(node.main) : doSwitchBreaker(node.main, true)));
+    } else {
+      line(deviceFedText(device));
+      deviceBreakers(device).forEach(id=>{
+        const br = POWER_NET.breakers[id];
+        const st = breakerStateIn(state.power, id);
+        const row = document.createElement("div");
+        row.className = "breaker-row";
+        const text = document.createElement("span");
+        text.textContent = `${br.label} · ${br.rating} A · ${breakerStateText(id)}`;
+        row.appendChild(text);
+        row.appendChild(st.tripped ? actionButton("Reset", ()=> doResetBreaker(id))
+          : st.on ? actionButton("Switch off", ()=> doSwitchBreaker(id, false))
+          : actionButton("Switch on", ()=> doSwitchBreaker(id, true)));
+        controls.appendChild(row);
+      });
+    }
+    devicePop.appendChild(controls);
   }
   // The device pop-up hangs from the Here strip, which is what holds Device
   // Options, at the strip's width.
@@ -8845,6 +9639,16 @@
       } else {
         hereBox.appendChild(hereNote(`The ${label} door is locked.`));
       }
+    });
+    // Open / Close on every door the room touches, as its key actions are
+    // offered. A locked door offers neither: it has to be unlocked first.
+    doorsTouchingRoom(state.currentRoom).forEach(doorId=>{
+      const d = doors[doorId];
+      if(d.locked) return;
+      const label = doorLabel(doorId, state.currentRoom);
+      hereBox.appendChild(d.open
+        ? actionButton(`Close the ${label} door`, ()=> doCloseDoor(doorId))
+        : actionButton(`Open the ${label} door`, ()=> doOpenDoor(doorId)));
     });
     hereBox.appendChild(actionButton("Rest " + fmtDuration(REST_DURATION_MIN), doRest));
     if(room.sleepSpot){
@@ -8985,8 +9789,10 @@
       invStrip.style.display = "";
       document.getElementById("unequipBtn").onclick = ()=> doUnequip(invTab);
     } else { invStrip.style.display = "none"; }
+    // No Store while the Here tab is a panel's or a board's: it holds no items.
     renderItemList(document.getElementById("invList"), currentInv.items, [
-      { label: worldTab === "floor" ? "Place" : "Store", onClick:(i)=> doStore(i) }
+      { label: worldTab === "floor" ? "Place" : "Store", onClick:(i)=> doStore(i),
+        test:()=> !!worldSlot(world[state.currentRoom], worldTab) }
     ], "inv", { container:null });
   }
   function renderWorldItemsPanel(){
@@ -9003,6 +9809,8 @@
       worldTabDefs.push([floorBagTab(bag), n > 1 ? bag.name + " " + n : bag.name]);
     });
     listedContainers(room).forEach(c=> worldTabDefs.push([c.id, c.name]));
+    // Then a tab for each panel or board hanging here, after the containers.
+    powerDevicesIn(state.currentRoom).forEach(d=> worldTabDefs.push([powerTab(d.id), powerNode(d).name]));
     // Before the buttons are built, so the render that drops the open tab
     // also marks Floor active.
     if(!worldTabDefs.find(d=>d[0]===worldTab)) worldTab = "floor";
@@ -9025,31 +9833,39 @@
       });
     }, false);
     revealActiveTab(worldTabsEl);
+    // A panel's or board's tab holds no items: no weight, no list.
     const currentWorld = worldSlot(room, worldTab);
-    document.getElementById("worldWeight").textContent =
-      totalWeight(currentWorld.items).toFixed(2) + " / " + currentWorld.capacityKg + " kg";
+    document.getElementById("worldWeight").textContent = currentWorld
+      ? totalWeight(currentWorld.items).toFixed(2) + " / " + currentWorld.capacityKg + " kg" : "";
     // A room fixture's strip, under the tabs: the selected tab is the focus,
     // the way the Inventory strip's Unequip follows its tab. Shown only while
-    // that tab is a container tagged `device`. It holds the stove's state,
-    // while the stove's tab is selected, then Device Options, which opens the
-    // device pop-up (renderDevicePop()).
+    // that tab is a container tagged `device`, or a panel's or board's. It
+    // holds the stove's state, while the stove's tab is selected, or the
+    // panel's or board's (deviceStripText()), then Device Options, which
+    // opens the device pop-up (renderDevicePop()).
     const worldStrip = document.getElementById("worldStrip");
     const tabContainer = room.containers.find(c=> c.id === worldTab);
+    const tabDevice = powerDevicesIn(state.currentRoom).find(d=> powerTab(d.id) === worldTab);
     if(tabContainer && hasTag(tabContainer, "device")){
       worldStrip.style.display = "";
       deviceOptionsBtn.onclick = ()=>{ deviceTarget = { kind:"container", id:tabContainer.id }; render(); };
+    } else if(tabDevice){
+      worldStrip.style.display = "";
+      deviceOptionsBtn.onclick = ()=>{ deviceTarget = { kind:tabDevice.kind, id:tabDevice.id }; render(); };
     } else { worldStrip.style.display = "none"; }
     // Hidden when empty, so it adds no gap to the strip.
     const deviceState = document.getElementById("worldDeviceState");
     deviceState.textContent = tabContainer && tabContainer === roomStove(room)
-      ? stoveOnText(room) + " · " + stoveTimerText(tabContainer) : "";
+      ? stoveOnText(room) + " · " + stoveTimerText(tabContainer)
+      : tabDevice ? deviceStripText(tabDevice) : "";
     deviceState.style.display = deviceState.textContent ? "" : "none";
+    if(!currentWorld){ document.getElementById("worldList").innerHTML = ""; return; }
     renderItemList(document.getElementById("worldList"), currentWorld.items, [
       // Disabled rather than hidden, for the reason given at the detail
       // view's Take family in getItemActions(): the item can be taken, just
       // not into the keychain.
       { label:"Take", disabled:(it)=> invTab === "keychain" && !keychainAllows(it), onClick:(i)=> doTake(i) }
-    ], "world", { container: worldTabContainer(room, worldTab) });
+    ], "world", { container: worldTabContainer(room, worldTab), roomId: state.currentRoom });
   }
   // The seed, as its canonical uint32 — what a typed word hashed to, which is
   // what reproduces the run; a word is lossy, the number is the seed. It lives
@@ -9058,6 +9874,12 @@
   // returns early, and the seed is exactly what a player wants after dying.
   function renderOptionsPanel(){
     document.getElementById("seedValue").textContent = state.seed;
+    // The current run's rules never change mid-run (#243): this line only
+    // reads them. The toggle below it is the next run's.
+    document.getElementById("rulesNow").textContent = "Electrical rules: " + ELECTRICAL_RULES_LABELS[state.electricalRules];
+    document.querySelectorAll("#rulesNext button[data-rules]").forEach(b=>{
+      b.classList.toggle("active", b.dataset.rules === nextElectricalRules());
+    });
   }
   function render(){
     renderOptionsPanel();
@@ -9117,19 +9939,20 @@
   document.title = "Ashfall — v" + GAME_CONFIG.VERSION;
   document.getElementById("pageTitle").textContent = "ASHFALL — v" + GAME_CONFIG.VERSION;
   // The initial boot's world, like doRestart()'s, needs its food aged once
-  // state exists.
+  // state exists, and its network resolved.
+  refreshPower();
   stampMissingAges();
   log("You wake up in your apartment. Everything's exactly where you left it — for now.");
   mapSetZoomStep(mapZoomStep);
   render();
 
-  // Dev seam. The four validators and the two seed reports above are local
-  // bindings inside this IIFE, so `validateReachability()` typed into devtools
-  // is a ReferenceError. This is the one deliberate hole in the closure:
-  // read-only reporting helpers, nothing that writes game state, and nothing
-  // else belongs on it.
+  // Dev seam. The five validators, the two seed reports and the power
+  // simulation above are local bindings inside this IIFE, so
+  // `validateReachability()` typed into devtools is a ReferenceError. This is
+  // the one deliberate hole in the closure: read-only reporting helpers,
+  // nothing that writes game state, and nothing else belongs on it.
   window.ashfallDev = { validateItemRegistry, validateLocations, validateRoomSchema, validateReachability,
-    simulateSeed, sampleSeeds };
+    validateWiring, simulateSeed, sampleSeeds, simulatePower };
 })();
 </script>
 </body>
