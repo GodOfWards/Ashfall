@@ -34,6 +34,9 @@
   #hubRow button:hover:not(:disabled){ border-color:var(--accent-dim); }
   #hubRow button:disabled{ color:var(--ink-faint); cursor:not-allowed; opacity:.6; }
   #hubRow .hint{ display:block; font-size:11px; font-style:italic; margin-top:2px; }
+  /* A hub toggle (the Electrical view) is lit while on, as the Crafting
+     group buttons are, and carries its On / Off on its second line. */
+  #hubRow button.active{ border-color:var(--accent); color:var(--accent); }
   /* A full-screen panel (Crafting, Options) stacked over the
      drawer. Above #sideMenu's 20, so it covers the drawer and its backdrop. */
   .full-panel{ position:fixed; inset:0; z-index:30; background:var(--panel); padding:20px 18px;
@@ -95,6 +98,9 @@
   .breaker-row{ display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:4px 8px;
     font-size:12px; color:var(--ink-dim); }
   .timer-steps button.action{ flex:1 1 0; min-width:0; padding-left:0; padding-right:0; text-align:center; }
+  /* A breaker row's buttons: its switch, then the Electrical view's meter
+     buttons while a meter is carried, wrapping together. */
+  .breaker-buttons{ display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end; }
   /* Focus is drawn for keyboard use only, so a click or a tap looks as it
      always has even now that opening and closing a layer moves focus. A
      layer's own root is focusable only as the last place focus can land,
@@ -220,6 +226,13 @@
   ul.itemlist .cat{ color:var(--ink-faint); font-size:12px; }
   ul.itemlist .state{ color:var(--ink-dim); }
   ul.itemlist .empty{ color:var(--ink-faint); font-style:italic; }
+  /* A circuit tab's rows in the electrical view: a load's name, then its
+     readout and nameplate on lines of their own; and the heading over the
+     loads elsewhere on the circuit, set as a panel heading is. */
+  ul.itemlist .meta > b{ color:var(--ink); }
+  ul.itemlist .line{ display:block; color:var(--ink-dim); }
+  ul.itemlist li.subhead{ font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-faint);
+    padding-top:10px; }
   .btnrow{ display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; }
   button.mini{ background:#262a30; border:1px solid var(--line); color:var(--ink); font-size:12px;
     padding:4px 7px; min-height:24px; border-radius:3px; cursor:pointer; white-space:nowrap; }
@@ -421,10 +434,14 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.9.2" };
+  const GAME_CONFIG = { VERSION: "0.9.3" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
+  // Where the Electrical view's toggle is kept (see electricalView): a player
+  // preference, stored beside the save and never in it, so its key carries no
+  // version and a MINOR bump leaves it as it was.
+  const ELECTRICAL_VIEW_KEY = "ashfall_pref_electrical_view";
   // Floor on the cost of one movement, in game minutes — applied two ways,
   // and the two branches are not a redundancy to be tidied away.
   //
@@ -493,6 +510,14 @@
   // counts from the start of the run.
   const START_DAYS_AFTER_COLLAPSE = 2;
   const POWER_FAILS_DAY = 21;
+  // How long a rail crossing's warning lights run on their standby battery
+  // once the grid fails (crossingLit()). US law requires "a standby source of
+  // power … with sufficient capacity to operate the warning system for a
+  // reasonable length of time during a period of primary power interruption"
+  // (49 CFR 234.215, "Standby power system"), and sets no length; 234.251
+  // requires only that it "be tested at least once each month". 24 hours is
+  // unconfirmed and retunable.
+  const CROSSING_STANDBY_MIN = 24 * 60;
   // The power network's figures (see POWER in SURVIVAL / TIME SIMULATION).
   // Breakers, per UL 489 (ABB's white paper on UL 489 breakers; Castor,
   // "Molded Case Circuit Breaker Basics", EasyPower): at 100% of its rating
@@ -675,7 +700,19 @@
   //                 cover). The pass that adds the first consumer also inherits
   //                 shelter's save backfill — backfillRoomAddresses()
   //                 deliberately does not restore it, since nothing reads it.
-  //   desc          description shown to the player
+  //   desc          description shown to the player: a string, or STATE
+  //                 VARIANTS, one text per state of something in the world,
+  //                 { reads, variants:{ state: text } }. `reads` names what
+  //                 picks the text, { kind, … }, a DESC_READERS entry
+  //                 (RENDERING): "load" with its `id`, on while that load is
+  //                 powered (loadPoweredNow()); "grid", on while the grid is
+  //                 up (gridUp()); "crossing", on while a rail crossing's
+  //                 lights are (crossingLit()). Each reader returns one of its
+  //                 own `states`, and `variants` holds a text for every one
+  //                 (validateRoomSchema()). A later reader (weather, time of
+  //                 day, damage) is one more DESC_READERS entry with its own
+  //                 states, and needs nothing new here. Rendering picks the
+  //                 text (roomDescText()); nothing else reads it.
   //   floor         array of loose item objects (see ITEM DATA SCHEMA)
   //   floorCap      maximum loose-item capacity in kg
   //   containers    array of container objects (see CONTAINER SCHEMA)
@@ -726,9 +763,10 @@
   //               reads "(Frozen)" meanwhile. No coasting either (#217).
   //     A container carrying both heat and device is the room's stove
   //     (roomStove()).
-  //   Optional: timerMinutes — a stove's analog timer, minutes left (absent
-  //     = 0). Set from its device pop-up, counted down by
-  //     tickStoveTimers() whether or not the stove is on.
+  //   Optional: timerMinutes — a stove's wind-up timer, minutes left (absent
+  //     = 0). It needs neither power nor a battery. Set from its device
+  //     pop-up, counted down by tickStoveTimers() whether or not the stove
+  //     is on or has power.
   //     Authored containers carry their tags in WORLD DATA. The campfire's
   //     container is created by doBuildFire(), which gives it `heat`.
   //   Optional (spawn pools — see SPAWN_POOLS below):
@@ -775,7 +813,8 @@
   //     tags          capability tags used by mechanics instead of name
   //                   checks. Read by a mechanic today: blunt, cutting,
   //                   chopping, fishing, tackle, fire-starter, battery,
-  //                   can-opening, disassemble, blade. `can-opening`
+  //                   can-opening, disassemble, blade, electrical,
+  //                   voltage-test, current-clamp. `can-opening`
   //                   means "can get a can open", not "is a can opener" —
   //                   doOpen() asks hasTool() for it, so every item that
   //                   could work a lid off carries it, not just the
@@ -794,6 +833,10 @@
   //                   before a fire-starter since it spends nothing.
   //                   roomHasHeat() reads it too, but its only caller is
   //                   canCraft()'s needsHeat branch, which no recipe sets.
+  //                   `electrical` puts an item in the Electrical view's
+  //                   Inventory (#242). `voltage-test` offers Test on a
+  //                   load or a breaker there, and `current-clamp` Clamp on
+  //                   a breaker (doMeterTest(), doMeterClamp()).
   //                   Declared, with no consumer yet: prying — an item
   //                   carrying it makes a claim nothing currently acts on,
   //                   which is correct to write and not yet load-bearing.
@@ -978,6 +1021,14 @@
     loose_change: { name:"Loose change", category:"Misc", unitWeight:0.3 },
     box_cutter: { name:"Box cutter", category:"Tool", unitWeight:0.1, tags:["blade","can-opening"] },
     screwdriver: { name:"Screwdriver", category:"Tool", unitWeight:0.15, tags:["can-opening"] },
+    // The meters (#249). A Fluke 115 weighs 550 g and a Fluke 323 265 g.
+    // The multimeter only tests voltage: it reads current up to 10 A, and
+    // only by breaking into the circuit, so it can't safely read a household
+    // one and the game doesn't offer it. The clamp meter clamps current
+    // (400 A AC) and tests voltage (600 V AC) too. Neither's battery is
+    // modelled (#261).
+    multimeter: { name:"Multimeter", category:"Tool", unitWeight:0.55, tags:["electrical","voltage-test"] },
+    clamp_meter: { name:"Clamp meter", category:"Tool", unitWeight:0.265, tags:["electrical","voltage-test","current-clamp"] },
     old_photographs: { name:"Old photographs", category:"Misc", unitWeight:0.1 },
     reading_lamp: { name:"Reading lamp", category:"Electronics", unitWeight:0.8 },
     prescription_bottles: { name:"Prescription bottles", category:"Medical", unitWeight:0.05 },
@@ -1226,6 +1277,9 @@
   //   chosen to sit in the band its neighbours already occupy. They are
   //   retunable balance values; the other entries are not, because retuning
   //   one silently breaks the derivation the rest are re-checkable against.
+  //   So are the meters' four: `multimeter` and `clamp_meter`, each at 0.20
+  //   in both `tools_workshop` and `hardware_store`, chosen beside the
+  //   screwdriver's. They postdate the conversion too. Retunable.
   //   The whole `kitchen_frozen` pool (meat 0.5, vegetables 0.5, fish 0.3,
   //   ice cream 0.4, emptyChance 0.2) is chosen too: the freezers postdate the
   //   conversion. So are `kitchen_tools`' cooking pot (0.15) and roasting
@@ -1348,6 +1402,8 @@
       { itemId:"metal_pipe", chance:0.204082, qtyMin:1, qtyMax:1 },
       { itemId:"box_cutter", chance:0.204082, qtyMin:1, qtyMax:1 },
       { itemId:"screwdriver", chance:0.20, qtyMin:1, qtyMax:1 },
+      { itemId:"multimeter", chance:0.20, qtyMin:1, qtyMax:1 },
+      { itemId:"clamp_meter", chance:0.20, qtyMin:1, qtyMax:1 },
       { itemId:"spare_parts_box", chance:0.204082, qtyMin:1, qtyMax:1 },
       { itemId:"motor_oil", chance:0.204082, qtyMin:1, qtyMax:1 },
       { itemId:"tire_iron", chance:0.164898, qtyMin:1, qtyMax:1 },
@@ -1382,6 +1438,8 @@
       { itemId:"rope", chance:0.264344, qtyMin:1, qtyMax:1 },
       { itemId:"plank", chance:0.229818, qtyMin:1, qtyMax:2 },
       { itemId:"screwdriver", chance:0.23, qtyMin:1, qtyMax:1 },
+      { itemId:"multimeter", chance:0.20, qtyMin:1, qtyMax:1 },
+      { itemId:"clamp_meter", chance:0.20, qtyMin:1, qtyMax:1 },
       { itemId:"paint_can", chance:0.194243, qtyMin:1, qtyMax:1 },
       { itemId:"wrench", chance:0.194243, qtyMin:1, qtyMax:1 },
       { itemId:"crowbar", chance:0.119873, qtyMin:1, qtyMax:1 },
@@ -1707,8 +1765,12 @@
   };
 
   // DOOR SCHEMA (one entry per key in the object makeDefaultDoors() returns):
-  //   Definitions are what makeDefaultDoors() authors, and they are never
-  //   saved: a save carries only what changes in play, `{ locked, open }` per
+  //   Definitions come from two places: the building's own doors, authored
+  //   below (authoredDoors()), and a wired unit's interior doors, which its
+  //   panel's WIRING_TEMPLATES entry carries by role (`doors`, expanded by
+  //   expandOpenings(); see POWER SCHEMA). An exit through a template door
+  //   gets its doorId when the world is built (stampTemplateDoorIds()), so no
+  //   room definition names one. Definitions are never saved: a save carries only what changes in play, `{ locked, open }` per
   //   door id (see savedDoorState() in PERSISTENCE). The runtime `doors`
   //   object is the two merged (buildDoors()), so every reader sees one shape.
   //   Definition fields:
@@ -1727,30 +1789,34 @@
   //               carbon monoxide (#248), the way ROOM SCHEMA's `shelter` was.
   //               Movement ignores it: passing through a closed, unlocked
   //               door leaves it closed.
-  function makeDefaultDoors(){
+  // The building's own doors: the entry doors, one per unit, which no unit
+  // template carries. Every interior door of a wired unit, and 1A's patio
+  // door, comes from its panel's template instead (expandOpenings(), and
+  // `doors` in WIRING_TEMPLATES).
+  function authoredDoors(){
     return {
       "2a": { locked:false, sides:["hallway2","living"], building:"acorn" },
       "2b": { locked:true, sides:["hallway2","twobee"], building:"acorn" },
       "1a": { locked:true, sides:["hallway1","onea"], building:"acorn" },
-      "1b": { locked:true, sides:["hallway1","onebee"], building:"acorn" },
-      "1a-patio": { locked:true, sides:["onea_patio","onea"], building:"acorn" },
-      // Interior doors, with no lock. A balcony door is a sliding door, which
-      // is taken to have none either (retunable).
-      "2a-bedroom": { locked:false, lockable:false, sides:["living","bedroom"], building:"acorn" },
-      "2a-bathroom": { locked:false, lockable:false, sides:["living","bathroom"], building:"acorn" },
-      "2a-bath-bedroom": { locked:false, lockable:false, sides:["bedroom","bathroom"], building:"acorn" },
-      "2a-balcony": { locked:false, lockable:false, sides:["living","balcony"], building:"acorn" },
-      "2b-bedroom": { locked:false, lockable:false, sides:["twobee","twobee_bedroom"], building:"acorn" },
-      "2b-bathroom": { locked:false, lockable:false, sides:["twobee","twobee_bathroom"], building:"acorn" },
-      "2b-bath-bedroom": { locked:false, lockable:false, sides:["twobee_bedroom","twobee_bathroom"], building:"acorn" },
-      "2b-balcony": { locked:false, lockable:false, sides:["twobee","twobee_balcony"], building:"acorn" },
-      "1a-bedroom": { locked:false, lockable:false, sides:["onea","onea_bedroom"], building:"acorn" },
-      "1a-bathroom": { locked:false, lockable:false, sides:["onea","onea_bathroom"], building:"acorn" },
-      "1a-bath-bedroom": { locked:false, lockable:false, sides:["onea_bedroom","onea_bathroom"], building:"acorn" }
+      "1b": { locked:true, sides:["hallway1","onebee"], building:"acorn" }
     };
   }
+  // Every door: the authored ones and the templates' together, lockable doors
+  // ahead of lockless ones, each group in the order it was built. That is the
+  // order doorsForRoom() walks, and so the order the Here panel offers Open
+  // and Close in.
+  function makeDefaultDoors(){
+    const all = Object.assign(authoredDoors(), expandOpenings(WIRING, WIRING_TEMPLATES).doors);
+    const out = {};
+    [true, false].forEach(lockable=> Object.keys(all).forEach(id=>{
+      if(doorLockable(all[id]) === lockable) out[id] = all[id];
+    }));
+    return out;
+  }
   // WINDOW SCHEMA (one entry per key in the object makeDefaultWindows()
-  // returns): definitions and saved state split as the doors' do. A save
+  // returns): definitions and saved state split as the doors' do, and come
+  // from the same two places: the building's own windows (authoredWindows())
+  // and a wired unit's, by role, from its template (`windows`). A save
   // carries `{ state }` per window id; the runtime `windows` object is the
   // two merged (buildWindows()).
   //   Definition fields:
@@ -1765,25 +1831,18 @@
   //   Saved field:
   //     state      "closed", "open" or "broken". Open, Close and Break are
   //                offered on every window, climbable or not.
-  function makeDefaultWindows(){
+  // The building's own windows, which no unit template carries: 2A's transom
+  // onto the hall and 1B's onto the alley. Every other window of a wired unit
+  // comes from its panel's template (expandOpenings(), and `windows` in
+  // WIRING_TEMPLATES).
+  function authoredWindows(){
     return {
       "2a-transom": { state:"closed", rooms:["hallway2","living"], breakTag:"blunt", label:"transom window", climbable:true },
-      "1b-alley":   { state:"closed", rooms:["alley","onebee"],   breakTag:"blunt", label:"window", climbable:true },
-      // One to the outside in each room of 2A, 2B and 1A but the balcony or
-      // patio. Which way each faces is not modelled.
-      "2a-living-window":     { state:"closed", rooms:["living"], breakTag:"blunt", label:"window" },
-      "2a-kitchen-window":    { state:"closed", rooms:["kitchen"], breakTag:"blunt", label:"window" },
-      "2a-bedroom-window":    { state:"closed", rooms:["bedroom"], breakTag:"blunt", label:"window" },
-      "2a-bathroom-window":   { state:"closed", rooms:["bathroom"], breakTag:"blunt", label:"window" },
-      "2b-living-window":     { state:"closed", rooms:["twobee"], breakTag:"blunt", label:"window" },
-      "2b-kitchen-window":    { state:"closed", rooms:["twobee_kitchen"], breakTag:"blunt", label:"window" },
-      "2b-bedroom-window":    { state:"closed", rooms:["twobee_bedroom"], breakTag:"blunt", label:"window" },
-      "2b-bathroom-window":   { state:"closed", rooms:["twobee_bathroom"], breakTag:"blunt", label:"window" },
-      "1a-living-window":     { state:"closed", rooms:["onea"], breakTag:"blunt", label:"window" },
-      "1a-kitchen-window":    { state:"closed", rooms:["onea_kitchen"], breakTag:"blunt", label:"window" },
-      "1a-bedroom-window":    { state:"closed", rooms:["onea_bedroom"], breakTag:"blunt", label:"window" },
-      "1a-bathroom-window":   { state:"closed", rooms:["onea_bathroom"], breakTag:"blunt", label:"window" }
+      "1b-alley":   { state:"closed", rooms:["alley","onebee"],   breakTag:"blunt", label:"window", climbable:true }
     };
+  }
+  function makeDefaultWindows(){
+    return Object.assign(authoredWindows(), expandOpenings(WIRING, WIRING_TEMPLATES).windows);
   }
   const WINDOW_STATES = ["closed", "open", "broken"];
   function doorLockable(door){ return door.lockable !== false; }
@@ -1817,8 +1876,6 @@
     });
     return out;
   }
-  let doors = buildDoors(null);
-  let windows = buildWindows(null);
 
   // POWER SCHEMA. The power network's definitions: never saved, expanded once
   // at startup into the node table the resolver runs on (expandWiring(), in
@@ -1826,7 +1883,7 @@
   // state.power (see PLAYER STATE).
   //
   // APPLIANCES, keyed by id: what a load is.
-  //   { name, watts, volts, leftOnChance | switchless, startWatts?,
+  //   { name, watts, volts, leftOnChance | switchless, nameplate, startWatts?,
   //     dutyCycle?, cycleMinutes? }
   //   watts        running draw
   //   volts        120 or 240
@@ -1839,7 +1896,17 @@
   //   startWatts   the total draw at a start; present on a motor load
   //   dutyCycle, cycleMinutes  present on a cycling load: it draws for
   //                dutyCycle × cycleMinutes of every cycleMinutes
-  //   No watts are shown anywhere (#242, #249).
+  //   nameplate    what its rating label prints (#249): { amps }, printed as
+  //                "<volts> V · <amps> A" at the entry's own `volts`, or
+  //                { printsWatts:true }, printed as its own `watts` ("10 W"),
+  //                as a bulb's base is; never a second copy of either. A
+  //                nameplate reads above the running draw, as a real one
+  //                does. Every entry carries one, rated at no less than its
+  //                `watts` (validateWiring()). Shown only in the Electrical
+  //                view's circuit tabs (nameplateText()). Picking one real
+  //                model per appliance is a judgment call, retunable; each
+  //                figure's source is given below.
+  //   No watts are shown anywhere, but a bulb's nameplate (#242, #249).
   // Every figure is a pick inside a sourced range, and retunable.
   //   fridge_freezer  the appliance behind every kitchen's Fridge and Freezer
   //                   pair. Running 150 W, within the measured 100–250 W
@@ -1862,17 +1929,43 @@
   //                   isn't modelled (#259).
   // The fan and the hood are motors, but their start surge is left
   // unmodelled: neither carries `startWatts`.
+  // Nameplates, one real model each:
+  //   fridge_freezer  6 A: Frigidaire FFTR1821QW, "Amps @ 120 Volts: 6", with
+  //                   a 0.72 kW connected load and a 15 A minimum circuit.
+  //                   Several retailer spec listings agree; Frigidaire's own
+  //                   page was not read, so the figure is secondary, not
+  //                   confirmed.
+  //   led_light       its own `watts`, printed on the base.
+  //   bath_fan        0.9 A: Broan 688, "120 VAC, 0.9 A".
+  //   range_hood      2.0 A: Broan 413004, "120V ~ 60 Hz, drawing 2.0 amps".
+  //   smoke_alarm     0.04 A: BRK 9120 data sheet, "Operating Current: .04
+  //                   amps (standby/alarm)".
+  //   gas_range       12 A: Frigidaire FCFG3062AS, "Amps @ 120 Volts: 12
+  //                   Amps". The rating covers its oven igniter and oven,
+  //                   which aren't modelled; that is why it sits far above
+  //                   the 4 W standby.
   const APPLIANCES = {
-    fridge_freezer: { name:"Fridge-freezer", watts:150, startWatts:525, volts:120, dutyCycle:0.35, cycleMinutes:60, leftOnChance:0.99 },
-    led_light:      { name:"Light",          watts:10,  volts:120, leftOnChance:0.3 },
-    bath_fan:       { name:"Exhaust fan",    watts:36,  volts:120, leftOnChance:0.05 },
-    range_hood:     { name:"Range hood",     watts:200, volts:120, leftOnChance:0.05 },
-    smoke_alarm:    { name:"Smoke alarm",    watts:1,   volts:120, switchless:true },
-    gas_range:      { name:"Gas range",      watts:4,   volts:120, switchless:true }
+    fridge_freezer: { name:"Fridge-freezer", watts:150, startWatts:525, volts:120, dutyCycle:0.35, cycleMinutes:60, leftOnChance:0.99,
+      nameplate:{ amps:6 } },
+    led_light:      { name:"Light",          watts:10,  volts:120, leftOnChance:0.3, nameplate:{ printsWatts:true } },
+    bath_fan:       { name:"Exhaust fan",    watts:36,  volts:120, leftOnChance:0.05, nameplate:{ amps:0.9 } },
+    range_hood:     { name:"Range hood",     watts:200, volts:120, leftOnChance:0.05, nameplate:{ amps:2.0 } },
+    smoke_alarm:    { name:"Smoke alarm",    watts:1,   volts:120, switchless:true, nameplate:{ amps:0.04 } },
+    gas_range:      { name:"Gas range",      watts:4,   volts:120, switchless:true, nameplate:{ amps:12 } }
   };
+  // What an appliance's nameplate is rated at, in watts, or null when it has
+  // no usable one. The one reading of `nameplate`'s two forms besides the
+  // printed line (nameplateText()).
+  function nameplateWatts(a){
+    const n = a && a.nameplate;
+    if(!n) return null;
+    if(n.printsWatts) return a.watts;
+    return Number.isFinite(n.amps) ? a.volts * n.amps : null;
+  }
   // WIRING_TEMPLATES, keyed by id: one unit's layout by room role, so every
   // unit wired the same way shares it.
-  //   { main:{ rating, volts? }, circuits:[…], fixtures:[…] }
+  //   { main:{ rating, volts? }, circuits:[…], fixtures:[…], doors?:[…],
+  //     windows?:[…] }
   //   main      the unit panel's main breaker: rating in A, and `volts`
   //             (PANEL_DEFAULT_VOLTS when absent)
   //   circuits  in panel order: { key, label, rating, volts, roles:[role] }.
@@ -1884,6 +1977,19 @@
   //             fixture is (a fridge-freezer is its room's Fridge and
   //             Freezer), which is how spoilage finds the load a container
   //             belongs to.
+  //   doors     { key, between:[role, role], locked, lockable? }: a door
+  //             between the rooms playing the two roles (DOOR SCHEMA). Its id
+  //             is the panel's id lowercased, then the key ("2a-bedroom"). A
+  //             door whose two roles map to one room is not made, which is
+  //             why a one-room unit has none.
+  //   windows   { key, role, label, breakTag, climbable? }: a window to the
+  //             outside in the room playing `role` (WINDOW SCHEMA), starting
+  //             closed. Its id is the panel's id lowercased, then the role,
+  //             then "window" ("2a-kitchen-window").
+  // The door and window ids must never change: saves key on them.
+  // They are the building's doors and windows, not the network's: nothing in
+  // POWER reads them. They sit on the template because the template is what
+  // says which room plays which role in a unit (expandOpenings()).
   //
   // `apartment`: one flat, by the roles living, kitchen, bathroom, bedroom
   // and balcony (a balcony or a patio). A one-room unit maps every role onto
@@ -1918,6 +2024,22 @@
         { key:"bath_fan",      appliance:"bath_fan",       circuit:"bath",     role:"bathroom" },
         { key:"light_bedroom", appliance:"led_light",      circuit:"bedroom",  role:"bedroom" },
         { key:"smoke_alarm",   appliance:"smoke_alarm",    circuit:"bedroom",  role:"bedroom" }
+      ],
+      // Interior doors, with no lock. A balcony door is a sliding door, which
+      // is taken to have none either (retunable).
+      doors: [
+        { key:"bedroom",      between:["living", "bedroom"],   locked:false, lockable:false },
+        { key:"bathroom",     between:["living", "bathroom"],  locked:false, lockable:false },
+        { key:"bath-bedroom", between:["bedroom", "bathroom"], locked:false, lockable:false },
+        { key:"balcony",      between:["living", "balcony"],   locked:false, lockable:false }
+      ],
+      // One to the outside in each room but the balcony or patio. Which way
+      // each faces is not modelled.
+      windows: [
+        { key:"living",   role:"living",   label:"window", breakTag:"blunt" },
+        { key:"kitchen",  role:"kitchen",  label:"window", breakTag:"blunt" },
+        { key:"bedroom",  role:"bedroom",  label:"window", breakTag:"blunt" },
+        { key:"bathroom", role:"bathroom", label:"window", breakTag:"blunt" }
       ]
     }
   };
@@ -1925,10 +2047,16 @@
   //   board    { name, room, rating, volts?, feeders:[{ panel, label, rating }] }
   //            the complex's main board: the room it hangs in, its main
   //            breaker's rating, and one feeder breaker per panel it feeds.
-  //   panels   [{ id, name, room, template?, layout?, rooms:{ role: roomId } }]
+  //   panels   [{ id, name, room, template?, layout?, rooms:{ role: roomId },
+  //              overrides? }]
   //            each unit's panel: the room it hangs in, and either a
   //            WIRING_TEMPLATES id or an inline `layout` of a template's
   //            shape, with the role → room id map that places it.
+  //            `overrides` is { doors?:{ key: door | null }, windows?:{ key:
+  //            window | null } }, for this unit only: a template door or
+  //            window by its key, replaced by the fields given, laid over the
+  //            template's (an `id` among them replaces the one it would get),
+  //            or null for none.
   //   common   optional, one more panel entry, for the halls and stairs. It
   //            expands exactly as a unit panel does, and the board needs a
   //            feeder for it.
@@ -1970,10 +2098,15 @@
           rooms:{ living:"living", kitchen:"kitchen", bathroom:"bathroom", bedroom:"bedroom", balcony:"balcony" } },
         { id:"2B", name:"Unit 2B panel", room:"twobee_kitchen", template:"apartment",
           rooms:{ living:"twobee", kitchen:"twobee_kitchen", bathroom:"twobee_bathroom", bedroom:"twobee_bedroom", balcony:"twobee_balcony" } },
+        // 1A's balcony door is its patio door, which locks, as it always
+        // has. Its sides are listed patio first, as they always have been.
         { id:"1A", name:"Unit 1A panel", room:"onea_kitchen", template:"apartment",
-          rooms:{ living:"onea", kitchen:"onea_kitchen", bathroom:"onea_bathroom", bedroom:"onea_bedroom", balcony:"onea_patio" } },
+          rooms:{ living:"onea", kitchen:"onea_kitchen", bathroom:"onea_bathroom", bedroom:"onea_bedroom", balcony:"onea_patio" },
+          overrides:{ doors:{ balcony:{ id:"1a-patio", between:["balcony", "living"], locked:true, lockable:true } } } },
+        // 1B's one window is the building's, onto the alley (authoredWindows()).
         { id:"1B", name:"Unit 1B panel", room:"onebee", template:"apartment",
-          rooms:{ living:"onebee", kitchen:"onebee", bathroom:"onebee", bedroom:"onebee", balcony:"onebee" } }
+          rooms:{ living:"onebee", kitchen:"onebee", bathroom:"onebee", bedroom:"onebee", balcony:"onebee" },
+          overrides:{ windows:{ living:null, kitchen:null, bedroom:null, bathroom:null } } }
       ],
       // The halls and stairs: one lighting circuit, a light in each.
       common: { id:"house", name:"House panel", room:"hallway1",
@@ -2002,13 +2135,15 @@
       ],
       exits:[
         { to:"kitchen", label:"Go to the kitchen", distanceM:4 },
-        { to:"bedroom", label:"Go to the bedroom", distanceM:5, doorId:"2a-bedroom" },
-        { to:"bathroom", label:"Go to the bathroom", distanceM:5, doorId:"2a-bathroom" },
-        { to:"balcony", label:"Go to the balcony", distanceM:3, doorId:"2a-balcony" },
+        { to:"bedroom", label:"Go to the bedroom", distanceM:5 },
+        { to:"bathroom", label:"Go to the bathroom", distanceM:5 },
+        { to:"balcony", label:"Go to the balcony", distanceM:3 },
         { to:"hallway2", label:"Leave the apartment", distanceM:6, doorId:"2a" } ]
     },
     kitchen: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Kitchen", shelter:"full",
-      desc:"Grease and old coffee grounds. The fridge still hums, though something inside it has already given up. The gas stove works too — no power needed to light it.",
+      desc:{ reads:{ kind:"load", id:"acorn.2A.fridge" },
+        variants:{ on:"Grease and old coffee grounds. The fridge still hums, though something inside it has already given up.",
+          off:"Grease and old coffee grounds. The fridge has gone quiet, and something inside it gave up well before it did." } },
       sink:true, cannotHaveFire:true, floorCap:50, floor:[],
       containers:[
         { id:"stove", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
@@ -2044,8 +2179,8 @@
           { id:"bleach", qty:1 } ])}
       ],
       exits:[
-        { to:"living", label:"Go to the living room", distanceM:5, doorId:"2a-bathroom" },
-        { to:"bedroom", label:"Go to the bedroom", distanceM:3, doorId:"2a-bath-bedroom" },
+        { to:"living", label:"Go to the living room", distanceM:5 },
+        { to:"bedroom", label:"Go to the bedroom", distanceM:3 },
         { to:"hallway2", label:"Leave the apartment", distanceM:7, doorId:"2a" } ]
     },
     bedroom: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Bedroom", shelter:"full",
@@ -2067,8 +2202,8 @@
           { id:"cloth", qty:3 } ])}
       ],
       exits:[
-        { to:"living", label:"Go to the living room", distanceM:5, doorId:"2a-bedroom" },
-        { to:"bathroom", label:"Go to the bathroom", distanceM:3, doorId:"2a-bath-bedroom" },
+        { to:"living", label:"Go to the living room", distanceM:5 },
+        { to:"bathroom", label:"Go to the bathroom", distanceM:3 },
         { to:"hallway2", label:"Leave the apartment", distanceM:7, doorId:"2a" } ]
     },
     balcony: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Balcony", shelter:"partial",
@@ -2080,11 +2215,13 @@
           { id:"rope", qty:1 } ])}
       ],
       exits:[
-        { to:"living", label:"Go to the living room", distanceM:3, doorId:"2a-balcony" },
+        { to:"living", label:"Go to the living room", distanceM:3 },
         { to:"alley", label:"Climb down the fire escape" } ]
     },
     hallway2: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2nd Floor", room:"Hallway", shelter:"full",
-      desc:"A dim corridor lit by one flickering bulb. Your door is one of two here, with a small transom window set beside it.",
+      desc:{ reads:{ kind:"load", id:"acorn.house.light_hallway2" },
+        variants:{ on:"A dim corridor lit by one flickering bulb. Your door is one of two here, with a small transom window set beside it.",
+          off:"A dark corridor, its one bulb dead. Your door is one of two here, with a small transom window set beside it." } },
       cannotHaveFire:true, floorCap:100, floor:[], containers:[],
       exits:[
         { to:"living", label:"Enter apartment 2A", distanceM:6, doorId:"2a" },
@@ -2104,9 +2241,9 @@
       ],
       exits:[
         { to:"twobee_kitchen", label:"Go to the kitchen", distanceM:4 },
-        { to:"twobee_bathroom", label:"Go to the bathroom", distanceM:5, doorId:"2b-bathroom" },
-        { to:"twobee_bedroom", label:"Go to the bedroom", distanceM:5, doorId:"2b-bedroom" },
-        { to:"twobee_balcony", label:"Go to the balcony", distanceM:3, doorId:"2b-balcony" },
+        { to:"twobee_bathroom", label:"Go to the bathroom", distanceM:5 },
+        { to:"twobee_bedroom", label:"Go to the bedroom", distanceM:5 },
+        { to:"twobee_balcony", label:"Go to the balcony", distanceM:3 },
         { to:"hallway2", label:"Leave 2B", distanceM:6, doorId:"2b" } ]
     },
     twobee_kitchen: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2B", room:"Kitchen", shelter:"full",
@@ -2138,8 +2275,8 @@
         { id:"undersink", name:"Under-sink cabinet", capacityKg:10, spawnPools:["hygiene","cleaning_supplies"], items:[] }
       ],
       exits:[
-        { to:"twobee", label:"Go to the living room", distanceM:5, doorId:"2b-bathroom" },
-        { to:"twobee_bedroom", label:"Go to the bedroom", distanceM:3, doorId:"2b-bath-bedroom" },
+        { to:"twobee", label:"Go to the living room", distanceM:5 },
+        { to:"twobee_bedroom", label:"Go to the bedroom", distanceM:3 },
         { to:"hallway2", label:"Leave 2B", distanceM:7, doorId:"2b" } ]
     },
     twobee_bedroom: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2B", room:"Bedroom", shelter:"full",
@@ -2156,8 +2293,8 @@
         { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal","pet_supplies"], items:[] }
       ],
       exits:[
-        { to:"twobee", label:"Go to the living room", distanceM:5, doorId:"2b-bedroom" },
-        { to:"twobee_bathroom", label:"Go to the bathroom", distanceM:3, doorId:"2b-bath-bedroom" },
+        { to:"twobee", label:"Go to the living room", distanceM:5 },
+        { to:"twobee_bathroom", label:"Go to the bathroom", distanceM:3 },
         { to:"hallway2", label:"Leave 2B", distanceM:7, doorId:"2b" } ]
     },
     twobee_balcony: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2B", room:"Balcony", shelter:"partial",
@@ -2168,7 +2305,7 @@
           { id:"rope", qty:1 },
           { id:"duct_tape", qty:1 } ])}
       ],
-      exits:[ { to:"twobee", label:"Go to the living room", distanceM:3, doorId:"2b-balcony" } ]
+      exits:[ { to:"twobee", label:"Go to the living room", distanceM:3 } ]
     },
     stairs2: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2nd Floor", room:"Stairs", shelter:"full",
       desc:"A concrete stairwell, cool and echoing. It goes down at least one more floor.",
@@ -2206,9 +2343,9 @@
       ],
       exits:[
         { to:"onea_kitchen", label:"Go to the kitchen", distanceM:4 },
-        { to:"onea_bathroom", label:"Go to the bathroom", distanceM:5, doorId:"1a-bathroom" },
-        { to:"onea_bedroom", label:"Go to the bedroom", distanceM:5, doorId:"1a-bedroom" },
-        { to:"onea_patio", label:"Go to the patio", distanceM:3, doorId:"1a-patio" },
+        { to:"onea_bathroom", label:"Go to the bathroom", distanceM:5 },
+        { to:"onea_bedroom", label:"Go to the bedroom", distanceM:5 },
+        { to:"onea_patio", label:"Go to the patio", distanceM:3 },
         { to:"hallway1", label:"Leave 1A", distanceM:6, doorId:"1a" } ]
     },
     onea_kitchen: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1A", room:"Kitchen", shelter:"full",
@@ -2238,8 +2375,8 @@
           { id:"childrens_medicine", qty:1 } ])}
       ],
       exits:[
-        { to:"onea", label:"Go to the living room", distanceM:5, doorId:"1a-bathroom" },
-        { to:"onea_bedroom", label:"Go to the bedroom", distanceM:3, doorId:"1a-bath-bedroom" },
+        { to:"onea", label:"Go to the living room", distanceM:5 },
+        { to:"onea_bedroom", label:"Go to the bedroom", distanceM:3 },
         { to:"hallway1", label:"Leave 1A", distanceM:7, doorId:"1a" } ]
     },
     onea_bedroom: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1A", room:"Bedroom", shelter:"full",
@@ -2255,8 +2392,8 @@
           { id:"flashlight", qty:1 } ])}
       ],
       exits:[
-        { to:"onea", label:"Go to the living room", distanceM:5, doorId:"1a-bedroom" },
-        { to:"onea_bathroom", label:"Go to the bathroom", distanceM:3, doorId:"1a-bath-bedroom" },
+        { to:"onea", label:"Go to the living room", distanceM:5 },
+        { to:"onea_bathroom", label:"Go to the bathroom", distanceM:3 },
         { to:"hallway1", label:"Leave 1A", distanceM:7, doorId:"1a" } ]
     },
     onea_patio: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1A", room:"Patio", shelter:"none",
@@ -2268,7 +2405,7 @@
           { id:"nails", qty:1 } ])}
       ],
       exits:[
-        { to:"onea", label:"Go to the living room", distanceM:3, doorId:"1a-patio" },
+        { to:"onea", label:"Go to the living room", distanceM:3 },
         { to:"alley", label:"Go through the back gate", distanceM:6 } ]
     },
     onebee: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1B", room:null, shelter:"full",
@@ -2284,7 +2421,8 @@
           { id:"crowbar", qty:1 },
           { id:"duct_tape", qty:2 },
           { id:"wrench", qty:1 },
-          { id:"bolt_cutters", qty:1 } ])},
+          { id:"bolt_cutters", qty:1 },
+          { id:"multimeter", qty:1 } ])},
         { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore","electronics"], spawnRolled:true, items:itemsFromRegistry([
           { id:"master_key", qty:1 },
           { id:"building_ledger", qty:1 },
@@ -2300,7 +2438,9 @@
   function buildOakApartments(){
     return {
     oak_hallway1: { locationId:"oak_f0", address:"Poplar St", building:"Oak Apartments", area:"1st Floor", room:"Hallway", shelter:"full",
-      desc:"Narrower than Acorn's hallway, and darker — half the bulbs are out.",
+      desc:{ reads:{ kind:"grid" },
+        variants:{ on:"Narrower than Acorn's hallway, and darker — half the bulbs are out.",
+          off:"Narrower than Acorn's hallway, and darker — none of the bulbs work now." } },
       cannotHaveFire:true, floorCap:80, floor:[], containers:[],
       exits:[
         { to:"mid_poplar_2_4", label:"Step outside" },
@@ -2792,7 +2932,9 @@
         { to:"mill4th", label:"Head east toward 4th St" } ]
     },
     mill4th: { locationId:"mill4th", address:"Mill St & 4th St", area:null, room:null, shelter:"none",
-      desc:"The corner of Mill and 4th. A weighbridge is set into the pavement, its readout dark.",
+      desc:{ reads:{ kind:"grid" },
+        variants:{ on:"The corner of Mill and 4th. A weighbridge is set into the pavement, its readout showing zeros.",
+          off:"The corner of Mill and 4th. A weighbridge is set into the pavement, its readout dark." } },
       floorCap:100, floor:[], containers:[],
       exits:[
         { to:"mill6th", label:"Head west on Mill St" },
@@ -3249,7 +3391,9 @@
         { to:"mid_4th_mp_p", label:"Step into the block (north)" } ]
     },
     mid_maple_2_4: { locationId:"mid_maple_2_4", address:"Maple St", area:null, room:"between 2nd & 4th", shelter:"none",
-      desc:"Maple St, mostly gravel shoulder and one working streetlight.",
+      desc:{ reads:{ kind:"grid" },
+        variants:{ on:"Maple St, mostly gravel shoulder and one working streetlight.",
+          off:"Maple St, mostly gravel shoulder and one streetlight, out like the rest." } },
       floorCap:20, floor:[], containers:[],
       exits:[
         { to:"maple4th", label:"Head west toward 4th St" },
@@ -3444,7 +3588,9 @@
         { to:"mid_2nd_p_m", label:"Step into the block (north)" } ]
     },
     poplar4th: { locationId:"poplar4th", address:"Poplar St & 4th St", area:null, room:null, shelter:"none",
-      desc:"The last residential stretch before Poplar runs into 4th St. Fewer porch lights than a block ago.",
+      desc:{ reads:{ kind:"grid" },
+        variants:{ on:"The last residential stretch before Poplar runs into 4th St. Fewer porch lights than a block ago.",
+          off:"The last residential stretch before Poplar runs into 4th St. Not a porch light on the block." } },
       floorCap:100, floor:[], containers:[],
       exits:[
         { to:"poplar6th", label:"Head west on Poplar St" },
@@ -3715,7 +3861,9 @@
         { to:"main7th", label:"Head east toward 7th St" } ]
     },
     main7th: { locationId:"main7th", address:"Main St & 7th St", area:null, room:null, shelter:"none",
-      desc:"Main and 7th, where a gas station sits dark on the corner, price signs stuck at numbers that don't matter.",
+      desc:{ reads:{ kind:"grid" },
+        variants:{ on:"Main and 7th, where a gas station's canopy lights still burn over empty pumps, price signs stuck at numbers that don't matter.",
+          off:"Main and 7th, where a gas station sits dark on the corner, price signs stuck at numbers that don't matter." } },
       floorCap:100, floor:[], containers:[],
       exits:[
         { to:"main5th", label:"Head west on Main St" },
@@ -4020,7 +4168,9 @@
         { to:"poplar2nd", label:"Head north toward Poplar St" } ]
     },
     mid_2nd_d_mi: { locationId:"mid_2nd_d_mi", address:"2nd St", area:null, room:"between Dock & Mill", shelter:"none",
-      desc:"2nd St crossing the rail spur at a shallow angle. The crossing lights blink for a train that isn't coming, but the bell housing's still up there.",
+      desc:{ reads:{ kind:"crossing" },
+        variants:{ on:"2nd St crossing the rail spur at a shallow angle. The crossing lights blink for a train that isn't coming, but the bell housing's still up there.",
+          off:"2nd St crossing the rail spur at a shallow angle. The crossing lights are dark, the bell housing still up there." } },
       floorCap:20, floor:[], containers:[],
       exits:[
         { to:"dock2nd", label:"Head south toward Dock St" },
@@ -4067,7 +4217,9 @@
         { to:"water1st", label:"Head north toward Water St" } ]
     },
     mid_1st_mp_p: { locationId:"mid_1st_mp_p", address:"1st St", area:null, room:"between Maple & Poplar", shelter:"none",
-      desc:"1st St running down toward Maple. Fewer houses with lights ever left on.",
+      desc:{ reads:{ kind:"grid" },
+        variants:{ on:"1st St running down toward Maple. Fewer houses with lights ever left on.",
+          off:"1st St running down toward Maple. None of the houses have a light on." } },
       floorCap:20, floor:[], containers:[],
       exits:[
         { to:"maple1st", label:"Head south toward Maple St" },
@@ -4349,9 +4501,26 @@
       buildSeventhSt(),
       buildNinthSt()
     );
-    return applyComputedDirections(world);
+    return applyComputedDirections(stampTemplateDoorIds(world));
+  }
+  // Gives every exit through a template door its doorId: an exit from one of
+  // the door's two rooms to the other (see DOOR SCHEMA). Run once, as the
+  // world is built; a loaded world keeps the exits its save carries.
+  function stampTemplateDoorIds(world){
+    const doorsById = expandOpenings(WIRING, WIRING_TEMPLATES).doors;
+    Object.keys(doorsById).forEach(id=>{
+      const [a, b] = doorsById[id].sides;
+      [[a, b], [b, a]].forEach(([from, to])=>{
+        ((world[from] && world[from].exits) || []).forEach(e=>{ if(e.to === to) e.doorId = id; });
+      });
+    });
+    return world;
   }
   let world = makeDefaultWorld();
+  // The runtime doors and windows (DOOR SCHEMA, WINDOW SCHEMA). Built here,
+  // below WIRING, because a unit's come from its wiring template.
+  let doors = buildDoors(null);
+  let windows = buildWindows(null);
 
   // ==================================================
   // PLAYER STATE
@@ -4452,6 +4621,14 @@
   // Floor.
   let invTab = "inventory";
   let worldTab = "floor";
+  // Whether the Electrical view is on (#242): Inventory lists only what is
+  // tagged `electrical`, and the Here panel shows the room's panels, boards
+  // and circuits instead of its items. A view, and nothing more: nothing in
+  // the simulation reads it. A player preference, kept in localStorage under
+  // ELECTRICAL_VIEW_KEY and never in `state`, so no save or export carries it
+  // and a restart or a load leaves it as it is. Off when storage is missing
+  // or refuses (readElectricalViewPref()).
+  let electricalView = readElectricalViewPref();
 
   // ==================================================
   // CORE UTILITIES
@@ -5794,6 +5971,11 @@
   function minutesSinceCollapse(){ return START_DAYS_AFTER_COLLAPSE * MINUTES_PER_DAY + state.totalMinutes; }
   function gridUp(m = minutesSinceCollapse()){ return m < POWER_FAILS_DAY * MINUTES_PER_DAY; }
   function waterRunning(m = minutesSinceCollapse()){ return gridUp(m); }
+  // Whether a rail crossing's warning lights are on: while the grid is up,
+  // then on standby for CROSSING_STANDBY_MIN after it fails.
+  function crossingLit(m = minutesSinceCollapse()){
+    return gridUp(m) || m - POWER_FAILS_DAY * MINUTES_PER_DAY < CROSSING_STANDBY_MIN;
+  }
   function getWindowsInRoom(roomId){
     return Object.keys(windows).filter(id=>windows[id].rooms.includes(roomId)).map(id=>Object.assign({id}, windows[id]));
   }
@@ -6010,6 +6192,34 @@
     if(!a || a.switchless || switchOnIn(state.power, state.seed, loadId, a) === on) return;
     setSwitchIn(state.power, state.seed, loadId, a, on);
     log(`You switch the ${a.name.toLowerCase()} ${on ? "on" : "off"}.`);
+    render();
+  }
+  // The meters (#249), from the Electrical view. A reading takes
+  // METER_READING_MIN, then reads the network as it stands after that minute
+  // (loadSupplyVolts(), breakerLoadSideVolts(), breakerCurrent()). Test needs
+  // a `voltage-test` tool carried, Clamp a `current-clamp` one. Under
+  // simplified rules Test reaches a load and a device's main, and Clamp only
+  // the main, as simplified shows only the main. Opening a panel to clamp a
+  // live conductor has no consequence yet (#247). Each reading logs one line
+  // and nothing else records it. The figure is a judgment call and the lines
+  // are functional; both retunable.
+  const METER_READING_MIN = 1;
+  function meterReachesBreaker(id){
+    return state.electricalRules !== "simplified" || ["panel", "board"].includes(POWER_NET.breakers[id].layer);
+  }
+  function doMeterTest(target){
+    if(!hasTool("voltage-test")) return;
+    if(target.breaker && (!POWER_NET.breakers[target.breaker] || !meterReachesBreaker(target.breaker))) return;
+    if(target.load && !POWER_NET.loads[target.load]) return;
+    advanceTime(METER_READING_MIN);
+    const v = target.load ? loadSupplyVolts(target.load) : breakerLoadSideVolts(target.breaker);
+    log(`The meter reads ${Math.round(v)} V.`);
+    render();
+  }
+  function doMeterClamp(id){
+    if(!hasTool("current-clamp") || !POWER_NET.breakers[id] || !meterReachesBreaker(id)) return;
+    advanceTime(METER_READING_MIN);
+    log(`The clamp reads ${breakerCurrent(id).toFixed(1)} A.`);
     render();
   }
   function doResetBreaker(id){
@@ -6444,6 +6654,65 @@
     });
     return net;
   }
+  // The doors and windows a wiring's unit templates carry (`doors`,
+  // `windows`; see POWER SCHEMA), as DOOR SCHEMA and WINDOW SCHEMA
+  // definitions keyed by id: { doors, windows, problems }. Pure, like
+  // expandWiring(), and a sibling of it because it reads the same panels and
+  // roles; nothing in POWER reads what it returns. A panel's `overrides`
+  // replace or drop its own unit's. A door whose two roles map to one room is
+  // not made. A role with no room, an override key the template lacks, and a
+  // clashing id are skipped or kept first and reported in `problems`, which
+  // validateWiring() reads.
+  function expandOpenings(wiring, templates){
+    const out = { doors:{}, windows:{}, problems:[] };
+    Object.keys(wiring || {}).forEach(b=>{
+      const w = wiring[b] || {};
+      (w.panels || []).concat(w.common ? [w.common] : []).forEach(pd=>{
+        if(!pd || !pd.id) return;
+        const layout = pd.layout || (templates || {})[pd.template];
+        if(!layout) return;
+        const unit = String(pd.id).toLowerCase();
+        const rooms = pd.rooms || {};
+        const ov = pd.overrides || {};
+        const place = (kind, list, build)=>{
+          const byKey = ov[kind] || {};
+          Object.keys(byKey).forEach(k=>{
+            if(!(list || []).some(t=> t.key === k)) out.problems.push(`${b}.${pd.id}: override for ${kind.slice(0, -1)} "${k}", which the template does not have`);
+          });
+          (list || []).forEach(t=>{
+            if(byKey[t.key] === null) return;
+            const spec = Object.assign({}, t, byKey[t.key] || {});
+            const made = build(spec);
+            if(!made) return;
+            if(out[kind][made.id]) out.problems.push(`${b}.${pd.id}: ${kind.slice(0, -1)} id "${made.id}" clashes`);
+            else out[kind][made.id] = made.def;
+          });
+        };
+        place("doors", layout.doors, (d)=>{
+          const sides = (d.between || []).map(r=> rooms[r]);
+          if(sides.length !== 2 || !sides[0] || !sides[1]){
+            out.problems.push(`${b}.${pd.id}: door "${d.key}" has a role with no room`);
+            return null;
+          }
+          if(sides[0] === sides[1]) return null;
+          const def = { locked:!!d.locked, sides, building:b };
+          if(d.lockable === false) def.lockable = false;
+          return { id: d.id || `${unit}-${d.key}`, def };
+        });
+        place("windows", layout.windows, (wd)=>{
+          const room = rooms[wd.role];
+          if(!room){
+            out.problems.push(`${b}.${pd.id}: window "${wd.key}" has a role with no room`);
+            return null;
+          }
+          const def = { state:"closed", rooms:[room], breakTag:wd.breakTag, label:wd.label };
+          if(wd.climbable) def.climbable = true;
+          return { id: wd.id || `${unit}-${wd.role}-window`, def };
+        });
+      });
+    });
+    return out;
+  }
   // The game's network, expanded once. A building WIRING does not name has
   // no nodes here, and its rooms fall back to the grid (containerPowered()).
   const POWER_NET = expandWiring(WIRING, WIRING_TEMPLATES);
@@ -6651,6 +6920,36 @@
   function loadPoweredNow(loadId){
     return !!powerSnapshot(POWER_NET, APPLIANCES, state.power, state.electricalRules, gridUp(),
       minutesSinceCollapse(), null, state.seed).powered[loadId];
+  }
+  // What a meter reads, from the last step (powerNow). They add no rule to
+  // the resolver: each is a look at what it already worked out (#249).
+  //   A load's supply, up to its own switch: its circuit's volts while the
+  //   circuit is live (simplified rules: its panel), else 0.
+  function loadSupplyVolts(loadId){
+    if(!powerNow) refreshPower();
+    const l = POWER_NET.loads[loadId];
+    const live = state.electricalRules === "simplified" ? powerNow.live[l.panel] : powerNow.live[l.circuit];
+    return live ? POWER_NET.breakers[l.circuit].volts : 0;
+  }
+  //   A breaker's load side, at its volts: a circuit's own liveness, a panel
+  //   main's its panel's, a feeder's its panel's supply, the board main's
+  //   its board's.
+  function breakerLoadSideVolts(id){
+    if(!powerNow) refreshPower();
+    const br = POWER_NET.breakers[id];
+    const live = br.layer === "circuit" ? powerNow.live[id]
+      : br.layer === "panel" ? powerNow.live[br.device]
+      : br.layer === "feeder" ? powerNow.supplied[Object.values(POWER_NET.panels).find(p=> p.feeder === id).id]
+      : powerNow.live[br.device];
+    return live ? br.volts : 0;
+  }
+  //   The current through a breaker, in amps: one conductor clamped at the
+  //   panel. A main or a feeder reads its total, since a panel's two legs are
+  //   taken as balanced; unbalanced legs are not modelled. A cycling load
+  //   reads whatever it is doing this minute.
+  function breakerCurrent(id){
+    if(!powerNow) refreshPower();
+    return powerNow.running[id] || 0;
   }
   // ==================================================
   // STAMINA / FATIGUE SYSTEM
@@ -7249,10 +7548,12 @@
     if(room.fireMinutesLeft != null && room.fireMinutesLeft < next.remaining) return null;
     return next;
   }
-  // The stove timer: an analog kitchen timer on the stove container, in
+  // The stove timer: a wind-up kitchen timer on the stove container, in
   // minutes (`timerMinutes`, absent = 0). Its device pop-up's buttons add
   // STOVE_TIMER_STEPS minutes a press, with no clear, no subtract and no cap.
-  // It needs neither the stove on nor power, and turns nothing off. When it
+  // It is clockwork, with no battery, so it needs neither the stove on nor
+  // power, and turns nothing off. It is not the range's own electronics,
+  // whose standby draw is `gas_range` in APPLIANCES (#270). When it
   // runs down it rings, heard anywhere in the stove's building: the player's
   // room must have a `building`, and the same one. Otherwise it rings unheard.
   // The ring's wording is Tom's.
@@ -7788,7 +8089,9 @@
   // validateRoomSchema(): dev-only console helper (not wired to any button or
   // UI, runs nothing automatically), sibling to validateLocations(). Walks
   // every room in world and reports a missing `address`, a missing `shelter`,
-  // or a `shelter` outside the three legal values. A helper is enough here
+  // or a `shelter` outside the three legal values, and a `desc` that is
+  // neither a string nor well-formed state variants (ROOM SCHEMA): a reader
+  // DESC_READERS lacks, a state with no text, a load that does not exist. A helper is enough here
   // because both failures are loud: a missing address renders "undefined" in
   // the location bar of the room you are standing in, on the first frame.
   // Call it as `ashfallDev.validateRoomSchema()` from the browser console
@@ -7800,10 +8103,19 @@
       const room = world[roomId];
       if(!room.address) problems.push(`${roomId}: no address set`);
       if(room.shelter === undefined) problems.push(`${roomId}: no shelter set`);
+      if(room.desc && typeof room.desc === "object"){
+        const reader = DESC_READERS[room.desc.reads && room.desc.reads.kind];
+        if(!reader) problems.push(`${roomId}: desc reads an unknown kind`);
+        else reader.states.forEach(st=>{
+          if(typeof (room.desc.variants || {})[st] !== "string") problems.push(`${roomId}: desc has no text for "${st}"`);
+        });
+        if(room.desc.reads && room.desc.reads.kind === "load" && !POWER_NET.loads[room.desc.reads.id])
+          problems.push(`${roomId}: desc reads load "${room.desc.reads.id}", which does not exist`);
+      } else if(typeof room.desc !== "string") problems.push(`${roomId}: no desc set`);
       else if(!legalShelter.includes(room.shelter)) problems.push(`${roomId}: shelter "${room.shelter}" is not one of ${legalShelter.join("/")}`);
     });
     if(problems.length) console.warn("validateRoomSchema: rooms with schema problems", problems);
-    else console.log("validateRoomSchema: every room has an address and a legal shelter");
+    else console.log("validateRoomSchema: every room has an address, a legal shelter and a well-formed desc");
     return problems;
   }
   // validateWiring(): dev-only console helper (not wired to any button or
@@ -7813,10 +8125,14 @@
   //   the expansion's own problems (expandWiring()): unknown templates,
   //     circuits and roles, a panel without a feeder, a feeder without a
   //     panel, clashing ids;
+  //   the templates' doors and windows (expandOpenings()): a role with no
+  //     room, an override key the template lacks, and an id that clashes with
+  //     another template one or with an authored one;
   //   every room a board, panel or role names exists, and every container a
   //     fixture names is in its room;
   //   every appliance id is in APPLIANCES, every APPLIANCES entry carries
-  //     exactly one of leftOnChance and switchless, every circuit's volts is
+  //     exactly one of leftOnChance and switchless, and a nameplate rated at
+  //     no less than its own watts (nameplateWatts()), every circuit's volts is
   //     120 or 240, and every circuit's roles are in its panel's rooms;
   //   every breaker's rating is an NEC 240.6(A) standard size
   //     (STANDARD_BREAKER_RATINGS).
@@ -7826,12 +8142,20 @@
   // `ashfallDev.validateWiring()` from the browser console when auditing.
   function validateWiring(wiring = WIRING, templates = WIRING_TEMPLATES){
     const net = expandWiring(wiring, templates);
+    const openings = expandOpenings(wiring, templates);
     const rooms = makeDefaultWorld();
-    const problems = net.problems.slice();
+    const problems = net.problems.concat(openings.problems);
+    const authored = { doors:authoredDoors(), windows:authoredWindows() };
+    ["doors", "windows"].forEach(kind=> Object.keys(openings[kind]).forEach(id=>{
+      if(authored[kind][id]) problems.push(`template ${kind.slice(0, -1)} "${id}" clashes with an authored one`);
+    }));
     const roomExists = (id, what)=>{ if(!rooms[id]) problems.push(`${what}: room "${id}" does not exist`); };
     Object.keys(APPLIANCES).forEach(id=>{
       const a = APPLIANCES[id];
       if(("leftOnChance" in a) === !!a.switchless) problems.push(`appliance ${id}: needs exactly one of leftOnChance and switchless`);
+      const rated = nameplateWatts(a);
+      if(rated === null) problems.push(`appliance ${id}: no nameplate`);
+      else if(rated < a.watts) problems.push(`appliance ${id}: nameplate rated ${rated} W, below its own ${a.watts} W`);
     });
     Object.values(net.boards).forEach(b=> roomExists(b.room, b.id));
     Object.values(net.panels).forEach(p=>{
@@ -7871,17 +8195,17 @@
   //   spare_batteries  the powered-equipment "Remove batteries" action
   const ACTION_GRANTED_ITEM_IDS = ["firewood", "fish", "spare_batteries"];
   // The tool tags validateReachability() counts, written down for the same
-  // reason. The first nine are what hasTool()/hasMatchUses() actually gate
+  // reason. The first eleven are what hasTool()/hasMatchUses() actually gate
   // an action on, and they include the `breakTag` values windows (blunt) and
   // locked storage units (cutting) carry, the `tool` a recipe asks for
-  // (blade), and `heat`, which lights an unpowered stove by hand
-  // (stoveLighting()). `prying` gates nothing at all and is counted
+  // (blade), `heat`, which lights an unpowered stove by hand
+  // (stoveLighting()), and the meters' two (doMeterTest(), doMeterClamp()). `prying` gates nothing at all and is counted
   // precisely for that reason: renderHereActionsPanel() records that forcing
   // a vehicle was deliberately NOT gated on it because one item carries it,
   // and #111 is the standing question of whether to gate on it once that
   // stops being true. The count is the evidence that question wants.
   const REPORTED_TOOL_TAGS = ["fire-starter", "fishing", "tackle", "chopping",
-    "cutting", "blunt", "can-opening", "blade", "heat", "prying"];
+    "cutting", "blunt", "can-opening", "blade", "heat", "voltage-test", "current-clamp", "prying"];
   // Whether the registry entry for `id` carries `tag`, the test every tag
   // count on the dev seam applies.
   function registryCarriesTag(id, tag){ return hasTag(ITEM_REGISTRY[id], tag); }
@@ -8227,6 +8551,15 @@
     render();
   }
 
+  // The Electrical view's preference (ELECTRICAL_VIEW_KEY). Every read and
+  // write is guarded: storage can be missing, blocked or full, and then the
+  // view is off and stays in memory only.
+  function readElectricalViewPref(){
+    try{ return localStorage.getItem(ELECTRICAL_VIEW_KEY) === "on"; }catch(e){ return false; }
+  }
+  function writeElectricalViewPref(on){
+    try{ localStorage.setItem(ELECTRICAL_VIEW_KEY, on ? "on" : "off"); }catch(e){ /* kept in memory only */ }
+  }
   function doSaveLocal(){
     try{ localStorage.setItem(SAVE_KEY, serializeGame()); log("Progress saved to this browser.", "sys", "save"); }
     catch(e){ log("Couldn't save to browser storage here — use Export instead.", "warn"); }
@@ -8462,20 +8795,40 @@
     }, back);
   }
   // The drawer's hub row, in order: one entry per button, giving its label
-  // and the FULL_PANELS id it opens. An entry that opens nothing is a
-  // placeholder, disabled and carrying HUB_PLACEHOLDER_HINT, so whether a
-  // button is enabled is whether it opens something, and enabling Health
-  // (#163) or Clothing (#164) is filling in `opens`. A new sub-menu is one
-  // line. The order and the hint's wording are retunable.
+  // and either the FULL_PANELS id it opens or the HUB_TOGGLES id it flips.
+  // An entry that does neither is a placeholder, disabled and carrying
+  // HUB_PLACEHOLDER_HINT, so whether a button is enabled is whether it does
+  // something, and enabling Health (#163) or Clothing (#164) is filling in
+  // `opens`. A new sub-menu is one line. The order and the hint's wording are
+  // retunable; so is Electrical's place in the row.
   const HUB_BUTTONS = [
-    { label:"Crafting", opens:"crafting" },
-    { label:"Health",   opens:null },
-    { label:"Clothing", opens:null },
-    { label:"Options",  opens:"options" }
+    { label:"Crafting",   opens:"crafting" },
+    { label:"Health",     opens:null },
+    { label:"Clothing",   opens:null },
+    { label:"Electrical", toggles:"electrical" },
+    { label:"Options",    opens:"options" }
   ];
   const HUB_PLACEHOLDER_HINT = "Not yet";
-  // Each enabled hub button, keyed by the FULL_PANELS id it opens, so
-  // render() can reach one by what it opens rather than by its label.
+  // The hub row's toggles, by id: what each reads and what flipping it does.
+  // A toggle opens nothing; it shows its state on its second line
+  // (HUB_TOGGLE_HINTS) and is lit while on. Functional UI text, retunable.
+  const HUB_TOGGLE_HINTS = { on:"On", off:"Off" };
+  const HUB_TOGGLES = {
+    // The Electrical view. Turning it off drops a Here tab it showed, so the
+    // panel opens on Floor again, as it does after a move.
+    electrical: {
+      on: ()=> electricalView,
+      flip(){
+        electricalView = !electricalView;
+        writeElectricalViewPref(electricalView);
+        if(!electricalView) worldTab = "floor";
+        render();
+      }
+    }
+  };
+  // Each enabled hub button, keyed by the FULL_PANELS id it opens or the
+  // HUB_TOGGLES id it flips, so render() can reach one by what it does
+  // rather than by its label.
   const hubButtonFor = {};
   HUB_BUTTONS.forEach(b=>{
     const btn = document.createElement("button");
@@ -8483,6 +8836,12 @@
     if(b.opens){
       hubButtonFor[b.opens] = btn;
       btn.addEventListener("click", ()=> openPanel(b.opens));
+    } else if(b.toggles){
+      hubButtonFor[b.toggles] = btn;
+      const hint = document.createElement("span");
+      hint.className = "hint";
+      btn.appendChild(hint);
+      btn.addEventListener("click", ()=> HUB_TOGGLES[b.toggles].flip());
     } else {
       btn.disabled = true;
       const hint = document.createElement("span");
@@ -8492,6 +8851,16 @@
     }
     document.getElementById("hubRow").appendChild(btn);
   });
+  // A toggle's state, drawn on every render(): lit while on, its second line
+  // saying which, and aria-pressed for a screen reader.
+  function renderHubToggles(){
+    Object.keys(HUB_TOGGLES).forEach(id=>{
+      const btn = hubButtonFor[id], on = HUB_TOGGLES[id].on();
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+      btn.querySelector(".hint").textContent = on ? HUB_TOGGLE_HINTS.on : HUB_TOGGLE_HINTS.off;
+    });
+  }
 
   // Options. The prompt's Cancel is the destructive-action guard the old
   // confirm() was, so the protection is kept rather than dropped. Blank is a
@@ -9696,6 +10065,22 @@
   // Here strip: what shows with the door open, its light, and when that is
   // dark, where its own switch sits. Read from loadPoweredNow(), so a hand
   // on the switch shows at once. Functional UI text, retunable.
+  // An appliance's nameplate as the Electrical view prints it (POWER
+  // SCHEMA). Functional UI text, retunable.
+  function nameplateText(a){
+    return "Nameplate: " + (a.nameplate.printsWatts ? `${a.watts} W` : `${a.volts} V · ${a.nameplate.amps} A`);
+  }
+  // The meter buttons the Electrical view offers, each only while its tool
+  // is carried: Test on a load row and a breaker row, Clamp on a breaker row
+  // (doMeterTest(), doMeterClamp()). Under simplified rules a breaker row is
+  // only ever a main. Each costs METER_READING_MIN.
+  function meterButtons(target, make){
+    const out = [];
+    const cost = fmtDuration(METER_READING_MIN);
+    if(hasTool("voltage-test")) out.push(make("Test", ()=> doMeterTest(target), cost));
+    if(target.breaker && hasTool("current-clamp")) out.push(make("Clamp", ()=> doMeterClamp(target.breaker), cost));
+    return out;
+  }
   function loadStatusText(loadId){
     if(loadPoweredNow(loadId)) return "Light on";
     const l = POWER_NET.loads[loadId];
@@ -9782,8 +10167,13 @@
       : actionButton("Switch on", ()=> doSwitchLoad(loadId, true)));
     devicePop.appendChild(controls);
   }
+  // A meter button in the device pop-up, its cost in the dim style every
+  // timed action's is.
+  function popMeterButton(label, onClick, cost){ return actionButton(label, onClick, { cost }); }
   // A panel's or board's pop-up, drawn into the device pop-up. Watts never
-  // appear (#242, #249). Detailed rules: the name, whether power reaches it,
+  // appear (#242, #249). While the Electrical view is on, each breaker row
+  // it lists also offers Test and Clamp, each while its meter is carried
+  // (meterButtons()). Detailed rules: the name, whether power reaches it,
   // then one row per breaker (deviceBreakers()), each its hand-written
   // label, rating and state and one button: Switch off, Switch on, or Reset
   // when tripped. Simplified rules: the name, the main's rating, On or Off,
@@ -9812,6 +10202,7 @@
         ? actionButton("Switch off", ()=> doSwitchBreaker(node.main, false))
         : actionButton("Switch on", ()=> breakerStateIn(state.power, node.main).tripped
           ? doResetBreaker(node.main) : doSwitchBreaker(node.main, true)));
+      if(electricalView) meterButtons({ breaker:node.main }, popMeterButton).forEach(b=> controls.appendChild(b));
     } else {
       line(deviceFedText(device));
       deviceBreakers(device).forEach(id=>{
@@ -9822,9 +10213,13 @@
         const text = document.createElement("span");
         text.textContent = `${br.label} · ${br.rating} A · ${breakerStateText(id)}`;
         row.appendChild(text);
-        row.appendChild(st.tripped ? actionButton("Reset", ()=> doResetBreaker(id))
+        const buttons = document.createElement("span");
+        buttons.className = "breaker-buttons";
+        buttons.appendChild(st.tripped ? actionButton("Reset", ()=> doResetBreaker(id))
           : st.on ? actionButton("Switch off", ()=> doSwitchBreaker(id, false))
           : actionButton("Switch on", ()=> doSwitchBreaker(id, true)));
+        if(electricalView) meterButtons({ breaker:id }, popMeterButton).forEach(b=> buttons.appendChild(b));
+        row.appendChild(buttons);
         controls.appendChild(row);
       });
     }
@@ -9836,6 +10231,24 @@
     if(!deviceTarget || !layerOpen(devicePop)) return;
     placePop(devicePop, document.getElementById("worldStrip").getBoundingClientRect());
   }
+  // What picks a room's text when its `desc` is state variants (ROOM SCHEMA),
+  // keyed by `reads.kind`: each entry's `states` are the variant keys it
+  // returns, and `read(reads)` which one holds now. Render-safe: each reads a
+  // predicate and writes nothing. A cycling fridge between runs is powered,
+  // not drawing, so the kitchen still hums then (a simplification,
+  // retunable).
+  const DESC_READERS = {
+    load:     { states:["on", "off"], read:(r)=> loadPoweredNow(r.id) ? "on" : "off" },
+    grid:     { states:["on", "off"], read:()=> gridUp() ? "on" : "off" },
+    crossing: { states:["on", "off"], read:()=> crossingLit() ? "on" : "off" }
+  };
+  // A room's description as it reads now.
+  function roomDescText(room){
+    const d = room.desc;
+    if(!d || typeof d !== "object") return d;
+    const reader = DESC_READERS[d.reads && d.reads.kind];
+    return reader ? d.variants[reader.read(d.reads)] : "";
+  }
   function renderLocationPanel(){
     const room = world[state.currentRoom];
     document.getElementById("locLabel").textContent = roomLabel(room);
@@ -9845,7 +10258,7 @@
         ? ` A fire is burning here — roughly ${fmtDuration(room.fireMinutesLeft).replace(/[()]/g,"")} of fuel left.`
         : " A fire is burning here.";
     }
-    document.getElementById("roomDesc").textContent = room.desc + heatNote;
+    document.getElementById("roomDesc").textContent = roomDescText(room) + heatNote;
     document.getElementById("clockLabel").textContent = hasWatch() ? getClockText() : getVagueClockText();
   }
   function renderStatsPanel(){
@@ -10064,15 +10477,29 @@
       invStrip.style.display = "";
       document.getElementById("unequipBtn").onclick = ()=> doUnequip(invTab);
     } else { invStrip.style.display = "none"; }
-    // No Store while the Here tab is a panel's or a board's: it holds no items.
-    renderItemList(document.getElementById("invList"), currentInv.items, [
-      { label: worldTab === "floor" ? "Place" : "Store", onClick:(i)=> doStore(i),
-        test:()=> !!worldSlot(world[state.currentRoom], worldTab) }
+    // No Store while the Here tab is a panel's or a board's, or a circuit's:
+    // none holds items. The Electrical view's Here tabs are only those.
+    // The Electrical view lists only what is tagged `electrical`, each row
+    // acting on the tab's own list by the item's own index there.
+    const invList = document.getElementById("invList");
+    const shown = electricalView ? currentInv.items.filter(it=> hasTag(it, "electrical")) : currentInv.items;
+    renderItemList(invList, shown, [
+      { label: worldTab === "floor" ? "Place" : "Store", onClick:(i)=> doStore(currentInv.items.indexOf(shown[i])),
+        test:()=> !electricalView && !!worldSlot(world[state.currentRoom], worldTab) }
     ], "inv", { container:null });
+    if(electricalView && !shown.length) invList.innerHTML = `<li class="empty">${ELECTRICAL_EMPTY_INV}</li>`;
   }
+  // The Electrical view's notes, where a list would be: an Inventory tab
+  // with nothing electrical in it, and a room with no panel, board or
+  // circuit to show. The room's says nothing of its wiring: a room no panel
+  // names still takes its power from the grid. Functional UI text,
+  // retunable.
+  const ELECTRICAL_EMPTY_INV = "Nothing electrical.";
+  const ELECTRICAL_EMPTY_HERE = "Nothing electrical to show here.";
   function renderWorldItemsPanel(){
     const room = world[state.currentRoom];
     const worldTabsEl = document.getElementById("worldTabs");
+    if(electricalView){ renderElectricalHere(room, worldTabsEl); return; }
     const worldTabDefs = [["floor","Floor"]];
     // Floor bags straight after Floor, in floor order, searched or not: the
     // bag is on the floor, and Floor is never gated. Bags sharing a name are
@@ -10145,6 +10572,131 @@
       { label:"Take", disabled:(it)=> invTab === "keychain" && !keychainAllows(it), onClick:(i)=> doTake(i) }
     ], "world", { container: worldTabContainer(room, worldTab), roomId: state.currentRoom });
   }
+  // A circuit's Here tab key in the Electrical view, prefixed as a device's
+  // is (powerTab()).
+  function circuitTab(breakerId){ return "circuit:" + breakerId; }
+  const NO_ELECTRICAL_TAB = "circuit:none";
+  // The circuits that serve a room: every circuit breaker whose roles include
+  // a role its panel maps to the room, panel by panel in wiring order, each
+  // panel's in breaker order. Under either rules: simplified rules ignore
+  // the circuit breakers, but the circuits are still how a room's loads are
+  // listed.
+  function circuitsServing(roomId){
+    const out = [];
+    Object.values(POWER_NET.panels).forEach(p=> p.circuits.forEach(id=>{
+      if(POWER_NET.breakers[id].roles.some(r=> p.roles[r] === roomId)) out.push(id);
+    }));
+    return out;
+  }
+  // The Here panel in the Electrical view (#242). Its tabs run upstream
+  // first: the panels and boards hanging here (powerDevicesIn()), each with
+  // the strip and Device Options it has in the normal view, then the circuits
+  // serving the room (circuitsServing()), by their hand-written labels. No
+  // Floor, bag or container tab. A room with none of either shows no tabs,
+  // only ELECTRICAL_EMPTY_HERE. Nothing here changes the simulation: a
+  // switch goes through doSwitchLoad(), a breaker through the device pop-up.
+  function renderElectricalHere(room, worldTabsEl){
+    const devices = powerDevicesIn(state.currentRoom);
+    const circuits = circuitsServing(state.currentRoom);
+    const defs = devices.map(d=> [powerTab(d.id), powerNode(d).name])
+      .concat(circuits.map(id=> [circuitTab(id), POWER_NET.breakers[id].label]));
+    // With no tab to show, the Here tab is none at all, never Floor, so no
+    // item pop-up offers Place onto a floor this view does not show.
+    if(!defs.find(d=> d[0] === worldTab)) worldTab = defs.length ? defs[0][0] : NO_ELECTRICAL_TAB;
+    rebuildKeepingFocus(worldTabsEl, ()=>{
+      worldTabsEl.innerHTML = "";
+      defs.forEach(([key, label])=>{
+        const btn = document.createElement("button");
+        btn.textContent = label;
+        if(worldTab === key) btn.classList.add("active");
+        btn.addEventListener("click", ()=>{ worldTab = key; render(); });
+        worldTabsEl.appendChild(btn);
+      });
+    }, false);
+    revealActiveTab(worldTabsEl);
+    document.getElementById("worldWeight").textContent = "";
+    const worldStrip = document.getElementById("worldStrip");
+    const deviceState = document.getElementById("worldDeviceState");
+    const tabDevice = devices.find(d=> powerTab(d.id) === worldTab);
+    if(tabDevice){
+      worldStrip.style.display = "";
+      deviceOptionsBtn.onclick = ()=>{ deviceTarget = { kind:tabDevice.kind, id:tabDevice.id }; render(); };
+      deviceState.textContent = deviceStripText(tabDevice);
+      deviceState.style.display = "";
+    } else {
+      worldStrip.style.display = "none";
+      deviceState.textContent = "";
+    }
+    const list = document.getElementById("worldList");
+    list.innerHTML = "";
+    if(!defs.length){ list.innerHTML = `<li class="empty">${ELECTRICAL_EMPTY_HERE}</li>`; return; }
+    const circuitId = circuits.find(id=> circuitTab(id) === worldTab);
+    if(circuitId) renderCircuitTab(list, circuitId, state.currentRoom);
+  }
+  // A circuit tab: one row per load on the circuit in this room, then the
+  // loads it feeds elsewhere, by appliance name and the room they are in
+  // (roomLabel()), with no status and no control: they can't be seen from
+  // here. A row here shows the appliance's name and, for a load with a
+  // switch of its own, its readout (loadStatusText()) and one Switch on /
+  // Switch off (doSwitchLoad()). A switchless one (the smoke alarm, the gas
+  // range) shows neither. Every row here shows its nameplate
+  // (nameplateText()) and, while a meter is carried, Test (meterButtons()).
+  // Watts appear nowhere but a bulb's nameplate. Functional UI text,
+  // retunable.
+  function renderCircuitTab(list, circuitId, roomId){
+    const loads = POWER_NET.breakers[circuitId].loads.map(id=> POWER_NET.loads[id]);
+    const line = (parent, text)=>{
+      const span = document.createElement("span");
+      span.className = "line";
+      span.textContent = text;
+      parent.appendChild(span);
+    };
+    loads.filter(l=> l.room === roomId).forEach(l=>{
+      const a = APPLIANCES[l.appliance];
+      const li = document.createElement("li");
+      const meta = document.createElement("span");
+      meta.className = "meta";
+      const name = document.createElement("b");
+      name.textContent = a.name;
+      meta.appendChild(name);
+      if(!a.switchless) line(meta, loadStatusText(l.id));
+      line(meta, nameplateText(a));
+      li.appendChild(meta);
+      const row = document.createElement("span");
+      row.className = "btnrow";
+      const mini = (label, onClick, cost)=>{
+        const btn = document.createElement("button");
+        btn.className = "mini";
+        btn.textContent = cost ? `${label} ${cost}` : label;
+        btn.addEventListener("click", onClick);
+        return btn;
+      };
+      if(!a.switchless){
+        const on = switchOnIn(state.power, state.seed, l.id, a);
+        row.appendChild(mini(on ? "Switch off" : "Switch on", ()=> doSwitchLoad(l.id, !on)));
+      }
+      meterButtons({ load:l.id }, mini).forEach(b=> row.appendChild(b));
+      li.appendChild(row);
+      list.appendChild(li);
+    });
+    const elsewhere = loads.filter(l=> l.room !== roomId);
+    if(!elsewhere.length) return;
+    const head = document.createElement("li");
+    head.className = "subhead";
+    head.textContent = "Elsewhere on this circuit";
+    list.appendChild(head);
+    elsewhere.forEach(l=>{
+      const li = document.createElement("li");
+      const meta = document.createElement("span");
+      meta.className = "meta";
+      const name = document.createElement("b");
+      name.textContent = APPLIANCES[l.appliance].name;
+      meta.appendChild(name);
+      line(meta, world[l.room] ? roomLabel(world[l.room]) : l.room);
+      li.appendChild(meta);
+      list.appendChild(li);
+    });
+  }
   // The seed, as its canonical uint32 — what a typed word hashed to, which is
   // what reproduces the run; a word is lossy, the number is the seed. It lives
   // in Options rather than as a line in Stats, and is drawn ahead of
@@ -10161,6 +10713,7 @@
   }
   function render(){
     renderOptionsPanel();
+    renderHubToggles();
     // Crafting is unavailable once the run is over, and available again the
     // moment it isn't: set on every render, so Restart, Replay this seed and
     // a load after death all re-enable it. No hint line: "You did not

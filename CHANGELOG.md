@@ -18,6 +18,307 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.9.3 — The electrical view, meters and nameplates, and room text that follows power
+
+Implements: handoffs/electrical-view-and-meters.md
+
+Implements #242, #235, #249, #267 and #270 in full, per
+`handoffs/electrical-view-and-meters.md`: the power PATCHes that don't wait on
+#237, built in six phases. Unit templates now carry their doors and windows,
+proven identical to what was hand-authored. The stove timer is documented as
+wind-up. Nine rooms' text follows power. An Electrical toggle in the ☰ Menu
+turns Inventory and Here into their electrical views. Every appliance has a
+nameplate, and two new tools, the multimeter and the clamp meter, read what the
+network is doing. No state field is added: the toggle is a preference outside
+the save, and the meters are ordinary items. So this is **PATCH**, and 0.9.2
+browser saves keep loading.
+
+**New**
+
+- Template doors and windows (#267). `WIRING_TEMPLATES.apartment` gains
+  `doors` (`{ key, between:[role, role], locked, lockable? }`: `bedroom`,
+  `bathroom`, `bath-bedroom`, `balcony`, all lockless) and `windows`
+  (`{ key, role, label, breakTag, climbable? }`: `living`, `kitchen`,
+  `bedroom`, `bathroom`). `expandOpenings(wiring, templates)` (SIMULATION,
+  POWER, a pure sibling of `expandWiring()`) builds them as DOOR / WINDOW
+  SCHEMA definitions with ids `<panel id lowercased>-<key>` and
+  `<panel id lowercased>-<role>-window`, `building` the WIRING key. A door
+  whose two roles map to one room is not made, which is why 1B has none. A
+  panel's `overrides: { doors?:{ key: fields | null }, windows?:{ key: fields
+  | null } }` replaces a template entry (fields laid over it, an `id` among
+  them) or drops it (`null`), for that unit only.
+- `stampTemplateDoorIds(world)`, run by `makeDefaultWorld()` before
+  `applyComputedDirections()`: every exit from one of a template door's two
+  rooms to the other gets its `doorId`.
+- `crossingLit(m)` (WORLD INTERACTION, beside `gridUp()`): a rail crossing's
+  lights are on while `gridUp(m)`, or while `m` is less than
+  `CROSSING_STANDBY_MIN` past the grid's failure.
+- `CROSSING_STANDBY_MIN = 24 * 60` (CONFIG, beside `POWER_FAILS_DAY`), citing
+  49 CFR 234.215, which requires standby power for "a reasonable length of
+  time" and sets no length. Unconfirmed and retunable. It is the only place
+  the figure lives.
+- State variants for room text (#235). A room's `desc` may be
+  `{ reads:{ kind, … }, variants:{ state: text } }`. `DESC_READERS`
+  (RENDERING) maps `kind` to its `states` and a render-safe `read()`:
+  - `load` (with `id`): `loadPoweredNow(id)`, so throwing the load's own
+    switch shows at once;
+  - `grid`: `gridUp()`;
+  - `crossing`: `crossingLit()`.
+
+  Each returns `"on"` or `"off"`, and `roomDescText(room)` picks the text. A
+  plain string still works.
+- Nameplates (#249). Every `APPLIANCES` entry carries `nameplate`: `{ amps }`
+  at its own `volts`, or `{ printsWatts:true }` for the bulb, which prints its
+  own `watts`. Neither form copies a figure. `nameplateWatts(a)` is the rated
+  figure.
+  - `fridge_freezer` 6 A (Frigidaire FFTR1821QW, secondary);
+  - `led_light` its 10 W;
+  - `bath_fan` 0.9 A (Broan 688);
+  - `range_hood` 2.0 A (Broan 413004);
+  - `smoke_alarm` 0.04 A (BRK 9120);
+  - `gas_range` 12 A (Frigidaire FCFG3062AS).
+
+  Each source sits in the comment beside its figure.
+- The meters (#249).
+  - `doMeterTest(target)` (`{ load }` or `{ breaker }`) and
+    `doMeterClamp(breakerId)` (ACTIONS, beside `doSwitchLoad()`) each cost
+    `METER_READING_MIN = 1` (retunable) through `advanceTime()`, then read
+    `powerNow`.
+  - Test reads a load's supply up to its switch: the circuit's `volts` while
+    `live[circuit]` (simplified: `live[panel]`), else 0. On a breaker it reads
+    the load side at the breaker's `volts`: `live[circuit]` for a circuit,
+    `live[panel]` for a panel main, `supplied[panel]` for a feeder,
+    `live[board]` for the board main. `loadSupplyVolts()` and
+    `breakerLoadSideVolts()` (SIMULATION, POWER) do the reading.
+  - Clamp reads `running[id]` to one decimal (`breakerCurrent()`). A main or
+    feeder reads its balanced total, and a cycling fridge reads its current
+    minute.
+  - Test needs a carried `voltage-test` tool and Clamp a `current-clamp` one
+    (`hasTool()`). Under simplified rules both reach only a device's main
+    (`meterReachesBreaker()`), and Test still reaches loads.
+  - Each reading logs one line, "The meter reads 120 V." or "The clamp reads
+    1.3 A."
+- The Electrical view (#242): `electricalView`, a UI-only binding
+  initialised by `readElectricalViewPref()`. It is stored in `localStorage`
+  under `ELECTRICAL_VIEW_KEY = "ashfall_pref_electrical_view"` (CONFIG,
+  unversioned), read and written inside try/catch, and off when storage is
+  missing or throws. It is never in `state`, a save or an export, and a
+  restart or a load leaves it as it is. The simulation never reads it.
+
+**New content**
+
+- `multimeter` ("Multimeter", Tool, 0.55 kg, a Fluke 115's weight):
+  `["electrical","voltage-test"]`. It can't read current: that takes
+  breaking into the circuit, which the game doesn't offer.
+- `clamp_meter` ("Clamp meter", Tool, 0.265 kg, a Fluke 323's weight):
+  `["electrical","voltage-test","current-clamp"]`. No battery is modelled on
+  either (#261).
+- Both join `tools_workshop` and `hardware_store` at chance 0.20. A
+  `multimeter` is hand-placed in 1B's `toolcabinet`.
+- The nine rooms' approved texts, verbatim:
+  - `kitchen` reads `acorn.2A.fridge`, and its "The gas stove works too —
+    no power needed to light it." is removed (#259);
+  - `hallway2` reads `acorn.house.light_hallway2`;
+  - `oak_hallway1`, `mill4th`, `mid_maple_2_4`, `poplar4th`, `main7th` and
+    `mid_1st_mp_p` read the grid;
+  - `mid_2nd_d_mi` reads the crossing.
+
+  The swept rooms (`living`, `onebee`, `cedar2nd`, `mid_9th_e_mp`, `main5th`,
+  `mid_maple_3_5`, `mid_maple_5_7`) are unchanged.
+- WIRING: 1A's `overrides.doors.balcony` is `1a-patio` (locked, lockable,
+  sides listed patio first as before). 1B's `overrides.windows` drops all four
+  template windows.
+
+**Changed / Reworked**
+
+- Doors and windows. `makeDefaultDoors()` is `authoredDoors()` (the four
+  entry doors) plus the templates' doors, listed lockable doors first, then
+  lockless ones. That is the order `doorsForRoom()` walks, and it keeps every
+  Open and Close button where it was. `makeDefaultWindows()` is
+  `authoredWindows()` (`2a-transom`, `1b-alley`) plus the templates'. The 24
+  template-door `doorId`s left the room definitions.
+- `let doors` / `let windows` moved from beside the definitions to just below
+  `let world = makeDefaultWorld()`, below `WIRING`, which their build now
+  reads (the temporal dead zone).
+- The stove timer (#270): comments only. The comment above
+  `doAddStoveTimer()` and CONTAINER SCHEMA's `timerMinutes` now say wind-up,
+  needing neither power nor a battery, and separate from `gas_range`'s
+  standby. The mechanic is unchanged.
+
+**UI**
+
+- ☰ Menu hub row: `Electrical`, between Clothing and Options. It is lit
+  while on, its second line reads `On` / `Off`, and it has `aria-pressed`.
+  `HUB_BUTTONS` entries may now carry `toggles` (a `HUB_TOGGLES` id) in place
+  of `opens`. `renderHubToggles()` draws them on every render. Turning the
+  view off returns Here to Floor.
+- The Here panel with the view on (`renderElectricalHere()`):
+  - Tabs run upstream first: the panels and boards hanging here, each with
+    its strip and Device Options as before. Then the circuits serving the
+    room (`circuitsServing()`: every circuit whose roles include a role its
+    panel maps here, by panel then breaker order), labelled by their
+    hand-written labels. There are no Floor, bag or container tabs.
+  - A circuit tab (`renderCircuitTab()`) lists each load on it in this room:
+    the name; for a switchable load, `loadStatusText()` and one Switch
+    on / off (`doSwitchLoad()`); a `Nameplate: 120 V · 0.9 A` / `Nameplate:
+    10 W` line; and `Test (0:01)` while a meter is carried.
+  - Under the heading "Elsewhere on this circuit" come the circuit's other
+    loads, by name and `roomLabel()`, with no status or control.
+  - A room with neither devices nor circuits shows no tabs, only "Nothing
+    electrical to show here.", which claims nothing about wiring.
+- The device pop-up, with the view on: each breaker row (simplified: the
+  main) adds `Test` and `Clamp` while their tools are carried, beside its
+  switch.
+- Inventory with the view on lists only `electrical`-tagged items, in every
+  tab. An empty list reads "Nothing electrical.", and there is no Store
+  button. Detail views, their actions and the weight readout are unchanged.
+- Watts appear nowhere but a bulb's nameplate.
+
+**Documentation**
+
+- These comments are new or extended:
+  - POWER SCHEMA: template `doors` / `windows`, panel `overrides`,
+    `nameplate` and its sources;
+  - DOOR SCHEMA and WINDOW SCHEMA: where each kind comes from;
+  - ROOM SCHEMA: state variants;
+  - ITEM DATA SCHEMA tags: `electrical`, `voltage-test`, `current-clamp`;
+  - the SPAWN_POOLS chosen-figures list: the meters' four entries;
+  - `REPORTED_TOOL_TAGS`: now twelve, with the meters' two;
+  - `validateWiring()` and `validateRoomSchema()`.
+- Filed for what this pass surfaced:
+  - #278: a save keeps the room text it was written with, so the variants
+    don't reach a 0.9.2 save until restart;
+  - #279: `loadStatusText()`'s "Light on" / "Dark" wording on a fan or
+    hood;
+  - #280: hall lights roll `led_light`'s 0.3 `leftOnChance`, so `hallway2`
+    usually opens reading "its one bulb dead".
+
+  Nothing else was deferred.
+
+**Explicitly out of scope**
+
+- Wiring other buildings (#252–#257) and the fallback's removal (#258).
+- Candles (#271).
+- Cords and plugging (#244), generators (#245), inlets (#246), shock and
+  GFCI (#247), carbon monoxide (#248) and batteries, the meters' included
+  (#261).
+- Outlets as network nodes.
+- Real street and store names (#237).
+- The grid's structure (#220).
+- Temperature and fridge coasting (#217), time of day and streetlight
+  photocells (#58).
+- A UI-preferences system (#165).
+
+**Sections touched**
+
+- CONFIG: `ELECTRICAL_VIEW_KEY`, `CROSSING_STANDBY_MIN`, `VERSION`.
+- WORLD DATA:
+  - `authoredDoors()`, `makeDefaultDoors()`, `authoredWindows()` and
+    `makeDefaultWindows()`;
+  - `APPLIANCES` and `nameplateWatts()`;
+  - `WIRING_TEMPLATES` and `WIRING`;
+  - room definitions: `doorId`s and nine `desc`s;
+  - `makeDefaultWorld()` and `stampTemplateDoorIds()`;
+  - `ITEM_REGISTRY` and `SPAWN_POOLS`;
+  - 1B's tool cabinet.
+- PLAYER STATE: the `doors` / `windows` bindings moved; `electricalView`.
+- WORLD INTERACTION: `crossingLit()`; `doMeterTest()`, `doMeterClamp()`,
+  `meterReachesBreaker()` and `METER_READING_MIN`.
+- SIMULATION (POWER): `expandOpenings()`, `loadSupplyVolts()`,
+  `breakerLoadSideVolts()`, `breakerCurrent()`.
+- FIRE/COOKING: the timer comment.
+- PERSISTENCE: `readElectricalViewPref()`, `writeElectricalViewPref()`. The
+  save format is untouched.
+- EVENTS / UI HELPERS: `HUB_BUTTONS`, `HUB_TOGGLES`, `renderHubToggles()`.
+- UI/RENDERING:
+  - `DESC_READERS` and `roomDescText()`;
+  - `renderInventoryPanel()`;
+  - `renderWorldItemsPanel()`, `renderElectricalHere()`,
+    `circuitsServing()`, `circuitTab()`, `renderCircuitTab()`;
+  - `renderPowerDevicePop()`, `popMeterButton()`, `meterButtons()`,
+    `nameplateText()`;
+  - CSS for the toggle, circuit rows and breaker buttons.
+- Dev seam: `validateWiring()`, `validateRoomSchema()`,
+  `REPORTED_TOOL_TAGS`.
+
+**Validation performed**
+
+- Phase 1's equality proof. A hook injected before the dev seam serialised
+  three things as JSON with sorted keys, once on `origin/main`'s file and
+  once after Phase 1: `makeDefaultDoors()`, `makeDefaultWindows()`, and every
+  room's exits (`to`, `label`, `distanceM`, `doorId`) from
+  `makeDefaultWorld()`. The two files were byte-identical (`cmp`). The
+  unsorted `Object.keys()` order of doors and windows was identical too.
+- `validateWiring()` reports no problems. On a test wiring it reported the
+  expected ones: a role removed from 2B's rooms, an override key 1A's
+  template lacks, and a template window id clashing with `2a-transom`.
+- `validateItemRegistry()`, `validateLocations()` and `validateRoomSchema()`
+  report nothing. `validateReachability()`: `voltage-test` has 1
+  hand-placed instance, `current-clamp` 0, and both are in the live pool
+  `tools_workshop`. `hardware_store` stays dead, as before.
+- Room text on a new game:
+  - at start, every grid-read room reads its "on" text;
+  - at `totalMinutes = 19 × 1440` (grid down), each reads "off" but the
+    crossing;
+  - the crossing is still lit at +1439 minutes and dark at +1440;
+  - switching the 2A fridge off and on flips the kitchen text at once.
+- Electrical view, in headless Chromium at 1200 px and 390 px (no
+  horizontal scroll):
+  - the toggle persisted `"on"` in storage;
+  - kitchen tabs: Unit 2A panel, KITCHEN 1, KITCHEN 2, LIGHTS; LIGHTS lists
+    the range hood and light here, and the living-room and balcony lights
+    elsewhere;
+  - 1B lists all five circuits; `hallway1` shows Main board, House panel,
+    HOUSE;
+  - the alley shows no tabs and the note;
+  - the Inventory filter hides a carried flashlight.
+- Meters: 120 V on a live load, 0 V after LIGHTS was switched off, 240 V on
+  the board's 2A feeder, 0 V at the board main after the grid failed. The
+  KITCHEN 1 clamp read 0.0 A in the fridge's off minute.
+- A save written by `origin/main`'s 0.9.2 file loads here. An open
+  `2a-bedroom`, a broken `2a-kitchen-window` and an unlocked `1a-patio` all
+  carry across by id. Its rooms keep their saved text (#278).
+- `git diff origin/main...HEAD -- ashfall.html` touches only the sections
+  above. No console errors on load.
+
+**Open questions / decisions resolved**
+
+- State-following text: variants per room, `{ reads, variants }`, with the
+  readers in one table (`DESC_READERS`), not tokens. Weather, time of day or
+  damage is one more reader with its own states.
+- Exits' `doorId`: stamped at world build, option (a)
+  (`stampTemplateDoorIds()`). The authored ids are gone.
+- Overrides: a per-key map, `{ key: fields | null }`, on the panel.
+- The temporal dead zone: the runtime `doors` / `windows` bindings moved
+  below `WIRING`, to beside `world`.
+- Nameplate schema: `{ amps }` at the entry's own `volts`, or
+  `{ printsWatts:true }`, so no figure is stored twice. Amps print as
+  authored numbers, so the hood reads "2 A", not the label's "2.0 A".
+- Tag names: `voltage-test`, `current-clamp`, plus `electrical`.
+- The hub toggle: a `toggles` field naming a `HUB_TOGGLES` entry. The
+  preference key is `ashfall_pref_electrical_view`.
+- Meter controls: inline buttons after a row's switch, each only while its
+  tool is carried, with its `(0:01)` cost shown like every timed action's.
+
+**Notes / assumptions**
+
+- Retunable, and not settled:
+  - `CROSSING_STANDBY_MIN` (24 h, unconfirmed);
+  - `METER_READING_MIN` (1);
+  - the four meter spawn chances (0.20);
+  - one real model per nameplate, the fridge's figure secondary;
+  - a cycling fridge counting as powered, so it "hums" between runs;
+  - Electrical's place in the hub row;
+  - every new UI string ("Nothing electrical.", "Nothing electrical to show
+    here.", "Elsewhere on this circuit", the `Nameplate:` line and the two
+    log lines).
+- Loads elsewhere are named by `roomLabel()`, the header's full label, as
+  the handoff asked. It is long at phone width but wraps.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.9.2"` → `"0.9.3"`
+
+---
+
 ## v0.9.2 — The stove needs power or a flame, and a load's own switch
 
 Implements: handoffs/stove-and-switches.md
