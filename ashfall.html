@@ -98,6 +98,9 @@
   .breaker-row{ display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:4px 8px;
     font-size:12px; color:var(--ink-dim); }
   .timer-steps button.action{ flex:1 1 0; min-width:0; padding-left:0; padding-right:0; text-align:center; }
+  /* A breaker row's buttons: its switch, then the Electrical view's meter
+     buttons while a meter is carried, wrapping together. */
+  .breaker-buttons{ display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end; }
   /* Focus is drawn for keyboard use only, so a click or a tap looks as it
      always has even now that opening and closing a layer moves focus. A
      layer's own root is focusable only as the last place focus can land,
@@ -810,7 +813,8 @@
   //     tags          capability tags used by mechanics instead of name
   //                   checks. Read by a mechanic today: blunt, cutting,
   //                   chopping, fishing, tackle, fire-starter, battery,
-  //                   can-opening, disassemble, blade. `can-opening`
+  //                   can-opening, disassemble, blade, electrical,
+  //                   voltage-test, current-clamp. `can-opening`
   //                   means "can get a can open", not "is a can opener" —
   //                   doOpen() asks hasTool() for it, so every item that
   //                   could work a lid off carries it, not just the
@@ -829,6 +833,10 @@
   //                   before a fire-starter since it spends nothing.
   //                   roomHasHeat() reads it too, but its only caller is
   //                   canCraft()'s needsHeat branch, which no recipe sets.
+  //                   `electrical` puts an item in the Electrical view's
+  //                   Inventory (#242). `voltage-test` offers Test on a
+  //                   load or a breaker there, and `current-clamp` Clamp on
+  //                   a breaker (doMeterTest(), doMeterClamp()).
   //                   Declared, with no consumer yet: prying — an item
   //                   carrying it makes a claim nothing currently acts on,
   //                   which is correct to write and not yet load-bearing.
@@ -1013,6 +1021,14 @@
     loose_change: { name:"Loose change", category:"Misc", unitWeight:0.3 },
     box_cutter: { name:"Box cutter", category:"Tool", unitWeight:0.1, tags:["blade","can-opening"] },
     screwdriver: { name:"Screwdriver", category:"Tool", unitWeight:0.15, tags:["can-opening"] },
+    // The meters (#249). A Fluke 115 weighs 550 g and a Fluke 323 265 g.
+    // The multimeter only tests voltage: it reads current up to 10 A, and
+    // only by breaking into the circuit, so it can't safely read a household
+    // one and the game doesn't offer it. The clamp meter clamps current
+    // (400 A AC) and tests voltage (600 V AC) too. Neither's battery is
+    // modelled (#261).
+    multimeter: { name:"Multimeter", category:"Tool", unitWeight:0.55, tags:["electrical","voltage-test"] },
+    clamp_meter: { name:"Clamp meter", category:"Tool", unitWeight:0.265, tags:["electrical","voltage-test","current-clamp"] },
     old_photographs: { name:"Old photographs", category:"Misc", unitWeight:0.1 },
     reading_lamp: { name:"Reading lamp", category:"Electronics", unitWeight:0.8 },
     prescription_bottles: { name:"Prescription bottles", category:"Medical", unitWeight:0.05 },
@@ -1860,7 +1876,7 @@
   // state.power (see PLAYER STATE).
   //
   // APPLIANCES, keyed by id: what a load is.
-  //   { name, watts, volts, leftOnChance | switchless, startWatts?,
+  //   { name, watts, volts, leftOnChance | switchless, nameplate, startWatts?,
   //     dutyCycle?, cycleMinutes? }
   //   watts        running draw
   //   volts        120 or 240
@@ -1873,7 +1889,17 @@
   //   startWatts   the total draw at a start; present on a motor load
   //   dutyCycle, cycleMinutes  present on a cycling load: it draws for
   //                dutyCycle × cycleMinutes of every cycleMinutes
-  //   No watts are shown anywhere (#242, #249).
+  //   nameplate    what its rating label prints (#249): { amps }, printed as
+  //                "<volts> V · <amps> A" at the entry's own `volts`, or
+  //                { printsWatts:true }, printed as its own `watts` ("10 W"),
+  //                as a bulb's base is; never a second copy of either. A
+  //                nameplate reads above the running draw, as a real one
+  //                does. Every entry carries one, rated at no less than its
+  //                `watts` (validateWiring()). Shown only in the Electrical
+  //                view's circuit tabs (nameplateText()). Picking one real
+  //                model per appliance is a judgment call, retunable; each
+  //                figure's source is given below.
+  //   No watts are shown anywhere, but a bulb's nameplate (#242, #249).
   // Every figure is a pick inside a sourced range, and retunable.
   //   fridge_freezer  the appliance behind every kitchen's Fridge and Freezer
   //                   pair. Running 150 W, within the measured 100–250 W
@@ -1896,14 +1922,39 @@
   //                   isn't modelled (#259).
   // The fan and the hood are motors, but their start surge is left
   // unmodelled: neither carries `startWatts`.
+  // Nameplates, one real model each:
+  //   fridge_freezer  6 A: Frigidaire FFTR1821QW, "Amps @ 120 Volts: 6", with
+  //                   a 0.72 kW connected load and a 15 A minimum circuit.
+  //                   Several retailer spec listings agree; Frigidaire's own
+  //                   page was not read, so the figure is secondary, not
+  //                   confirmed.
+  //   led_light       its own `watts`, printed on the base.
+  //   bath_fan        0.9 A: Broan 688, "120 VAC, 0.9 A".
+  //   range_hood      2.0 A: Broan 413004, "120V ~ 60 Hz, drawing 2.0 amps".
+  //   smoke_alarm     0.04 A: BRK 9120 data sheet, "Operating Current: .04
+  //                   amps (standby/alarm)".
+  //   gas_range       12 A: Frigidaire FCFG3062AS, "Amps @ 120 Volts: 12
+  //                   Amps". The rating covers its oven igniter and oven,
+  //                   which aren't modelled; that is why it sits far above
+  //                   the 4 W standby.
   const APPLIANCES = {
-    fridge_freezer: { name:"Fridge-freezer", watts:150, startWatts:525, volts:120, dutyCycle:0.35, cycleMinutes:60, leftOnChance:0.99 },
-    led_light:      { name:"Light",          watts:10,  volts:120, leftOnChance:0.3 },
-    bath_fan:       { name:"Exhaust fan",    watts:36,  volts:120, leftOnChance:0.05 },
-    range_hood:     { name:"Range hood",     watts:200, volts:120, leftOnChance:0.05 },
-    smoke_alarm:    { name:"Smoke alarm",    watts:1,   volts:120, switchless:true },
-    gas_range:      { name:"Gas range",      watts:4,   volts:120, switchless:true }
+    fridge_freezer: { name:"Fridge-freezer", watts:150, startWatts:525, volts:120, dutyCycle:0.35, cycleMinutes:60, leftOnChance:0.99,
+      nameplate:{ amps:6 } },
+    led_light:      { name:"Light",          watts:10,  volts:120, leftOnChance:0.3, nameplate:{ printsWatts:true } },
+    bath_fan:       { name:"Exhaust fan",    watts:36,  volts:120, leftOnChance:0.05, nameplate:{ amps:0.9 } },
+    range_hood:     { name:"Range hood",     watts:200, volts:120, leftOnChance:0.05, nameplate:{ amps:2.0 } },
+    smoke_alarm:    { name:"Smoke alarm",    watts:1,   volts:120, switchless:true, nameplate:{ amps:0.04 } },
+    gas_range:      { name:"Gas range",      watts:4,   volts:120, switchless:true, nameplate:{ amps:12 } }
   };
+  // What an appliance's nameplate is rated at, in watts, or null when it has
+  // no usable one. The one reading of `nameplate`'s two forms besides the
+  // printed line (nameplateText()).
+  function nameplateWatts(a){
+    const n = a && a.nameplate;
+    if(!n) return null;
+    if(n.printsWatts) return a.watts;
+    return Number.isFinite(n.amps) ? a.volts * n.amps : null;
+  }
   // WIRING_TEMPLATES, keyed by id: one unit's layout by room role, so every
   // unit wired the same way shares it.
   //   { main:{ rating, volts? }, circuits:[…], fixtures:[…], doors?:[…],
@@ -6135,6 +6186,34 @@
     log(`You switch the ${a.name.toLowerCase()} ${on ? "on" : "off"}.`);
     render();
   }
+  // The meters (#249), from the Electrical view. A reading takes
+  // METER_READING_MIN, then reads the network as it stands after that minute
+  // (loadSupplyVolts(), breakerLoadSideVolts(), breakerCurrent()). Test needs
+  // a `voltage-test` tool carried, Clamp a `current-clamp` one. Under
+  // simplified rules Test reaches a load and a device's main, and Clamp only
+  // the main, as simplified shows only the main. Opening a panel to clamp a
+  // live conductor has no consequence yet (#247). Each reading logs one line
+  // and nothing else records it. The figure is a judgment call and the lines
+  // are functional; both retunable.
+  const METER_READING_MIN = 1;
+  function meterReachesBreaker(id){
+    return state.electricalRules !== "simplified" || ["panel", "board"].includes(POWER_NET.breakers[id].layer);
+  }
+  function doMeterTest(target){
+    if(!hasTool("voltage-test")) return;
+    if(target.breaker && (!POWER_NET.breakers[target.breaker] || !meterReachesBreaker(target.breaker))) return;
+    if(target.load && !POWER_NET.loads[target.load]) return;
+    advanceTime(METER_READING_MIN);
+    const v = target.load ? loadSupplyVolts(target.load) : breakerLoadSideVolts(target.breaker);
+    log(`The meter reads ${Math.round(v)} V.`);
+    render();
+  }
+  function doMeterClamp(id){
+    if(!hasTool("current-clamp") || !POWER_NET.breakers[id] || !meterReachesBreaker(id)) return;
+    advanceTime(METER_READING_MIN);
+    log(`The clamp reads ${breakerCurrent(id).toFixed(1)} A.`);
+    render();
+  }
   function doResetBreaker(id){
     const br = POWER_NET.breakers[id];
     if(!br || !breakerStateIn(state.power, id).tripped) return;
@@ -6833,6 +6912,36 @@
   function loadPoweredNow(loadId){
     return !!powerSnapshot(POWER_NET, APPLIANCES, state.power, state.electricalRules, gridUp(),
       minutesSinceCollapse(), null, state.seed).powered[loadId];
+  }
+  // What a meter reads, from the last step (powerNow). They add no rule to
+  // the resolver: each is a look at what it already worked out (#249).
+  //   A load's supply, up to its own switch: its circuit's volts while the
+  //   circuit is live (simplified rules: its panel), else 0.
+  function loadSupplyVolts(loadId){
+    if(!powerNow) refreshPower();
+    const l = POWER_NET.loads[loadId];
+    const live = state.electricalRules === "simplified" ? powerNow.live[l.panel] : powerNow.live[l.circuit];
+    return live ? POWER_NET.breakers[l.circuit].volts : 0;
+  }
+  //   A breaker's load side, at its volts: a circuit's own liveness, a panel
+  //   main's its panel's, a feeder's its panel's supply, the board main's
+  //   its board's.
+  function breakerLoadSideVolts(id){
+    if(!powerNow) refreshPower();
+    const br = POWER_NET.breakers[id];
+    const live = br.layer === "circuit" ? powerNow.live[id]
+      : br.layer === "panel" ? powerNow.live[br.device]
+      : br.layer === "feeder" ? powerNow.supplied[Object.values(POWER_NET.panels).find(p=> p.feeder === id).id]
+      : powerNow.live[br.device];
+    return live ? br.volts : 0;
+  }
+  //   The current through a breaker, in amps: one conductor clamped at the
+  //   panel. A main or a feeder reads its total, since a panel's two legs are
+  //   taken as balanced; unbalanced legs are not modelled. A cycling load
+  //   reads whatever it is doing this minute.
+  function breakerCurrent(id){
+    if(!powerNow) refreshPower();
+    return powerNow.running[id] || 0;
   }
   // ==================================================
   // STAMINA / FATIGUE SYSTEM
@@ -8014,7 +8123,8 @@
   //   every room a board, panel or role names exists, and every container a
   //     fixture names is in its room;
   //   every appliance id is in APPLIANCES, every APPLIANCES entry carries
-  //     exactly one of leftOnChance and switchless, every circuit's volts is
+  //     exactly one of leftOnChance and switchless, and a nameplate rated at
+  //     no less than its own watts (nameplateWatts()), every circuit's volts is
   //     120 or 240, and every circuit's roles are in its panel's rooms;
   //   every breaker's rating is an NEC 240.6(A) standard size
   //     (STANDARD_BREAKER_RATINGS).
@@ -8035,6 +8145,9 @@
     Object.keys(APPLIANCES).forEach(id=>{
       const a = APPLIANCES[id];
       if(("leftOnChance" in a) === !!a.switchless) problems.push(`appliance ${id}: needs exactly one of leftOnChance and switchless`);
+      const rated = nameplateWatts(a);
+      if(rated === null) problems.push(`appliance ${id}: no nameplate`);
+      else if(rated < a.watts) problems.push(`appliance ${id}: nameplate rated ${rated} W, below its own ${a.watts} W`);
     });
     Object.values(net.boards).forEach(b=> roomExists(b.room, b.id));
     Object.values(net.panels).forEach(p=>{
@@ -8074,17 +8187,17 @@
   //   spare_batteries  the powered-equipment "Remove batteries" action
   const ACTION_GRANTED_ITEM_IDS = ["firewood", "fish", "spare_batteries"];
   // The tool tags validateReachability() counts, written down for the same
-  // reason. The first nine are what hasTool()/hasMatchUses() actually gate
+  // reason. The first eleven are what hasTool()/hasMatchUses() actually gate
   // an action on, and they include the `breakTag` values windows (blunt) and
   // locked storage units (cutting) carry, the `tool` a recipe asks for
-  // (blade), and `heat`, which lights an unpowered stove by hand
-  // (stoveLighting()). `prying` gates nothing at all and is counted
+  // (blade), `heat`, which lights an unpowered stove by hand
+  // (stoveLighting()), and the meters' two (doMeterTest(), doMeterClamp()). `prying` gates nothing at all and is counted
   // precisely for that reason: renderHereActionsPanel() records that forcing
   // a vehicle was deliberately NOT gated on it because one item carries it,
   // and #111 is the standing question of whether to gate on it once that
   // stops being true. The count is the evidence that question wants.
   const REPORTED_TOOL_TAGS = ["fire-starter", "fishing", "tackle", "chopping",
-    "cutting", "blunt", "can-opening", "blade", "heat", "prying"];
+    "cutting", "blunt", "can-opening", "blade", "heat", "voltage-test", "current-clamp", "prying"];
   // Whether the registry entry for `id` carries `tag`, the test every tag
   // count on the dev seam applies.
   function registryCarriesTag(id, tag){ return hasTag(ITEM_REGISTRY[id], tag); }
@@ -9944,6 +10057,22 @@
   // Here strip: what shows with the door open, its light, and when that is
   // dark, where its own switch sits. Read from loadPoweredNow(), so a hand
   // on the switch shows at once. Functional UI text, retunable.
+  // An appliance's nameplate as the Electrical view prints it (POWER
+  // SCHEMA). Functional UI text, retunable.
+  function nameplateText(a){
+    return "Nameplate: " + (a.nameplate.printsWatts ? `${a.watts} W` : `${a.volts} V · ${a.nameplate.amps} A`);
+  }
+  // The meter buttons the Electrical view offers, each only while its tool
+  // is carried: Test on a load row and a breaker row, Clamp on a breaker row
+  // (doMeterTest(), doMeterClamp()). Under simplified rules a breaker row is
+  // only ever a main. Each costs METER_READING_MIN.
+  function meterButtons(target, make){
+    const out = [];
+    const cost = fmtDuration(METER_READING_MIN);
+    if(hasTool("voltage-test")) out.push(make("Test", ()=> doMeterTest(target), cost));
+    if(target.breaker && hasTool("current-clamp")) out.push(make("Clamp", ()=> doMeterClamp(target.breaker), cost));
+    return out;
+  }
   function loadStatusText(loadId){
     if(loadPoweredNow(loadId)) return "Light on";
     const l = POWER_NET.loads[loadId];
@@ -10030,8 +10159,13 @@
       : actionButton("Switch on", ()=> doSwitchLoad(loadId, true)));
     devicePop.appendChild(controls);
   }
+  // A meter button in the device pop-up, its cost in the dim style every
+  // timed action's is.
+  function popMeterButton(label, onClick, cost){ return actionButton(label, onClick, { cost }); }
   // A panel's or board's pop-up, drawn into the device pop-up. Watts never
-  // appear (#242, #249). Detailed rules: the name, whether power reaches it,
+  // appear (#242, #249). While the Electrical view is on, each breaker row
+  // it lists also offers Test and Clamp, each while its meter is carried
+  // (meterButtons()). Detailed rules: the name, whether power reaches it,
   // then one row per breaker (deviceBreakers()), each its hand-written
   // label, rating and state and one button: Switch off, Switch on, or Reset
   // when tripped. Simplified rules: the name, the main's rating, On or Off,
@@ -10060,6 +10194,7 @@
         ? actionButton("Switch off", ()=> doSwitchBreaker(node.main, false))
         : actionButton("Switch on", ()=> breakerStateIn(state.power, node.main).tripped
           ? doResetBreaker(node.main) : doSwitchBreaker(node.main, true)));
+      if(electricalView) meterButtons({ breaker:node.main }, popMeterButton).forEach(b=> controls.appendChild(b));
     } else {
       line(deviceFedText(device));
       deviceBreakers(device).forEach(id=>{
@@ -10070,9 +10205,13 @@
         const text = document.createElement("span");
         text.textContent = `${br.label} · ${br.rating} A · ${breakerStateText(id)}`;
         row.appendChild(text);
-        row.appendChild(st.tripped ? actionButton("Reset", ()=> doResetBreaker(id))
+        const buttons = document.createElement("span");
+        buttons.className = "breaker-buttons";
+        buttons.appendChild(st.tripped ? actionButton("Reset", ()=> doResetBreaker(id))
           : st.on ? actionButton("Switch off", ()=> doSwitchBreaker(id, false))
           : actionButton("Switch on", ()=> doSwitchBreaker(id, true)));
+        if(electricalView) meterButtons({ breaker:id }, popMeterButton).forEach(b=> buttons.appendChild(b));
+        row.appendChild(buttons);
         controls.appendChild(row);
       });
     }
@@ -10492,7 +10631,9 @@
   // here. A row here shows the appliance's name and, for a load with a
   // switch of its own, its readout (loadStatusText()) and one Switch on /
   // Switch off (doSwitchLoad()). A switchless one (the smoke alarm, the gas
-  // range) shows neither. Watts appear nowhere. Functional UI text,
+  // range) shows neither. Every row here shows its nameplate
+  // (nameplateText()) and, while a meter is carried, Test (meterButtons()).
+  // Watts appear nowhere but a bulb's nameplate. Functional UI text,
   // retunable.
   function renderCircuitTab(list, circuitId, roomId){
     const loads = POWER_NET.breakers[circuitId].loads.map(id=> POWER_NET.loads[id]);
@@ -10511,17 +10652,22 @@
       name.textContent = a.name;
       meta.appendChild(name);
       if(!a.switchless) line(meta, loadStatusText(l.id));
+      line(meta, nameplateText(a));
       li.appendChild(meta);
       const row = document.createElement("span");
       row.className = "btnrow";
-      if(!a.switchless){
-        const on = switchOnIn(state.power, state.seed, l.id, a);
+      const mini = (label, onClick, cost)=>{
         const btn = document.createElement("button");
         btn.className = "mini";
-        btn.textContent = on ? "Switch off" : "Switch on";
-        btn.addEventListener("click", ()=> doSwitchLoad(l.id, !on));
-        row.appendChild(btn);
+        btn.textContent = cost ? `${label} ${cost}` : label;
+        btn.addEventListener("click", onClick);
+        return btn;
+      };
+      if(!a.switchless){
+        const on = switchOnIn(state.power, state.seed, l.id, a);
+        row.appendChild(mini(on ? "Switch off" : "Switch on", ()=> doSwitchLoad(l.id, !on)));
       }
+      meterButtons({ load:l.id }, mini).forEach(b=> row.appendChild(b));
       li.appendChild(row);
       list.appendChild(li);
     });
