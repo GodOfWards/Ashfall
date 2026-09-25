@@ -26,6 +26,9 @@ adopts it.
 - **A run starts a few days after the collapse, at most** (#218). The exact
   figure is a constant in `ashfall.html` and a future world-generation
   option (#149); it is not restated here.
+- **Grid power fails on its own day after the collapse, and running water
+  fails with it** (#260). For now the grid fails as one event; faults
+  building up area by area stay open (#220).
 
 ## Open
 
@@ -34,6 +37,10 @@ adopts it.
 - **Why the player is still in town** a few days after (#137).
 - **Why grid power fails when it does** (#220). Proposed, not decided: an
   accumulation of unrepaired faults, area by area, rather than one event.
+- **How the player notices the grid failing** (#220).
+- **How old each building is.** Its wiring era decides its panel size, where
+  it has GFCIs, and whether its water heater is gas or electric (#237,
+  #251).
 
 ## Reference — Henderson's real infrastructure
 
@@ -42,8 +49,9 @@ Researched September 2026. Real-world facts, not canon until adopted.
 **Electricity.**
 - Henderson Municipal Power & Light (HMP&L) is the city's utility. It owns
   transmission and distribution but no generation: Station One, its coal
-  plant on Water Street by the river, closed in 2008; Station Two, at the
-  Sebree site to the south, was retired in 2019 and demolished in 2023.
+  plant on Water Street by the river, ran from 1956 to 2008 (44 MW, three
+  units, owned by the city); Station Two, at Sebree Station in northeast
+  Webster County, was retired in 2019 and demolished in 2023.
 - HMP&L buys through MISO, the regional grid operator, and has a 20-year
   contract for the 50 MW Henderson County Solar farm.
 - HMP&L substations reported: just east of the Borax Drive / US 41A-60
@@ -70,7 +78,13 @@ Researched September 2026. Real-world facts, not canon until adopted.
   gas distributor was not confirmed.
 - The US 41 Twin Bridges cross the Ohio to Evansville (1932 and 1966).
 
+**Technical research lives on the issues.** Breakers, appliances,
+generators, gasoline, carbon monoxide, cords and GFCIs were researched for
+the power system, with sources, on #241, #251, #245, #239, #248, #244 and
+#247. It is real-world data, not lore, so it is not copied here.
+
 **Sources.**
+- Station One (1956–2008, 44 MW) and Sebree Station's location: https://en.wikipedia.org/wiki/Henderson_Station_One and https://en.wikipedia.org/wiki/Sebree_Station
 - HMP&L substations: https://www.tristatehomepage.com/news/local-news/henderson-county/henderson-news/hmpl-crews-continuing-to-restore-power-to-customers-in-dark/
 - Station Two retirement: https://www.spglobal.com/commodityinsights/en/market-insights/latest-news/coal/050118-big-rivers-says-to-stop-operating-henderson-kentucky-coal-plant-in-2019
 - Station Two demolition: https://the-hendersonian.com/big-rivers-implodes-former-power-plant-boiler/
