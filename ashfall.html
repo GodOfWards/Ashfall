@@ -82,6 +82,10 @@
   /* The stove timer's add buttons, side by side in the device pop-up,
      sharing the row evenly so all three fit it at phone width. */
   .timer-steps{ display:flex; gap:6px; }
+  /* A panel's or board's breaker row in the device pop-up: its label,
+     rating and state, and its one button, wrapping at phone width. */
+  .breaker-row{ display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:4px 8px;
+    font-size:12px; color:var(--ink-dim); }
   .timer-steps button.action{ flex:1 1 0; min-width:0; padding-left:0; padding-right:0; text-align:center; }
   /* Focus is drawn for keyboard use only, so a click or a tap looks as it
      always has even now that opening and closing a layer moves focus. A
@@ -4254,9 +4258,11 @@
   let gameOver = false; // UI-only: never saved — a loaded save always resumes alive
   let detailItem = null; // UI-only: { uid, side } — resolved fresh via findItemByUid(), safe against list mutation
   // What the device pop-up is open on, or null when it is closed:
-  // { kind:"container", id }, a room fixture tagged `device`. Identity only,
-  // never an index or a kept object: resolveDeviceTarget() looks it up again
-  // on every render. UI-only and never saved, like detailItem.
+  // { kind:"container", id }, a room fixture tagged `device`, or
+  // { kind:"panel" | "board", id }, a panel or board by its POWER_NET node
+  // id. Identity only, never an index or a kept object:
+  // resolveDeviceTarget() looks it up again on every render. UI-only and
+  // never saved, like detailItem.
   let deviceTarget = null;
   // The open menu layers, bottom to top — the pop-ups, the drawer, a
   // full-screen panel. UI-only and never saved, like detailItem. See
@@ -5362,7 +5368,7 @@
         actions.push({ label:"Take Half", disabled: keychainBlocked, onClick:()=>doTake(index, Math.ceil(it.qty/2)) });
       if(splittable && it.qty>1)
         actions.push({ label:"Take 1", disabled: keychainBlocked, onClick:()=>doTake(index,1) });
-    } else {
+    } else if(worldSlot(world[state.currentRoom], worldTab)){
       const verb = worldTab==="floor" ? "Place" : "Store";
       actions.push({ label: verb + " All", onClick:()=>doStore(index) });
       if(splittable && it.qty>=3)
@@ -5820,6 +5826,23 @@
     if(!d.open) return;
     d.open = false;
     log(`You pull the ${doorLabel(doorId, state.currentRoom)} door shut.`);
+    render();
+  }
+  // A breaker in a panel or board, by hand, from its device pop-up. Instant,
+  // and seen by the next step's resolution (stepPower()). The lines are
+  // functional, named by the breaker's hand-written label; retunable.
+  function doSwitchBreaker(id, on){
+    const br = POWER_NET.breakers[id];
+    if(!br) return;
+    switchBreakerIn(state.power, id, on);
+    log(`You switch the ${br.label} breaker ${on ? "on" : "off"}.`);
+    render();
+  }
+  function doResetBreaker(id){
+    const br = POWER_NET.breakers[id];
+    if(!br || !breakerStateIn(state.power, id).tripped) return;
+    resetBreakerIn(state.power, id);
+    log(`You push the tripped ${br.label} breaker back on.`);
     render();
   }
   function doUnlockContainer(containerId){
@@ -9263,16 +9286,61 @@
   }
   function renderCraftResult(){ renderLogResult(document.getElementById("craftResult"), craftResult); }
   // What deviceTarget points at now, looked up again by identity: a
-  // container by its id, among the current room's containers. It must still
-  // carry `device`, and the Here panel's selected tab must still be its, since
-  // the pop-up hangs from that tab's strip. null when the target no longer
-  // resolves, which closes the pop-up: leaving the room, switching the Here
-  // tab, a load or a restart.
+  // container by its id, among the current room's containers, which must
+  // still carry `device`; or a panel or board by its node id, among the
+  // devices hanging in the current room (POWER_NET.devices). Either way the
+  // Here panel's selected tab must still be its, since the pop-up hangs from
+  // that tab's strip. null when the target no longer resolves, which closes
+  // the pop-up: leaving the room, switching the Here tab, a load or a
+  // restart.
   function resolveDeviceTarget(){
-    if(!deviceTarget || worldTab !== deviceTarget.id) return null;
+    if(!deviceTarget) return null;
     const room = world[state.currentRoom];
-    const container = room.containers.find(c=> c.id === deviceTarget.id);
-    return container && hasTag(container, "device") ? { room, container } : null;
+    if(deviceTarget.kind === "container"){
+      if(worldTab !== deviceTarget.id) return null;
+      const container = room.containers.find(c=> c.id === deviceTarget.id);
+      return container && hasTag(container, "device") ? { room, container } : null;
+    }
+    if(worldTab !== powerTab(deviceTarget.id)) return null;
+    const device = powerDevicesIn(state.currentRoom).find(d=> d.kind === deviceTarget.kind && d.id === deviceTarget.id);
+    return device ? { room, device } : null;
+  }
+  // The panels and boards hanging in a room, in wiring order, as
+  // [{ kind:"panel"|"board", id }]. Each gets a Here tab after the room's
+  // containers. They are not containers: they come from the wiring, never
+  // from room.containers, and hold no items.
+  function powerDevicesIn(roomId){ return POWER_NET.devices[roomId] || []; }
+  // A device's Here tab key, prefixed so it can't be mistaken for an
+  // authored container id, the way a floor bag's is.
+  function powerTab(nodeId){ return "power:" + nodeId; }
+  function powerNode(device){ return device.kind === "board" ? POWER_NET.boards[device.id] : POWER_NET.panels[device.id]; }
+  // A device's breakers, in the order its pop-up lists them: MAIN first,
+  // then a panel's circuits in panel order, or a board's feeders, one per
+  // panel it feeds.
+  function deviceBreakers(device){
+    const node = powerNode(device);
+    return [node.main].concat(device.kind === "board"
+      ? node.panels.map(id=> POWER_NET.panels[id].feeder)
+      : node.circuits);
+  }
+  // A breaker's state as its row reads it, and whether power reaches the
+  // device, both functional UI text, retunable.
+  function breakerStateText(id){
+    const b = breakerStateIn(state.power, id);
+    return b.tripped ? "Tripped" : b.on ? "On" : "Off";
+  }
+  function deviceFedText(device){
+    const fed = device.kind === "board" ? gridUp() : !!(powerNow && powerNow.supplied[device.id]);
+    return fed ? "Fed by the grid" : "No power";
+  }
+  // What the Here strip reads while a device's tab is selected: under
+  // detailed rules its main and how many of its breakers have tripped, under
+  // simplified rules just On or Off.
+  function deviceStripText(device){
+    const main = breakerClosedIn(state.power, powerNode(device).main);
+    if(state.electricalRules === "simplified") return main ? "On" : "Off";
+    const tripped = deviceBreakers(device).filter(id=> breakerStateIn(state.power, id).tripped).length;
+    return (main ? "Main on" : "Main off") + (tripped ? ` · ${tripped} tripped` : "");
   }
   // The stove's two readouts, shared by the device pop-up's status lines and
   // the Here strip: whether it is lit, and the timer rounded up to a whole
@@ -9297,6 +9365,7 @@
     const room = target.room;
     rebuildKeepingFocus(devicePop, ()=>{
       devicePop.innerHTML = "";
+      if(target.device){ renderPowerDevicePop(target.device); return; }
       const box = document.createElement("div");
       box.className = "detailBox";
       const nameLine = document.createElement("div");
@@ -9331,6 +9400,54 @@
     });
     if(!layerOpen(devicePop)) openLayer(devicePop, showDevicePop, hideDevicePop, { el:deviceOptionsBtn, uid:null });
     positionDevicePop();
+  }
+  // A panel's or board's pop-up, drawn into the device pop-up. Watts never
+  // appear (#242, #249). Detailed rules: the name, whether power reaches it,
+  // then one row per breaker (deviceBreakers()), each its hand-written
+  // label, rating and state and one button: Switch off, Switch on, or Reset
+  // when tripped. Simplified rules: the name, the main's rating, On or Off,
+  // and one Switch on / Switch off; a tripped main reads Off, and switching
+  // it on is its reset. Every control is instant and logs its own line
+  // (doSwitchBreaker(), doResetBreaker()).
+  function renderPowerDevicePop(device){
+    const node = powerNode(device);
+    const box = document.createElement("div");
+    box.className = "detailBox";
+    const nameLine = document.createElement("div");
+    const nameB = document.createElement("b");
+    nameB.textContent = node.name;
+    nameLine.appendChild(nameB);
+    box.appendChild(nameLine);
+    devicePop.appendChild(box);
+    const line = (text)=>{ const div = document.createElement("div"); div.textContent = text; box.appendChild(div); };
+    const controls = document.createElement("div");
+    controls.className = "pop-actions";
+    if(state.electricalRules === "simplified"){
+      const main = POWER_NET.breakers[node.main];
+      const closed = breakerClosedIn(state.power, node.main);
+      line(`Rating: ${main.rating} A`);
+      line(closed ? "On" : "Off");
+      controls.appendChild(closed
+        ? actionButton("Switch off", ()=> doSwitchBreaker(node.main, false))
+        : actionButton("Switch on", ()=> breakerStateIn(state.power, node.main).tripped
+          ? doResetBreaker(node.main) : doSwitchBreaker(node.main, true)));
+    } else {
+      line(deviceFedText(device));
+      deviceBreakers(device).forEach(id=>{
+        const br = POWER_NET.breakers[id];
+        const st = breakerStateIn(state.power, id);
+        const row = document.createElement("div");
+        row.className = "breaker-row";
+        const text = document.createElement("span");
+        text.textContent = `${br.label} · ${br.rating} A · ${breakerStateText(id)}`;
+        row.appendChild(text);
+        row.appendChild(st.tripped ? actionButton("Reset", ()=> doResetBreaker(id))
+          : st.on ? actionButton("Switch off", ()=> doSwitchBreaker(id, false))
+          : actionButton("Switch on", ()=> doSwitchBreaker(id, true)));
+        controls.appendChild(row);
+      });
+    }
+    devicePop.appendChild(controls);
   }
   // The device pop-up hangs from the Here strip, which is what holds Device
   // Options, at the strip's width.
@@ -9566,8 +9683,10 @@
       invStrip.style.display = "";
       document.getElementById("unequipBtn").onclick = ()=> doUnequip(invTab);
     } else { invStrip.style.display = "none"; }
+    // No Store while the Here tab is a panel's or a board's: it holds no items.
     renderItemList(document.getElementById("invList"), currentInv.items, [
-      { label: worldTab === "floor" ? "Place" : "Store", onClick:(i)=> doStore(i) }
+      { label: worldTab === "floor" ? "Place" : "Store", onClick:(i)=> doStore(i),
+        test:()=> !!worldSlot(world[state.currentRoom], worldTab) }
     ], "inv", { container:null });
   }
   function renderWorldItemsPanel(){
@@ -9584,6 +9703,8 @@
       worldTabDefs.push([floorBagTab(bag), n > 1 ? bag.name + " " + n : bag.name]);
     });
     listedContainers(room).forEach(c=> worldTabDefs.push([c.id, c.name]));
+    // Then a tab for each panel or board hanging here, after the containers.
+    powerDevicesIn(state.currentRoom).forEach(d=> worldTabDefs.push([powerTab(d.id), powerNode(d).name]));
     // Before the buttons are built, so the render that drops the open tab
     // also marks Floor active.
     if(!worldTabDefs.find(d=>d[0]===worldTab)) worldTab = "floor";
@@ -9606,25 +9727,33 @@
       });
     }, false);
     revealActiveTab(worldTabsEl);
+    // A panel's or board's tab holds no items: no weight, no list.
     const currentWorld = worldSlot(room, worldTab);
-    document.getElementById("worldWeight").textContent =
-      totalWeight(currentWorld.items).toFixed(2) + " / " + currentWorld.capacityKg + " kg";
+    document.getElementById("worldWeight").textContent = currentWorld
+      ? totalWeight(currentWorld.items).toFixed(2) + " / " + currentWorld.capacityKg + " kg" : "";
     // A room fixture's strip, under the tabs: the selected tab is the focus,
     // the way the Inventory strip's Unequip follows its tab. Shown only while
-    // that tab is a container tagged `device`. It holds the stove's state,
-    // while the stove's tab is selected, then Device Options, which opens the
-    // device pop-up (renderDevicePop()).
+    // that tab is a container tagged `device`, or a panel's or board's. It
+    // holds the stove's state, while the stove's tab is selected, or the
+    // panel's or board's (deviceStripText()), then Device Options, which
+    // opens the device pop-up (renderDevicePop()).
     const worldStrip = document.getElementById("worldStrip");
     const tabContainer = room.containers.find(c=> c.id === worldTab);
+    const tabDevice = powerDevicesIn(state.currentRoom).find(d=> powerTab(d.id) === worldTab);
     if(tabContainer && hasTag(tabContainer, "device")){
       worldStrip.style.display = "";
       deviceOptionsBtn.onclick = ()=>{ deviceTarget = { kind:"container", id:tabContainer.id }; render(); };
+    } else if(tabDevice){
+      worldStrip.style.display = "";
+      deviceOptionsBtn.onclick = ()=>{ deviceTarget = { kind:tabDevice.kind, id:tabDevice.id }; render(); };
     } else { worldStrip.style.display = "none"; }
     // Hidden when empty, so it adds no gap to the strip.
     const deviceState = document.getElementById("worldDeviceState");
     deviceState.textContent = tabContainer && tabContainer === roomStove(room)
-      ? stoveOnText(room) + " · " + stoveTimerText(tabContainer) : "";
+      ? stoveOnText(room) + " · " + stoveTimerText(tabContainer)
+      : tabDevice ? deviceStripText(tabDevice) : "";
     deviceState.style.display = deviceState.textContent ? "" : "none";
+    if(!currentWorld){ document.getElementById("worldList").innerHTML = ""; return; }
     renderItemList(document.getElementById("worldList"), currentWorld.items, [
       // Disabled rather than hidden, for the reason given at the detail
       // view's Take family in getItemActions(): the item can be taken, just
