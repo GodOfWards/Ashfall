@@ -56,9 +56,12 @@ it can be made. Streets, buildings, businesses, utilities and
 infrastructure carry their real names, and what the game says about them
 — where they are, what they do, how they connect — matches the real town.
 That is checked against a source when it is written, never recalled or
-invented. A fact that can't be confirmed is marked unconfirmed rather
-than filled in with a plausible one. Where the game needs something
-Henderson doesn't have, adding it is a design decision (Part 2).
+invented, and the fact goes into `docs/canon/reference/` with its source, so
+it is found once rather than searched for again. A fact that isn't there yet
+is asked for or filed as a `Research:` issue. A fact that can't be confirmed
+is marked unconfirmed rather than filled in with a plausible one. Where the
+game needs something Henderson doesn't have, adding it is a design decision
+(Part 2).
 
 This sits under the tone rules, not above them. A real name doesn't
 license exposition: a real power plant is still described through what
@@ -309,12 +312,18 @@ bump.
 - `CLAUDE.md` — the rules that bind even when these guides go unread.
 - `docs/` — this guide and its two siblings. Process documentation only;
   nothing a session needs at runtime.
-- `docs/canon/` — the world's private lore: what the collapse was, its
-  timeline, the real places behind the town. The game never states it.
-  Read by a planning session when the discussion is about lore, or when
-  Tom asks; never by a coding session, whose handoff quotes any canon fact
-  the work depends on. Listed in `.rgignore`, so repository searches skip
-  it.
+- `docs/canon/Ashfall_Canon.md` — the world's private lore: what the
+  collapse was, its timeline, the real places behind the town. The game never
+  states it. Read by a planning session when the discussion is about lore, or
+  when Tom asks.
+- `docs/canon/reference/` — real-world facts, researched once: the real town,
+  codes, equipment and figures, each with its source, the date it was checked
+  and whether it is confirmed. Read by a planning session whenever it needs a
+  real-world fact, and always first. Its `README.md` is the index and the
+  rules, including what to do when a fact isn't there.
+- Neither is read by a coding session: a handoff quotes any canon fact or
+  reference figure the work depends on. `.rgignore` keeps the whole folder out
+  of repository searches.
 - `handoffs/<feature-name>.md` — one file per handoff, kept after it
   ships. Its commit date says when it was written; nothing needs deleting.
 - `handoffs/archive/` — the same files once they are no longer live, spent
@@ -402,8 +411,21 @@ discussion starts spends context on material that mostly goes unused.
 - Individual issues in full, once one bears on the discussion.
 - The most recent `CHANGELOG.md` entries — the last few versions, not the
   whole file — when what shipped recently bears on the design.
-- `docs/canon/` when the discussion is about lore, or when Tom asks — not
-  up front, and not as one of the "other docs" below.
+- `docs/canon/Ashfall_Canon.md` when the discussion is about lore, or when
+  Tom asks — not up front, and not as one of the "other docs" below.
+- `docs/canon/reference/` whenever the discussion needs a real-world fact:
+  a code, a rating, a figure, a fact about the real town. Sessions run with
+  limited internet access, so this is where a fact is looked up first, along
+  with open `Research:` issues, whose findings may not have merged yet. If it
+  isn't there, the session doesn't guess and doesn't search unasked. It
+  either asks Tom for network access to research it now, or files a
+  `Research:` issue (the fact, why it's needed, which issue it blocks) and
+  carries on with the gap marked unconfirmed. Whatever is researched is added
+  there in the same session, with its source, date and status, so it is found
+  once. If it answers a `Research:` issue, it is also written into that
+  issue's body at once, so other sessions can read it before the merge, and
+  the pull request that adds it closes the issue. Other issues point to the
+  folder rather than repeating it.
 - Other docs (`Ashfall_Handoff_Guide.md` at the wrap, as before) when a
   question reaches them.
 
@@ -476,8 +498,8 @@ drifted out of step with branch-per-session working in the first place.
   under `handoffs/archive/` is out: those have shipped or been superseded,
   and implementing one is the failure the folder exists to prevent.
 
-Nothing else. Not the canon — a handoff quotes any canon fact it depends
-on. Not the changelog, not the issue backlog — implementation
+Nothing else. Not the canon or its reference files — a handoff quotes any
+canon fact or reference figure it depends on. Not the changelog, not the issue backlog — implementation
 never needs either, and the changelog is long enough that reading it up
 front costs real context for no return. Both come into play at wrap-time,
 below.

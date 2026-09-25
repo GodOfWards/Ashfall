@@ -25,8 +25,13 @@ list. Nothing else up front.
 - Individual issues in full, once one is relevant.
 - Recent `CHANGELOG.md` entries — the last few, not the whole file — when what
   shipped recently bears on the design.
-- `docs/canon/` — when the discussion is about lore, or Tom asks. See "The
-  canon is private" below.
+- `docs/canon/Ashfall_Canon.md` — when the discussion is about lore, or Tom
+  asks. See "The canon is private" below.
+- `docs/canon/reference/` — whenever the discussion needs a real-world fact.
+  Look there first, and in open `Research:` issues, whose findings may not
+  have merged yet. If it isn't there, don't guess or search on your own: ask
+  Tom for network access, or file a `Research:` issue. See "The canon is
+  private" below.
 
 **Output:** issues filed as they surface, and — only if the session reaches a
 conclusion — a handoff at `handoffs/<feature-name>.md`, landed on `main` at the
@@ -63,20 +68,38 @@ Full detail on both: Project Guide, Part 3.
 the script is the source of truth. No document restates that list; check the
 comment.
 
-**The canon is private.** `docs/canon/` holds the world's lore as the designers
-know it: what the collapse was, its timeline, the real places behind the town.
-The game never states it; its text only ever implies a piece of it (see Writing
-game text). A planning session reads it when the discussion is about lore, or
-when Tom asks — never up front. A coding session never reads it: a handoff that
-depends on a canon fact quotes that fact itself. `.rgignore` keeps the folder
-out of repository searches, so it is read by path, on purpose, or not at all.
+**The canon is private.** `docs/canon/Ashfall_Canon.md` holds the world's lore
+as the designers know it: what the collapse was, its timeline, the real places
+behind the town. The game never states it; its text only ever implies a piece
+of it (see Writing game text). A planning session reads it when the discussion
+is about lore, or when Tom asks — never up front.
+
+`docs/canon/reference/` holds real-world facts, researched once: the real town,
+codes, equipment, figures, each with its source and the date it was checked.
+A planning session reads it whenever it needs a real-world fact, and looks
+there first, and in open `Research:` issues: sessions run with limited
+internet access. A fact that isn't there is never guessed or searched for
+unasked. The session either asks Tom for network access to research it now,
+or files a `Research:` issue (the fact, why it's needed, what it blocks) and
+carries on with the gap marked unconfirmed. Whatever is researched is added to
+the folder in the same session, with its source, date and status. If it
+answers a `Research:` issue, it is also written into that issue's body at
+once, so other sessions can read it before the merge, and the pull request
+that adds it closes the issue. Other issues point to the folder rather than
+repeating it.
+
+A coding session reads neither: a handoff that depends on a canon fact or a
+reference figure quotes it itself. `.rgignore` keeps the folder out of
+repository searches, so it is read by path, on purpose, or not at all.
 
 **The world is real.** The town is Henderson, Kentucky. Streets, places,
 businesses, utilities and infrastructure carry their real names, and what the
 game says about them is accurate — checked against a source when it is written,
-never recalled or invented. A fact that can't be confirmed is marked unconfirmed,
-not filled with a plausible one. Adding something the real town lacks is a
-design decision (see below). Project Guide, Part 1.
+never recalled or invented, and recorded in `docs/canon/reference/` (see "The
+canon is private" for what to do when a fact isn't there yet). A fact that
+can't be confirmed is marked unconfirmed, not filled with a plausible one.
+Adding something the real town lacks is a design decision (see below). Project
+Guide, Part 1.
 
 **Content vs. mechanics stay separated.** A change touches WORLD DATA (content)
 or ACTIONS/SIMULATION (mechanics), and normally not both. Rendering is its own
