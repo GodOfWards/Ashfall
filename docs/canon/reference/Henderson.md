@@ -152,7 +152,9 @@ record. What would confirm it: the city's or county's GIS street centrelines.
   - The Imperial's site advertises views of "the iconic train bridge" (below).
 - **Downtown, the line is elevated.** OSM tags it `bridge=yes` over Water,
   Main, Elm, Green and Ingram St, crossing them between about 4th and 6th St.
-  There is **no grade crossing inside the #237 frame**. The nearest are at
+  There is **no grade crossing inside the #237 frame**. Tom's decision: the
+  street rooms under it get the bridge in their text, and the game's
+  crossing lights wait until the map reaches a real grade crossing. The nearest are at
   Washington St and Powell St, well east of Alvasia St. Secondary,
   2026-09-25: OSM (as above). What would confirm it: a railroad crossing
   inventory (FRA) or a photo survey.
@@ -167,7 +169,7 @@ Candidates for the game's buildings (#237). **The era is before Feb 2025**
 2026-09-25.
 
 - **The Imperial**, 110 Third Street, at 3rd & Water St: **the player's home
-  (Acorn Apartments, #284), proposed.**
+  (Acorn Apartments, #284). Adopted by Tom, 2026-09-25; see the canon.**
   - The original three-storey building went up in 1964 on the site of the
     Imperial Tobacco Company's warehouse, with a second wing added a few years
     later. It was later a medical centre. It is about 40,000 sq ft.
@@ -182,9 +184,9 @@ Candidates for the game's buildings (#237). **The era is before Feb 2025**
   - Secondary: [The Hendersonian, 2023-12-22](https://the-hendersonian.com/condos-add-another-jewel-to-downtowns-crown/),
     [Community Ventures](https://cvky.org/venture/the-imperial-building/),
     [The Imperial](https://www.theimperialky.com/).
-- **Walgreens**, 2nd St & N Green St (OSM). For the Pharmacy. In the era:
-  unconfirmed. OSM also has a Walgreens node on N Green near 5th, which may
-  be stale. **Dunaway's Imperial Pharmacy** (above) is the other candidate.
+- **Walgreens**, 2nd St & N Green St (OSM). In the era: unconfirmed. OSM
+  also has a Walgreens node on N Green near 5th, which may be stale. **Not
+  used for the Pharmacy:** Tom chose Dunaway's Imperial Pharmacy (above).
 - **Henderson County Sheriff's Office**, 20 N Main St, Suite 112. For the
   Police Station. The **city police headquarters is not downtown**: it is at
   1990 Barret Ct. Secondary:

@@ -30,6 +30,10 @@ adopts it.
   business and building in the game is as it was then: HMP&L still works out
   of its downtown block, for instance, and the grain elevator is Viterra's.
   The exact date is not set.
+- **The player's home is The Imperial,** 110 Third Street, at 3rd & Water St
+  on the riverfront (#237, #284): the game's Acorn Apartments, made real.
+  Its ground-floor pharmacy, Dunaway's Imperial Pharmacy, is the game's
+  Pharmacy. The facts are in `reference/Henderson.md`.
 - **Grid power fails on its own day after the collapse, and running water
   fails with it** (#260). For now the grid fails as one event; faults
   building up area by area stay open (#220).
