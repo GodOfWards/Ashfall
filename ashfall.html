@@ -6090,6 +6090,8 @@
   // carried one is "your", one in the room you are in is "the", and one
   // anywhere else shuts off silently, the way a fire elsewhere goes out.
   function applyWorldTicking(min){
+    // The network first: what spoilage reads this step is this step's power.
+    stepPower(min);
     ageFood(min);
     forEachItemList((list, roomId)=>{
       list.forEach(it=>{
@@ -6149,9 +6151,13 @@
   //   boards    { id: { id, building, name, room, volts, main, panels:[id] } }
   //   panels    { id: { id, building, board, name, room, volts, main, feeder,
   //              circuits:[breakerId], loads:[loadId], rooms:[roomId] } }
-  //   breakers  { id: { id, layer, label, rating, volts?, device, room, loads } }
+  //   breakers  { id: { id, layer, label, rating, volts, device, room, loads } }
   //             `device` is the panel or board it sits in and `room` the
-  //             room that hangs in; `loads` is every load it feeds.
+  //             room that hangs in; `loads` is every load it feeds. `volts`
+  //             divides its watts into amps: a circuit's own, a panel
+  //             main's and its feeder's the panel's, the board main's the
+  //             board's. A panel or board treats its loads as balanced
+  //             across its two legs, so its current is total watts ÷ volts.
   //   loads     { id: { id, appliance, panel, circuit, room, containers } }
   //   containerLoad  { roomId + KEY_SEP + containerId: loadId }
   //   devices   { roomId: [{ kind:"board"|"panel", id }] } — what hangs there
@@ -6174,7 +6180,8 @@
       const board = { id:boardId, building:b, name:bd.name || boardId, room:bd.room,
         volts:bd.volts || PANEL_DEFAULT_VOLTS, main:boardMain, panels:[] };
       net.boards[boardId] = board;
-      net.breakers[boardMain] = { id:boardMain, layer:"board", label:"MAIN", rating:bd.rating, device:boardId, room:bd.room, loads:[] };
+      net.breakers[boardMain] = { id:boardMain, layer:"board", label:"MAIN", rating:bd.rating, volts:board.volts,
+        device:boardId, room:bd.room, loads:[] };
       hang(bd.room, "board", boardId);
       const feeders = bd.feeders || [];
       (w.panels || []).concat(w.common ? [w.common] : []).forEach(pd=>{
@@ -6193,9 +6200,10 @@
           rooms:Array.from(new Set(Object.values(rooms))) };
         net.panels[panelId] = panel;
         board.panels.push(panelId);
-        net.breakers[panelMain] = { id:panelMain, layer:"panel", label:"MAIN", rating:main.rating, device:panelId, room:pd.room, loads:[] };
+        net.breakers[panelMain] = { id:panelMain, layer:"panel", label:"MAIN", rating:main.rating, volts:panel.volts,
+          device:panelId, room:pd.room, loads:[] };
         net.breakers[feederId] = { id:feederId, layer:"feeder", label:feeder ? feeder.label : pd.id,
-          rating:feeder ? feeder.rating : undefined, device:boardId, room:bd.room, loads:[] };
+          rating:feeder ? feeder.rating : undefined, volts:panel.volts, device:boardId, room:bd.room, loads:[] };
         hang(pd.room, "panel", panelId);
         (layout.circuits || []).forEach(c=>{
           const circuitId = claim(`${panelId}.${c.key}`);
@@ -6249,6 +6257,169 @@
   function setHeatIn(power, id, h){
     if(h > 0) power.heat[id] = h;
     else delete power.heat[id];
+  }
+  // What a hand on a breaker does: switching it moves the handle and leaves a
+  // trip as it is; a reset pushes a tripped breaker back on. The device
+  // pop-up and the dev seam's scripts both go through these.
+  function switchBreakerIn(power, id, on){ setBreakerIn(power, id, on, breakerStateIn(power, id).tripped); }
+  function resetBreakerIn(power, id){ setBreakerIn(power, id, true, false); }
+  function breakerClosedIn(power, id){
+    const b = breakerStateIn(power, id);
+    return b.on && !b.tripped;
+  }
+  // The breaker layers a run's rules consult. Simplified rules ignore the
+  // circuits, and each panel and the board is one breaker, its main (#243).
+  function consultedLayers(rules){ return rules === "simplified" ? ["panel", "board"] : BREAKER_LAYERS; }
+  // How long a breaker takes to trip at `f` times its rating (f > 1), in
+  // minutes: t(f) = T200 ÷ (f − 1)^n, with n = ln(T200 ÷ T135) ÷ ln(0.35),
+  // which passes exactly through the 135% and 200% points (see
+  // BREAKER_T135_MIN). A breaker with no usable rating never trips.
+  function bandMinutes(bands, rating){ return bands.find(b=> rating <= b.upTo).min; }
+  function tripMinutes(rating, f){
+    if(!(rating > 0)) return Infinity;
+    const t135 = bandMinutes(BREAKER_T135_MIN, rating), t200 = bandMinutes(BREAKER_T200_MIN, rating);
+    const n = Math.log(t200 / t135) / Math.log(0.35);
+    return t200 / Math.pow(f - 1, n);
+  }
+  // One look at the network at `minute`, changing nothing. Pure: a function
+  // of the expanded network, the appliances, a power state, the rules,
+  // whether the grid is live, the minute, the previous step's `drawing` and
+  // the seed.
+  //   live      board, panel and circuit ids: whether power reaches past
+  //             their breaker. A board is live when the grid is and its
+  //             main is closed; a panel when its board is, and its feeder
+  //             and main are closed; a circuit when its panel is and its
+  //             breaker is closed. Simplified rules skip feeders and
+  //             circuits.
+  //   supplied  panel ids: whether power reaches its main (live but for it)
+  //   powered   load ids: its switch is on and its circuit (simplified: its
+  //             panel) is live. What spoilage asks, through isPowered().
+  //   drawing   load ids: powered, and a cycling load in the on part of its
+  //             cycle, ((minute + phase) mod cycleMinutes) < dutyCycle ×
+  //             cycleMinutes, its phase fixed per load by a keyed roll so
+  //             the kitchens don't all cycle together.
+  //   starting  load ids: a motor load (startWatts) drawing now that was not
+  //             in `prevDrawing`: switched on, its cycle turned on, or its
+  //             circuit came back. No `prevDrawing` means no starts.
+  //   running, momentary  breaker ids: the current through it in amps, from
+  //             the watts of the loads it feeds that are drawing; momentary
+  //             counts a starting load at its startWatts.
+  function powerSnapshot(net, appliances, power, rules, gridLive, minute, prevDrawing, seed){
+    const simple = rules === "simplified";
+    const closed = (id)=> breakerClosedIn(power, id);
+    const live = {}, supplied = {};
+    Object.values(net.boards).forEach(b=>{ live[b.id] = !!gridLive && closed(b.main); });
+    Object.values(net.panels).forEach(p=>{
+      supplied[p.id] = !!live[p.board] && (simple || closed(p.feeder));
+      live[p.id] = supplied[p.id] && closed(p.main);
+      p.circuits.forEach(c=>{ live[c] = live[p.id] && (simple || closed(c)); });
+    });
+    const powered = {}, drawing = {}, starting = {};
+    Object.values(net.loads).forEach(l=>{
+      powered[l.id] = !!(simple ? live[l.panel] : live[l.circuit]) && switchOnIn(power, seed, l.id);
+      const a = appliances[l.appliance];
+      if(!powered[l.id] || !a) return;
+      if(a.dutyCycle !== undefined && a.cycleMinutes > 0){
+        const phase = rollValueFor(seed, ["power", "cycle", l.id]) * a.cycleMinutes;
+        if(!((minute + phase) % a.cycleMinutes < a.dutyCycle * a.cycleMinutes)) return;
+      }
+      drawing[l.id] = true;
+      if(a.startWatts !== undefined && prevDrawing && !prevDrawing[l.id]) starting[l.id] = true;
+    });
+    const running = {}, momentary = {};
+    Object.values(net.breakers).forEach(br=>{
+      let run = 0, mom = 0;
+      br.loads.forEach(id=>{
+        if(!drawing[id]) return;
+        const a = appliances[net.loads[id].appliance];
+        run += a.watts;
+        mom += starting[id] ? a.startWatts : a.watts;
+      });
+      running[br.id] = run / br.volts;
+      momentary[br.id] = mom / br.volts;
+    });
+    return { live, supplied, powered, drawing, starting, running, momentary };
+  }
+  // One step of `dt` minutes ending at `minute`: the snapshot after this
+  // step's trips, plus `power`, the new power state (the one passed in is
+  // never written), and `trips`, [{ id, cause, running }] in the order they
+  // happened, `running` being the loads the breaker fed that were drawing
+  // when it went. Pure, like powerSnapshot(). Each check runs lowest layer
+  // first and looks again after every layer, so a trip below is seen above.
+  //   Instant: a closed breaker whose momentary current exceeds
+  //     INSTANT_TRIP_MULTIPLE × its rating trips at once.
+  //   Heat, the delayed trip: at f = running current ÷ rating, heat rises by
+  //     dt ÷ tripMinutes() while f > 1 and drains by dt ÷ HEAT_COOL_MIN
+  //     otherwise, never below 0. At 1 the breaker trips. Tripped means off
+  //     until reset; its heat keeps draining meanwhile, so a reset with the
+  //     overload still there trips again quickly, as a real breaker does.
+  // A breaker the rules don't consult is left exactly as it is.
+  function resolvePowerStep(net, appliances, power, rules, gridLive, minute, dt, prevDrawing, seed){
+    const p = { switches:Object.assign({}, power.switches), heat:Object.assign({}, power.heat), breakers:{} };
+    Object.keys(power.breakers).forEach(id=>{ p.breakers[id] = Object.assign({}, power.breakers[id]); });
+    const trips = [];
+    const look = ()=> powerSnapshot(net, appliances, p, rules, gridLive, minute, prevDrawing, seed);
+    const trip = (id, cause, snap)=>{
+      setBreakerIn(p, id, breakerStateIn(p, id).on, true);
+      trips.push({ id, cause, running: net.breakers[id].loads.filter(l=> snap.drawing[l]) });
+    };
+    const layers = consultedLayers(rules);
+    layers.forEach(layer=>{
+      const snap = look();
+      net.byLayer[layer].forEach(id=>{
+        if(breakerClosedIn(p, id) && snap.momentary[id] > INSTANT_TRIP_MULTIPLE * net.breakers[id].rating) trip(id, "instant", snap);
+      });
+    });
+    layers.forEach(layer=>{
+      const snap = look();
+      net.byLayer[layer].forEach(id=>{
+        const rating = net.breakers[id].rating;
+        const f = snap.running[id] / rating;
+        let h = heatIn(p, id);
+        h = f > 1 ? h + dt / tripMinutes(rating, f) : Math.max(0, h - dt / HEAT_COOL_MIN);
+        h = Math.min(h, 1);
+        if(h >= 1 - TICK_EPSILON && breakerClosedIn(p, id)){ h = 1; trip(id, "heat", snap); }
+        setHeatIn(p, id, h);
+      });
+    });
+    return Object.assign(look(), { power:p, trips });
+  }
+  // The game's network, now: the last step's result, kept for render and for
+  // isPowered(). Runtime only, never saved. refreshPower() rebuilds it
+  // without a step, and without starting anything, on boot, restart and
+  // load; a switch or breaker changed from its device pop-up shows in the
+  // next step.
+  let powerNow = null;
+  function refreshPower(){
+    powerNow = powerSnapshot(POWER_NET, APPLIANCES, state.power, state.electricalRules, gridUp(),
+      minutesSinceCollapse(), null, state.seed);
+  }
+  // Resolved every step, from applyWorldTicking(), before anything reads it:
+  // the networks are tens of rooms, so there is no cache to keep honest.
+  function stepPower(dt){
+    const r = resolvePowerStep(POWER_NET, APPLIANCES, state.power, state.electricalRules, gridUp(),
+      minutesSinceCollapse(), dt, powerNow ? powerNow.drawing : null, state.seed);
+    state.power = r.power;
+    powerNow = r;
+    logTrips(r.trips);
+  }
+  // A trip is heard where its panel or board hangs, and noticed where
+  // something it fed was running; anywhere else it passes unremarked. The
+  // grid failing logs nothing: noticing it is deferred (#220). One line of
+  // each kind per step. Wording retunable.
+  function logTrips(trips){
+    let atPanel = false, quiet = false;
+    trips.forEach(t=>{
+      if(POWER_NET.breakers[t.id].room === state.currentRoom) atPanel = true;
+      else if(t.running.some(id=> POWER_NET.loads[id].room === state.currentRoom)) quiet = true;
+    });
+    if(atPanel) log("The panel on the wall snaps. A breaker has tripped.", "warn");
+    if(quiet) log("Everything in here goes quiet.", "warn");
+  }
+  // Whether a load has power: its switch is on and its path is live.
+  function isPowered(loadId){
+    if(!powerNow) refreshPower();
+    return !!powerNow.powered[loadId];
   }
   // ==================================================
   // STAMINA / FATIGUE SYSTEM
@@ -7227,6 +7398,8 @@
     state = nextState;
     world = nextWorld;
     doors = nextDoors; windows = nextWindows;
+    // The loaded run's network, before anything reads it.
+    refreshPower();
     detailItem = null;
     deviceTarget = null;
     gameOver = false;
@@ -7629,6 +7802,59 @@
     console.log(`sampleSeeds: n ${n}, start ${start}, ${compared.length} rows compared, ${flagged.length} flagged`);
     return { n, start, entries, pools, items, tags };
   }
+  // simulatePower(network, minutes, options): dev-only console helper (not
+  // wired to any button or UI, runs nothing automatically). Runs the power
+  // resolver on a SUPPLIED test network, never the game's, and never touches
+  // game state: its power state is its own copy. What the power release's
+  // resolver, spoilage and device checks are run with.
+  //   network  { wiring, templates?, appliances? }: a WIRING-shaped object,
+  //            the templates it names (WIRING_TEMPLATES when absent), and
+  //            appliances to add to APPLIANCES.
+  //   minutes  how many one-minute steps to run (default 60).
+  //   options  rules    "detailed" (default) or "simplified"
+  //            seed     the seed for switch defaults and cycle phases
+  //                     (default: the current run's, read only)
+  //            start    the minute since the collapse it starts at (default 0)
+  //            grid     true / false, or a function of the minute (default
+  //                     gridUp())
+  //            power    a starting state.power (default empty)
+  //            running  true: whatever draws at the start was already
+  //                     running, so nothing starts on the first step. Default
+  //                     false: everything drawing then starts.
+  //            script   { t: [change] } applied before step t + 1, t counting
+  //                     from 0: { switch: loadId, on }, { breaker: id, on },
+  //                     { reset: id }
+  // Returns { problems, steps, power }: the expansion's problems, then one row
+  // per step, { minute, running, momentary, heat, trips:[{ id, cause }],
+  // powered, drawing:[loadId] }, `minute` counting from 1, and the final power
+  // state. Call it as `ashfallDev.simulatePower({ wiring:{ … } }, 120)`.
+  function simulatePower(network, minutes = 60, options = {}){
+    const nw = network || {};
+    const net = expandWiring(nw.wiring, nw.templates || WIRING_TEMPLATES);
+    const appliances = Object.assign({}, APPLIANCES, nw.appliances || {});
+    const rules = options.rules || "detailed";
+    const seed = options.seed === undefined ? state.seed : options.seed >>> 0;
+    const start = options.start || 0;
+    const grid = typeof options.grid === "boolean" ? ()=> options.grid : (options.grid || ((m)=> gridUp(m)));
+    let power = JSON.parse(JSON.stringify(options.power || { switches:{}, breakers:{}, heat:{} }));
+    let prev = options.running ? powerSnapshot(net, appliances, power, rules, grid(start), start, null, seed).drawing : {};
+    const script = options.script || {};
+    const steps = [];
+    for(let t = 0; t < minutes; t++){
+      (script[t] || []).forEach(c=>{
+        if("switch" in c) power.switches[c.switch] = !!c.on;
+        else if("breaker" in c) switchBreakerIn(power, c.breaker, !!c.on);
+        else if("reset" in c) resetBreakerIn(power, c.reset);
+      });
+      const m = start + t + 1;
+      const r = resolvePowerStep(net, appliances, power, rules, grid(m), m, 1, prev, seed);
+      power = r.power;
+      prev = r.drawing;
+      steps.push({ minute:t + 1, running:r.running, momentary:r.momentary, heat:Object.assign({}, power.heat),
+        trips:r.trips.map(x=> ({ id:x.id, cause:x.cause })), powered:r.powered, drawing:Object.keys(r.drawing) });
+    }
+    return { problems:net.problems, steps, power };
+  }
   // `seed` is optional: undefined starts a fresh world, a uint32 replays that
   // one (see seedFromInput()). Callers wired straight to a click must wrap
   // this in an arrow — a bare doRestart handler would receive the click event
@@ -7639,6 +7865,7 @@
     world = makeDefaultWorld();
     doors = buildDoors(null);
     windows = buildWindows(null);
+    refreshPower();
     stampMissingAges();
     detailItem = null;
     deviceTarget = null;
@@ -9468,7 +9695,8 @@
   document.title = "Ashfall — v" + GAME_CONFIG.VERSION;
   document.getElementById("pageTitle").textContent = "ASHFALL — v" + GAME_CONFIG.VERSION;
   // The initial boot's world, like doRestart()'s, needs its food aged once
-  // state exists.
+  // state exists, and its network resolved.
+  refreshPower();
   stampMissingAges();
   log("You wake up in your apartment. Everything's exactly where you left it — for now.");
   mapSetZoomStep(mapZoomStep);
@@ -9480,7 +9708,7 @@
   // read-only reporting helpers, nothing that writes game state, and nothing
   // else belongs on it.
   window.ashfallDev = { validateItemRegistry, validateLocations, validateRoomSchema, validateReachability,
-    simulateSeed, sampleSeeds };
+    simulateSeed, sampleSeeds, simulatePower };
 })();
 </script>
 </body>
