@@ -466,14 +466,14 @@
   const DECAY = { hunger:100/(3*MINUTES_PER_DAY), thirst:100/MINUTES_PER_DAY, energy:100/MINUTES_PER_DAY };
   const CAMPFIRE_KIT_COST = 3;
   // The collapse clock. A run starts START_DAYS_AFTER_COLLAPSE days after the
-  // collapse; grid power and running water fail on their own day after it.
-  // Nothing is stored: minutesSinceCollapse() derives the clock from
-  // state.totalMinutes. Power and water are separate constants on purpose,
-  // since they will be set separately (#149). All three are retunable; the
-  // Day N clock still counts from the start of the run.
+  // collapse; the grid fails on POWER_FAILS_DAY after it. Nothing is stored:
+  // minutesSinceCollapse() derives the clock from state.totalMinutes. Running
+  // water has no day of its own: the pumps run on the grid, so the water
+  // stops with it (waterRunning() is gridUp()). #149's separate water option
+  // is moot while that holds. Both are retunable; the Day N clock still
+  // counts from the start of the run.
   const START_DAYS_AFTER_COLLAPSE = 2;
   const POWER_FAILS_DAY = 21;
-  const WATER_FAILS_DAY = 21;
   // Spoilage rates, as multiples of the rate food ages at room temperature
   // (see spoilageRate()). A fridge slows ageing while powered, and for
   // FRIDGE_COAST_MIN after the power fails it still holds some cold; a
@@ -655,8 +655,8 @@
   //   fireMinutesLeft remaining fuel minutes for an active fire
   //   campfireBuilt  a campfire structure has been assembled here
   //   sink           the room has a sink: while the water runs
-  //                  (waterRunning()), a water-holding item can be filled
-  //                  at it (doFillAtSink())
+  //                  (waterRunning(), which follows the grid: gridUp()), a
+  //                  water-holding item can be filled at it (doFillAtSink())
   //
   // CONTAINER SCHEMA:
   //   { id, name, capacityKg, items: [] }
@@ -5448,12 +5448,16 @@
   function getVagueClockText(){ return "Day " + dayNumber() + ", " + timeOfDayBand(); }
   // How long ago the collapse was, in game minutes: the run's start offset
   // plus the time played. Derived, never stored. Everything that asks whether
-  // the power or the water is still on reads this, through the two
-  // predicates below; `m` defaults to now so a caller integrating over time
-  // can ask about any other minute.
+  // the grid or the water is still on reads this, through the two predicates
+  // below; `m` defaults to now so a caller integrating over time can ask
+  // about any other minute.
+  // gridUp() is the grid source's state, the one source the power network
+  // has (see POWER in SURVIVAL / TIME SIMULATION). The water follows the
+  // grid, not a building's power: nothing restores a building's power
+  // without the grid yet, and the rule still holds once generators do (#245).
   function minutesSinceCollapse(){ return START_DAYS_AFTER_COLLAPSE * MINUTES_PER_DAY + state.totalMinutes; }
-  function powerOn(m = minutesSinceCollapse()){ return m < POWER_FAILS_DAY * MINUTES_PER_DAY; }
-  function waterRunning(m = minutesSinceCollapse()){ return m < WATER_FAILS_DAY * MINUTES_PER_DAY; }
+  function gridUp(m = minutesSinceCollapse()){ return m < POWER_FAILS_DAY * MINUTES_PER_DAY; }
+  function waterRunning(m = minutesSinceCollapse()){ return gridUp(m); }
   function getWindowsInRoom(roomId){
     return Object.keys(windows).filter(id=>windows[id].rooms.includes(roomId)).map(id=>Object.assign({id}, windows[id]));
   }
@@ -5781,7 +5785,7 @@
     const sinceFailure = m - POWER_FAILS_DAY * MINUTES_PER_DAY;
     if(hasTag(container, "freezer")) return sinceFailure < FREEZER_COAST_MIN ? 0 : 1;
     if(hasTag(container, "fridge")){
-      if(powerOn(m)) return FRIDGE_RATE_POWERED;
+      if(gridUp(m)) return FRIDGE_RATE_POWERED;
       return sinceFailure < FRIDGE_COAST_MIN ? FRIDGE_RATE_COASTING : 1;
     }
     return 1;
