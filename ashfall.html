@@ -421,7 +421,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.9.1" };
+  const GAME_CONFIG = { VERSION: "0.9.2" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -508,13 +508,12 @@
   // to US plug-in panel breakers is an approximation, flagged.
   const INSTANT_TRIP_MULTIPLE = 7.5;
   // Judgment calls, retunable: a breaker's heat meter drains fully in
-  // HEAT_COOL_MIN below its rating; an appliance's switch is found on with
-  // SWITCH_LEFT_ON_CHANCE ("random but left on in almost all cases"); a panel
-  // or board without its own `volts` is 240 V. Real apartment buildings are
-  // often 120/208 V (#241), which is why `volts` is a per-panel field for a
-  // building pass to set; the default is flagged.
+  // HEAT_COOL_MIN below its rating; a panel or board without its own `volts`
+  // is 240 V. Real apartment buildings are often 120/208 V (#241), which is
+  // why `volts` is a per-panel field for a building pass to set; the default
+  // is flagged. How likely an appliance's switch is to be found on is each
+  // appliance's own `leftOnChance` (APPLIANCES, POWER SCHEMA).
   const HEAT_COOL_MIN = 30;
-  const SWITCH_LEFT_ON_CHANCE = 0.9;
   const PANEL_DEFAULT_VOLTS = 240;
   // The standard ampere ratings for fuses and inverse-time circuit breakers,
   // NEC 2023 Table 240.6(A), which made 10 A a standard breaker size (it had
@@ -716,7 +715,10 @@
   //       device  the container has controls beyond take and store, kept in
   //               its device pop-up (renderDevicePop()). The strip under the
   //               Here panel's tabs offers that pop-up while its tab is
-  //               selected.
+  //               selected. A container the wiring ties to a load with a
+  //               switch of its own (a fridge, a freezer) gets the same
+  //               strip and pop-up without the tag (hasDevicePop()), and
+  //               stays hidden until a search.
   //       fridge  food in it ages slower while its load is powered
   //               (spoilageRate(), containerPowered()). Coasting on its
   //               cold after the power stops is deferred to #217.
@@ -787,13 +789,14 @@
   //                   Containers carry tags too (see CONTAINER SCHEMA).
   //                   `blade` is the tool a recipe's `tool` asks for to
   //                   cut (Fillet the fish).
-  //                   Declared, with no consumer yet: prying, heat — an
-  //                   item carrying one of these makes a claim nothing
-  //                   currently acts on, which is correct to write and not
-  //                   yet load-bearing. `heat` sits in that second group
-  //                   despite having a reader:
-  //                   roomHasHeat() exists, but its only caller is
+  //                   `heat` on a carried item is a flame to light an
+  //                   unpowered stove by hand with (stoveLighting()), tried
+  //                   before a fire-starter since it spends nothing.
+  //                   roomHasHeat() reads it too, but its only caller is
   //                   canCraft()'s needsHeat branch, which no recipe sets.
+  //                   Declared, with no consumer yet: prying — an item
+  //                   carrying it makes a claim nothing currently acts on,
+  //                   which is correct to write and not yet load-bearing.
   //     durability    { current, max, mode } — mode is "uses" or "time"
   //     restores      { hunger, thirst } — consumable effect
   //     verb          display/use verb, e.g. "Eat", "Drink"
@@ -1823,9 +1826,16 @@
   // state.power (see PLAYER STATE).
   //
   // APPLIANCES, keyed by id: what a load is.
-  //   { name, watts, volts, startWatts?, dutyCycle?, cycleMinutes? }
+  //   { name, watts, volts, leftOnChance | switchless, startWatts?,
+  //     dutyCycle?, cycleMinutes? }
   //   watts        running draw
   //   volts        120 or 240
+  //   leftOnChance 0–1: how likely its own switch is to be found on, rolled
+  //                per load (switchOnIn()). Every figure is a judgment call,
+  //                retunable.
+  //   switchless   true: it has no user switch. It is always on, and no
+  //                control is offered for it. Every entry carries exactly
+  //                one of leftOnChance and switchless (validateWiring()).
   //   startWatts   the total draw at a start; present on a motor load
   //   dutyCycle, cycleMinutes  present on a cycling load: it draws for
   //                dutyCycle × cycleMinutes of every cycleMinutes
@@ -1842,14 +1852,23 @@
   //                   on average (Engineer Fix, HomeAlliance).
   //   range_hood      200 W: 150–300 W on high (Engineer Fix, Storables).
   //   smoke_alarm     1 W: a hardwired alarm draws 1–2 W on standby (Kidde).
+  //                   Switchless: hardwired, with no user switch.
+  //   gas_range       4 W: in standby a gas range powers only its control
+  //                   board, clock and display, "generally less than 5
+  //                   watts" (Engineer Fix). Switchless: it is plugged in and
+  //                   has no power switch. The spark module's burst while
+  //                   igniting is left unmodelled, so no `startWatts`; the
+  //                   372–432 W glow bar is the oven's igniter, and the oven
+  //                   isn't modelled (#259).
   // The fan and the hood are motors, but their start surge is left
   // unmodelled: neither carries `startWatts`.
   const APPLIANCES = {
-    fridge_freezer: { name:"Fridge-freezer", watts:150, startWatts:525, volts:120, dutyCycle:0.35, cycleMinutes:60 },
-    led_light:      { name:"Light",          watts:10,  volts:120 },
-    bath_fan:       { name:"Exhaust fan",    watts:36,  volts:120 },
-    range_hood:     { name:"Range hood",     watts:200, volts:120 },
-    smoke_alarm:    { name:"Smoke alarm",    watts:1,   volts:120 }
+    fridge_freezer: { name:"Fridge-freezer", watts:150, startWatts:525, volts:120, dutyCycle:0.35, cycleMinutes:60, leftOnChance:0.99 },
+    led_light:      { name:"Light",          watts:10,  volts:120, leftOnChance:0.3 },
+    bath_fan:       { name:"Exhaust fan",    watts:36,  volts:120, leftOnChance:0.05 },
+    range_hood:     { name:"Range hood",     watts:200, volts:120, leftOnChance:0.05 },
+    smoke_alarm:    { name:"Smoke alarm",    watts:1,   volts:120, switchless:true },
+    gas_range:      { name:"Gas range",      watts:4,   volts:120, switchless:true }
   };
   // WIRING_TEMPLATES, keyed by id: one unit's layout by room role, so every
   // unit wired the same way shares it.
@@ -1871,10 +1890,13 @@
   // its one room. Ratings follow the NEC: two 20 A kitchen countertop
   // circuits (210.11(C)(1)), a 20 A bathroom circuit (210.11(C)(3)), 15 A for
   // lighting and room outlets, and a 100 A main, the modern minimum for a
-  // unit. KITCHEN 2 has no fixture: it is the second countertop circuit,
-  // whose load is whatever gets plugged in. There is no laundry circuit and
-  // no water heater, the heater taken to be gas like the stove; that is
-  // unconfirmed. The panel-door labels are a naming choice, retunable.
+  // unit. KITCHEN 2 is the second countertop circuit, and the gas range
+  // plugs into it: NEC 210.52(B)(2) Exception No. 2 allows "receptacles
+  // installed to provide power for supplemental equipment and lighting on
+  // gas-fired ranges" on a small-appliance branch circuit. There is no
+  // laundry circuit and no water heater, the heater taken to be gas like the
+  // stove; that is unconfirmed. The panel-door labels are a naming choice,
+  // retunable.
   const WIRING_TEMPLATES = {
     apartment: {
       main: { rating:100 },
@@ -1887,6 +1909,7 @@
       ],
       fixtures: [
         { key:"fridge",        appliance:"fridge_freezer", circuit:"kitchen1", role:"kitchen", containers:["fridge", "freezer"] },
+        { key:"stove",         appliance:"gas_range",      circuit:"kitchen2", role:"kitchen", containers:["stove"] },
         { key:"hood",          appliance:"range_hood",     circuit:"lights",   role:"kitchen" },
         { key:"light_kitchen", appliance:"led_light",      circuit:"lights",   role:"kitchen" },
         { key:"light_living",  appliance:"led_light",      circuit:"lights",   role:"living" },
@@ -2192,7 +2215,7 @@
       desc:"A family kitchen, cluttered with kids' cups and a permission slip on the counter that nobody signed.",
       sink:true, cannotHaveFire:true, floorCap:50, floor:[],
       containers:[
-        { id:"stove1a", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
+        { id:"stove", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
           { id:"kids_plastic_bowl", qty:1 } ])},
         { id:"kitchen1a", name:"Kitchen Shelf", capacityKg:15, spawnPools:["kitchen_nonperishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
           { id:"plastic_bottle", qty:3, overrides:{ water:{ kind:"clean", fill:1 } } },
@@ -4360,8 +4383,9 @@
       // The power network's state, keyed by the expansion's node ids (see
       // POWER SCHEMA). Only what differs from its default is stored, so a
       // building wired after the run started needs nothing written:
-      //   switches  { loadId: bool } — a load's own switch. Default: rolled,
-      //             keyed and pure (switchOnIn()).
+      //   switches  { loadId: bool } — a load's own switch. Default: rolled
+      //             at its appliance's leftOnChance, keyed and pure
+      //             (switchOnIn()). A switchless appliance has no entry.
       //   breakers  { breakerId: { on, tripped } }. Default: on, untripped.
       //   heat      { breakerId: number } — the delayed-trip meter, toward 1.
       //             Default: 0.
@@ -5974,6 +5998,20 @@
     log(`You switch the ${br.label} breaker ${on ? "on" : "off"}.`);
     render();
   }
+  // A load's own switch, by hand: today from a fridge's or freezer's device
+  // pop-up, later from the electrical view (#242). Instant, and seen by the
+  // next step's resolution, as a breaker is: switching a fridge on can start
+  // it, surge and all. Nothing else in play writes state.power.switches. The
+  // line names the appliance; functional, retunable.
+  function doSwitchLoad(loadId, on){
+    const l = POWER_NET.loads[loadId];
+    const a = l && APPLIANCES[l.appliance];
+    on = !!on;
+    if(!a || a.switchless || switchOnIn(state.power, state.seed, loadId, a) === on) return;
+    setSwitchIn(state.power, state.seed, loadId, a, on);
+    log(`You switch the ${a.name.toLowerCase()} ${on ? "on" : "off"}.`);
+    render();
+  }
   function doResetBreaker(id){
     const br = POWER_NET.breakers[id];
     if(!br || !breakerStateIn(state.power, id).tripped) return;
@@ -6138,6 +6176,16 @@
     const loadId = container && POWER_NET.containerLoad[roomId + KEY_SEP + container.id];
     return loadId ? isPowered(loadId) : gridUp();
   }
+  // The load a room container is, when the wiring makes it one and its
+  // appliance has a switch of its own; null otherwise, and for a switchless
+  // one (the stove). What decides that a container offers a switch control
+  // (doSwitchLoad()): the Fridge and the Freezer both answer their kitchen's
+  // one fridge-freezer.
+  function switchableLoad(roomId, container){
+    const loadId = container && POWER_NET.containerLoad[roomId + KEY_SEP + container.id];
+    const a = loadId && APPLIANCES[POWER_NET.loads[loadId].appliance];
+    return a && !a.switchless ? loadId : null;
+  }
   // How fast food ages in `container`, as a multiple of the rate at room
   // temperature, given whether its load is `powered`. A powered fridge runs
   // at FRIDGE_RATE_POWERED and a powered freezer stops ageing; anything
@@ -6163,7 +6211,7 @@
   function effectiveAge(container, roomId, fromM, toM){
     if(!(toM > fromM)) return 0;
     const loadId = container && POWER_NET.containerLoad[roomId + KEY_SEP + container.id];
-    const wasOn = loadId ? switchOnIn({ switches:{} }, state.seed, loadId) : true;
+    const wasOn = loadId ? switchOnIn({ switches:{} }, state.seed, loadId, APPLIANCES[POWER_NET.loads[loadId].appliance]) : true;
     const fail = Math.min(Math.max(POWER_FAILS_DAY * MINUTES_PER_DAY, fromM), toM);
     return spoilageRate(container, wasOn) * (fail - fromM) + spoilageRate(container, false) * (toM - fail);
   }
@@ -6402,11 +6450,22 @@
   // state.power's readers and writers, over any power object so the dev
   // seam's simulation shares them. A default is never written: a writer
   // that returns an entry to its default deletes it.
-  // A load's switch: its stored value, else its rolled starting state,
-  // keyed on the load's id, so it is pure and render-safe.
-  function switchOnIn(power, seed, loadId){
+  // A load's switch, given its APPLIANCES entry: always on for a switchless
+  // appliance, whatever is stored; otherwise its stored value, else its
+  // rolled starting state, at the appliance's leftOnChance keyed on the
+  // load's id, so it is pure and render-safe.
+  function switchOnIn(power, seed, loadId, appliance){
+    if(appliance && appliance.switchless) return true;
     const s = power.switches[loadId];
-    return typeof s === "boolean" ? s : chanceFor(seed, SWITCH_LEFT_ON_CHANCE, ["power", "switch", loadId]);
+    if(typeof s === "boolean") return s;
+    return chanceFor(seed, appliance ? appliance.leftOnChance : 0, ["power", "switch", loadId]);
+  }
+  // Sets a load's switch. A load back at its rolled starting state has its
+  // entry deleted; a switchless appliance has no switch to set.
+  function setSwitchIn(power, seed, loadId, appliance, on){
+    if(!appliance || appliance.switchless) return;
+    delete power.switches[loadId];
+    if(on !== switchOnIn(power, seed, loadId, appliance)) power.switches[loadId] = on;
   }
   function breakerStateIn(power, id){
     const b = power.breakers[id];
@@ -6479,8 +6538,8 @@
     });
     const powered = {}, drawing = {}, starting = {};
     Object.values(net.loads).forEach(l=>{
-      powered[l.id] = !!(simple ? live[l.panel] : live[l.circuit]) && switchOnIn(power, seed, l.id);
       const a = appliances[l.appliance];
+      powered[l.id] = !!(simple ? live[l.panel] : live[l.circuit]) && switchOnIn(power, seed, l.id, a);
       if(!powered[l.id] || !a) return;
       if(a.dutyCycle !== undefined && a.cycleMinutes > 0){
         const phase = rollValueFor(seed, ["power", "cycle", l.id]) * a.cycleMinutes;
@@ -6583,6 +6642,15 @@
   function isPowered(loadId){
     if(!powerNow) refreshPower();
     return !!powerNow.powered[loadId];
+  }
+  // Whether a load has power on state.power as it stands, before the next
+  // step resolves it: a hand on the load's own switch shows at once in the
+  // load's own readout, where isPowered() and spoilage see it from the next
+  // step, as they see a breaker. A fresh look, stored nowhere and starting
+  // nothing, so it is render-safe.
+  function loadPoweredNow(loadId){
+    return !!powerSnapshot(POWER_NET, APPLIANCES, state.power, state.electricalRules, gridUp(),
+      minutesSinceCollapse(), null, state.seed).powered[loadId];
   }
   // ==================================================
   // STAMINA / FATIGUE SYSTEM
@@ -6853,17 +6921,33 @@
     if(!c){ c = { id, name, capacityKg, tags, items:[] }; room.containers.push(c); }
     return c;
   }
+  // How the stove in `roomId` would light now: "self" with power, its
+  // igniter sparking; "hand" without, when a flame is carried, a `heat` tool
+  // (the propane torch) or a fire-starter with uses; null when nothing
+  // carried will light it. Power matters only here, at the lighting: a lit
+  // burner holds its own flame on a manual gas valve, so losing power never
+  // puts it out. The device pop-up and doLightStove() both ask this.
+  function stoveLighting(roomId, stove){
+    if(containerPowered(roomId, stove)) return "self";
+    return hasTool("heat") || hasMatchUses() ? "hand" : null;
+  }
   // Lights the room's stove, the authored container roomStove() finds. It
-  // never creates a container: making one by id is how 1A's kitchen, whose
-  // stove is `stove1a`, grew a second, empty "Stove" tab when lit (#177).
-  // A gas stove lights itself, so it needs no fire-starter and spends none
-  // (#234): only a campfire does.
+  // never creates a container: making one by id is how a kitchen whose
+  // stove's id was not the one asked for grew a second, empty "Stove" tab
+  // when lit (#177). With power the stove lights itself and spends nothing
+  // (#234). Without, a burner is lit by hand (#259): the torch first, which
+  // has no fuel to spend, so a player carrying both keeps their matches, and
+  // otherwise one use of a fire-starter.
   function doLightStove(){
     const room = world[state.currentRoom];
-    if(!roomStove(room)) return;
+    const stove = roomStove(room);
+    if(!stove) return;
+    const how = stoveLighting(state.currentRoom, stove);
+    if(!how) return;
+    if(how === "hand" && !hasTool("heat")) consumeMatchUse();
     room.heatActive = true;
     advanceTime(LIGHT_STOVE_MIN);
-    log("You light the stove.", "good");
+    log(how === "self" ? "You light the stove." : "You light a burner by hand.", "good");
     render();
   }
   function canBuildFire(room){
@@ -7471,10 +7555,10 @@
   // container in place, keeping its items and fields, when its room has the
   // old id and not the new. Idempotent; a save without the old ids passes
   // through unchanged.
-  //   onea_kitchen  fridge1a, freezer1a → fridge, freezer, the ids the
-  //                 `apartment` wiring template names
+  //   onea_kitchen  fridge1a, freezer1a, stove1a → fridge, freezer, stove,
+  //                 the ids the `apartment` wiring template names
   const RENAMED_CONTAINERS = {
-    onea_kitchen: { fridge1a:"fridge", freezer1a:"freezer" }
+    onea_kitchen: { fridge1a:"fridge", freezer1a:"freezer", stove1a:"stove" }
   };
   function backfillRenamedContainers(){
     Object.keys(RENAMED_CONTAINERS).forEach(roomId=>{
@@ -7731,8 +7815,9 @@
   //     panel, clashing ids;
   //   every room a board, panel or role names exists, and every container a
   //     fixture names is in its room;
-  //   every appliance id is in APPLIANCES, every circuit's volts is 120 or
-  //     240, and every circuit's roles are in its panel's rooms;
+  //   every appliance id is in APPLIANCES, every APPLIANCES entry carries
+  //     exactly one of leftOnChance and switchless, every circuit's volts is
+  //     120 or 240, and every circuit's roles are in its panel's rooms;
   //   every breaker's rating is an NEC 240.6(A) standard size
   //     (STANDARD_BREAKER_RATINGS).
   // It also lists every room with shelter "full" that no panel's rooms
@@ -7744,6 +7829,10 @@
     const rooms = makeDefaultWorld();
     const problems = net.problems.slice();
     const roomExists = (id, what)=>{ if(!rooms[id]) problems.push(`${what}: room "${id}" does not exist`); };
+    Object.keys(APPLIANCES).forEach(id=>{
+      const a = APPLIANCES[id];
+      if(("leftOnChance" in a) === !!a.switchless) problems.push(`appliance ${id}: needs exactly one of leftOnChance and switchless`);
+    });
     Object.values(net.boards).forEach(b=> roomExists(b.room, b.id));
     Object.values(net.panels).forEach(p=>{
       roomExists(p.room, p.id);
@@ -7782,16 +7871,15 @@
   //   spare_batteries  the powered-equipment "Remove batteries" action
   const ACTION_GRANTED_ITEM_IDS = ["firewood", "fish", "spare_batteries"];
   // The tool tags validateReachability() counts, written down for the same
-  // reason. The first eight are what hasTool()/hasMatchUses() actually gate
+  // reason. The first nine are what hasTool()/hasMatchUses() actually gate
   // an action on, and they include the `breakTag` values windows (blunt) and
-  // locked storage units (cutting) carry, and the `tool` a recipe asks for
-  // (blade). `heat` is listed because
-  // roomHasHeat() reads it, though its only caller is canCraft()'s needsHeat
-  // branch and no recipe sets that. `prying` gates nothing at all and is
-  // counted precisely for that reason: renderHereActionsPanel() records that
-  // forcing a vehicle was deliberately NOT gated on it because one item
-  // carries it, and #111 is the standing question of whether to gate on it
-  // once that stops being true. The count is the evidence that question wants.
+  // locked storage units (cutting) carry, the `tool` a recipe asks for
+  // (blade), and `heat`, which lights an unpowered stove by hand
+  // (stoveLighting()). `prying` gates nothing at all and is counted
+  // precisely for that reason: renderHereActionsPanel() records that forcing
+  // a vehicle was deliberately NOT gated on it because one item carries it,
+  // and #111 is the standing question of whether to gate on it once that
+  // stops being true. The count is the evidence that question wants.
   const REPORTED_TOOL_TAGS = ["fire-starter", "fishing", "tackle", "chopping",
     "cutting", "blunt", "can-opening", "blade", "heat", "prying"];
   // Whether the registry entry for `id` carries `tag`, the test every tag
@@ -8076,7 +8164,9 @@
   //                     false: everything drawing then starts.
   //            script   { t: [change] } applied before step t + 1, t counting
   //                     from 0: { switch: loadId, on }, { breaker: id, on },
-  //                     { reset: id }
+  //                     { reset: id }. A switch goes through setSwitchIn(),
+  //                     as the game's does, so one for a switchless or an
+  //                     unknown load is ignored.
   // Returns { problems, steps, power }: the expansion's problems, then one row
   // per step, { minute, running, momentary, heat, trips:[{ id, cause }],
   // powered, drawing:[loadId] }, `minute` counting from 1, and the final power
@@ -8095,7 +8185,10 @@
     const steps = [];
     for(let t = 0; t < minutes; t++){
       (script[t] || []).forEach(c=>{
-        if("switch" in c) power.switches[c.switch] = !!c.on;
+        if("switch" in c){
+          const l = net.loads[c.switch];
+          setSwitchIn(power, seed, c.switch, l && appliances[l.appliance], !!c.on);
+        }
         else if("breaker" in c) switchBreakerIn(power, c.breaker, !!c.on);
         else if("reset" in c) resetBreakerIn(power, c.reset);
       });
@@ -9528,10 +9621,19 @@
     renderCraftResult();
   }
   function renderCraftResult(){ renderLogResult(document.getElementById("craftResult"), craftResult); }
+  // Whether a room container has a device pop-up, and so the Here strip
+  // while its tab is selected: one tagged `device` (the stove), or one the
+  // wiring ties to a load with a switch of its own (switchableLoad(): a
+  // fridge or freezer). The strip and resolveDeviceTarget() both ask this,
+  // so the two can't disagree.
+  function hasDevicePop(roomId, container){
+    return hasTag(container, "device") || !!switchableLoad(roomId, container);
+  }
   // What deviceTarget points at now, looked up again by identity: a
   // container by its id, among the current room's containers, which must
-  // still carry `device`; or a panel or board by its node id, among the
-  // devices hanging in the current room (POWER_NET.devices). Either way the
+  // still have a device pop-up (hasDevicePop()); or a panel or board by its
+  // node id, among the devices hanging in the current room
+  // (POWER_NET.devices). Either way the
   // Here panel's selected tab must still be its, since the pop-up hangs from
   // that tab's strip. null when the target no longer resolves, which closes
   // the pop-up: leaving the room, switching the Here tab, a load or a
@@ -9542,7 +9644,7 @@
     if(deviceTarget.kind === "container"){
       if(worldTab !== deviceTarget.id) return null;
       const container = room.containers.find(c=> c.id === deviceTarget.id);
-      return container && hasTag(container, "device") ? { room, container } : null;
+      return container && hasDevicePop(state.currentRoom, container) ? { room, container } : null;
     }
     if(worldTab !== powerTab(deviceTarget.id)) return null;
     const device = powerDevicesIn(state.currentRoom).find(d=> d.kind === deviceTarget.kind && d.id === deviceTarget.id);
@@ -9590,18 +9692,29 @@
   // minute ("Timer: 0" when unset).
   function stoveOnText(room){ return room.heatActive ? "On" : "Off"; }
   function stoveTimerText(stove){ return "Timer: " + Math.ceil(stove.timerMinutes || 0); }
+  // A switchable load's readout, shared by its pop-up's status line and the
+  // Here strip: what shows with the door open, its light, and when that is
+  // dark, where its own switch sits. Read from loadPoweredNow(), so a hand
+  // on the switch shows at once. Functional UI text, retunable.
+  function loadStatusText(loadId){
+    if(loadPoweredNow(loadId)) return "Light on";
+    const l = POWER_NET.loads[loadId];
+    return "Dark · " + (switchOnIn(state.power, state.seed, loadId, APPLIANCES[l.appliance]) ? "switched on" : "switched off");
+  }
   // The device pop-up: a room fixture's controls, styled as the item pop-up
   // is. A bold title line with the fixture's name, its status lines, then
-  // its controls. For the stove, the room's heatActive is its On/Off, Turn on
-  // / Turn off switch it (doLightStove(), doExtinguish()), always offered
-  // since the stove needs no fire-starter, and below them sit its timer's add
-  // buttons (doAddStoveTimer()). Whether it is open follows
-  // deviceTarget and nothing else, as the item pop-up's follows detailItem:
-  // Device Options sets it, and render() opens the pop-up. Drawn by every
-  // render(), so it stays open after a control runs and updates in place. A
-  // control's result is its line in #log, and nothing here repeats it.
-  // Closing it, by an outside tap, Esc, or its target no longer resolving,
-  // hands focus back to Device Options.
+  // its controls, drawn by one of three renderers: a panel's or board's
+  // (renderPowerDevicePop()), the stove's (renderStovePop(), for the
+  // container roomStove() finds), or a switchable load's
+  // (renderLoadSwitchPop(), for a container switchableLoad() ties to one).
+  // A fixture tagged `device` that is neither would draw only its name until
+  // it gains controls. Whether it is open follows deviceTarget and nothing
+  // else, as the item pop-up's follows detailItem: Device Options sets it,
+  // and render() opens the pop-up. Drawn by every render(), so it stays open
+  // after a control runs and updates in place. A control's result is its
+  // line in #log, and nothing here repeats it. Closing it, by an outside
+  // tap, Esc, or its target no longer resolving, hands focus back to Device
+  // Options.
   function renderDevicePop(){
     const target = resolveDeviceTarget();
     if(!target){ closeLayer(devicePop); return; }
@@ -9617,32 +9730,57 @@
       nameLine.appendChild(nameB);
       box.appendChild(nameLine);
       devicePop.appendChild(box);
-      // The stove, the one fixture device today. A fixture tagged `device`
-      // without `heat` would draw only its name until it gains controls.
-      if(!hasTag(target.container, "heat")) return;
-      // Functional UI text, held to clarity; retunable.
-      [stoveOnText(room), stoveTimerText(target.container)].forEach(line=>{
-        const div = document.createElement("div");
-        div.textContent = line;
-        box.appendChild(div);
-      });
-      const controls = document.createElement("div");
-      controls.className = "pop-actions";
-      controls.appendChild(room.heatActive
-        ? actionButton("Turn off the stove", doExtinguish)
-        : actionButton("Turn on the stove " + fmtDuration(LIGHT_STOVE_MIN), doLightStove));
-      // The timer's buttons, one per step, after Turn on / Turn off. They
-      // cost no time and log nothing.
-      const timerRow = document.createElement("div");
-      timerRow.className = "timer-steps";
-      STOVE_TIMER_STEPS.forEach(m=>{
-        timerRow.appendChild(actionButton("+" + m, ()=> doAddStoveTimer(m)));
-      });
-      controls.appendChild(timerRow);
-      devicePop.appendChild(controls);
+      const loadId = switchableLoad(state.currentRoom, target.container);
+      if(target.container === roomStove(room)) renderStovePop(room, target.container, box);
+      else if(loadId) renderLoadSwitchPop(loadId, box);
     });
     if(!layerOpen(devicePop)) openLayer(devicePop, showDevicePop, hideDevicePop, { el:deviceOptionsBtn, uid:null });
     positionDevicePop();
+  }
+  // The stove's pop-up, below its name: the room's heatActive as On/Off and
+  // its timer, then its controls. Turn off (doExtinguish()) while lit;
+  // unlit, how it would light now (stoveLighting()) picks the button: Turn
+  // on with power, Light by hand without, or, with nothing carried to light
+  // it, a note in the button's place, styled as the Here panel's campfire
+  // note (hereNote()). Below them sit its timer's add buttons
+  // (doAddStoveTimer()). Functional UI text, held to clarity; retunable.
+  function renderStovePop(room, stove, box){
+    [stoveOnText(room), stoveTimerText(stove)].forEach(line=>{
+      const div = document.createElement("div");
+      div.textContent = line;
+      box.appendChild(div);
+    });
+    const controls = document.createElement("div");
+    controls.className = "pop-actions";
+    const how = room.heatActive ? null : stoveLighting(state.currentRoom, stove);
+    controls.appendChild(room.heatActive ? actionButton("Turn off the stove", doExtinguish)
+      : how === "self" ? actionButton("Turn on the stove " + fmtDuration(LIGHT_STOVE_MIN), doLightStove)
+      : how === "hand" ? actionButton("Light the stove by hand " + fmtDuration(LIGHT_STOVE_MIN), doLightStove)
+      : hereNote("Nothing you're carrying will light it."));
+    // The timer's buttons, one per step, after Turn on / Turn off. They
+    // cost no time and log nothing.
+    const timerRow = document.createElement("div");
+    timerRow.className = "timer-steps";
+    STOVE_TIMER_STEPS.forEach(m=>{
+      timerRow.appendChild(actionButton("+" + m, ()=> doAddStoveTimer(m)));
+    });
+    controls.appendChild(timerRow);
+    devicePop.appendChild(controls);
+  }
+  // A switchable load's pop-up, below its container's name: its readout
+  // (loadStatusText()), then one button that flips its own switch
+  // (doSwitchLoad()). A fridge's and a freezer's both work their kitchen's
+  // one fridge-freezer. Functional UI text, retunable.
+  function renderLoadSwitchPop(loadId, box){
+    const div = document.createElement("div");
+    div.textContent = loadStatusText(loadId);
+    box.appendChild(div);
+    const on = switchOnIn(state.power, state.seed, loadId, APPLIANCES[POWER_NET.loads[loadId].appliance]);
+    const controls = document.createElement("div");
+    controls.className = "pop-actions";
+    controls.appendChild(on ? actionButton("Switch off", ()=> doSwitchLoad(loadId, false))
+      : actionButton("Switch on", ()=> doSwitchLoad(loadId, true)));
+    devicePop.appendChild(controls);
   }
   // A panel's or board's pop-up, drawn into the device pop-up. Watts never
   // appear (#242, #249). Detailed rules: the name, whether power reaches it,
@@ -9976,14 +10114,16 @@
       ? totalWeight(currentWorld.items).toFixed(2) + " / " + currentWorld.capacityKg + " kg" : "";
     // A room fixture's strip, under the tabs: the selected tab is the focus,
     // the way the Inventory strip's Unequip follows its tab. Shown only while
-    // that tab is a container tagged `device`, or a panel's or board's. It
-    // holds the stove's state, while the stove's tab is selected, or the
-    // panel's or board's (deviceStripText()), then Device Options, which
-    // opens the device pop-up (renderDevicePop()).
+    // that tab is a container with a device pop-up (hasDevicePop()), or a
+    // panel's or board's. It holds the stove's state, while the stove's tab
+    // is selected, a switchable load's (loadStatusText()), or the panel's or
+    // board's (deviceStripText()), then Device Options, which opens the
+    // device pop-up (renderDevicePop()).
     const worldStrip = document.getElementById("worldStrip");
     const tabContainer = room.containers.find(c=> c.id === worldTab);
     const tabDevice = powerDevicesIn(state.currentRoom).find(d=> powerTab(d.id) === worldTab);
-    if(tabContainer && hasTag(tabContainer, "device")){
+    const tabLoad = tabContainer && switchableLoad(state.currentRoom, tabContainer);
+    if(tabContainer && hasDevicePop(state.currentRoom, tabContainer)){
       worldStrip.style.display = "";
       deviceOptionsBtn.onclick = ()=>{ deviceTarget = { kind:"container", id:tabContainer.id }; render(); };
     } else if(tabDevice){
@@ -9994,6 +10134,7 @@
     const deviceState = document.getElementById("worldDeviceState");
     deviceState.textContent = tabContainer && tabContainer === roomStove(room)
       ? stoveOnText(room) + " · " + stoveTimerText(tabContainer)
+      : tabLoad ? loadStatusText(tabLoad)
       : tabDevice ? deviceStripText(tabDevice) : "";
     deviceState.style.display = deviceState.textContent ? "" : "none";
     if(!currentWorld){ document.getElementById("worldList").innerHTML = ""; return; }

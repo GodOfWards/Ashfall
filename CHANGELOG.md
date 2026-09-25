@@ -18,6 +18,189 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.9.2 — The stove needs power or a flame, and a load's own switch
+
+Implements: handoffs/stove-and-switches.md
+
+Implements #259, #264 and #266 in full, per `handoffs/stove-and-switches.md`:
+the bundle after Acorn's wiring. The stove becomes a load on its kitchen's
+`KITCHEN 2` circuit and, without power, is lit by hand with a carried flame;
+a load's own switch gets a control, on the Fridge and Freezer tabs; and each
+appliance carries its own left-on chance, or none at all for one with no user
+switch. No state field is added: `state.power.switches` already existed and
+saved, so **PATCH**, and 0.9.1 browser saves keep loading.
+
+**New**
+
+- Per-appliance switches (#266). Every `APPLIANCES` entry carries exactly one
+  of `leftOnChance` (0–1, rolled per load on the existing key
+  `["power", "switch", loadId]`) or `switchless: true` (no user switch:
+  always on, any stored entry ignored, no control offered).
+  `switchOnIn(power, seed, loadId, appliance)` now takes the entry;
+  `powerSnapshot()` passes `appliances[l.appliance]`, `effectiveAge()`
+  `APPLIANCES[POWER_NET.loads[loadId].appliance]`.
+- `setSwitchIn(power, seed, loadId, appliance, on)` (SIMULATION, POWER), the
+  switch's writer: stores `on`, or deletes the entry when `on` is the load's
+  rolled starting state; a no-op for a switchless appliance.
+- `doSwitchLoad(loadId, on)` (ACTIONS): returns early for an unknown load, a
+  switchless one, or one already in that position; otherwise sets the switch,
+  logs "You switch the fridge-freezer on." / "…off." (the appliance's name,
+  lower-cased) and renders. Instant, seen by the next step's resolution as
+  `doSwitchBreaker()` is, so a fridge switched on starts with its surge. It is
+  the only in-play writer of `state.power.switches`; #242 will call it.
+- `switchableLoad(roomId, container)`: the load a container is, when its
+  appliance is not switchless. Today that is the Fridge and Freezer in each of
+  Acorn's four kitchens, both tied to the one `fridge_freezer`.
+- Lighting the stove (#259): `stoveLighting(roomId, stove)` returns `"self"`
+  when `containerPowered()` says the stove has power, `"hand"` when it has
+  none and a `heat` tool or a fire-starter with uses is carried, else `null`.
+  `doLightStove()` reads it: with power it lights as before ("You light the
+  stove.", spends nothing); by hand it spends nothing with the propane torch
+  (`hasTool("heat")`, checked first, so matches are kept) and otherwise one
+  use via `consumeMatchUse()`, then `LIGHT_STOVE_MIN` and "You light a burner
+  by hand."; with nothing carried, no action runs. Power matters only at the
+  lighting: a lit burner is never put out by a power loss.
+- `loadPoweredNow(loadId)`: a fresh `powerSnapshot()` of `state.power` as it
+  stands, stored nowhere, so a load's own readout shows a hand on its switch
+  at once (see decisions below).
+
+**New content**
+
+- `APPLIANCES.gas_range`: `{ name:"Gas range", watts:4, volts:120,
+  switchless:true }`, a pick inside the sourced "generally less than 5 watts"
+  of a gas range's standby board, clock and display (Engineer Fix). The spark
+  module's burst and the oven's 372–432 W glow bar are unmodelled.
+- `leftOnChance`: `fridge_freezer` 0.99, `led_light` 0.3, `range_hood` 0.05,
+  `bath_fan` 0.05; `smoke_alarm` is `switchless` (hardwired).
+- `WIRING_TEMPLATES.apartment` fixture `stove` (`gas_range` on `kitchen2`,
+  role `kitchen`, containers `["stove"]`), straight after `fridge`. It expands
+  to `acorn.<unit>.stove`: four new loads, 44 in all.
+- 1A's stove is renamed `stove1a` → `stove`, so the template finds it.
+
+**Removed**
+
+- `SWITCH_LEFT_ON_CHANCE` (CONFIG). Every appliance states its own figure, so
+  a fallback would be a second source of truth.
+
+**Fixed**
+
+- `RENAMED_CONTAINERS.onea_kitchen` gains `stove1a:"stove"`, so
+  `backfillRenamedContainers()` renames a 0.9.1 save's 1A stove in place,
+  items and timer kept, rather than the load-time migration adding an empty
+  second Stove beside it.
+
+**UI**
+
+- Fridge and Freezer tabs (once found by a search, which is unchanged) show
+  the Here strip: `Light on` when powered, `Dark · switched on` or
+  `Dark · switched off` otherwise. Device Options opens the device pop-up:
+  the container's name, the same line, and `Switch on` / `Switch off`. It
+  stays open and updates in place.
+- The stove's pop-up: `Turn on the stove (0:05)` with power, unchanged;
+  unpowered with a flame, `Light the stove by hand (0:05)`; unpowered with
+  none, the note `Nothing you're carrying will light it.` in the button's
+  place. Turn off, the timer buttons and the stove's strip text are
+  unchanged.
+
+**Documentation**
+
+- The POWER SCHEMA comment documents `leftOnChance` / `switchless` and the
+  gas range's source; the `apartment` comment replaces "KITCHEN 2 has no
+  fixture" with NEC 210.52(B)(2) Exception No. 2. The CONFIG judgment-call
+  comment no longer names the removed constant. The `state.power.switches`,
+  CONTAINER SCHEMA `device`, ITEM DATA SCHEMA `heat`, `REPORTED_TOOL_TAGS`,
+  `validateWiring()`, `simulatePower()` and `doLightStove()` comments follow
+  the new rules; the last states #177's reason without the old id.
+- Nothing was deferred beyond what the handoff already filed: the stove
+  timer and power (#270) and candles (#271).
+
+**Explicitly out of scope**
+
+- The stove timer and power (#270): it keeps running unpowered. Candles as a
+  flame source (#271). The torch lighting campfires and the rest of #96.
+- Room text following power (#235), including the kitchen's "no power needed
+  to light it". Switch controls for loads that aren't containers (lights,
+  hood, fan), which come with the electrical view (#242). Meters and
+  nameplates (#249). The oven. Fridge coasting on its cold (#217). Templates
+  carrying windows and doors (#267), and the other buildings.
+
+**Sections touched**
+
+- WORLD DATA: `APPLIANCES` and the POWER SCHEMA comment;
+  `WIRING_TEMPLATES.apartment` and its comment; 1A's stove id in
+  `buildAcornApartments()`.
+- CONFIG: `SWITCH_LEFT_ON_CHANCE` removed, its comment rewritten.
+- SIMULATION (POWER): `switchOnIn()`, new `setSwitchIn()` and
+  `loadPoweredNow()`, the calls in `powerSnapshot()` and `effectiveAge()`,
+  new `switchableLoad()` beside `containerPowered()`.
+- ACTIONS: `doLightStove()` and new `stoveLighting()` (FIRE/COOKING); new
+  `doSwitchLoad()` beside `doSwitchBreaker()`.
+- PERSISTENCE: `RENAMED_CONTAINERS` and its comment.
+- UI/RENDERING: the Here strip block in `render()`, new `hasDevicePop()`,
+  `resolveDeviceTarget()`, `renderDevicePop()` split into
+  `renderStovePop()` and `renderLoadSwitchPop()`, new `loadStatusText()`.
+- Dev seam: `validateWiring()`; `simulatePower()`'s script switches.
+
+**Validation performed**
+
+- `ashfallDev.validateWiring()` on a new game: no problems; 44 loads, and
+  `containerLoad` ties each kitchen's `stove` to `acorn.<unit>.stove`,
+  1A's included. No console errors.
+- `switchOnIn()` across 2,000 seeds: the fridge found on 99.0%, a light
+  31.1%. A stored `false` on the stove or smoke alarm reads `true`.
+- New game, 2A kitchen: the stove lights itself. After `POWER_FAILS_DAY`:
+  with no flame, no button, the note, and `doLightStove()` does nothing;
+  with matches, one use spent and "You light a burner by hand." in 5
+  minutes; with the torch and matches, none spent. A lit burner stays lit
+  through a step with the grid down.
+- Fridge tab: strip `Light on`; Switch off stores `false`, logs the line and
+  reads `Dark · switched off` at once; Switch on deletes the entry. Grid down
+  reads `Dark · switched on`. A repeat or a switchless target logs nothing.
+- `simulatePower()` with a script switching `stove`, `smoke_alarm` and
+  `fridge` off: only the fridge's entry is stored and only it loses power.
+- A save made by `origin/main`'s 0.9.1 file loads here: 1A holds one `stove`,
+  tied to `acorn.1A.stove`. A save and load round-trips a switch.
+- `git diff origin/main...HEAD -- ashfall.html` touches only the sections
+  above.
+
+**Open questions / decisions resolved**
+
+- `renderDevicePop()` draws the name, then branches: the container
+  `roomStove()` finds gets `renderStovePop()`; one `switchableLoad()` ties to
+  a load gets `renderLoadSwitchPop()`; a panel or board keeps
+  `renderPowerDevicePop()`.
+- The pop-up's note reuses `hereNote()`, the Here panel's campfire-note
+  helper.
+- The shared predicate is `hasDevicePop(roomId, container)`: tagged `device`,
+  or `switchableLoad()` finds a load. The strip and `resolveDeviceTarget()`
+  both ask it.
+- `stoveLighting()` is the one statement of how the stove would light, read
+  by both `doLightStove()` and the pop-up, so the button shown and the action
+  run can't disagree.
+- The load's readout reads `loadPoweredNow()`, not `isPowered()`. The latter
+  reads the last step's snapshot, so right after "You switch the
+  fridge-freezer off." the strip would still have said `Light on`. A fresh
+  snapshot starts nothing and stores nothing, and `powerNow` is untouched, so
+  the next step still sees a switched-on fridge as a start, surge and all.
+  The "(Frozen)" label and spoilage still follow the next step, as they do
+  for a breaker.
+- `simulatePower()`'s `{ switch }` script entries now go through
+  `setSwitchIn()`, so one for a switchless or unknown load is ignored.
+
+**Notes / assumptions**
+
+- Retunable, and Tom's: every `leftOnChance`; the gas range's 4 W; the UI
+  and log wording.
+- Accepted save effects: the fridge's chance going 0.9 → 0.99 on the same
+  roll key only flips some fridges found off to on; lights going 0.9 → 0.3
+  is invisible, since nothing reads a light yet; items already stamped keep
+  their ages. A 0.9.1 save whose 1A stove was never opened may roll different
+  contents under the new id.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.9.1"` → `"0.9.2"`
+
+---
+
 ## v0.9.1 — Acorn Apartments wired
 
 Implements: handoffs/acorn-wiring.md
