@@ -18,6 +18,146 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.9.1 — Acorn Apartments wired
+
+Implements: handoffs/acorn-wiring.md
+
+Implements #251 in full, per `handoffs/acorn-wiring.md`: the first building
+pass after the power foundation. Acorn Apartments gets a real network on
+v0.9.0's schema: a main board, a panel per unit, a house panel for the halls
+and stairs, circuits and fixtures. It defines the first `WIRING_TEMPLATES`
+entry, `apartment`, which Oak (#252) and the flats above the shops will reuse.
+It also adds Acorn's windows and interior doors, and gives unit 1B a fridge.
+Definitions only, plus one idempotent load-time repair: no state field is added
+or reshaped, so **PATCH**, and 0.9.0 browser saves keep loading.
+
+**New content**
+
+- `APPLIANCES`: `led_light` (10 W), `bath_fan` (36 W), `range_hood` (200 W),
+  `smoke_alarm` (1 W), all 120 V, none cycling. The fridge-freezer's source
+  comment now covers all five, with the sources from #251.
+- `WIRING_TEMPLATES.apartment`: a 100 A main (`PANEL_DEFAULT_VOLTS`) and, in
+  panel order, `KITCHEN 1` and `KITCHEN 2` (20 A), `BATH` (20 A), `LIGHTS`
+  (15 A, living, kitchen and balcony) and `BEDROOM` (15 A), all 120 V. Nine
+  fixtures: the kitchen's `fridge` (`fridge_freezer` on `kitchen1`,
+  containers `fridge` and `freezer`), `hood`, and lights in each room, the
+  bathroom's `bath_fan` and the bedroom's `smoke_alarm`. `KITCHEN 2` carries
+  no fixture. The comment cites NEC 210.11(C)(1) and (C)(3).
+- `WIRING.acorn`: the Main board (200 A) in `hallway1`, feeding 2A, 2B, 1A
+  and 1B at 100 A and the house panel at 30 A. Each unit's panel hangs in its
+  kitchen (1B's in `onebee`), per NEC 240.24(B). 1B maps every role onto its
+  one room, so it carries all nine fixtures. The house panel (a `common`
+  entry, 30 A main) has one 15 A `HOUSE` circuit and a light in each of
+  `hallway1`, `hallway2`, `stairs1`, `stairs2`. 40 loads in all.
+- 1B (`onebee`) gains a Fridge (30 kg) and Freezer (10 kg) straight after its
+  stove, the same shape as 2B's kitchen.
+- 1A's `fridge1a` and `freezer1a` are renamed `fridge` and `freezer`, so the
+  template's containers find them. `stove1a` and the other `…1a` ids keep
+  theirs.
+- Twelve windows to the outside, `<unit>-<room>-window` for the living room,
+  kitchen, bedroom and bathroom of 2A, 2B and 1A. None is climbable.
+- Eleven interior doors (`lockable:false`): bedroom, bathroom and
+  bath–bedroom doors in 2A, 2B and 1A, and balcony doors in 2A and 2B. Each
+  pair of exits carries the door's `doorId` both ways.
+
+**Fixed**
+
+- `backfillRenamedContainers()` (PERSISTENCE), run on every load after
+  `backfillLocationIds()` and before `backfillContainerFields()` and
+  `migrateCookingRelease()`. Without it a 0.9.0 save kept `fridge1a` /
+  `freezer1a`, and the migration, which matches containers by id, added an
+  empty `fridge` and `freezer` beside them: two Fridge tabs, the old one
+  unwired. It reads `RENAMED_CONTAINERS` (room → old id → new id) and renames
+  the saved container in place, items and fields kept, only when the room has
+  the old id and not the new. Idempotent.
+
+**UI**
+
+- Device tabs where panels hang: the Main board and the House panel in the
+  ground-floor hallway, each unit's panel in its kitchen, 1B's in its room,
+  with v0.9.0's breaker options.
+- A wired fridge keeps food cold only while its circuit is live and its
+  switch was found on. After `POWER_FAILS_DAY` everything in Acorn is
+  unpowered, as before.
+- Open / Close / Break on the new windows; Open / Close on the new interior
+  doors ("Open the bedroom door"), with no key actions. 1B shows Fridge and
+  Freezer tabs.
+
+**Documentation**
+
+- The comments above `WIRING_TEMPLATES` and `WIRING` and on `POWER_NET` no
+  longer say the network is empty; they describe the `apartment` template and
+  Acorn's wiring, with their citations and flagged figures.
+- Nothing was deferred: everything this pass left out already has an issue
+  (below), and the water heater and laundry follow the building-age question,
+  #237.
+
+**Explicitly out of scope**
+
+- A control for a load's own switch (#264): a load found off, 2A's fridge
+  included (a one-in-ten chance), can't be switched on in this version.
+- The stove as a load (#259); room text following power (#235), so 2A's
+  kitchen still says the fridge hums; per-appliance left-on chances (#266);
+  templates carrying windows and doors (#267).
+- Outlets, cords and plugging (#244); GFCI/AFCI and shock (#247); a water
+  heater; laundry; the electrical view (#242); meters and nameplates (#249);
+  the other buildings (#252–#257) and removing the fallback (#258).
+
+**Sections touched**
+
+- WORLD DATA: `APPLIANCES`, `WIRING_TEMPLATES`, `WIRING`,
+  `makeDefaultDoors()`, `makeDefaultWindows()`, `buildAcornApartments()`.
+- PERSISTENCE: `backfillRenamedContainers()` and its call in
+  `applyLoadedData()`.
+- SIMULATION (POWER): the comment on `POWER_NET` only.
+
+**Validation performed**
+
+- `ashfallDev.validateWiring()` on a new game: no problems, and no Acorn room
+  in the unwired list. `containerLoad` ties each of the four kitchens'
+  Fridge and Freezer to `acorn.<unit>.fridge`.
+- A 0.9.0 save (from `origin/main`'s file) loaded into this build: one Fridge
+  and one Freezer in `onea_kitchen`, the Fridge's leftovers intact, both tied
+  to `acorn.1A.fridge`; 1B gains its Fridge and Freezer; a second save and
+  load leaves the ids unchanged. No console errors.
+- New game: 2A's Fridge is powered with the grid up and its spoilage rate is
+  `FRIDGE_RATE_POWERED` (0.1). Living-room and kitchen actions render the new
+  doors, windows and the Unit 2A panel tab.
+- `git diff origin/main...HEAD -- ashfall.html` touches only the sections
+  above.
+
+**Open questions / decisions resolved**
+
+- The save repair is `backfillRenamedContainers()`, table-driven by
+  `RENAMED_CONTAINERS`, placed before `backfillContainerFields()` as well as
+  before `migrateCookingRelease()`, since both match containers by id.
+- The house panel's four lights are a mapped list over `ACORN_HOUSE_ROOMS`,
+  which also gives the `HOUSE` circuit's roles and the panel's `rooms` map,
+  so the four ids are written once. They expand to `acorn.house.light_<room>`.
+- The stale schema comments were rewritten to describe what is true now,
+  with no versions.
+
+**Notes / assumptions**
+
+- Retunable: every appliance figure (a pick inside its sourced range); the
+  panel-door labels; the board's 200 A main (unconfirmed, no source read for
+  a four-unit service); the house panel's 30 A feeder and main (judgment
+  call); balcony doors being unlockable, as a sliding door is.
+- The fan's and hood's start surge is left unmodelled: neither has
+  `startWatts`.
+- Acorn's water heater is taken to be gas, like its stove. Unconfirmed:
+  Acorn isn't a real building.
+- In a 0.9.0 save whose 1A freezer was never opened, the renamed freezer's
+  loot roll now keys on `freezer` rather than `freezer1a`, so it may roll
+  different contents. Nothing seen in play changes.
+- A 0.9.0 save's exits lack the new `doorId`s. Door actions still appear
+  through the doors' `sides`, and a closed interior door doesn't block
+  movement.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.9.0"` → `"0.9.1"`
+
+---
+
 ## v0.9.0 — The power foundation
 
 Implements: handoffs/power-foundation.md
