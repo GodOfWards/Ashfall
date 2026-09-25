@@ -503,15 +503,10 @@
   // protective device here is a breaker.
   const STANDARD_BREAKER_RATINGS = [15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100, 110, 125, 150, 175,
     200, 225, 250, 300, 350, 400, 450, 500, 600, 700, 800, 1000, 1200, 1600, 2000, 2500, 3000, 4000, 5000, 6000];
-  // Spoilage rates, as multiples of the rate food ages at room temperature
-  // (see spoilageRate()). A fridge slows ageing while powered, and for
-  // FRIDGE_COAST_MIN after the power fails it still holds some cold; a
-  // freezer stops it while powered and for FREEZER_COAST_MIN after. Balance
-  // values, retunable.
+  // The spoilage rate in a powered fridge, as a multiple of the rate food
+  // ages at room temperature (see spoilageRate()). A powered freezer stops
+  // ageing; anything unpowered ages at 1 at once. Balance value, retunable.
   const FRIDGE_RATE_POWERED = 0.1;
-  const FRIDGE_RATE_COASTING = 0.25;
-  const FRIDGE_COAST_MIN = 2 * MINUTES_PER_DAY;
-  const FREEZER_COAST_MIN = 5 * MINUTES_PER_DAY;
   // Rotten food restores this fraction of what it would fresh, and carries a
   // baseline food-poisoning chance combined with the food's own
   // (combinePoisoning()). POISONING_TRAIT_MULTIPLIER is a placeholder until
@@ -702,10 +697,11 @@
   //               its device pop-up (renderDevicePop()). The strip under the
   //               Here panel's tabs offers that pop-up while its tab is
   //               selected.
-  //       fridge  food in it ages slower while the power is on, and for a
-  //               while after (spoilageRate()).
-  //       freezer food in it does not age while the power is on, nor for a
-  //               while after; it reads "(Frozen)" meanwhile.
+  //       fridge  food in it ages slower while its load is powered
+  //               (spoilageRate(), containerPowered()). Coasting on its
+  //               cold after the power stops is deferred to #217.
+  //       freezer food in it does not age while its load is powered; it
+  //               reads "(Frozen)" meanwhile. No coasting either (#217).
   //     A container carrying both heat and device is the room's stove
   //     (roomStove()).
   //   Optional: timerMinutes — a stove's analog timer, minutes left (absent
@@ -5899,7 +5895,7 @@
     worldTab = container.id;
     if(container.spawnPools && !container.spawnRolled){
       rolledLootFor(state.seed, state.currentRoom, container)
-        .forEach(it=>{ stampAges(it, container); addToList(container.items, it); });
+        .forEach(it=>{ stampAges(it, container, state.currentRoom); addToList(container.items, it); });
       container.spawnRolled = true;
       container.lastRolledMinute = state.totalMinutes;
     }
@@ -5975,52 +5971,58 @@
     const oldest = freshnessOfAge(def, ages[0]);
     return oldest === freshnessOfAge(def, ages[ages.length - 1]) ? oldest : "mixed";
   }
-  // How fast food ages in `container` at minute `m` since the collapse, as a
-  // multiple of the rate at room temperature. A fridge runs slow while
-  // powered and a while after; a freezer stops ageing while powered and a
-  // while after; anything else, and no container, is 1.
-  function spoilageRate(container, m){
-    const sinceFailure = m - POWER_FAILS_DAY * MINUTES_PER_DAY;
-    if(hasTag(container, "freezer")) return sinceFailure < FREEZER_COAST_MIN ? 0 : 1;
-    if(hasTag(container, "fridge")){
-      if(gridUp(m)) return FRIDGE_RATE_POWERED;
-      return sinceFailure < FRIDGE_COAST_MIN ? FRIDGE_RATE_COASTING : 1;
-    }
+  // Whether the room container `container`, in room `roomId`, has power:
+  // the load it belongs to, if the wiring makes it one (POWER_NET's
+  // containerLoad), and otherwise the grid directly. That fallback is how a
+  // room nothing wires yet behaves: as it always has, on the grid.
+  function containerPowered(roomId, container){
+    const loadId = container && POWER_NET.containerLoad[roomId + KEY_SEP + container.id];
+    return loadId ? isPowered(loadId) : gridUp();
+  }
+  // How fast food ages in `container`, as a multiple of the rate at room
+  // temperature, given whether its load is `powered`. A powered fridge runs
+  // at FRIDGE_RATE_POWERED and a powered freezer stops ageing; anything
+  // unpowered, anything else, and no container, is 1, from the moment the
+  // power stops. A fridge that coasts on its cold for a while is #217's, with
+  // temperature.
+  function spoilageRate(container, powered){
+    if(hasTag(container, "freezer")) return powered ? 0 : 1;
+    if(hasTag(container, "fridge")) return powered ? FRIDGE_RATE_POWERED : 1;
     return 1;
   }
-  // Whether a freezer is holding its contents frozen right now: the "(Frozen)"
-  // label reads this.
-  function isFrozenIn(container){
-    return hasTag(container, "freezer") && spoilageRate(container, minutesSinceCollapse()) === 0;
+  // Whether a freezer is holding its contents frozen right now, which is
+  // whether it is powered: the "(Frozen)" label reads this.
+  function isFrozenIn(container, roomId){
+    return hasTag(container, "freezer") && containerPowered(roomId, container);
   }
-  // spoilageRate() integrated over [fromM, toM), minutes since the collapse:
-  // the effective age an item gains there. The rate is constant between the
-  // power failure and the ends of the two coasting windows, so the sum is
-  // exact.
-  function effectiveAge(container, fromM, toM){
+  // The effective age an item gains over [fromM, toM), minutes since the
+  // collapse, in `container` in `roomId` if nobody has touched it since the
+  // collapse: at its powered rate until the grid failed, then at 1. Its load's
+  // switch is as it was found, its starting state (switchOnIn() with nothing
+  // stored), and every breaker starts on; a load found switched off has aged
+  // at 1 throughout. An unwired container is on the grid until it fails.
+  function effectiveAge(container, roomId, fromM, toM){
     if(!(toM > fromM)) return 0;
-    const fail = POWER_FAILS_DAY * MINUTES_PER_DAY;
-    const cuts = [fail, fail + FRIDGE_COAST_MIN, fail + FREEZER_COAST_MIN]
-      .filter(c=> c > fromM && c < toM).sort((x, y)=> x - y);
-    let age = 0, at = fromM;
-    cuts.concat([toM]).forEach(next=>{ age += spoilageRate(container, at) * (next - at); at = next; });
-    return age;
+    const loadId = container && POWER_NET.containerLoad[roomId + KEY_SEP + container.id];
+    const wasOn = loadId ? switchOnIn({ switches:{} }, state.seed, loadId) : true;
+    const fail = Math.min(Math.max(POWER_FAILS_DAY * MINUTES_PER_DAY, fromM), toM);
+    return spoilageRate(container, wasOn) * (fail - fromM) + spoilageRate(container, false) * (toM - fail);
   }
   // Gives a perishable without `ages` the age it would have if it had sat in
-  // `container` since the collapse. A world item's starting age; an item an
-  // action makes is new instead (asNewlyMade()), and a placement that sets
-  // `ages` itself keeps them.
-  function stampAges(it, container){
-    (Array.isArray(it.contents) ? it.contents : []).forEach(c=> stampAges(c, container));
+  // `container`, in `roomId`, since the collapse. A world item's starting
+  // age; an item an action makes is new instead (asNewlyMade()), and a
+  // placement that sets `ages` itself keeps them.
+  function stampAges(it, container, roomId){
+    (Array.isArray(it.contents) ? it.contents : []).forEach(c=> stampAges(c, container, roomId));
     if(!isPerishable(it) || Array.isArray(it.ages)) return;
-    it.ages = new Array(it.qty).fill(effectiveAge(container, 0, minutesSinceCollapse()));
+    it.ages = new Array(it.qty).fill(effectiveAge(container, roomId, 0, minutesSinceCollapse()));
   }
   // stampAges() over every item list, each with its container. Run on a new
   // game, once the world is built — not inside makeDefaultWorld(), which
   // must stay free of state — and on load; doOpenContainer() stamps what a
   // roll adds.
   function stampMissingAges(){
-    forEachItemList((list, roomId, container)=> list.forEach(it=> stampAges(it, container)));
+    forEachItemList((list, roomId, container)=> list.forEach(it=> stampAges(it, container, roomId)));
   }
   // Keeps `ages` one per unit, oldest first, whatever wrote the row: a
   // missing age reads as new.
@@ -6041,17 +6043,17 @@
       list.splice(list.indexOf(row), 0, takeUnits(row, n));
     }
   }
-  // One tick of ageing: every perishable unit grows by its container's
-  // effective age over the step. A row that changes state is split where its
-  // units now differ, and any row that changed folds into a matching row of
-  // its list, so each list holds one row per item and state.
+  // One tick of ageing: every perishable unit grows by the step at its
+  // container's rate from the power state now (stepPower() has just run). A
+  // row that changes state is split where its units now differ, and any row
+  // that changed folds into a matching row of its list, so each list holds
+  // one row per item and state.
   function ageFood(dt){
-    const to = minutesSinceCollapse(), from = to - dt;
     forEachItemList((list, roomId, container)=>{
       let grow = null, changed = false;
       list.slice().forEach(row=>{
         if(!isPerishable(row)) return;
-        if(grow === null) grow = effectiveAge(container, from, to);
+        if(grow === null) grow = container ? spoilageRate(container, containerPowered(roomId, container)) * dt : dt;
         if(!(grow > 0)) return;
         normalizeAges(row);
         const before = rowFreshness(row);
@@ -8856,7 +8858,7 @@
   // order: Open, then cook state (a cookable item always shows Raw or
   // Cooked), then freshness or Frozen, then water. `ctx` carries what a label
   // needs from outside the item: `ctx.container`, the room container the row
-  // is in, for Frozen. The row and the item pop-up show them; log lines keep
+  // is in, and `ctx.roomId`, its room, for Frozen. The row and the item pop-up show them; log lines keep
   // the plain name.
   // `sealed` is three-valued (see ITEM DATA SCHEMA), and only the opened
   // state is marked: undefined means the item was never a packaged thing,
@@ -8869,7 +8871,7 @@
     if(cook) labels.push(COOK_STATE_LABELS[cook]);
     // A perishable always shows its freshness, or Frozen while it sits in a
     // freezer that is holding it.
-    if(isPerishable(it)) labels.push(ctx && isFrozenIn(ctx.container) ? "Frozen" : FRESHNESS_LABELS[unitFreshness(it)]);
+    if(isPerishable(it)) labels.push(ctx && isFrozenIn(ctx.container, ctx.roomId) ? "Frozen" : FRESHNESS_LABELS[unitFreshness(it)]);
     // Water shows its kind, never its level: an empty bottle is the plain name.
     const water = waterKindOf(it);
     if(water) labels.push(water === "tainted" ? "Tainted" : "Water");
@@ -8974,7 +8976,8 @@
       box.className = "detailBox";
       const nameLine = document.createElement("div");
       const nameB = document.createElement("b");
-      const ctx = { container: detailItem.side === "world" ? worldTabContainer(world[state.currentRoom], worldTab) : null };
+      const ctx = { container: detailItem.side === "world" ? worldTabContainer(world[state.currentRoom], worldTab) : null,
+        roomId: state.currentRoom };
       const shown = itemDisplay(it, ctx);
       nameB.textContent = shown.name;
       nameLine.appendChild(nameB);
@@ -9627,7 +9630,7 @@
       // view's Take family in getItemActions(): the item can be taken, just
       // not into the keychain.
       { label:"Take", disabled:(it)=> invTab === "keychain" && !keychainAllows(it), onClick:(i)=> doTake(i) }
-    ], "world", { container: worldTabContainer(room, worldTab) });
+    ], "world", { container: worldTabContainer(room, worldTab), roomId: state.currentRoom });
   }
   // The seed, as its canonical uint32 — what a typed word hashed to, which is
   // what reproduces the run; a word is lossy, the number is the seed. It lives
