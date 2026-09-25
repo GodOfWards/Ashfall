@@ -54,7 +54,7 @@ rule. A coding session reads neither.
 
 | File | Covers |
 |---|---|
-| `Henderson.md` | The real town: its electricity, water, gas, crossings and plants |
+| `Henderson.md` | The real town: its electricity, water, gas, crossings and plants; downtown's street grid, rail and buildings |
 | `Electrical.md` | US wiring code (NEC) and Kentucky's adoption, breakers (UL 489), panels and service, appliances and nameplates, lighting, GFCI, cords, meters, rail-crossing standby power |
 | `Fuel_and_Generators.md` | Gasoline (grades, shelf life, stations, cars, cans) and portable generators |
 | `Carbon_Monoxide.md` | Exposure effects, the body's level, CO alarms, generator placement |

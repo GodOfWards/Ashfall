@@ -26,6 +26,10 @@ adopts it.
 - **A run starts a few days after the collapse, at most** (#218). The exact
   figure is a constant in `ashfall.html` and a future world-generation
   option (#149); it is not restated here.
+- **The collapse comes before February 2025** (#237). Every real name,
+  business and building in the game is as it was then: HMP&L still works out
+  of its downtown block, for instance, and the grain elevator is Viterra's.
+  The exact date is not set.
 - **Grid power fails on its own day after the collapse, and running water
   fails with it** (#260). For now the grid fails as one event; faults
   building up area by area stay open (#220).
@@ -33,7 +37,7 @@ adopts it.
 ## Open
 
 - **What day zero is.** The day it began everywhere, or the day this town
-  emptied.
+  emptied, and its exact date; it falls before February 2025.
 - **Why the player is still in town** a few days after (#137).
 - **Why grid power fails when it does** (#220). Proposed, not decided: an
   accumulation of unrepaired faults, area by area, rather than one event.
