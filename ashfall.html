@@ -67,6 +67,14 @@
   #seedRow{ display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink-dim); }
   .full-panel .menu-actions{ align-items:flex-start; }
   #seedValue{ color:var(--ink); user-select:all; -webkit-user-select:all; }
+  /* Options' electrical rules: the current run's, read-only, then the
+     choice for the next run as a two-way toggle styled like the Crafting
+     group buttons. The toggle row wraps, so it holds at phone width. */
+  #rulesBox{ display:flex; flex-direction:column; gap:8px; font-size:13px; color:var(--ink-dim); }
+  #rulesNext{ display:flex; flex-wrap:wrap; align-items:center; gap:5px 6px; }
+  #rulesNext button{ font-size:12px; background:var(--panel-2); border:1px solid var(--line); color:var(--ink-dim);
+    padding:4px 9px; min-height:24px; border-radius:3px; cursor:pointer; }
+  #rulesNext button.active{ border-color:var(--accent); color:var(--accent); }
   /* A pop-up (the item pop-up, #itemPop, and the device pop-up, #devicePop)
      and the transparent layer behind each that takes an outside tap. Both
      sit below #menuBackdrop's 15: a pop-up belongs to the play area, and
@@ -298,6 +306,10 @@
   <h2>Options <button class="panel-close">✕</button></h2>
   <div class="full-panel-body">
     <div id="seedRow">Seed: <span id="seedValue"></span><button id="copySeedBtn" class="mini">Copy</button></div>
+    <div id="rulesBox">
+      <div id="rulesNow"></div>
+      <div id="rulesNext"><span>Next run:</span></div>
+    </div>
     <div class="menu-actions"><button id="restartMenuBtn">Restart game</button></div>
   </div>
 </section>
@@ -4279,6 +4291,12 @@
   // drawer.
   function defaultCraftFilter(){ return { query:"", group:"all", canMakeOnly:false, vesselUid:null }; }
   let craftFilter = defaultCraftFilter();
+  // The electrical rules Options has chosen for the next run, or null to
+  // follow the current run's, which is the choice's default. UI-only and
+  // never saved: a restart applies it to the new run's
+  // state.electricalRules, and a restart or a load forgets it.
+  let nextRulesChoice = null;
+  function nextElectricalRules(){ return nextRulesChoice || state.electricalRules; }
   // Whether the last render() drew the game-over screen. UI-only. Game over
   // closes every layer once, on the render that first draws it, so the
   // drawer can still be opened and used afterwards (see render()).
@@ -7427,6 +7445,7 @@
     refreshPower();
     detailItem = null;
     deviceTarget = null;
+    nextRulesChoice = null;
     gameOver = false;
     invTab = "inventory";
     worldTab = "floor";
@@ -7886,7 +7905,11 @@
   // as its seed.
   function doRestart(seed){
     gameOver = false;
+    // The rules Options chose for this run, read before the old run goes.
+    const rules = nextElectricalRules();
     state = makeDefaultState(seed);
+    state.electricalRules = rules;
+    nextRulesChoice = null;
     world = makeDefaultWorld();
     doors = buildDoors(null);
     windows = buildWindows(null);
@@ -8214,6 +8237,17 @@
     } else fallback();
   }
   copySeedBtn.addEventListener("click", copySeed);
+  // The next run's electrical rules, a two-way choice built once. Choosing
+  // changes nothing in this run; Restart game applies it. The labels are
+  // functional UI text; the choice moves to a New Game screen with #166.
+  const ELECTRICAL_RULES_LABELS = { detailed:"Detailed", simplified:"Simplified" };
+  Object.keys(ELECTRICAL_RULES_LABELS).forEach(rules=>{
+    const btn = document.createElement("button");
+    btn.textContent = ELECTRICAL_RULES_LABELS[rules];
+    btn.dataset.rules = rules;
+    btn.addEventListener("click", ()=>{ nextRulesChoice = rules; renderOptionsPanel(); });
+    document.getElementById("rulesNext").appendChild(btn);
+  });
   document.querySelectorAll("#gaitBar button[data-gait]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       if(gaitLocked() && btn.dataset.gait !== "sneak") return;
@@ -9768,6 +9802,12 @@
   // returns early, and the seed is exactly what a player wants after dying.
   function renderOptionsPanel(){
     document.getElementById("seedValue").textContent = state.seed;
+    // The current run's rules never change mid-run (#243): this line only
+    // reads them. The toggle below it is the next run's.
+    document.getElementById("rulesNow").textContent = "Electrical rules: " + ELECTRICAL_RULES_LABELS[state.electricalRules];
+    document.querySelectorAll("#rulesNext button[data-rules]").forEach(b=>{
+      b.classList.toggle("active", b.dataset.rules === nextElectricalRules());
+    });
   }
   function render(){
     renderOptionsPanel();
