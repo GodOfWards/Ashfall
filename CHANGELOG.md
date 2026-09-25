@@ -106,9 +106,12 @@ v0.8.2 file still loads.
 - `HEAT_COOL_MIN = 30`, `SWITCH_LEFT_ON_CHANCE = 0.9` and
   `PANEL_DEFAULT_VOLTS = 240` are judgment calls, retunable. 240 is flagged,
   since real apartment buildings are often 120/208 V (#241).
-- `STANDARD_BREAKER_RATINGS`: the NEC 240.6(A) standard ratings for fuses and
-  inverse-time breakers, 15 A to 6000 A. The fuse-only 1 / 3 / 6 / 10 / 601 A
-  are left out.
+- `STANDARD_BREAKER_RATINGS`: the standard ratings for fuses and inverse-time
+  breakers in NEC 2023 Table 240.6(A), 10 A to 6000 A. 10 A became a standard
+  breaker size in the 2023 edition; it had been fuse-only. The fuse-only
+  1 / 3 / 6 / 601 A are left out. Checked against Loomi's NEC 2023 table and
+  UpCodes' NFPA 70 2023 summary; Callout's 2023 page still lists 10 A as
+  fuse-only, and the primary NFPA text wasn't available to settle it.
 
 *Spoilage reads the network (SURVIVAL / TIME SIMULATION)*
 

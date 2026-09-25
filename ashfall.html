@@ -517,10 +517,11 @@
   const SWITCH_LEFT_ON_CHANCE = 0.9;
   const PANEL_DEFAULT_VOLTS = 240;
   // The standard ampere ratings for fuses and inverse-time circuit breakers,
-  // NEC 240.6(A). validateWiring() checks every breaker against it; the
-  // fuse-only ratings (1, 3, 6, 10, 601 A) are left out, since every
-  // protective device here is a breaker.
-  const STANDARD_BREAKER_RATINGS = [15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100, 110, 125, 150, 175,
+  // NEC 2023 Table 240.6(A), which made 10 A a standard breaker size (it had
+  // been fuse-only). validateWiring() checks every breaker against it; the
+  // fuse-only ratings (1, 3, 6, 601 A) are left out, since every protective
+  // device here is a breaker.
+  const STANDARD_BREAKER_RATINGS = [10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100, 110, 125, 150, 175,
     200, 225, 250, 300, 350, 400, 450, 500, 600, 700, 800, 1000, 1200, 1600, 2000, 2500, 3000, 4000, 5000, 6000];
   // The spoilage rate in a powered fridge, as a multiple of the rate food
   // ages at room temperature (see spoilageRate()). A powered freezer stops
