@@ -18,22 +18,21 @@ adopts it.
 
 ## Settled
 
-- **The town is Henderson, Kentucky**, on the Ohio River across from
-  Evansville, Indiana, and the world is as real and accurate as it can be
+- **The town is Lima,** in the Partido de Zárate, Buenos Aires province,
+  Argentina: a small grid town with the Atucha nuclear complex about 8 km to
+  its north and the city of Zárate about 16 km away (#237). The world is as real and accurate as it can be
   made: real names, facts checked against a source (`CLAUDE.md`, "The world
-  is real"). World names written before that rule are being checked
+  is real"). Chosen 2026-09-26, replacing Henderson, Kentucky. The game's
+  world, written for an invented American town, is being rebuilt on it
   (#237).
+- **The game is in English; places keep their Spanish names** (`CLAUDE.md`,
+  "Writing game text").
+- **The wider setting is a string of towns with a city nearby:** Lima first,
+  then others along the same corridor (Zárate, Baradero, San Pedro are the
+  candidates in `reference/Lima.md`). Which ones, and when, is open.
 - **A run starts a few days after the collapse, at most** (#218). The exact
   figure is a constant in `ashfall.html` and a future world-generation
   option (#149); it is not restated here.
-- **The collapse comes before February 2025** (#237). Every real name,
-  business and building in the game is as it was then: HMP&L still works out
-  of its downtown block, for instance, and the grain elevator is Viterra's.
-  The exact date is not set.
-- **The player's home is The Imperial,** 110 Third Street, at 3rd & Water St
-  on the riverfront (#237, #284): the game's Acorn Apartments, made real.
-  Its ground-floor pharmacy, Dunaway's Imperial Pharmacy, is the game's
-  Pharmacy. The facts are in `reference/Henderson.md`.
 - **Grid power fails on its own day after the collapse, and running water
   fails with it** (#260). For now the grid fails as one event; faults
   building up area by area stay open (#220).
@@ -41,14 +40,17 @@ adopts it.
 ## Open
 
 - **What day zero is.** The day it began everywhere, or the day this town
-  emptied, and its exact date; it falls before February 2025.
+  emptied, and its exact date. Tom set "before February 2025" for Henderson;
+  whether that holds for Lima is to be re-confirmed.
+- **The player's home in Lima** (#284). The Henderson choice (The Imperial)
+  lapsed with the move.
 - **Why the player is still in town** a few days after (#137).
 - **Why grid power fails when it does** (#220). Proposed, not decided: an
   accumulation of unrepaired faults, area by area, rather than one event.
 - **How the player notices the grid failing** (#220).
 - **How old each building is.** Its wiring era decides its panel size, where
-  it has GFCIs, and whether its water heater is gas or electric (#237,
-  #251).
+  it has residual-current protection, and whether its water heater is gas
+  or electric (#237, #251).
 
 ## Reference
 

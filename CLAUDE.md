@@ -92,7 +92,8 @@ A coding session reads neither: a handoff that depends on a canon fact or a
 reference figure quotes it itself. `.rgignore` keeps the folder out of
 repository searches, so it is read by path, on purpose, or not at all.
 
-**The world is real.** The town is Henderson, Kentucky. Streets, places,
+**The world is real.** The town is Lima, in the Partido de Zárate, Buenos
+Aires province, Argentina. Streets, places,
 businesses, utilities and infrastructure carry their real names, and what the
 game says about them is accurate — checked against a source when it is written,
 never recalled or invented, and recorded in `docs/canon/reference/` (see "The
@@ -262,6 +263,10 @@ Second person, present tense, plain sentences. Understatement over drama — the
 horror is in the mundane detail. Tell the story through what people left behind,
 never through exposition, and never explain the collapse itself. One to three
 sentences. Functional UI text is held to clarity instead, not to this tone.
+
+The game is written in English. Real places keep their original Spanish names,
+spelled as they are locally, accents included ("Calle 15", "Estación Lima").
+They are never translated or anglicised.
 
 The Project Guide, Part 1 has the full checklist and examples. Match the
 existing descriptions; don't invent a new voice.

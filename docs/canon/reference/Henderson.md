@@ -1,5 +1,10 @@
 # Henderson, Kentucky — the real town's infrastructure
 
+> **Not the game's town since 2026-09-26.** Tom moved the game to Lima,
+> Buenos Aires, Argentina (#237; `Lima.md`). This file stays as the record of
+> what was researched. Its facts are still true of Henderson, but none of them
+> applies to the game.
+
 Real-world facts, not canon until a decision adopts them (`../Ashfall_Canon.md`
 records what's decided). See `README.md` for the status labels.
 
