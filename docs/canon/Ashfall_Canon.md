@@ -25,11 +25,13 @@ adopts it.
   is real"). Chosen 2026-09-26, replacing Henderson, Kentucky. The game's
   world, written for an invented American town, is being rebuilt on it
   (#237).
-- **The era is 2022** (Tom, 2026-09-26): the year with the most consistent
-  data on population, households and dwellings. That's Argentina's national
-  census, the *Censo Nacional de Población, Hogares y Viviendas 2022*
-  (reference date 18 May 2022). Every real name, business and building in the
-  game is as it was in 2022. The collapse's exact date within it is open.
+- **The collapse comes in February 2025** (Tom, 2026-09-26). The world is
+  as it stood then. Each subject uses the latest data that describes it as of
+  February 2025. Where nothing newer exists, the latest earlier source stands:
+  for population and households that's the 2022 national census (*Censo
+  Nacional de Población, Hogares y Viviendas*, 18 May 2022). A source written
+  later still counts if it shows what was there by February 2025. The exact
+  day is open.
 - **The game is in English; places keep their Spanish names** (`CLAUDE.md`,
   "Writing game text").
 - **The wider setting is a string of towns with a city nearby:** Lima first,
@@ -45,7 +47,7 @@ adopts it.
 ## Open
 
 - **What day zero is.** The day it began everywhere, or the day this town
-  emptied, and its exact date in 2022: before or after the census on 18 May.
+  emptied, and its exact day in February 2025.
 - **The player's home in Lima** (#284). The Henderson choice (The Imperial)
   lapsed with the move.
 - **Why the player is still in town** a few days after (#137).

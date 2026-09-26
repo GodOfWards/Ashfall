@@ -26,8 +26,10 @@ town since 2026-09-26 (#237), replacing Henderson, Kentucky.
     above.
   - All secondary. What would confirm it: INDEC's final 2022 tables by
     locality (#288).
-- **The era is 2022** (canon). INDEC's census, the *Censo Nacional de
-  Población, Hogares y Viviendas 2022*, has reference date **18 May 2022**. It
+- **The era is February 2025** (canon), with the latest data for each subject
+  as of then. For population and households that's INDEC's 2022 census, the
+  *Censo Nacional de Población, Hogares y Viviendas 2022*, with reference date
+  **18 May 2022**. It
   counted 46,044,703 people and 17,805,711 dwellings nationally, and its final
   results are published by province, department and local government, down
   to census tract (*fracción y radio*). It was the first Argentine census
@@ -94,7 +96,8 @@ through the OSM API (`api/0.6/map`, the box 34.070–34.025 S, 59.225–59.170 W
   27 June 2014. **745 MW** gross, on natural uranium and heavy water.
   **Reported stopped from late 2022** with no restart date as of January 2023
   ([Infobae, 2023-01-11](https://www.infobae.com/economia/2023/01/11/atucha-ii-la-principal-central-nuclear-del-pais-esta-parada-y-aun-no-se-sabe-cuando-volvera-a-funcionar/),
-  title only, not read). When it stopped, relative to the era, is unconfirmed.
+  title only, not read). Whether it was running again by February 2025 (the
+  era) is unconfirmed.
 - Secondary, 2026-09-26:
   [es.wikipedia](https://es.wikipedia.org/wiki/Complejo_Nuclear_Atucha);
   the operator's pages ([Atucha I](https://www.na-sa.com.ar/es/centrales-nucleares/atucha-1),
