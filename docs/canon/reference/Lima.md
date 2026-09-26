@@ -94,10 +94,45 @@ through the OSM API (`api/0.6/map`, the box 34.070–34.025 S, 59.225–59.170 W
   America. **362 MW** gross, on slightly enriched uranium (0.85%).
 - **Atucha II:** first criticality on 3 June 2014, synchronised to the grid on
   27 June 2014. **745 MW** gross, on natural uranium and heavy water.
-  **Reported stopped from late 2022** with no restart date as of January 2023
-  ([Infobae, 2023-01-11](https://www.infobae.com/economia/2023/01/11/atucha-ii-la-principal-central-nuclear-del-pais-esta-parada-y-aun-no-se-sabe-cuando-volvera-a-funcionar/),
-  title only, not read). Whether it was running again by February 2025 (the
-  era) is unconfirmed.
+- **2022 to February 2025 (the era):**
+  - **Atucha II** was taken off line by hand on **9 October 2022**, after
+    vibration was detected in the turbine. Inspections in November 2022
+    found that one of the reactor pressure vessel's four internal separators
+    had come loose and moved. It was repaired in ten months (the designer had
+    estimated more than four years), and it **returned to the grid on
+    28 August 2023**. **Running in February 2025.**
+  - **Atucha I** was **shut down in September 2024** for a 30-month
+    life-extension overhaul, to run another 20 years (about US$450–700
+    million, sources differ; about 2,000 direct and indirect jobs). Its
+    return slipped from March 2027 to the second half of 2027. **In February
+    2025 it is off line and a works site.**
+  - Nucleoeléctrica Argentina S.A. (NA-SA), which operates Atucha I, Atucha II
+    and Embalse, has about **3,000** direct workers company-wide.
+  - Secondary, 2026-09-26, read through search summaries:
+    [argentina.gob.ar, parada no programada](https://www.argentina.gob.ar/arn/parada-no-programada-de-la-central-nuclear-atucha-ii),
+    [argentina.gob.ar, vuelve a entregar energía](https://www.argentina.gob.ar/noticias/la-central-nuclear-atucha-ii-vuelve-entregar-energia-luego-de-su-exitosa-reparacion),
+    [EconoJournal, Jan 2023](https://econojournal.com.ar/2023/01/la-central-nuclear-atucha-ii-continuara-fuera-de-servicio-hasta-que-se-defina-como-reparar-el-reactor/),
+    [Mejor Energía, Mar 2024](https://www.mejorenergia.com.ar/noticias/2024/03/22/2605-buscan-postergar-hasta-septiembre-la-parada-de-atucha-i-para-las-obras-de-extension-de-vida),
+    [EconoJournal, Atucha I delay](https://econojournal.com.ar/energia/centrales-nucleares-la-extension-de-vida-de-atucha-i-se-retrasara-hasta-la-segunda-mitad-de-2027/),
+    [es.wikipedia](https://es.wikipedia.org/wiki/Complejo_Nuclear_Atucha).
+- **Around the plant (OSM, 2026-09-26, secondary):**
+  - The **Atucha substation**, and lines tagged **"Atucha 132kV"** and
+    **"Atucha 220kV"**.
+  - **Celulosa Campana** (Papel Campanita), a paper works, on the road
+    between the town and the plant.
+  - **DeltaDock S.A.**, an industrial site on the river.
+  - The **Balcón al río (costanera de Lima)** and a **Club de Pesca** on the
+    Paraná de las Palmas, north-east of the plant.
+  - The road from town to the plant is tagged "Camino provincial secundario
+    038-01", "038-03" and "038-09" along its length.
+- **The Atucha rail halt is not at the plant.** It is on the FC Mitre about
+  11 km west-north-west of Lima, and about 7.7 km from the reactors (OSM).
+
+## The game's frame (Tom, 2026-09-26)
+
+**The whole built-up town, the road north to the Atucha plant (about 8 km),
+and the FC Mitre west to the Atucha halt (about 11 km).** Lab:
+https://claude.ai/artifact/6kfxFmhKY4ZJzwk2FWxwMu (private to Tom).
 - Secondary, 2026-09-26:
   [es.wikipedia](https://es.wikipedia.org/wiki/Complejo_Nuclear_Atucha);
   the operator's pages ([Atucha I](https://www.na-sa.com.ar/es/centrales-nucleares/atucha-1),
