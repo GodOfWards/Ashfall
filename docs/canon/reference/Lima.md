@@ -53,7 +53,7 @@ through the OSM API (`api/0.6/map`, the box 34.070–34.025 S, 59.225–59.170 W
   south-east).
 - **Two level crossings inside the town** (OSM `railway=level_crossing`), and
   more along the line outside it. Whether they have lights, barriers or
-  bells is unconfirmed.
+  bells is unconfirmed (#288).
 - Secondary, 2026-09-26: OSM, as above. Whether passenger trains ran to Lima
   in the era is unconfirmed.
 
@@ -77,8 +77,8 @@ through the OSM API (`api/0.6/map`, the box 34.070–34.025 S, 59.225–59.170 W
 ## Electricity in Argentina (to be researched properly)
 
 All **secondary, 2026-09-26**, read through search summaries. Confirming
-them, and the figures the power system needs, is its own research issue
-(see #220).
+them, and the figures the power system needs, is #286. Fuel and cooking
+gas are #287; the town block by block is #288.
 
 - **220/380 V at 50 Hz** in common use. The normalised values are
   230/400 V ±5% under AEA/IRAM.
