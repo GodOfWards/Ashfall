@@ -7,9 +7,33 @@ town since 2026-09-26 (#237), replacing Henderson, Kentucky.
 ## The town and its region
 
 - **Lima** is a town (`place=town` in OSM) in the **Partido de Zárate**,
-  Buenos Aires province, centred on about **34.0447 S, 59.1961 W**.
-  Population **10,219 (2010 census)**; the 2022 figure is not yet read.
-  Secondary, 2026-09-26: OSM Nominatim; Wikidata Q6548772.
+  Buenos Aires province, centred on about **34.0447 S, 59.1961 W**. Its urban
+  plan dates from the auction of its lots on 24 June 1888, and its station is
+  at km 99.77 of the Buenos Aires–Rosario line. The Zárate Municipal Council
+  declared it a **city** by Ordenanza 4932 on 5 May 2022, and the provincial
+  legislature did the same in 2022. Secondary, 2026-09-26:
+  [es.wikipedia](https://es.wikipedia.org/wiki/Lima_(Buenos_Aires)), OSM
+  Nominatim.
+- **Population. The sources conflict:**
+  - **17,368 (INDEC, 2022)** and 12,375 (INDEC, 2010), per es.wikipedia.
+    This is the likeliest figure for the town proper.
+  - **32,996 (2022)**, per La Voz de Zárate on 15 June 2022, from the local
+    census coordination: "Lima and its surroundings", before INDEC's final
+    results. The paper also gave the Partido de Zárate as 138,022.
+    [La Voz de Zárate](https://www.diariolavozdezarate.com/2022/06/15/el-censo-2022-revelo-que-lima-cuenta-con-32-996-habitantes/)
+    (refuses automated readers; read through a search summary).
+  - **10,219 (2010)**, per Wikidata Q6548772, disagreeing with the 12,375
+    above.
+  - All secondary. What would confirm it: INDEC's final 2022 tables by
+    locality (#288).
+- **The era is 2022** (canon). INDEC's census, the *Censo Nacional de
+  Población, Hogares y Viviendas 2022*, has reference date **18 May 2022**. It
+  counted 46,044,703 people and 17,805,711 dwellings nationally, and its final
+  results are published by province, department and local government, down
+  to census tract (*fracción y radio*). It was the first Argentine census
+  with an online questionnaire. Secondary, 2026-09-26:
+  [censo.gob.ar](https://censo.gob.ar/index.php/censo-2022-resultados-provisorios/),
+  [INDEC](https://www.indec.gob.ar/ftp/cuadros/poblacion/cnphv2022_resultados_provisionales.pdf).
 - **Nearby towns and cities** (Wikidata, INDEC 2022 census unless marked;
   distances straight-line between town centres):
   - **Zárate**, the partido's head town: 109,443. About 16 km from Lima.
@@ -68,6 +92,9 @@ through the OSM API (`api/0.6/map`, the box 34.070–34.025 S, 59.225–59.170 W
   America. **362 MW** gross, on slightly enriched uranium (0.85%).
 - **Atucha II:** first criticality on 3 June 2014, synchronised to the grid on
   27 June 2014. **745 MW** gross, on natural uranium and heavy water.
+  **Reported stopped from late 2022** with no restart date as of January 2023
+  ([Infobae, 2023-01-11](https://www.infobae.com/economia/2023/01/11/atucha-ii-la-principal-central-nuclear-del-pais-esta-parada-y-aun-no-se-sabe-cuando-volvera-a-funcionar/),
+  title only, not read). When it stopped, relative to the era, is unconfirmed.
 - Secondary, 2026-09-26:
   [es.wikipedia](https://es.wikipedia.org/wiki/Complejo_Nuclear_Atucha);
   the operator's pages ([Atucha I](https://www.na-sa.com.ar/es/centrales-nucleares/atucha-1),
