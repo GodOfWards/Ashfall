@@ -18,6 +18,328 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.10.0 — The Lima release: the real town, building types, Walk to…
+
+Implements: handoffs/lima-release.md
+
+Implements #295, #291, #237, #284, #294 and #292 in full, and #296 in part (its
+confirmed items), per `handoffs/lima-release.md`, in eight phases, one commit
+each. The invented American town is gone. The game now takes place in Lima,
+Partido de Zárate, Buenos Aires province: its real streets, 777 stops joined by
+1,008 links, and landmarks at their real sites. The player's home is a row
+house in the Barrio Atucha. The save format changes and new state fields are
+added, so this is **MINOR**. Saves from 0.9 and earlier are refused (Tom: "I
+don't care if it breaks saves").
+
+**Changed / Reworked**
+
+*Saves (phase 1, #295)*
+- The save is `{ version, state, rooms, doors, windows }`; `world` is no longer
+  written. Room definitions are rebuilt from WORLD DATA on every load.
+  `savedRoomState()` writes, per room id, only the `ROOM_STATE_FIELDS` (`floor`,
+  `searched`, `carLocked`, `heatActive`, `fireMinutesLeft`, `campfireBuilt`,
+  `hasTree`) and `CONTAINER_STATE_FIELDS` (`items`, `spawnRolled`,
+  `lastRolledMinute`, `locked`, `timerMinutes`) that differ from a freshly
+  built world, compared as JSON with every `_uid` left out (`stateJson()`).
+  A container the definition lacks (the campfire's) is saved whole as
+  `{ made: container }`. The write-site search the handoff asked for found no
+  field beyond its list.
+- `buildWorld(savedRooms)` rebuilds the definitions and applies the saved
+  fields by room id and container id. It takes only well-typed values, and
+  drops (with a `console.warn`) a saved room or container the definitions no
+  longer have.
+- `applyLoadedData()` refuses a save with no `rooms` object, logging "This save
+  is from an older version of Ashfall and can't be loaded.". Import takes the
+  same path. `validateLoadedWorld(savedRooms, nextWorld, nextState)` checks the
+  new shape and that `state.currentRoom` exists in the rebuilt world.
+- A fresh save is about 240 KB, most of it every door and window (#302).
+
+*Doors (phase 2, #291)*
+- DOOR SCHEMA gains `lock` (`"key"` default, `"latch"`, `"bolt"`), `inside`,
+  `label` (definition) and `broken` (saved, default `false`). A latch locks
+  and unlocks by key from outside and by hand from inside. A bolt can't be
+  opened from outside ("The back door is bolted from the inside.") and works
+  by hand from inside ("Draw the bolt on the back door" / "Bolt the back
+  door"). `doorLabel()` uses `label` first. `doorLocks()` (lockable and not
+  broken) gates every lock action. `doToggleLock()` words a bolt's lines.
+
+*Map (phase 3, #237)*
+- `mapToSvg(x, y)` takes LOCATIONS metres (`MAP_UNITS_PER_M = MAP_SPACING /
+  100`), with its origin from the extent of LOCATIONS (`MAP_EXTENT`).
+  `MAP_MIN_COL` … `MAP_MAX_ROW` are gone.
+- Street names: every path is cut into straight runs (`MAP_STREET_RUNS`, a
+  turn under `MAP_RUN_TURN_DEG = 10`). Each run is labelled on its own heading,
+  with oriented boxes (`mapLabelCentre()`, `mapRunVisible()` by Liang–Barsky,
+  crossings measured along the run). Horizontal and vertical runs place
+  exactly as before: on the old grid, at 300 m and 600 m, every label's
+  transform matched v0.9.4's.
+- Zoom ladder in metres of span: Close `[100, 200, 300]` opening at 200, Wide
+  `[300, 600, 1200, 2400]` opening at 1200 (`mapZoomSpan`,
+  `mapSetZoomSpan()`).
+
+*Movement and exits (phase 4)*
+- One exit per link each way; "Step into the block" is gone. Labels by street
+  type: "Head north on Calle 7", from a mid stop "Head north toward Calle 10",
+  "Head west along the unnamed street", "Follow the tracks east", "Walk to the
+  station" / "Walk out to …".
+
+*Water (phase 7, #294)*
+- `waterRunning()` became `waterRunningIn(roomId, m)`: a room in a building
+  with a tank runs while `gridUp(m) || tankLeft(roomId, m) > 0`. Any other
+  sink runs on the grid alone, as before.
+- `doFillAtSink()` draws the litres it adds from the tank once the grid is
+  down, and fills only what the tank has left (a bottle part way; a vessel
+  needs its whole `waterKg`).
+
+**New**
+
+- `BUILDING_TYPES` and the builder (`buildBuilding()`, `expandBuildings()`,
+  `registerBuildingLocations()`): one instance line `{ id, type | layout,
+  site, at?, name?, address, seed?, enter?, leave?, overrides? }` makes rooms
+  `<id>_<role>`, doors `<id>-<key>` and windows `<id>-<role>-window`. Every
+  room gets `buildingId`, and each building one Location, `<id>_f0`.
+  `enter`/`leave` (the street exit's labels) and `layout` (an inline type for
+  a one-off building, as WIRING panels take `layout`) are additions the
+  handoff's instance shape didn't list.
+- Force the front door (`doForceDoor()`, `canForceDoor()`): offered from
+  outside a locked latch door while a `prying` tool is carried. It takes
+  `FORCE_DOOR_MIN = 5` and costs `FORCE_DOOR_EXERTION = FORCE_DOOR_MIN *
+  BASELINE_STAMINA_RATE`. The door comes out unlocked and `broken`, never
+  locks again, and the Here panel notes "The lock on the front door is
+  broken." Log: "You work the crowbar into the frame by the lock until it
+  gives."
+- `stableHash(str)`, FNV-1a from the standard basis: the one helper for
+  stable per-place picks (locked homes, parked cars, text variants).
+- `HOME_LOCKED_PCT = 60`: a generated home's street door starts locked when
+  `stableHash(id) % 100` is below it (254 of 427 homes).
+- `GRID_BEARING_DEG = 14` and a north arrow (`#mapNorth`), pinned over the
+  map's corner outside the panning SVG and rotated −14°.
+- Wide scaling: past `MAP_SCALE_FROM_SPAN` (600 m), Wide scales its street
+  names, line widths (through the `--map-k` property) and player marker with
+  the span (`mapScale()`, `mapApplyScale()`). At or below it, nothing changes.
+- A label-overlap pass: names are placed longest run first, and one whose box
+  overlaps a placed name is dropped (`mapBoxesOverlap()`, separating axes).
+- `map-rail` (thin, dashed) for the railway; the river drawn from
+  `RIVER_LINES`.
+- Water tanks: `HOUSE_TANK_L = 1000` on `row_house`, `casa` and `shop_home`
+  (`water:{ tankL }`), `BUILDING_INFO`, `tankOf()`, `tankLeft()`,
+  `sinkLitresFor()`, `tapDryFor()`. New state `state.tankDrawn`. The fill
+  that empties a tank logs "The tap coughs, spits, and runs dry.", and the
+  item pop-up then shows "The tap is dry." where Fill at the sink was (a
+  `note` entry in `getItemActions()`).
+- Walk to… (phase 8, #292): `walkRoutes()` (Dijkstra over a binary heap, by
+  `exitMinutes(exit, fromId)` through `getExitsForRoom()`), `routeTo()`,
+  `doWalk()`, `listedPlaces()`, `placeForStop()`, `placeForBuilding()`,
+  `atPlace()`. `doMove(exit, walking)` skips its render while walking. A walk
+  stops early on a collapse, game over, or a next exit no longer offered.
+  It logs one line: "You walk to Pharmacy (0:19)." or "You stop at <address>
+  (h:mm)."
+- New state `state.enteredBuildings`, appended by `doMove()`.
+- `validateBuildings()` on the dev seam: builder problems, sites that aren't
+  rooms, latch or bolt doors without an `inside`.
+
+**New content**
+
+- Lima's streets: Appendix A transcribed as `LIMA_STREET_CODES`,
+  `LIMA_STOPS`, `LIMA_LINKS` and `LIMA_RIVER`, read once by
+  `readLimaData()` into `LIMA`. `buildLimaStops()` makes 777 stop rooms:
+  addresses (`stopAddress()`; "Unnamed street", "FC Mitre", "Estación
+  Lima"), mid-stop `room` "between A & B" / "near A" (`stopRoomName()`),
+  trees on plaza and barrio mid stops, and a parked car where
+  `stableHash(id) % PARKED_CAR_EVERY` is 0 (67 stops), locked when the next
+  digit is even. `limaMapStreets()` derives `MAP_STREETS` from the links.
+- Stop text: the 31 hand-written stops of Appendix B (`LIMA_STOP_TEXT`), and
+  every other stop picks a variant by type from `STOP_TEXT`.
+- Four types: `row_house` (#284: eight rooms, barred windows, a latch front
+  door and a bolted back door), `casa` (designed), `shop_home` and `galpon`.
+- Landmarks (`landmarkInstances()`), each carrying the old building's
+  containers and hand-placed contents by room:
+  - the home (Acorn 2A's contents; the pantry's went into the Cupboards and
+    the balcony bin's into the Shed box), and the neighbours' row house;
+  - the pharmacy, the Comisaría Zárate 2 (a hand-authored `layout`), the
+    building-materials yard (the hardware store's), the almacén (the corner
+    store's, at a designed site);
+  - the repair shop (the auto workshop's), the goods shed (the storage units
+    as "Padlocked crate 1/2" and "Crate 3") and the paper mill (the freight
+    warehouse's, at its own `at`).
+- Named scenery on the map (`NAMED_SCENERY`, merged into `BUILDINGS`):
+  municipal hospital, Banco Nación, Escuela Primaria Nº 9, Correo Argentino,
+  San Isidro Labrador, Delegación Municipal, fire station, the club, the petrol
+  station, Estación Lima.
+- `generatedHomes()`: a `casa` on each of the 427 mid stops other than the
+  home stop. In the barrio it stands in for the chalets (#299).
+- The start: `currentRoom:"home_living"`, front door locked, back door bolted,
+  the keychain's `house_key` (`doorId:"home-front"`). "You wake up at home."
+- Items (#296, confirmed part): `registration_papers` → `cedula_verde`
+  ("Cédula verde"), `peanut_butter` → `dulce_de_leche`, `acorn_apt_2a_key` →
+  `house_key`, each keeping its pool chances. Renamed: "Crumpled pesos",
+  "Bundle of pesos", "Electricity bill", "Sachet of milk". Added:
+  `yerba_mate`, `mate_bombilla`, `alfajores`, `galletitas`, `dni_card` and
+  `us_dollars`, with their pool entries; the `car_boot` and `car_glovebox`
+  pools; one `mate_bombilla` on the home's living-room floor.
+
+**Removed**
+
+- The invented town: Acorn Apartments, Oak Apartments, the Alley, the Corner
+  Store, the Pharmacy, the Hardware Store, the Storage Facility, the
+  Riverbank, the Auto Workshop, the Police Station, Riverside Freight, and
+  all sixteen street builders. The same goes for their `BUILDINGS`,
+  `LOCATIONS`, `MAP_BUILDING_OFFSETS`, `authoredDoors()` and
+  `authoredWindows()` entries (both functions now return `{}`), and for the
+  hand-written `MAP_STREETS`.
+- `WIRING.acorn` (`WIRING` is `{}`), `ACORN_HOUSE_ROOMS`, and
+  `WIRING_TEMPLATES.apartment`'s `doors` and `windows`. The template keeps its
+  circuits and fixtures for `simulatePower()`.
+- `backfillLocationIds()`, `backfillRoomAddresses()`, `backfillRoomDescs()`,
+  `backfillContainerFields()`, `backfillRenamedContainers()` with
+  `RENAMED_CONTAINERS`, and the world half of `migrateCookingRelease()`.
+- `CROSSING_STANDBY_MIN`, `crossingLit()` and the `crossing` DESC_READERS
+  entry (#235).
+- Items `checkbook`, `gift_card`, `master_key`, `building_ledger`, with their
+  pool entries. The masterKey mechanic itself stays.
+
+**Fixed**
+
+- The stove timer rang wherever the player stood in a building with the same
+  *name* as the timer's (`here.building === room.building`). Every generated
+  home is "House", so it would have rung in all of them. It now compares
+  `buildingId`.
+
+**Hardened**
+
+- The per-minute tick with ~2,900 rooms: `forEachItemList()` skips empty
+  lists (its visitors only act on items), and the scans read a room-id list
+  cached per world (`roomIds()`). An 8-hour sleep went from 1.4 s to 0.5 s in
+  Chromium.
+
+**UI**
+
+- The map shows Lima, with slanted street names, the north arrow, the river
+  near the plant, the dashed railway, landmark and scenery markers, and the
+  metre zoom ladder.
+- Tapping a stop dot or a marker opens the map card (`#mapCard`, over the
+  drawer): the place's name, "Walking: h:mm" or "You're here." / "No way
+  through.", and Walk here.
+- The Here panel shows:
+  - Walk to…, opening a list (`#walkPop`): Home first, then the rest nearest
+    first, each with its time, or "— no way through";
+  - latch and bolt hand actions, and Force the front door;
+  - "A car is parked here. It's locked." at a locked car. The stop's text no
+    longer mentions the car, and without the note a locked car was invisible
+    to a player with no blunt tool.
+- Two doors reading alike from one room (two front doors on the home's
+  courtyard) are told apart by their building's name: "Open the front door
+  (Home)" (`doorNamesFor()`).
+- The locator bar reads Lima addresses: "Calle 90 Bis, between Calle 117 &
+  Calle 119".
+
+**Documentation**
+
+- ARCHITECTURE and the LOCATIONS comment were rewritten for Lima: origin
+  34.0447 S, 59.1961 W, the grid frame, `GRID_BEARING_DEG`.
+- ROOM SCHEMA: `buildingId`; the address rule's examples moved to Lima; the
+  mid-stop `room`.
+- DOOR SCHEMA: `lock`, `inside`, `label`, `broken`.
+- BUILDING TYPES documents types and instances.
+- The PERSISTENCE save-format comment.
+- The comments that described the old town (`MIN_MOVE_MIN`, `BLOCK_M`,
+  `doorLabel()`, `gatedExitsForRoom()`, `isGridTravel()`, the WIRING block).
+- `validateReachability()`'s note on `prying`, which now gates forcing a door.
+- Issues filed for deferred work: #298 (a riverside stop at the Balcón al
+  río), #299 (chalet and PH types), #300 (the water network and the town
+  tank), #301 (Walk to… bookmarks), #302 (saves write every door). #133 was
+  updated with the pools and items this release made unreachable or
+  reachable. #235 and #220 got notes on the removed crossing code and on
+  power.
+
+**Open questions / decisions resolved**
+
+- Appendix A lives in the file in its own line format, in template strings
+  read once at startup (design decision 1, as recommended).
+- Room state is compared at save time against one freshly built world
+  (design decision 2, as recommended).
+- Oriented label boxes: runs carry their own `u`/`n` axes, and crossings are
+  distances along the run (design decision 3).
+- The map card and the Walk to… list reuse `openLayer()` pop-ups (design
+  decision 4).
+- One shared FNV-1a helper, `stableHash()` (design decision 5).
+- Tom's three answers of 2026-09-27: locked homes with forcing
+  (`HOME_LOCKED_PCT`), no fishing this release (#298), the `casa` standing in
+  for the chalets (#299).
+
+**Notes / assumptions**
+
+All of these are retunable.
+
+- Exit clashes: 25 same-direction groups at 22 stops (the handoff counted
+  18). They are settled in order: " toward <address>"; then ", <room>" on a
+  later twin (not "toward between …"); then eight-point compass words; last
+  " (second)". The last two exist for Calle 2's parallel carriageways and a
+  few unnamed lanes, which the handoff's two rules left identical. A rail
+  link's own street for this purpose is "FC Mitre". A mid's "toward" names
+  every other street at the next corner, joined by " & ".
+- A mid stop whose two ends are the same street reads "near <street>", not
+  "between Calle 15 & Calle 15".
+- Row-house container capacities and floor caps, the casa's link distances,
+  and the shop and galpon rooms' room names ("Back rooms", "Office"; the
+  front room takes the building's name).
+- The `casa` living room has no containers, as its spec lists none.
+- Map marker offsets (`MAP_BUILDING_OFFSETS`, metres).
+- The item weights: yerba 0.5 kg, mate 0.3 kg, alfajores 0.3 kg, galletitas
+  0.2 kg. Food values follow the model item (alfajores restore what a candy
+  bar does).
+- The neighbours' row house takes the generated homes' lock rule.
+- The landmarks keep their search actions ("Search the pharmacy", "Search the
+  yard", "Search the shop").
+- The goods shed's third crate, never locked, is "Crate 3".
+- The paper mill's street exit costs its real distance down the side road
+  (about 5 minutes), since its Location is its own.
+- A burnt-out campfire's `fireMinutesLeft` reloads as undefined rather than
+  `null`. Every reader treats the two alike (`!= null`, `> 0`).
+
+**Explicitly out of scope**
+
+- Wiring any Lima building (#289, #250); the chalet and PH types (#299); fog
+  of war, other towns (#293, #8) and bookmarks (#301); the water network,
+  showers, toilets and contamination (#300); garrafas and fuel (#287, #259);
+  cutting window bars, forcing a bolt or a window; the other real businesses
+  and institutions as enterable buildings (#250, #285, #252–#257); trains,
+  the bell ringing, anything at the Atucha plant beyond its shut gate (#290);
+  fishing (#298); #296's remainder (the police kit, pepper spray, the stun
+  gun, the baseball bat, shop pools, the garrafa).
+
+**Sections touched**
+
+- WORLD DATA (almost all of it); PLAYER STATE (`enteredBuildings`,
+  `tankDrawn`, the start).
+- WORLD INTERACTION: doors, forcing, `doMove()`, water, Walk to….
+- SURVIVAL / TIME SIMULATION: the per-minute scans, stove timers.
+- PERSISTENCE; RENDERING (map, Here panel, pop-ups); the dev seam.
+
+**Validation performed**
+
+In headless Chromium (Playwright):
+- A new game starts in the home's living room, and the front door unlocks by
+  hand from inside.
+- Save/reload and export/import each round-trip a moved item, an opened
+  freezer, a burnt-out campfire, a drawn tank, the entered buildings and the
+  door states.
+- A save exported from v0.9.4 is refused, and the running game is left as it
+  was.
+- `validateItemRegistry`, `validateLocations`, `validateRoomSchema` and
+  `validateBuildings` report nothing. `validateWiring` reports no problems and
+  1,736 unwired rooms (the known warning until #258). `validateReachability`
+  has no authoring problems.
+- Every stop is reachable from the home stop, and no exit label is empty or
+  lacks a direction.
+- A walk from home to the pharmacy (24 steps) ends at the same minute and the
+  same vitals as the same steps clicked one by one on the same seed.
+- The map was screenshotted at every zoom step.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.9.4"` → `"0.10.0"`
+
+---
+
 ## v0.9.4 — Power text fixes: load readouts, hall lights, room text in old saves
 
 Implements: handoffs/power-text-and-hall-lights.md
