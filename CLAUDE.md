@@ -104,7 +104,8 @@ Adding something the real town lacks is a design decision (see below).
 appears ("a sachet of milk", not its maker), and a private business is named by
 what it is ("the pharmacy", "a bank", "the petrol station"), never by its
 trading name. State-owned institutions and government buildings keep their
-real names (Correo Argentino, the Comisaría, the municipal hospital). Fictional
+real names (Correo Argentino, Banco Nación, the Comisaría, the municipal
+hospital). Fictional
 brands are lore, for later. Project Guide, Part 1.
 
 **Content vs. mechanics stay separated.** A change touches WORLD DATA (content)

@@ -68,8 +68,8 @@ appears in the game: an item is "a sachet of milk" or "a bag of yerba", never
 its maker's name. A private business is named by what it is ("the pharmacy",
 "a bank", "the petrol station", "the hardware store"), never by its trading
 name, though it still stands at its real site. State-owned institutions and
-government buildings keep their real names: Correo Argentino, the Comisaría,
-the municipal hospital, the Delegación Municipal. Streets, neighbourhoods and
+government buildings keep their real names: Correo Argentino, Banco Nación,
+the Comisaría, the municipal hospital, the Delegación Municipal. Streets, neighbourhoods and
 public places keep theirs too. Fictional brands and trading names are lore,
 to be invented later.
 
