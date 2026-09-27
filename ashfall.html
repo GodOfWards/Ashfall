@@ -125,14 +125,25 @@
     border:1px solid var(--line); color:var(--ink-dim); padding:4px 9px; border-radius:3px; cursor:pointer; }
   #mapZoomToggle button.active{ border-color:var(--accent); color:var(--accent); }
   #mapZoomToggle button:disabled{ opacity:.4; cursor:not-allowed; }
-  #mapSvg{ width:100%; height:auto; display:block; background:var(--panel-2); border-radius:3px; margin-top:8px; }
+  /* The map and its north arrow. The arrow sits over the map's top-right
+     corner, outside the SVG whose viewBox pans, so it never moves; its
+     rotation is set from GRID_BEARING_DEG. It takes no taps. */
+  #mapWrap{ position:relative; margin-top:8px; }
+  #mapSvg{ width:100%; height:auto; display:block; background:var(--panel-2); border-radius:3px; }
+  #mapNorth{ position:absolute; top:6px; right:6px; width:22px; height:29px; pointer-events:none; }
+  #mapNorth path{ fill:var(--ink-dim); }
+  #mapNorth text{ fill:var(--ink-dim); font-size:10px; font-weight:600; font-family:system-ui,sans-serif; }
+  /* Line widths in user units, times --map-k: 1, except in Wide past
+     MAP_SCALE_FROM_SPAN, where mapApplyScale() raises it with the span so
+     the lines keep their width on screen. */
   .map-street{ stroke:var(--line); stroke-width:3; fill:none; }
-  .map-street-thin{ stroke:var(--line); stroke-width:1.5; opacity:.6; fill:none; }
+  .map-street-thin{ stroke:var(--line); stroke-width:calc(1.5px * var(--map-k, 1)); opacity:.6; fill:none; }
+  .map-rail{ stroke:var(--ink-faint); stroke-width:calc(1.2px * var(--map-k, 1)); stroke-dasharray:calc(6px * var(--map-k, 1)) calc(4px * var(--map-k, 1)); fill:none; opacity:.7; }
   .map-node-dot{ fill:var(--ink-faint); }
   .map-street-name{ fill:var(--ink-dim); font-size:15px; font-family:system-ui,sans-serif; letter-spacing:.5px; font-weight:600; }
   .map-bldg-dot{ fill:var(--panel-2); stroke:var(--accent-dim); stroke-width:1.5; }
   .map-bldg-label{ fill:var(--ink); font-size:10px; font-weight:600; font-family:system-ui,sans-serif; }
-  .map-river{ fill:none; stroke:#2a4a5c; stroke-width:10; stroke-linecap:round; opacity:.5; }
+  .map-river{ fill:none; stroke:#2a4a5c; stroke-width:calc(10px * var(--map-k, 1)); stroke-linecap:round; stroke-linejoin:round; opacity:.5; }
   #mapPlayer{ fill:var(--accent); }
   #locBar{ padding:10px 24px; border-bottom:1px solid var(--line); font-family:system-ui,sans-serif;
     display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; }
@@ -300,7 +311,10 @@
         <button id="mapZoomOut">&minus;</button>
       </div>
     </div>
-    <svg id="mapSvg" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div id="mapWrap">
+      <svg id="mapSvg" xmlns="http://www.w3.org/2000/svg"></svg>
+      <svg id="mapNorth" viewBox="0 0 24 32" aria-hidden="true"></svg>
+    </div>
   </div>
 </aside>
 <section id="craftingPanel" class="full-panel" tabindex="-1">
@@ -510,14 +524,6 @@
   // counts from the start of the run.
   const START_DAYS_AFTER_COLLAPSE = 2;
   const POWER_FAILS_DAY = 21;
-  // How long a rail crossing's warning lights run on their standby battery
-  // once the grid fails (crossingLit()). US law requires "a standby source of
-  // power … with sufficient capacity to operate the warning system for a
-  // reasonable length of time during a period of primary power interruption"
-  // (49 CFR 234.215, "Standby power system"), and sets no length; 234.251
-  // requires only that it "be tested at least once each month". 24 hours is
-  // unconfirmed and retunable.
-  const CROSSING_STANDBY_MIN = 24 * 60;
   // The power network's figures (see POWER in SURVIVAL / TIME SIMULATION).
   // Breakers, per UL 489 (ABB's white paper on UL 489 breakers; Castor,
   // "Molded Case Circuit Breaker Basics", EasyPower): at 100% of its rating
@@ -709,8 +715,7 @@
   //                 picks the text, { kind, … }, a DESC_READERS entry
   //                 (RENDERING): "load" with its `id`, on while that load is
   //                 powered (loadPoweredNow()); "grid", on while the grid is
-  //                 up (gridUp()); "crossing", on while a rail crossing's
-  //                 lights are (crossingLit()). Each reader returns one of its
+  //                 up (gridUp()). Each reader returns one of its
   //                 own `states`, and `variants` holds a text for every one
   //                 (validateRoomSchema()). A later reader (weather, time of
   //                 day, damage) is one more DESC_READERS entry with its own
@@ -1543,6 +1548,11 @@
   //   Z is laid down for every Location but not consumed by anything yet
   //   (the map is top-down) — future systems can rely on it without a
   //   retrofit.
+  // The true bearing of the map's "up", in degrees east of north. LOCATIONS
+  // are stored already in the grid frame, so movement and computeDirection()
+  // never read this: "north" in an exit label is the grid's north, the way
+  // the town's own streets run. Only the map's north arrow reads it.
+  const GRID_BEARING_DEG = 14;
   const LOCATIONS = {
     maple4th:       { x:0, y:0, z:0 },
     maple2nd:       { x:100, y:0, z:0 },
@@ -1743,6 +1753,10 @@
     police_f0:      { x:300, y:0, z:0 },
     industrial_f0:  { x:100, y:0, z:0 }
   };
+
+  // The river, drawn and nothing more: polylines of [x, y] metres in the
+  // LOCATIONS frame. No stop touches them.
+  const RIVER_LINES = [ [[-119, 300], [619, 300]] ];
 
   // Buildings the map can name: a player-visible name and the Location its
   // marker sits on. Reference data, the same category as LOCATIONS above —
@@ -4529,9 +4543,7 @@
         { to:"poplar2nd", label:"Head north toward Poplar St" } ]
     },
     mid_2nd_d_mi: { locationId:"mid_2nd_d_mi", address:"2nd St", area:null, room:"between Dock & Mill", shelter:"none",
-      desc:{ reads:{ kind:"crossing" },
-        variants:{ on:"2nd St crossing the rail spur at a shallow angle. The crossing lights blink for a train that isn't coming, but the bell housing's still up there.",
-          off:"2nd St crossing the rail spur at a shallow angle. The crossing lights are dark, the bell housing still up there." } },
+      desc:"2nd St crossing the rail spur at a shallow angle, the bell housing still up there.",
       floorCap:20, floor:[], containers:[],
       exits:[
         { to:"dock2nd", label:"Head south toward Dock St" },
@@ -4987,7 +4999,7 @@
   // drawer can still be opened and used afterwards (see render()).
   let gameOverRendered = false;
   // Which tab each item panel is showing. UI-only and deliberately outside
-  // `state`, the same call already made for mapZoomMode/mapZoomStep, gameOver
+  // `state`, the same call already made for mapZoomMode/mapZoomSpan, gameOver
   // and detailItem: serializeGame() writes `state` wholesale, so anything left
   // in it lands in every save and every export. The consequence is that a save
   // carries no record of what the panels looked like — both reset to their
@@ -6352,11 +6364,6 @@
   function minutesSinceCollapse(){ return START_DAYS_AFTER_COLLAPSE * MINUTES_PER_DAY + state.totalMinutes; }
   function gridUp(m = minutesSinceCollapse()){ return m < POWER_FAILS_DAY * MINUTES_PER_DAY; }
   function waterRunning(m = minutesSinceCollapse()){ return gridUp(m); }
-  // Whether a rail crossing's warning lights are on: while the grid is up,
-  // then on standby for CROSSING_STANDBY_MIN after it fails.
-  function crossingLit(m = minutesSinceCollapse()){
-    return gridUp(m) || m - POWER_FAILS_DAY * MINUTES_PER_DAY < CROSSING_STANDBY_MIN;
-  }
   function getWindowsInRoom(roomId){
     return Object.keys(windows).filter(id=>windows[id].rooms.includes(roomId)).map(id=>Object.assign({id}, windows[id]));
   }
@@ -9359,24 +9366,25 @@
     btn.addEventListener("click", ()=>{
       if(mapZoomMode === btn.dataset.zoom) return;
       mapZoomMode = btn.dataset.zoom;
-      // Clamp to the nearest step the new mode allows rather than resetting to
-      // its base: where the two ranges overlap, the box is unchanged and only
-      // the content switches.
-      mapSetZoomStep(mapZoomStep);
+      // Snap to the nearest step the new mode allows rather than resetting to
+      // its base: where the two ladders share a span, the box is unchanged
+      // and only the content switches.
+      mapSetZoomSpan(mapZoomSpan);
       document.querySelectorAll("#mapZoomToggle button[data-zoom]").forEach(b=>{
         b.classList.toggle("active", b.dataset.zoom === mapZoomMode);
       });
       render();
     });
   });
-  // + zooms in, which is a smaller span: a step counts blocks across, so fewer
-  // blocks is closer in. A step re-aims the existing viewBox and never rebuilds
+  // + zooms in, which is a smaller span: the next step down the mode's ladder
+  // (MAP_ZOOM_RANGE). A step re-aims the existing viewBox and never rebuilds
   // the SVG — content is keyed on the mode, not the step — and the animation
   // already interpolates the box's width and height, so the street names
   // re-place themselves as it runs.
   [["mapZoomIn", -1], ["mapZoomOut", 1]].forEach(pair=>{
     document.getElementById(pair[0]).addEventListener("click", ()=>{
-      mapSetZoomStep(mapZoomStep + pair[1]);
+      const steps = MAP_ZOOM_RANGE[mapZoomMode].steps;
+      mapSetZoomSpan(steps[Math.max(0, Math.min(steps.length - 1, steps.indexOf(mapZoomSpan) + pair[1]))]);
       if(mapLastNode) mapUpdateViewBox(mapLastNode, false);
     });
   });
@@ -9387,35 +9395,38 @@
   // ==================================================
   // MAP (In-Game Viewing Map)
   // ==================================================
+  // SVG user units per 100 m, and so per metre. The map's scale: every
+  // coordinate it draws is a LOCATIONS metre times MAP_UNITS_PER_M.
   const MAP_SPACING = 130;
+  const MAP_UNITS_PER_M = MAP_SPACING / 100;
   const MAP_MARGIN = 55;
-  // Grid extents (see LOCATIONS above) — col -1..6, row -4..3.
-  // MAP_MIN_COL/MAP_MIN_ROW exist because the southern and western streets
-  // give the grid negative coordinates: mapToSvg() offsets by MAP_MIN_COL
-  // so col -1 still lands on the left margin. Retunable defaults, scaled
-  // by the same margin/spacing logic:
-  // 8 columns x 8 rows spans ~1020x1020 units including margins.
-  const MAP_MIN_COL = -1;
-  const MAP_MAX_COL = 6;
-  const MAP_MIN_ROW = -4;
-  const MAP_MAX_ROW = 3;
-  // The zoom ladder. Both modes are a player-centred window whose span is a
-  // whole number of blocks — span = zoomStep * MAP_SPACING — so one step moves
-  // the view by one block and every view sits on the grid's own pitch. Each
-  // mode owns the range of steps it allows and the step it opens at. The
-  // ranges overlap at 3, so switching mode there changes the content without
-  // changing the box. Close's ceiling is where its 10-unit building labels
-  // fall under ~10 CSS px (the map renders ~420px wide, so a label's apparent
-  // size is 10 * 420 / span); Wide's base is the widest step that still leaves
-  // the town's 910 units of content something to pan within. Ranges and bases
-  // are retunable, with no prior convention behind them.
+  // The map's origin, from the extent of LOCATIONS as it stands once the
+  // world is built: the westmost Location lands on the left margin and the
+  // northmost on the top one, whatever the coordinates' sign.
+  const MAP_EXTENT = (function(){
+    const all = Object.values(LOCATIONS);
+    return { minX: Math.min.apply(null, all.map(l=> l.x)), maxY: Math.max.apply(null, all.map(l=> l.y)) };
+  })();
+  // The zoom ladder, in metres of span: each mode's steps, closest first, and
+  // the one it opens at. Both modes are a player-centred square window of
+  // that span. The two share 300 m, so switching mode there changes the
+  // content without changing the box. Close's widest step is where its
+  // 10-unit building labels still read at ~10 CSS px on the ~420px map.
+  // Retunable, with no prior convention behind the figures.
   const MAP_ZOOM_RANGE = {
-    close: { min: 1, max: 3, base: 2 },  // 130 / 260 / 390 units across
-    wide:  { min: 3, max: 6, base: 6 }   // 390 / 520 / 650 / 780
+    close: { steps: [100, 200, 300], base: 200 },
+    wide:  { steps: [300, 600, 1200, 2400], base: 1200 }
   };
   const MAP_PLAYER_R_WIDE = 12;
+  // Past this span, in user units (600 m, the widest Wide view the invented
+  // town had), Wide scales its street names, its line widths and the player
+  // marker up with the span (mapScale()), so they keep the size on screen
+  // they have there; at or below it they are drawn as they always were. A
+  // judgment call, retunable.
+  const MAP_SCALE_FROM_SPAN = 600 * MAP_UNITS_PER_M;
 
-  // Street runs (Wide view) — one continuous named path per street.
+  // Street runs — each path a street takes, as a chain of stop ids, `name`
+  // null for a street with none, `rail` for the track.
   const MAP_STREETS = [
     { name:"DOCK ST",   chain:["dock6th","mid_dock_4_6","dock4th","mid_dock_2_4","dock2nd","mid_dock_1_2","dock1st","mid_dock_1_3","dock3rd","mid_dock_3_5","dock5th","mid_dock_5_7","dock7th","mid_dock_7_9","dock9th"] },
     { name:"MILL ST",   chain:["mill6th","mid_mill_4_6","mill4th","mid_mill_2_4","mill2nd","mid_mill_1_2","mill1st","mid_mill_1_3","mill3rd","mid_mill_3_5","mill5th","mid_mill_5_7","mill7th","mid_mill_7_9","mill9th"] },
@@ -9434,39 +9445,37 @@
     { name:"7TH ST",    chain:["dock7th","mid_7th_d_mi","mill7th","mid_7th_mi_c","cedar7th","mid_7th_c_e","elm7th","mid_7th_e_mp","maple7th","mid_7th_mp_p","poplar7th","mid_7th_p_m","main7th","mid_7th_m_w","water7th"] },
     { name:"9TH ST",    chain:["dock9th","mid_9th_d_mi","mill9th","mid_9th_mi_c","cedar9th","mid_9th_c_e","elm9th","mid_9th_e_mp","maple9th","mid_9th_mp_p","poplar9th","mid_9th_p_m","main9th","mid_9th_m_w","water9th"] }
   ];
-  // Every street/mid-block Location id, derived from MAP_STREETS above
-  // (every such id appears in some chain) rather than hand-duplicated —
-  // used by renderMapClose() to draw the node dots.
-  const MAP_STREET_NODE_IDS = Array.from(new Set(MAP_STREETS.flatMap(s => s.chain)));
+  // Every street stop id, derived from MAP_STREETS above (every such id
+  // appears in some chain) rather than hand-duplicated — used by
+  // renderMapClose() to draw the node dots.
+  const MAP_STREET_NODE_IDS = Array.from(new Set(MAP_STREETS.filter(s=> !s.rail).flatMap(s => s.chain)));
   // Building markers (Close view only) — the label's offset from its
-  // building's anchor, in grid units, keyed by BUILDINGS id. Membership is
+  // building's anchor, in metres, keyed by BUILDINGS id. Membership is
   // the point as much as the numbers: a BUILDINGS entry with no offsets
   // here is a building the map does not name, and renderMapClose() never
-  // reaches it. Every building has one today, but where two sit close
-  // enough that only one can carry a label, this is where that is said.
-  // Pharmacy/Hardware Store deliberately share an anchor (both entered
-  // from the same mid-block) — the offset, not a second coordinate, is
-  // what keeps them legible as two separate markers.
+  // reaches it. Where two sit close enough that only one can carry a label,
+  // this is where that is said, and the offset, not a second coordinate,
+  // is what keeps two markers on one anchor legible as two.
   const MAP_BUILDING_OFFSETS = {
-    acorn:       { dx:-0.05, dy:-0.28 },
-    alley:       { dx: 0.32, dy:-0.05 },
-    cornerstore: { dx:-0.32, dy:-0.05 },
-    pharmacy:    { dx:-0.05, dy:-0.28 },
-    hardware:    { dx:-0.05, dy: 0.28 },
-    storage:     { dx: 0.32, dy: 0.05 },
-    riverbank:   { dx: 0.05, dy: 0.32 },
-    oak:         { dx: 0.3,  dy: 0.05 },
-    auto_shop:   { dx:-0.05, dy: 0.28 },
-    police:      { dx: 0.32, dy:-0.05 },
-    industrial:  { dx: 0.32, dy: 0.05 }
+    acorn:       { dx:-5,  dy:-28 },
+    alley:       { dx: 32, dy:-5 },
+    cornerstore: { dx:-32, dy:-5 },
+    pharmacy:    { dx:-5,  dy:-28 },
+    hardware:    { dx:-5,  dy: 28 },
+    storage:     { dx: 32, dy: 5 },
+    riverbank:   { dx: 5,  dy: 32 },
+    oak:         { dx: 30, dy: 5 },
+    auto_shop:   { dx:-5,  dy: 28 },
+    police:      { dx: 32, dy:-5 },
+    industrial:  { dx: 32, dy: 5 }
   };
 
   let mapZoomMode = "close";
-  let mapZoomStep = MAP_ZOOM_RANGE.close.base; // blocks across; like mapZoomMode, deliberately outside `state`
+  let mapZoomSpan = MAP_ZOOM_RANGE.close.base; // metres across; like mapZoomMode, deliberately outside `state`
   let mapRenderedZoom = null;   // zoom mode the current SVG content was built for
   let mapLastNode = null;       // last resolved player map node
   let mapCurrentViewBox = null; // {x,y,w,h} of the viewBox, animated toward its target
-  let mapStreetLabels = [];     // Wide's label pool: one entry per street
+  let mapStreetLabels = [];     // Wide's label pool: one entry per straight run of a named street
   let mapBuildingLabels = [];   // Close's label pool: one entry per marked building
 
   // The one way this file measures rendered text. Both label pools bind by
@@ -9483,29 +9492,43 @@
     } catch(e){ return 0; }
   }
 
-  function mapToSvg(col, row){
-    // row MAP_MIN_ROW (Dock) at bottom, row MAP_MAX_ROW (Water) at top;
-    // col MAP_MIN_COL (6th) at the left margin — the offset is what lets the
-    // grid carry negative coordinates without drawing off-canvas.
-    return { x: MAP_MARGIN + (col - MAP_MIN_COL) * MAP_SPACING, y: MAP_MARGIN + (MAP_MAX_ROW - row) * MAP_SPACING };
+  // A point in LOCATIONS metres (the grid frame: +x along the grid's east,
+  // +y along its "up", GRID_BEARING_DEG east of true north) to SVG user units.
+  function mapToSvg(x, y){
+    return { x: MAP_MARGIN + (x - MAP_EXTENT.minX) * MAP_UNITS_PER_M, y: MAP_MARGIN + (MAP_EXTENT.maxY - y) * MAP_UNITS_PER_M };
   }
+  function mapNodeSvg(id){ const l = LOCATIONS[id]; return mapToSvg(l.x, l.y); }
   function mapPathD(chain){
     return chain.map((id,i)=>{
-      const p = mapToSvg(LOCATIONS[id].x / 100, LOCATIONS[id].y / 100);
+      const p = mapNodeSvg(id);
       return (i===0 ? "M " : "L ") + p.x + " " + p.y;
     }).join(" ");
   }
+  function mapPolylineD(points){
+    return points.map(([x, y], i)=>{
+      const p = mapToSvg(x, y);
+      return (i===0 ? "M " : "L ") + p.x + " " + p.y;
+    }).join(" ");
+  }
+  // How much Wide draws its names, lines and player marker up at a span, in
+  // user units: 1 up to MAP_SCALE_FROM_SPAN, then in proportion.
+  function mapScale(span){ return mapZoomMode === "wide" ? Math.max(1, span / MAP_SCALE_FROM_SPAN) : 1; }
   // Street names (Wide view). They are placed against the portion of each
-  // street currently on screen rather than once per block: the view moves,
+  // run currently on screen rather than once per block: the view moves,
   // so a build-time position would stop meaning anything.
-  // Each street owns a fixed pool of MAP_LABELS_PER_STREET <text> nodes,
-  // created once by renderMapWide() and thereafter only moved, shown or
-  // hidden — never created or destroyed during a pan.
+  // A street's path is cut into straight runs (MAP_STREET_RUNS), and each run
+  // owns a fixed pool of MAP_LABELS_PER_STREET <text> nodes, created once by
+  // renderMapWide() and thereafter only moved, shown or hidden — never
+  // created or destroyed during a pan.
   // MAP_LABEL_OFFSET nudges a name off its own street line; the label is
-  // rotated onto the street's heading (always 0 or +/-90 on this grid),
-  // folded into (-90, 90] so vertical streets read bottom-to-top.
+  // rotated onto its run's heading, folded into (-90, 90] so no name reads
+  // upside down, and sits on the side that fold puts above it: above a
+  // horizontal street, right of a vertical one.
   const MAP_LABEL_OFFSET = 5;
   const MAP_LABELS_PER_STREET = 3;
+  // Consecutive segments of a path belong to one straight run while their
+  // heading turns by less than this. Retunable.
+  const MAP_RUN_TURN_DEG = 10;
   // The rendered size of a street name at the 15px .map-street-name face, in
   // user units: a name's width, and the cap height. Every name is upper case
   // with no descender, so the cap height is the whole ink band. The inset,
@@ -9517,10 +9540,9 @@
   // is only correct on the machine it was measured on — it resolves to Segoe
   // UI, SF Pro, Roboto or Cantarell depending on where the page is opened,
   // and those differ by more than the placement arithmetic tolerates. The
-  // constant below is the last known good Chromium measurement of "POPLAR
-  // ST", the widest of the sixteen, kept only as what a street falls back to
-  // if its own measurement fails. It is not any street's live width;
-  // street.metrics.w is.
+  // constant below is a last known good Chromium measurement of a long
+  // name, kept only as what a street falls back to if its own measurement
+  // fails. It is not any street's live width; street.metrics.w is.
   const MAP_LABEL_W_FALLBACK = 99.1;
   // The cap height is deliberately *not* measured. getComputedTextLength()
   // gives width only, and getBBox().height reports the em box — 17.83 at this
@@ -9528,7 +9550,7 @@
   // to take. This stays a chosen number until there is one.
   const MAP_LABEL_CAP = 12;
   // How far a name's ink reaches off its own street line: MAP_LABEL_OFFSET
-  // to its near edge, a cap height more to its far one. A street is named
+  // to its near edge, a cap height more to its far one. A run is named
   // only where this much of the view lies on the name's side of its line
   // (mapPositionStreetLabels()), and it is the band a crossing's name
   // occupies (clearance, below).
@@ -9537,82 +9559,77 @@
   // from. Retunable.
   const MAP_LABEL_EDGE_GAP = 5;
   // One width and the three values derived from it, as a plain object per
-  // street. Every street is measured at bind time and keeps its own set: a
-  // single map-wide width reserved "POPLAR ST"'s 99 units for "1ST ST" too,
-  // which over-reserves it by 63% and costs the shorter streets names they
-  // had room for. Returns null on a measurement that cannot be trusted — a
-  // detached node, a pool that never got layout, a browser that throws — so
-  // the caller falls back rather than taking a zero. Zero collapses every
+  // street, at scale `k` (mapScale()). Every street is measured at bind time
+  // and keeps its own width: a single map-wide width reserves the longest
+  // name's room for the shortest too, and costs the shorter streets names
+  // they had room for. Returns null on a measurement that cannot be trusted
+  // — a detached node, a pool that never got layout, a browser that throws —
+  // so the caller falls back rather than taking a zero. Zero collapses every
   // tier to `hi - lo >= 0`, which is always true, so the street would
   // silently jump to three names.
-  function mapLabelMetrics(w){
+  function mapLabelMetrics(w, k = 1){
     if(!Number.isFinite(w) || w <= 0) return null;
+    w = w * k;
     return {
-      w,
-      inset: w / 2 + MAP_LABEL_EDGE_GAP,
-      // How many names one street gets, by the length of it currently
-      // visible, in multiples of its own name's width — longest tier first.
-      // Under a single width the street gets none, since a name wider than
-      // its visible stretch would read as floating loose. This is a crowding
-      // rule, not a legibility one: a name's width in user units is the same
-      // at every span, so what the tiers measure is how many fit, and the
-      // zoom ladder's ranges are what keep them readable. The multipliers are
-      // retunable.
+      w, k,
+      offset: MAP_LABEL_OFFSET * k,
+      cap: MAP_LABEL_CAP * k,
+      depth: MAP_LABEL_DEPTH * k,
+      inset: w / 2 + MAP_LABEL_EDGE_GAP * k,
+      // How many names one run gets, by the length of it currently visible,
+      // in multiples of its own name's width — longest tier first. Under a
+      // single width the run gets none, since a name wider than its visible
+      // stretch would read as floating loose. This is a crowding rule, not a
+      // legibility one. The multipliers are retunable.
       tiers: [
         { minVisible: 6 * w, count: 3 },
         { minVisible: 3 * w, count: 2 },
         { minVisible: 1 * w, count: 1 }
       ],
       // How close to a crossing a name may sit before it can touch that
-      // crossing's own name. A name reaches its own w/2 along its street, and
-      // the crossing's name occupies a band from MAP_LABEL_OFFSET to
-      // MAP_LABEL_DEPTH off the crossing line, so this is
-      // how far past an intersection a name's box can still reach one.
-      // A mid-block sits MAP_SPACING/2 away. Under per-street widths the
-      // limit is a name wider than
-      // MAP_SPACING - 2 * MAP_LABEL_DEPTH = 96 units, and
-      // the widest north-south name is "2ND ST" at ~65 — clear by ~31 units
-      // by construction, rather than by the coincidence that the one
-      // over-wide name happens to run east-west.
-      clearance: w / 2 + MAP_LABEL_DEPTH
+      // crossing's own name: a name reaches its own w/2 along its street, and
+      // the crossing's name occupies a band out to MAP_LABEL_DEPTH off the
+      // crossing line.
+      clearance: w / 2 + MAP_LABEL_DEPTH * k
     };
   }
-  // What a street keeps when its own measurement fails. Computed once here so
-  // the fallback is the same object every bind, and so the game has valid
-  // metrics before the first Wide bind ever runs.
-  const MAP_LABEL_METRICS_FALLBACK = mapLabelMetrics(MAP_LABEL_W_FALLBACK);
-  // Positions along a street's visible stretch [lo, hi], in that street's
-  // own axis, against that street's own metrics `m`. Two or three labels sit
-  // m.inset in from each end; one sits at the midpoint. Whatever the tier, a
-  // position that would land on a crossing is slid clear of it before it is
-  // returned.
-  function mapLabelPositions(lo, hi, m){
+  // Positions along a run's visible stretch [lo, hi], measured along the run
+  // from its start, against that street's metrics `m`. Two or three labels
+  // sit m.inset in from each end; one sits at the midpoint. Whatever the
+  // tier, a position that would land on a crossing is slid clear of it
+  // before it is returned.
+  function mapLabelPositions(lo, hi, m, run){
     const tier = m.tiers.find(t => hi - lo >= t.minVisible);
     if(!tier) return [];
-    if(tier.count === 1) return mapClearCrossings([(lo + hi) / 2], lo, hi, m);
-    if(tier.count === 2) return mapClearCrossings([lo + m.inset, hi - m.inset], lo, hi, m);
-    return mapClearCrossings([lo + m.inset, (lo + hi) / 2, hi - m.inset], lo, hi, m);
+    if(tier.count === 1) return mapClearCrossings([(lo + hi) / 2], lo, hi, m, run);
+    if(tier.count === 2) return mapClearCrossings([lo + m.inset, hi - m.inset], lo, hi, m, run);
+    return mapClearCrossings([lo + m.inset, (lo + hi) / 2, hi - m.inset], lo, hi, m, run);
   }
-  // Intersections fall on the grid pitch along both axes, since mapToSvg()
-  // offsets every coordinate by MAP_MARGIN — so where a position sits
-  // relative to one is arithmetic, not a walk through the street's chain.
-  // A position within m.clearance of a crossing slides to the
-  // mid-block beside it, toward the centre of the visible stretch: sliding
-  // outward risks leaving the stretch. A name with no mid-block left inside
-  // the stretch is dropped rather than slid again — a second slide can
-  // cascade, and a street that loses one of its two or three names still
-  // reads. Two names converging on one mid-block is the same case: the one
-  // nearer the centre of the stretch keeps it.
-  function mapClearCrossings(positions, lo, hi, m){
+  // A position within m.clearance of a crossing (another street meeting this
+  // run, run.crossings) slides to the middle of the block beside it, toward
+  // the centre of the visible stretch: sliding outward risks leaving the
+  // stretch. A name with no block middle left inside the stretch is dropped
+  // rather than slid again — a second slide can cascade, and a street that
+  // loses one of its two or three names still reads. Two names converging on
+  // one block is the same case: the one nearer the centre of the stretch
+  // keeps it.
+  function mapClearCrossings(positions, lo, hi, m, run){
     const mid = (lo + hi) / 2;
     const room = m.w / 2;  // a slid name still has to fit inside the stretch
+    const xs = run.crossings;
     const cleared = [];
     positions.forEach(p=>{
-      const cross = MAP_MARGIN + Math.round((p - MAP_MARGIN) / MAP_SPACING) * MAP_SPACING;
+      if(!xs.length){ cleared.push(p); return; }
+      let ci = 0;
+      xs.forEach((c, i)=>{ if(Math.abs(c - p) < Math.abs(xs[ci] - p)) ci = i; });
+      const cross = xs[ci];
       if(Math.abs(p - cross) >= m.clearance){ cleared.push(p); return; }
       const inward = p <= mid ? 1 : -1;
-      const slid = [cross + inward * MAP_SPACING / 2, cross - inward * MAP_SPACING / 2]
-        .find(q => q >= lo + room && q <= hi - room);
+      const beside = (dir)=>{
+        const next = dir > 0 ? (ci + 1 < xs.length ? xs[ci + 1] : run.len) : (ci > 0 ? xs[ci - 1] : 0);
+        return (cross + next) / 2;
+      };
+      const slid = [beside(inward), beside(-inward)].find(q => q >= lo + room && q <= hi - room);
       if(slid !== undefined) cleared.push(slid);
     });
     const kept = [];
@@ -9621,105 +9638,148 @@
     });
     return kept.sort((q, r) => q - r);
   }
-  // Caches the Wide label pool as element references plus each street's
+  // Every named street's paths cut into straight runs, fixed geometry built
+  // once: { name, a, len, angle, u, n, crossings }. `a` is the run's start in
+  // user units, `len` its length, `angle` its heading folded into (-90, 90],
+  // `u` the unit vector along it in that folded direction and `n` the one
+  // its names sit toward, and `crossings` the distances along it, sorted,
+  // of every stop on it where another named street meets it. A run's start
+  // is its folded start, so distances grow along `u`.
+  const MAP_STREET_RUNS = (function(){
+    const namesAt = {};
+    MAP_STREETS.forEach(s=>{ if(s.name) s.chain.forEach(id=>{ (namesAt[id] = namesAt[id] || new Set()).add(s.name); }); });
+    const runs = [];
+    MAP_STREETS.forEach(s=>{
+      if(!s.name || s.chain.length < 2) return;
+      const pts = s.chain.map(id=> ({ id, p: mapNodeSvg(id) }));
+      const heading = (i)=> Math.atan2(pts[i + 1].p.y - pts[i].p.y, pts[i + 1].p.x - pts[i].p.x) * 180 / Math.PI;
+      let start = 0;
+      for(let i = 1; i <= pts.length - 1; i++){
+        let turn = i < pts.length - 1 ? Math.abs(heading(i) - heading(i - 1)) % 360 : 360;
+        if(turn > 180) turn = 360 - turn;
+        if(i < pts.length - 1 && turn < MAP_RUN_TURN_DEG) continue;
+        let seg = pts.slice(start, i + 1);
+        start = i;
+        let a = seg[0].p, b = seg[seg.length - 1].p;
+        let angle = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+        if(angle > 90 || angle <= -90){ seg = seg.slice().reverse(); [a, b] = [b, a]; angle += angle > 90 ? -180 : 180; }
+        const len = Math.hypot(b.x - a.x, b.y - a.y);
+        if(!(len > 0)) continue;
+        const r = angle * Math.PI / 180;
+        const u = { x: Math.cos(r), y: Math.sin(r) };
+        const n = { x: Math.sin(r), y: -Math.cos(r) };
+        const crossings = seg.filter(q=> namesAt[q.id] && namesAt[q.id].size > 1)
+          .map(q=> (q.p.x - a.x) * u.x + (q.p.y - a.y) * u.y).sort((x, y)=> x - y);
+        runs.push({ name: s.name, a, len, angle, u, n, crossings });
+      }
+    });
+    return runs;
+  })();
+  // Caches the Wide label pool as element references plus each run's
   // fixed geometry, so a pan touches no DOM queries — mirrors how
   // mapPositionPlayer() resolves #mapPlayer. Cleared for Close, which emits
   // no street names at all.
   //
   // This is also where each street's name is measured, for the same
   // reason the widths in mapBindBuildingLabels() are: bind is the one moment
-  // the names are in the DOM and are about to be placed. Each street keeps
-  // its own metrics, so one reading per street — the three pooled nodes of a
-  // street all carry the same string.
+  // the names are in the DOM and are about to be placed. One reading per
+  // name, shared by every run of that street.
   function mapBindStreetLabels(){
     mapStreetLabels = [];
     if(mapZoomMode !== "wide") return;
     const svg = document.getElementById("mapSvg");
-    MAP_STREETS.forEach((street, i)=>{
-      const first = LOCATIONS[street.chain[0]], last = LOCATIONS[street.chain[street.chain.length-1]];
-      const a = mapToSvg(first.x / 100, first.y / 100);
-      const b = mapToSvg(last.x / 100, last.y / 100);
-      let angle = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
-      if(angle > 90) angle -= 180;
-      else if(angle <= -90) angle += 180;
-      const els = Array.prototype.slice.call(svg.querySelectorAll(`text.map-street-name[data-street="${i}"]`));
-      els.forEach(el=> el.textContent = street.name);
+    const widths = {};
+    MAP_STREET_RUNS.forEach((run, i)=>{
+      const els = Array.prototype.slice.call(svg.querySelectorAll(`text.map-street-name[data-run="${i}"]`));
+      els.forEach(el=> el.textContent = run.name);
       // The pool ships hidden and a hidden node has no layout, so it would
       // measure zero. Show the one node being read and leave it shown: the
       // snap that follows this bind sets `display` on every pooled node
       // anyway, and shipping the whole pool visible instead would paint
-      // sixteen names at the origin first — the flash Close's build-order
+      // every name at the origin first — the flash Close's build-order
       // comment exists to avoid.
-      let metrics = null;
-      if(els.length){
+      if(!(run.name in widths) && els.length){
         els[0].style.display = "";
-        metrics = mapLabelMetrics(mapTextWidth(els[0]));
+        widths[run.name] = mapTextWidth(els[0]);
       }
-      mapStreetLabels.push({ a, b, angle, horizontal: a.y === b.y, els,
-                             metrics: metrics || MAP_LABEL_METRICS_FALLBACK });
+      mapStreetLabels.push({ run, els, w: widths[run.name] });
     });
   }
-  // The box a name occupies: this street's own measured width along its
-  // street and MAP_LABEL_CAP across, sitting MAP_LABEL_OFFSET off the street
-  // line — above a horizontal street, right of a vertical one, which is where
-  // the rotation in mapBindStreetLabels() puts it. Centre and extents, so a
-  // hit test reads the same for either heading.
-  function mapLabelBox(street, p){
-    const band = MAP_LABEL_OFFSET + MAP_LABEL_CAP / 2;
-    const w = street.metrics.w;
-    if(street.horizontal) return { x: p, y: street.a.y - band, w, h: MAP_LABEL_CAP };
-    return { x: street.a.x + band, y: p, w: MAP_LABEL_CAP, h: w };
+  // A street's metrics at the scale `k`: its own measured width, or the
+  // fallback when the measurement failed.
+  function mapStreetMetrics(street, k){
+    return mapLabelMetrics(street.w, k) || mapLabelMetrics(MAP_LABEL_W_FALLBACK, k);
+  }
+  // Where a name at distance `t` along its run sits: its anchor on the line,
+  // and the centre of the box it occupies — its width along the run and a
+  // cap height across, MAP_LABEL_OFFSET off the line on the run's `n` side,
+  // which is where the rotation in mapPositionStreetLabels() puts it.
+  function mapLabelAnchor(run, t){ return { x: run.a.x + run.u.x * t, y: run.a.y + run.u.y * t }; }
+  function mapLabelCentre(run, t, m){
+    const p = mapLabelAnchor(run, t), band = m.offset + m.cap / 2;
+    return { x: p.x + run.n.x * band, y: p.y + run.n.y * band };
   }
   // The player marker is drawn over the same streets and nothing else in the
   // placement knows it is there, so a name that would sit under it is dropped
   // — suppressed rather than slid, since a slide can cascade. Where it was
-  // the street's only name, #locBar already says where the player is.
-  function mapLabelHitsPlayer(street, p, player){
-    const box = mapLabelBox(street, p);
-    const reach = MAP_PLAYER_R_WIDE + street.metrics.clearance;
-    const dx = Math.max(Math.abs(player.x - box.x) - box.w / 2, 0);
-    const dy = Math.max(Math.abs(player.y - box.y) - box.h / 2, 0);
+  // the street's only name, #locBar already says where the player is. The
+  // test is in the box's own frame, so it reads the same at any heading.
+  function mapLabelHitsPlayer(run, t, m, player){
+    const c = mapLabelCentre(run, t, m);
+    const reach = MAP_PLAYER_R_WIDE * m.k + m.clearance;
+    const vx = player.x - c.x, vy = player.y - c.y;
+    const dx = Math.max(Math.abs(vx * run.u.x + vy * run.u.y) - m.w / 2, 0);
+    const dy = Math.max(Math.abs(vx * run.n.x + vy * run.n.y) - m.cap / 2, 0);
     return dx * dx + dy * dy < reach * reach;
+  }
+  // The distances along `run` at which its line lies inside `box`, shrunk
+  // by `depth` on every side its names reach toward (run.n): [lo, hi], or
+  // null when none of it does. A name drawn anywhere in that stretch stays
+  // inside the view (#37). Liang–Barsky, against the run as a segment.
+  function mapRunVisible(run, box, depth){
+    const x0 = box.x + (run.n.x < 0 ? -run.n.x * depth : 0), x1 = box.x + box.w - (run.n.x > 0 ? run.n.x * depth : 0);
+    const y0 = box.y + (run.n.y < 0 ? -run.n.y * depth : 0), y1 = box.y + box.h - (run.n.y > 0 ? run.n.y * depth : 0);
+    let lo = 0, hi = run.len;
+    const clip = (p, q)=>{
+      if(Math.abs(p) < 1e-12) return q >= 0;
+      const r = q / p;
+      if(p < 0){ if(r > hi) return false; if(r > lo) lo = r; }
+      else { if(r < lo) return false; if(r < hi) hi = r; }
+      return true;
+    };
+    const ok = clip(-run.u.x, run.a.x - x0) && clip(run.u.x, x1 - run.a.x)
+      && clip(-run.u.y, run.a.y - y0) && clip(run.u.y, y1 - run.a.y);
+    return ok && hi > lo ? [lo, hi] : null;
   }
   // Moves every pooled label to match the viewBox `box`. Called wherever the
   // viewBox is set — the snap branch and every animation frame — since the
   // placement is relative to the window, not to the street. `node` is the map
   // node the player is on, passed in rather than read from mapLastNode, which
   // renderMap() has not updated yet when the snap branch runs.
-  // A street is named only while its line is inside the box with
-  // MAP_LABEL_DEPTH to spare on the side its names sit, above a horizontal
-  // street and right of a vertical one (mapLabelBox()): a street closer than
-  // that to the top or right edge would have its names drawn wholly outside
-  // the view (#37). The other side needs only the line inside, since the
-  // names run into the view from there.
   function mapPositionStreetLabels(box, node){
-    const p0 = LOCATIONS[node];
-    const player = mapToSvg(p0.x / 100, p0.y / 100);
+    const player = mapNodeSvg(node);
+    const k = mapScale(box.w);
     mapStreetLabels.forEach(street=>{
-      let positions = [];
-      if(street.horizontal){
-        if(street.a.y >= box.y + MAP_LABEL_DEPTH && street.a.y <= box.y + box.h){
-          positions = mapLabelPositions(
-            Math.max(Math.min(street.a.x, street.b.x), box.x),
-            Math.min(Math.max(street.a.x, street.b.x), box.x + box.w),
-            street.metrics);
-        }
-      } else if(street.a.x >= box.x && street.a.x <= box.x + box.w - MAP_LABEL_DEPTH){
-        positions = mapLabelPositions(
-          Math.max(Math.min(street.a.y, street.b.y), box.y),
-          Math.min(Math.max(street.a.y, street.b.y), box.y + box.h),
-          street.metrics);
-      }
-      positions = positions.filter(p => !mapLabelHitsPlayer(street, p, player));
+      const run = street.run, m = mapStreetMetrics(street, k);
+      const seen = mapRunVisible(run, box, m.depth);
+      const positions = (seen ? mapLabelPositions(seen[0], seen[1], m, run) : [])
+        .filter(t => !mapLabelHitsPlayer(run, t, m, player));
       street.els.forEach((el, i)=>{
         if(i >= positions.length){ el.style.display = "none"; return; }
-        const x = street.horizontal ? positions[i] : street.a.x;
-        const y = street.horizontal ? street.a.y : positions[i];
-        el.setAttribute("transform", `translate(${x} ${y}) rotate(${street.angle})`);
+        const p = mapLabelAnchor(run, positions[i]);
+        el.setAttribute("transform", `translate(${p.x} ${p.y}) rotate(${run.angle}) scale(${k})`);
         el.style.display = "";
       });
     });
   }
+  // The north arrow, pinned to the map's corner outside the panning SVG, so
+  // it never moves: true north lies GRID_BEARING_DEG anticlockwise of the
+  // map's up. Drawn once.
+  (function(){
+    const arrow = document.getElementById("mapNorth");
+    arrow.innerHTML = `<path d="M 12 3 L 17 17 L 12 14 L 7 17 Z"/><text x="12" y="29" text-anchor="middle">N</text>`;
+    arrow.style.transform = `rotate(${-GRID_BEARING_DEG}deg)`;
+  })();
   // Building markers and their names (Close view). The marker circle's
   // radius is read twice — by the circle itself and by the visibility test
   // in mapPositionBuildingLabels() — so it is one fact with one name.
@@ -9770,7 +9830,7 @@
     Object.keys(MAP_BUILDING_OFFSETS).forEach(id=>{
       const off = MAP_BUILDING_OFFSETS[id];
       const anchor = LOCATIONS[BUILDINGS[id].anchor];
-      const dot = mapToSvg(anchor.x / 100 + off.dx, anchor.y / 100 + off.dy);
+      const dot = mapToSvg(anchor.x + off.dx, anchor.y + off.dy);
       const els = Array.prototype.slice.call(svg.querySelectorAll(`text.map-bldg-label[data-bldg="${id}"]`));
       // Split first: `half` below reads the nodes, so it has to run against
       // the text they finally carry, not the whole name sitting in the first
@@ -9836,15 +9896,20 @@
       });
     });
   }
+  // The river and the railway, under everything else in both views: the
+  // river's polylines (RIVER_LINES) and every rail run in MAP_STREETS.
+  function mapRiverAndRail(){
+    let html = RIVER_LINES.map(line=> `<path class="map-river" d="${mapPolylineD(line)}"/>`).join("");
+    MAP_STREETS.forEach(s=>{ if(s.rail) html += `<path class="map-rail" d="${mapPathD(s.chain)}"/>`; });
+    return html;
+  }
   function renderMapClose(){
-    let html = "";
-    const wStart = mapToSvg(MAP_MIN_COL, MAP_MAX_ROW), wEnd = mapToSvg(MAP_MAX_COL, MAP_MAX_ROW);
-    html += `<path class="map-river" d="M ${wStart.x-25} ${wStart.y} L ${wEnd.x+25} ${wEnd.y}"/>`;
+    let html = mapRiverAndRail();
     MAP_STREETS.forEach(s=>{
-      html += `<path class="map-street" d="${mapPathD(s.chain)}"/>`;
+      if(!s.rail) html += `<path class="map-street" d="${mapPathD(s.chain)}"/>`;
     });
     MAP_STREET_NODE_IDS.forEach(id=>{
-      const p = mapToSvg(LOCATIONS[id].x / 100, LOCATIONS[id].y / 100);
+      const p = mapNodeSvg(id);
       html += `<circle class="map-node-dot" cx="${p.x}" cy="${p.y}" r="3"/>`;
     });
     // A name is written here but not placed here: the viewBox slides under
@@ -9867,7 +9932,7 @@
     Object.keys(MAP_BUILDING_OFFSETS).forEach(id=>{
       const off = MAP_BUILDING_OFFSETS[id];
       const anchor = LOCATIONS[BUILDINGS[id].anchor];
-      const p = mapToSvg(anchor.x / 100 + off.dx, anchor.y / 100 + off.dy);
+      const p = mapToSvg(anchor.x + off.dx, anchor.y + off.dy);
       html += `<circle class="map-bldg-dot" cx="${p.x}" cy="${p.y}" r="${MAP_BLDG_DOT_R}"/>`;
       const name = BUILDINGS[id].name;
       const lineCount = name.indexOf(" ") === -1 ? 1 : 2;
@@ -9879,19 +9944,18 @@
     return html;
   }
   function renderMapWide(){
-    const wStart = mapToSvg(MAP_MIN_COL, MAP_MAX_ROW), wEnd = mapToSvg(MAP_MAX_COL, MAP_MAX_ROW);
-    let html = `<path class="map-river" d="M ${wStart.x-25} ${wStart.y} L ${wEnd.x+25} ${wEnd.y}"/>`;
+    let html = mapRiverAndRail();
     MAP_STREETS.forEach(s=>{
-      html += `<path class="map-street-thin" d="${mapPathD(s.chain)}"/>`;
+      if(!s.rail) html += `<path class="map-street-thin" d="${mapPathD(s.chain)}"/>`;
     });
     // The label pool goes after every street line so no run is drawn over
     // its own names. The nodes ship empty and hidden; mapBindStreetLabels()
     // fills in the names, measures the widest of them and leaves the one
     // node per street it measured shown, and mapPositionStreetLabels() then
     // places or hides every node in the pool.
-    MAP_STREETS.forEach((s, i)=>{
+    MAP_STREET_RUNS.forEach((run, i)=>{
       for(let k = 0; k < MAP_LABELS_PER_STREET; k++){
-        html += `<text class="map-street-name" data-street="${i}" y="${-MAP_LABEL_OFFSET}" text-anchor="middle" style="display:none"></text>`;
+        html += `<text class="map-street-name" data-run="${i}" y="${-MAP_LABEL_OFFSET}" text-anchor="middle" style="display:none"></text>`;
       }
     });
     // Wide's viewBox is ~4x Close's, so the marker needs a matching radius
@@ -9900,32 +9964,39 @@
     return html;
   }
   function mapPositionPlayer(node){
-    const n = LOCATIONS[node];
-    const p = mapToSvg(n.x / 100, n.y / 100);
+    const p = mapNodeSvg(node);
     const el = document.getElementById("mapPlayer");
     if(el){ el.setAttribute("cx", p.x); el.setAttribute("cy", p.y); }
   }
-  // The zoom step changes in exactly two places — a +/- click, and the mode
-  // toggle moving the range under it — so both clamp here and
-  // mapTargetViewBox() reads a step it can trust. The buttons take their
-  // disabled state from the same range for the same reason: a step clamped
-  // where the span is read would render as the clamped view while the button
-  // still offered a step that did nothing.
-  function mapSetZoomStep(step){
-    const range = MAP_ZOOM_RANGE[mapZoomMode];
-    mapZoomStep = Math.min(range.max, Math.max(range.min, step));
-    document.getElementById("mapZoomIn").disabled = mapZoomStep === range.min;
-    document.getElementById("mapZoomOut").disabled = mapZoomStep === range.max;
+  // The zoom span changes in exactly two places — a +/- click, and the mode
+  // toggle moving the ladder under it — so both snap here, to the nearest
+  // step of the mode's ladder, and mapTargetViewBox() reads a span it can
+  // trust. The buttons take their disabled state from the same ladder for
+  // the same reason: a span snapped where it is read would render as the
+  // snapped view while the button still offered a step that did nothing.
+  function mapSetZoomSpan(spanM){
+    const steps = MAP_ZOOM_RANGE[mapZoomMode].steps;
+    mapZoomSpan = steps.reduce((best, s)=> Math.abs(s - spanM) < Math.abs(best - spanM) ? s : best, steps[0]);
+    document.getElementById("mapZoomIn").disabled = mapZoomSpan === steps[0];
+    document.getElementById("mapZoomOut").disabled = mapZoomSpan === steps[steps.length - 1];
   }
-  // Both modes are a player-centred window on their own span. Wide used to
-  // return a constant box, which is why it never panned. The box
-  // is deliberately not clamped to the town's bounds: the ask was for Wide to
-  // pan the way Close does, and Close shows empty canvas past the edge too.
+  // Both modes are a player-centred window on their own span. The box is
+  // deliberately not clamped to the town's bounds: the map shows empty
+  // canvas past the edge.
   function mapTargetViewBox(node){
-    const span = mapZoomStep * MAP_SPACING;
-    const n = LOCATIONS[node];
-    const p = mapToSvg(n.x / 100, n.y / 100);
+    const span = mapZoomSpan * MAP_UNITS_PER_M;
+    const p = mapNodeSvg(node);
     return { x: p.x - span/2, y: p.y - span/2, w: span, h: span };
+  }
+  // What Wide scales with its span (mapScale()): the line widths, through
+  // the --map-k property the stylesheet multiplies them by, and the player
+  // marker's radius. The names scale where they are placed.
+  function mapApplyScale(box){
+    const k = mapScale(box.w);
+    const svg = document.getElementById("mapSvg");
+    svg.style.setProperty("--map-k", k);
+    const el = document.getElementById("mapPlayer");
+    if(el && mapZoomMode === "wide") el.setAttribute("r", MAP_PLAYER_R_WIDE * k);
   }
   function mapUpdateViewBox(node, snap){
     const svg = document.getElementById("mapSvg");
@@ -9933,6 +10004,7 @@
     if(snap || !mapCurrentViewBox){
       mapCurrentViewBox = target;
       svg.setAttribute("viewBox", `${target.x} ${target.y} ${target.w} ${target.h}`);
+      mapApplyScale(target);
       mapPositionStreetLabels(target, node);
       mapPositionBuildingLabels(target);
       return;
@@ -9948,6 +10020,7 @@
       const h = start.h + (target.h - start.h) * ease;
       svg.setAttribute("viewBox", `${x} ${y} ${w} ${h}`);
       mapCurrentViewBox = { x, y, w, h };
+      mapApplyScale(mapCurrentViewBox);
       // Per frame, not on settle: both pools are fixed, so this only writes
       // position and `display` on at most MAP_LABELS_PER_STREET nodes per
       // street and one or two per building. Nothing is created or destroyed
@@ -10668,8 +10741,7 @@
   // retunable).
   const DESC_READERS = {
     load:     { states:["on", "off"], read:(r)=> loadPoweredNow(r.id) ? "on" : "off" },
-    grid:     { states:["on", "off"], read:()=> gridUp() ? "on" : "off" },
-    crossing: { states:["on", "off"], read:()=> crossingLit() ? "on" : "off" }
+    grid:     { states:["on", "off"], read:()=> gridUp() ? "on" : "off" }
   };
   // A room's description as it reads now.
   function roomDescText(room){
@@ -11231,7 +11303,7 @@
   refreshPower();
   stampMissingAges();
   log("You wake up in your apartment. Everything's exactly where you left it — for now.");
-  mapSetZoomStep(mapZoomStep);
+  mapSetZoomSpan(mapZoomSpan);
   render();
 
   // Dev seam. The six validators, the two seed reports and the power
