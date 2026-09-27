@@ -96,7 +96,15 @@ town since 2026-09-26 (#237), replacing Henderson, Kentucky.
   - windbreak rows of tall trees on the north and west sides.
 
   Status: observed from imagery; the chalets' interiors and number of floors
-  are unconfirmed. Property listings found for "Atucha" are quintas and
+  are unconfirmed.
+- **The row houses, measured** (same imagery, 2026-09-27):
+  - attached single-family houses, three or four to a row, around U-shaped
+    shared courtyards with paths and parking, and gardens behind;
+  - each under a pyramid (hipped) red-tile roof, about 12 × 12 m over the
+    eaves.
+
+  Whether they're one storey or two is unconfirmed. **The player's home is
+  one of them** (canon). Property listings found for "Atucha" are quintas and
   newer houses, not these chalets.
 - NA-SA had about 1,400 workers at some point (El Destape, 2023, search
   summary) against about 3,000 in a later figure (above). They wore "the
@@ -129,9 +137,23 @@ above it uses the shop's address; private homes get none (#237).
   between Calles 107 and 109
   ([argentino.com.ar](https://www.argentino.com.ar/casa-fierro-corralon-F120EC10E18D344),
   search summary; secondary).
-- **Not yet found in Lima:** a *ferretería*, a supermarket or *autoservicio*,
-  a *taller mecánico* or *gomería*. Listings for "Lima" mostly return Zárate
-  or Lima, Peru. Tom is checking on Street View.
+- **Shops mapped in OSM** (secondary, 2026-09-27):
+  - **Alineación Esteban**, Calle 16 Nº 470 (`shop=car_repair`);
+  - **Rosich Neumáticos** (tyres), by the railway;
+  - **butchers:** Estilo Argentino (Calle 7 Nº 332) and El Porvenir (Calle 6
+    Nº 665);
+  - **Panadería Gualdoni** (bakery);
+  - an ice-cream maker, two laundrettes, an electronics shop, a perfumery,
+    a clothes shop;
+  - **restaurants and bars:** El Galpón de los Felipetti, Federicos, Saba
+    Resto-bar, Bar El Abuelo, Pulpería El Rincón;
+  - **fuel:** D.A.P.S.A. on Avenida 11, and another station further south.
+- **Estación Lima's goods shed:** OSM maps a `building=warehouse`, about
+  29 × 26 m, beside the two station buildings.
+- **Not found in Lima:** a *ferretería* (the corralón is the nearest thing),
+  a supermarket, *almacén* or *autoservicio*. Neither Street View (Tom) nor
+  the listings turned one up. The game places one *almacén* as a design
+  addition (#237).
 
 ## Homes as seen from the street (Tom, Street View, 2026-09-27)
 
