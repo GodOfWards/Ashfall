@@ -697,9 +697,9 @@
   //                 cannotHaveFire without being fully under cover, and the two
   //                 partial street nodes are covered and can still host a fire.
   //                 They are different facts (a fire rule vs. being under
-  //                 cover). The pass that adds the first consumer also inherits
-  //                 shelter's save backfill — backfillRoomAddresses()
-  //                 deliberately does not restore it, since nothing reads it.
+  //                 cover). Like every definition field it is never saved,
+  //                 so the pass that adds the first consumer needs no
+  //                 backfill.
   //   desc          description shown to the player: a string, or STATE
   //                 VARIANTS, one text per state of something in the world,
   //                 { reads, variants:{ state: text } }. `reads` names what
@@ -4563,6 +4563,10 @@
       rollSeq: 0,
       currentRoom:"living", gait:"walk",
       totalMinutes:0, collapseCount:0,
+      // Every building the player has been inside, by `buildingId` (ROOM
+      // SCHEMA), in the order first entered. Written by doMove(); Walk to…
+      // reads it.
+      enteredBuildings:[],
       // Running illnesses, keyed by ILLNESSES id: the minutes each has left.
       // A missing or 0 entry means not ill with it.
       illnesses:{},
@@ -6077,6 +6081,8 @@
       checkGameOver();
     }
     state.currentRoom = exit.to;
+    const entered = world[exit.to].buildingId;
+    if(entered && !state.enteredBuildings.includes(entered)) state.enteredBuildings.push(entered);
     worldTab = "floor";
     detailItem = null;
     render();
@@ -7616,14 +7622,18 @@
   // ==================================================
   // PERSISTENCE
   // ==================================================
-  // Save format: { version, state, world, doors, windows }. `state` and
-  // `world` are written whole; `doors` and `windows` carry only what changes
-  // in play, `{ locked, open }` per door and `{ state }` per window, since
-  // their definitions are rebuilt from WORLD DATA on every load (buildDoors(),
-  // buildWindows()). _uid is not persisted specially — resyncUidCounter()
-  // scans every item location after a load so newly-created items during the
-  // next session keep getting unique ids, and ensureUid() lazily assigns one
-  // to any loaded item that predates the uid system.
+  // Save format: { version, state, rooms, doors, windows }. `state` is
+  // written whole. The world's definitions are never saved: they are rebuilt
+  // from WORLD DATA on every load, and the save carries only what play
+  // changed on top of them. `rooms` holds, per room id, the fields of
+  // ROOM_STATE_FIELDS and CONTAINER_STATE_FIELDS that differ from a freshly
+  // built world (savedRoomState(), applied back by buildWorld()); `doors` and
+  // `windows` carry `{ locked, open }` per door and `{ state }` per
+  // window (buildDoors(), buildWindows()). _uid is not persisted specially —
+  // resyncUidCounter() scans every item location after a load so
+  // newly-created items during the next session keep getting unique ids, and
+  // ensureUid() lazily assigns one to any loaded item that predates the uid
+  // system.
   function savedDoorState(){
     const out = {};
     Object.keys(doors).forEach(id=>{ out[id] = { locked: doors[id].locked, open: doors[id].open }; });
@@ -7634,9 +7644,89 @@
     Object.keys(windows).forEach(id=>{ out[id] = { state: windows[id].state }; });
     return out;
   }
+  // What a room's saved state is made of: the fields play writes on a room
+  // (every write site: doSearch(), doBreakCar(), FIRE / COOKING, the fire's
+  // burn-down in applyWorldTicking(), doChopTree(), every take and drop), and
+  // on a container, in `containers` and `carContainers` alike
+  // (doOpenContainer(), doUnlockContainer(), the stove timer). Everything
+  // else on a room is definition, rebuilt on every load.
+  const ROOM_STATE_FIELDS = ["floor", "searched", "carLocked", "heatActive", "fireMinutesLeft", "campfireBuilt", "hasTree"];
+  const CONTAINER_STATE_FIELDS = ["items", "spawnRolled", "lastRolledMinute", "locked", "timerMinutes"];
+  const ROOM_CONTAINER_KINDS = ["containers", "carContainers"];
+  // A value as the saved-state comparison sees it: its JSON with every
+  // item's _uid left out, so a row the player only looked at (which mints a
+  // _uid) doesn't count as changed.
+  function stateJson(v){ return JSON.stringify(v === undefined ? null : v, (k, x)=> k === "_uid" ? undefined : x); }
+  // Per room id, what differs from a freshly built world: the room fields
+  // that changed, and per container id the container fields that changed. A
+  // container the definition lacks, made in play (today only the campfire's),
+  // is saved whole, as `{ made: container }`. A room with nothing changed is
+  // left out. One fresh build per save.
+  function savedRoomState(){
+    const fresh = makeDefaultWorld();
+    const out = {};
+    Object.keys(world).forEach(id=>{
+      const room = world[id], def = fresh[id];
+      if(!def) return;
+      const s = {};
+      ROOM_STATE_FIELDS.forEach(f=>{ if(stateJson(room[f]) !== stateJson(def[f])) s[f] = room[f] === undefined ? null : room[f]; });
+      ROOM_CONTAINER_KINDS.forEach(kind=>{
+        const byId = {};
+        (room[kind] || []).forEach(c=>{
+          const dc = (def[kind] || []).find(x=> x.id === c.id);
+          if(!dc){ byId[c.id] = { made:c }; return; }
+          const cs = {};
+          CONTAINER_STATE_FIELDS.forEach(f=>{ if(stateJson(c[f]) !== stateJson(dc[f])) cs[f] = c[f] === undefined ? null : c[f]; });
+          if(Object.keys(cs).length) byId[c.id] = cs;
+        });
+        if(Object.keys(byId).length) s[kind] = byId;
+      });
+      if(Object.keys(s).length) out[id] = s;
+    });
+    return out;
+  }
   function serializeGame(){
-    return JSON.stringify({ version: GAME_CONFIG.VERSION, state, world,
+    return JSON.stringify({ version: GAME_CONFIG.VERSION, state, rooms: savedRoomState(),
       doors: savedDoorState(), windows: savedWindowState() }, null, 2);
+  }
+  // The runtime world: the definitions, rebuilt fresh, with a save's `rooms`
+  // (or null for a new game) applied by id — each saved room's fields, and
+  // each saved container's fields by container id. A saved room or container
+  // the definitions no longer have is dropped with a warning; a definition the
+  // save lacks keeps its default. Only well-typed fields are taken, the
+  // buildDoors() rule: a bad value falls back to the definition's. A `made`
+  // container is restored whole, where the definition has none by its id.
+  function buildWorld(saved){
+    const out = makeDefaultWorld();
+    const bool = v=> typeof v === "boolean";
+    const num = v=> typeof v === "number" && Number.isFinite(v);
+    const roomTypes = { floor:Array.isArray, searched:bool, carLocked:bool, heatActive:bool, campfireBuilt:bool, hasTree:bool,
+      fireMinutesLeft: v=> v === null || num(v) };
+    const containerTypes = { items:Array.isArray, spawnRolled:bool, lastRolledMinute:num, locked:bool, timerMinutes:num };
+    Object.keys(saved || {}).forEach(id=>{
+      const s = saved[id], room = out[id];
+      if(!room){ console.warn(`buildWorld: saved room "${id}" is no longer in the world — dropped`); return; }
+      if(!s || typeof s !== "object") return;
+      ROOM_STATE_FIELDS.forEach(f=>{ if(f in s && roomTypes[f](s[f])) room[f] = s[f]; });
+      ROOM_CONTAINER_KINDS.forEach(kind=>{
+        const byId = s[kind];
+        if(!byId || typeof byId !== "object") return;
+        Object.keys(byId).forEach(cid=>{
+          const cs = byId[cid];
+          if(!cs || typeof cs !== "object") return;
+          const c = (room[kind] || []).find(x=> x.id === cid);
+          if(!c){
+            const made = cs.made;
+            if(made && typeof made === "object" && made.id === cid && Array.isArray(made.items)){
+              (room[kind] = room[kind] || []).push(made);
+            } else console.warn(`buildWorld: saved container "${id}/${cid}" is no longer in the world — dropped`);
+            return;
+          }
+          CONTAINER_STATE_FIELDS.forEach(f=>{ if(f in cs && containerTypes[f](cs[f])) c[f] = cs[f]; });
+        });
+      });
+    });
+    return out;
   }
   // forEachItemList(): calls visit(list, roomId) once for every item array
   // reachable from the current `state` and `world` — the inventory pools,
@@ -7687,79 +7777,40 @@
       if(it && !it.itemId && nameToId[it.name]) it.itemId = nameToId[it.name];
     }));
   }
-  // backfillLocationIds(): companion to backfillItemIds(), run alongside it
-  // on every load. Older saves (pre-v0.2.9) predate the locationId field —
-  // this assigns it to any loaded room missing it, by direct room-id lookup
-  // against a freshly-built default world. Unlike backfillItemIds()'s name
-  // matching, room ids are stable, so this is an unambiguous key lookup.
-  function backfillLocationIds(){
-    const defaults = makeDefaultWorld();
-    Object.keys(world).forEach(roomId=>{
-      const room = world[roomId];
-      if(room && !room.locationId && defaults[roomId]){
-        room.locationId = defaults[roomId].locationId;
-      }
-    });
-  }
-  // backfillContainerFields(): companion to backfillLocationIds(), run
-  // alongside it on every load. Older saves (pre-v0.4.0) predate both
-  // spawnPools and spawnRolled entirely — for any loaded container whose
-  // matching default-world container has spawnPools, this copies
-  // spawnPools (if missing) the same way backfillLocationIds() copies a
-  // missing locationId, then copies spawnRolled (if missing) to match the
-  // default. That ordering matters: without spawnPools also being
-  // restored, doOpenContainer()'s `container.spawnPools && ...` guard
-  // could never fire for anything loaded from an old save, silently
-  // defeating the roll entirely rather than just mistiming it. The net
-  // effect: an old save's already-populated container doesn't become
-  // eligible for an auto-roll it was never meant to get, and a still-empty
-  // one does get a chance to roll on next open.
-  function backfillContainerFields(){
-    const defaults = makeDefaultWorld();
-    Object.keys(world).forEach(roomId=>{
-      const room = world[roomId];
-      const defaultRoom = defaults[roomId];
-      if(!room || !defaultRoom) return;
-      const scan = (containers, defaultContainers)=>{
-        (containers || []).forEach(c=>{
-          const dc = (defaultContainers || []).find(x=>x.id===c.id);
-          if(!dc || !dc.spawnPools) return;
-          if(c.spawnPools === undefined) c.spawnPools = dc.spawnPools;
-          if(c.spawnRolled === undefined) c.spawnRolled = dc.spawnRolled;
-        });
-      };
-      scan(room.containers, defaultRoom.containers);
-      // No car container carries spawnPools today, so this second scan
-      // can copy nothing — kept for a car container that gains one later,
-      // since scan() already returns early when there is nothing to copy.
-      scan(room.carContainers, defaultRoom.carContainers);
-    });
-  }
   // validateLoadedWorld(): the shape check a load must pass before anything
   // is committed. Unlike validateItemRegistry()/validateLocations() below,
   // which are dev-only console helpers, this is wired into a real code path
   // and runs on every load — hence its place here in PERSISTENCE beside the
   // backfills rather than in the dev-helper block.
   //
-  // It covers exactly the shapes that make resyncUidCounter(), the load-time
-  // backfills or render() throw, and no more. This is a shape check, not a
-  // schema validator: a save that is merely out of date is the backfills'
-  // problem, and they run only once this has passed. Returns an array of
-  // problem strings, empty on success — the shape its two siblings use.
-  function validateLoadedWorld(nextWorld, nextState){
+  // It covers exactly the shapes that make buildWorld(), resyncUidCounter(),
+  // the load-time backfills or render() throw, and no more: `rooms` is an
+  // object, each saved room's `floor` and each saved container's `items`
+  // (or a made container's) is an array, and the player's room exists in the
+  // world rebuilt from the definitions. This is a shape check, not a schema
+  // validator: a save that is merely out of date is the backfills' problem,
+  // and they run only once this has passed. Returns an array of problem
+  // strings, empty on success — the shape its two siblings use.
+  function validateLoadedWorld(savedRooms, nextWorld, nextState){
     const problems = [];
-    Object.keys(nextWorld).forEach(roomId=>{
-      const room = nextWorld[roomId];
-      if(!room){ problems.push(`${roomId}: room is missing`); return; }
-      if(!Array.isArray(room.floor)) problems.push(`${roomId}: floor is not an array`);
-      if(!Array.isArray(room.exits)) problems.push(`${roomId}: exits is not an array`);
-      if(!Array.isArray(room.containers)) problems.push(`${roomId}: containers is not an array`);
-      // carContainers is optional on a room and stays optional — only a
-      // present one is checked.
-      if(room.carContainers !== undefined && !Array.isArray(room.carContainers)){
-        problems.push(`${roomId}: carContainers is present but not an array`);
-      }
+    if(!savedRooms || typeof savedRooms !== "object" || Array.isArray(savedRooms)) problems.push("rooms: not an object");
+    else Object.keys(savedRooms).forEach(roomId=>{
+      const s = savedRooms[roomId];
+      if(!s || typeof s !== "object"){ problems.push(`${roomId}: saved room is not an object`); return; }
+      if("floor" in s && !Array.isArray(s.floor)) problems.push(`${roomId}: floor is not an array`);
+      ROOM_CONTAINER_KINDS.forEach(kind=>{
+        const byId = s[kind];
+        if(byId === undefined) return;
+        if(!byId || typeof byId !== "object"){ problems.push(`${roomId}: ${kind} is not an object`); return; }
+        Object.keys(byId).forEach(cid=>{
+          const cs = byId[cid];
+          if(!cs || typeof cs !== "object") problems.push(`${roomId}/${cid}: saved container is not an object`);
+          else if(cs.made ? !Array.isArray(cs.made.items) : ("items" in cs && !Array.isArray(cs.items)))
+            problems.push(`${roomId}/${cid}: items is not an array`);
+        });
+      });
     });
+    if(!nextWorld[nextState.currentRoom]) problems.push(`state.currentRoom: "${nextState.currentRoom}" is not in the world`);
     if(!nextState.inventory || !Array.isArray(nextState.inventory.items)){
       problems.push("state.inventory: no items array");
     }
@@ -7775,46 +7826,6 @@
   // keep playing — the old order committed `world` first and a throw in a
   // backfill left a half-loaded world on screen with no way back but
   // Restart.
-  // backfillRoomAddresses(): companion to backfillLocationIds(), run
-  // alongside it on every load. roomLabel() now composes from `address`, a
-  // field no save made before it shipped carries — without this, every room in
-  // such a save renders "undefined, ...". It keys off `address === undefined`
-  // rather than falsiness: an address is never empty, and `undefined` is what
-  // distinguishes "this save predates the field" from any other state. It
-  // copies all four label fields rather than just `address`, because this is
-  // not a pure field addition — `building`'s meaning narrowed, and six rooms
-  // moved their name out of `room`, so restoring `address` alone would leave
-  // cornerstore reading "Main St, Corner Store, Corner Store". All four are
-  // static content that nothing mutates at runtime (roomLabel() is their only
-  // reader), so taking them wholesale from the defaults is both safe and the
-  // only version that produces a correct label. `shelter` gets no backfill:
-  // nothing reads it, so an old save's rooms lacking it changes nothing.
-  function backfillRoomAddresses(){
-    const defaults = makeDefaultWorld();
-    Object.keys(world).forEach(roomId=>{
-      const room = world[roomId];
-      if(room && room.address === undefined && defaults[roomId]){
-        room.address  = defaults[roomId].address;
-        room.building = defaults[roomId].building;
-        room.area     = defaults[roomId].area;
-        room.room     = defaults[roomId].room;
-      }
-    });
-  }
-  // backfillRoomDescs(): companion to backfillRoomAddresses(), run alongside
-  // it on every load. A room's `desc` is static content that nothing mutates
-  // in play (roomDescText() is its only reader); a save carries it only
-  // because serializeGame() writes `world` whole. So every room the defaults
-  // know takes its `desc` from them, unconditionally, the way
-  // backfillRegistryTags() recopies tags: every content pass that edits room
-  // text then reaches existing saves without a migration of its own (#278).
-  // A room the defaults don't know is left as it is.
-  function backfillRoomDescs(){
-    const defaults = makeDefaultWorld();
-    Object.keys(world).forEach(roomId=>{
-      if(world[roomId] && defaults[roomId]) world[roomId].desc = defaults[roomId].desc;
-    });
-  }
   // backfillSlotItemIds(): companion to backfillItemIds(), run
   // alongside it on every load. Saves written before equipment slots carried
   // itemId hold a slot object built by hand from an item's fields — so
@@ -7879,30 +7890,6 @@
   function backfillInventoryCap(){
     delete state.inventory.capacityKg;
   }
-  // backfillRenamedContainers(): run on every load, before
-  // backfillContainerFields() and migrateCookingRelease(), which both match
-  // containers by id. A container whose id changed in the definitions keeps
-  // its old id in a save, so the migration would add the new one beside it,
-  // empty: two Fridge tabs, the old one unwired. This renames the saved
-  // container in place, keeping its items and fields, when its room has the
-  // old id and not the new. Idempotent; a save without the old ids passes
-  // through unchanged.
-  //   onea_kitchen  fridge1a, freezer1a, stove1a → fridge, freezer, stove,
-  //                 the ids the `apartment` wiring template names
-  const RENAMED_CONTAINERS = {
-    onea_kitchen: { fridge1a:"fridge", freezer1a:"freezer", stove1a:"stove" }
-  };
-  function backfillRenamedContainers(){
-    Object.keys(RENAMED_CONTAINERS).forEach(roomId=>{
-      const room = world[roomId];
-      if(!room || !Array.isArray(room.containers)) return;
-      const renames = RENAMED_CONTAINERS[roomId];
-      Object.keys(renames).forEach(oldId=>{
-        const c = room.containers.find(x=> x && x.id === oldId);
-        if(c && !room.containers.some(x=> x && x.id === renames[oldId])) c.id = renames[oldId];
-      });
-    });
-  }
   // backfillPowerState(): the power release's state, repaired in place on
   // every load, before the loaded network is first resolved. A save from
   // before it (0.8) has no `power` or `electricalRules` and takes them from
@@ -7929,11 +7916,11 @@
   //   from, is deleted: poisoning is read from the registry now. It runs
   //   after backfillIllnessScale(), which repairs that same field first.
   //   The illness timer moves into state.illnesses.
-  //   Rooms gain what the release authored: containers the default world has
-  //   and the loaded room lacks (the freezers), each container's `tags` from
-  //   its default (the fridges'), and `sink`.
   //   Last, every perishable still without ages is aged from the collapse,
   //   as a new game's world is (stampMissingAges()).
+  // Its other half, which gave a loaded room the containers, tags and `sink`
+  // the release authored, went when room definitions stopped being saved:
+  // every load rebuilds them (buildWorld()).
   const MIGRATED_ITEMS = {
     raw_fish:            it=> itemFromRegistry({ id:"fish", qty:it.qty }),
     cooked_fish:         it=> Object.assign(itemFromRegistry({ id:"fish", qty:it.qty }), { cookState:"cooked" }),
@@ -7966,29 +7953,19 @@
     if(state.illnessMinutesLeft > 0 && !(state.illnesses.food_poisoning > 0))
       state.illnesses.food_poisoning = state.illnessMinutesLeft;
     delete state.illnessMinutesLeft;
-    const defaults = makeDefaultWorld();
-    Object.keys(world).forEach(roomId=>{
-      const room = world[roomId], def = defaults[roomId];
-      if(!room || !def) return;
-      if(def.sink) room.sink = true;
-      else delete room.sink;
-      def.containers.forEach((dc, i)=>{
-        const c = room.containers.find(x=> x.id === dc.id);
-        if(c){
-          if(dc.tags) c.tags = dc.tags.slice();
-          return;
-        }
-        // Where the default has it: straight after the container it follows.
-        const before = i > 0 ? room.containers.findIndex(x=> x.id === def.containers[i - 1].id) : -1;
-        room.containers.splice(before + 1, 0, dc);
-      });
-    });
     stampMissingAges();
     resyncUidCounter();
   }
+  // A save from before room definitions and saved state split (every save
+  // before 0.10) carries `world` and no `rooms`. Its rooms can't be mapped
+  // onto the rebuilt world, so it is refused, whole, with its own line.
   function applyLoadedData(data){
-    if(!data || !data.state || !data.world || !data.world[data.state.currentRoom]){
+    if(!data || !data.state){
       log("That save doesn't look valid — nothing was loaded.", "warn");
+      return false;
+    }
+    if(!data.rooms){
+      log("This save is from an older version of Ashfall and can't be loaded.", "warn");
       return false;
     }
     if(!data.version){
@@ -8001,11 +7978,12 @@
     // roll from it) and `rollSeq`.
     const base = makeDefaultState();
     const nextState = { ...base, ...data.state, vitals: { ...base.vitals, ...(data.state.vitals || {}) } };
-    const nextWorld = data.world;
+    if(!Array.isArray(nextState.enteredBuildings)) nextState.enteredBuildings = [];
     // Rebuilt from the definitions, with the save's fields applied.
+    const nextWorld = buildWorld(data.rooms);
     const nextDoors = buildDoors(data.doors);
     const nextWindows = buildWindows(data.windows);
-    const problems = validateLoadedWorld(nextWorld, nextState);
+    const problems = validateLoadedWorld(data.rooms, nextWorld, nextState);
     if(problems.length){
       console.warn("applyLoadedData: save rejected", problems);
       log("That save doesn't look valid — nothing was loaded.", "warn");
@@ -8035,11 +8013,6 @@
     backfillItemIds();
     backfillSlotItemIds();
     backfillRegistryTags();
-    backfillLocationIds();
-    backfillRenamedContainers();
-    backfillContainerFields();
-    backfillRoomAddresses();
-    backfillRoomDescs();
     backfillIllnessScale();
     backfillInventoryCap();
     migrateCookingRelease();
