@@ -42,6 +42,10 @@ adopts it.
 - **No radiation mechanic,** unless the research shows that lack of
   maintenance really makes radioactive material a hazard (Tom, 2026-09-27;
   #290).
+- **The player is from Lima** (Tom, 2026-09-27; #292). They know its streets
+  and public landmarks as a local does, but not what's inside or what's left.
+  Their home is proposed as a chalet in the Barrio Complejo Nuclear Atucha
+  (#284). How this fits the opening (#137) is open.
 - **The game is in English; places keep their Spanish names** (`CLAUDE.md`,
   "Writing game text").
 - **The wider setting is a string of towns with a city nearby:** Lima first,
