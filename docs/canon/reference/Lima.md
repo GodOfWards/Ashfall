@@ -83,6 +83,39 @@ town since 2026-09-26 (#237), replacing Henderson, Kentucky.
   summary) against about 3,000 in a later figure (above). They wore "the
   company's uniform of grayish-brown trousers and a beige shirt".
 
+## Public buildings and businesses in OSM (2026-09-27, secondary)
+
+Named points in the town, with the address OSM gives. Status as of February
+2025 is unconfirmed for each.
+
+- **Comisaría Zárate 2** (police), on Calle 12.
+- **Hospital Intermedio Municipal "Aurelio Aleotti"**, Calle 6 560. This is
+  at odds with La Nación's "no hospital" (2015); it may have opened or been
+  upgraded since.
+- **Banco Nación**, Avenida 11 245. **Correo Argentino**, Avenida 11 171.
+- **Parroquia San Isidro Labrador** (the parish church), on Avenida 11.
+- **Delegación Municipal de Lima**, on Calle 8.
+- **Schools:**
+  - Escuela de Educación Primaria 9 "Juan Bautista Alberdi" (Avenida 11 256,
+    sharing the site with Escuela de Adultos 705 "Patricias Argentinas");
+  - Primaria 17 "Rosario Vera Peñaloza" (Calle 52);
+  - Secundaria 1 "Fernando Feder" (Calle 2 568);
+  - Secundaria Técnica 5 "Doctor Oscar Melillo" and Instituto Superior de
+    Formación Técnica 195 (Calle 111);
+  - Escuela Especial 503 "Irma Althabe de Guelvenzu" (Calle 8);
+  - Instituto Vanguardia de Lima (Calle 7 945);
+  - kindergartens (*jardines*): 901 "Gendarmería Nacional" (Calle 9), 913
+    "Juana Paula Manso" (Calle 12 1340), 918 "Del Pilar" (Calle 50).
+- **Bomberos Voluntarios de Lima**, Calle 28.
+- **Lodgings:** Hospedaje Lima (Calle 9 399), Plaza Lima Hotel (Calle 10),
+  Hotel Rural Suiza (Calle 111 690).
+- **Shops and services** (a sample): Laverap 10 (laundrette, Calle 10 446),
+  Estilo Argentino (Calle 7 332), Alineación Esteban (wheel alignment,
+  Calle 16 470), El Porvenir (Calle 6 665), Grupo Márquez (Calle 10).
+- **Named neighbourhoods:** Barrio Cervecero, Citrus Lima, Villa del Pilar.
+- **Avenida 11's house numbers** run from 101 at its north end (by the
+  railway) to 900 at its south end, so no. 835 is near its southern end.
+
 ## The street grid
 
 Measured 2026-09-26 from OpenStreetMap (© OpenStreetMap contributors, ODbL)
@@ -130,8 +163,10 @@ through the OSM API (`api/0.6/map`, the box 34.070–34.025 S, 59.225–59.170 W
   - Secondary, 2026-09-27:
     [La Opinión (San Pedro), 2025-04-13](https://www.laopinionsemanario.com.ar/noticia/ferrocarril-mitre-las-barreras-automaticas-que-no-funcionan-y-podrian-evitar-accidentes),
     [Pilar a Diario](https://www.pilaradiario.com/policiales/nuevo-accidente-un-paso-nivel-del-tren-mitre-piden-barreras-n5450406).
-  - **What Lima's crossings had in February 2025 is still unconfirmed:**
-    lights, a bell, a St Andrew's cross, or nothing working.
+  - **Lima's crossings have a bell and nothing more,** day or night: "a
+    common thing in the region" (Tom, from knowing the region, 2026-09-27).
+    No lights and no barriers. Status: Tom's first-hand knowledge; no
+    document read.
 - Secondary, 2026-09-26: OSM, as above. Whether passenger trains ran to Lima
   in the era is unconfirmed.
 
