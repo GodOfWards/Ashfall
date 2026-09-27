@@ -427,10 +427,14 @@
   //   doRestart lives in PERSISTENCE, not SIMULATION, since it performs a
   //   full state reset rather than a time-driven update.
   //
-  // WORLD DATA also carries LOCATIONS — real integer (x,y,z) coordinates
-  // (meters) for every street/mid-block node and building floor, keyed by
-  // `locationId` on every room. LOCATIONS is read by both MAP rendering
-  // and movement: exitMinutes()/locationDistance() compute
+  // The world is Lima, Partido de Zárate, Buenos Aires province: its real
+  // streets as stops and links (LIMA_STOPS, LIMA_LINKS), and its buildings
+  // generated from one line of data each (BUILDING TYPES). WORLD DATA also
+  // carries LOCATIONS — real integer (x,y,z) coordinates (metres) for every
+  // stop and building floor, keyed by `locationId` on every room, in the
+  // frame of Lima's street grid: origin 34.0447 S, 59.1961 W, +y the grid's
+  // "up", GRID_BEARING_DEG east of true north. LOCATIONS is read by both MAP
+  // rendering and movement: exitMinutes()/locationDistance() compute
   // cross-Location travel distance, and applyComputedDirections() (run once
   // at world-build time) derives compass words for cross-Location exit
   // labels via computeDirection(). See the LOCATIONS comment below for the
@@ -459,21 +463,21 @@
   // Floor on the cost of one movement, in game minutes — applied two ways,
   // and the two branches are not a redundancy to be tidied away.
   //
-  // Grid travel (street/mid-block nodes, what isGridTravel() marks) is
-  // floored in proportion to distance: MIN_MOVE_MIN per BLOCK_M. A flat
-  // per-move floor priced the two routes across one block differently —
-  // stopping at the mid-block node cost +44% at Walk and +100% at Jog against
-  // the single 100 m move with the same endpoints — and the mid-block nodes
-  // are where the trees, the parked cars, the building entrances and the
-  // loose floor items hang, so the toll fell on looking around. The
-  // proportional form was chosen, not stumbled into: both routes now cost the
-  // same at every gait.
+  // Street travel (stop to stop, what isGridTravel() marks) is floored in
+  // proportion to distance: MIN_MOVE_MIN per BLOCK_M. A flat per-move floor
+  // priced the two routes along one block differently — stopping at its mid
+  // stop cost +44% at Walk and +100% at Jog against a single move with the
+  // same endpoints — and the mid stops are where the trees, the parked cars,
+  // the house doors and the loose floor items hang, so the toll fell on
+  // looking around. The proportional form was chosen, not stumbled into:
+  // both routes cost the same at every gait.
   //
   // Everything else keeps the flat floor, and that branch is load-bearing:
-  // 22 of the 774 exits are building entrances whose two Locations sit at
-  // identical coordinates, so their computed distance is 0. A proportional
-  // floor would floor them at zero and make them free. They are non-grid
-  // exits, so isGridTravel() already routes them to the flat branch.
+  // every building's street exit joins two Locations at identical
+  // coordinates (a building's Location is its site stop's), so its computed
+  // distance is 0. A proportional floor would floor it at zero and make it
+  // free. They are not street travel, so isGridTravel() already routes them
+  // to the flat branch.
   //
   // The floor also settles the pace question: pace is a journey-scale choice,
   // not a per-block one. With the floor at 1 minute per block, one 100 m
@@ -482,10 +486,10 @@
   // behaviour: the gait selector is meant to pay off over a route, not over
   // one step, which is why the floor is not lowered further.
   const MIN_MOVE_MIN = 1;
-  // The grid pitch in metres, which moveMinutes() divides by to scale the
-  // grid floor. A second statement of the figure the LOCATIONS comment gives
-  // as "Block size 100m" and that every street coordinate embodies; it earns
-  // a name because a formula, not a table, now depends on it.
+  // The distance, in metres, that street travel's floor charges MIN_MOVE_MIN
+  // for (moveMinutes()). Lima's blocks run close to it (about 110 m between
+  // corners), which is where the figure came from; it is a rate now, not a
+  // pitch the coordinates follow.
   const BLOCK_M = 100;
   // Floor on any duration the UI prints, in game minutes. Equal to
   // MIN_MOVE_MIN today and a separate constant on purpose: retuning the
@@ -496,7 +500,7 @@
   // time is accepted rounding rather than an oversight. It became visible
   // when grid travel's floor was made proportional to distance (see
   // MIN_MOVE_MIN): a 50 m half-move costs 0.694 min at Walk and 0.500 at Jog
-  // and prints (0:01) for both, so two half-moves through a mid-block display
+  // and prints (0:01) for both, so two half-moves through a mid stop display
   // 2 minutes against ~1.39 actually spent at Walk. A button that printed
   // (0:00), or one that printed a fraction, would both be worse than being a
   // little generous about a figure the clock already shows to the minute.
@@ -667,45 +671,43 @@
   // ROOM SCHEMA (one entry per key in the object returned by
   // makeDefaultWorld()):
   //   id            (the object key itself) room identifier
-  //   address       the street or intersection the room is at, as a display
-  //                 string, e.g. "Poplar St" / "Dock St & 6th St". Required on
-  //                 every room, never empty. THE ADDRESS RULE: a room's address
-  //                 is the street it is on, and a building fronts a street,
-  //                 never a corner. A street/mid-block node's address is its own
-  //                 location — including an intersection node, which genuinely
-  //                 is at a corner and keeps its "<Street> St & <N>th St"
-  //                 string. A room *inside* a building takes the named street
-  //                 that building fronts, even when the building sits on an
-  //                 intersection node: the Police Station is entered from
-  //                 maple3rd but its address is "Maple St", not
-  //                 "Maple St & 3rd St".
+  //   address       the street or corner the room is at, as a display
+  //                 string, e.g. "Calle 7" / "Avenida 11 & Calle 10".
+  //                 Required on every room, never empty. THE ADDRESS RULE: a
+  //                 room's address is the street it is on, and a building
+  //                 fronts a street, never a corner. A stop's address is its
+  //                 own location — including a corner, which genuinely is at
+  //                 a corner and keeps its "Calle 7 & Calle 10" string
+  //                 (stopAddress()). A room *inside* a building takes the
+  //                 street that building fronts, even when the building sits
+  //                 on a corner: the almacén is entered from the corner of
+  //                 Calle 113 and Calle 50, but its address is "Calle 113".
+  //                 Never a house number: a home is never tied to a real one.
   //   building      the NAME of the building this room is inside, e.g.
-  //                 "Acorn Apartments". Absent when the room is not inside a
-  //                 named building (every street/mid-block node, the alley, and
-  //                 the three flats above the Main St shops — a flat over a shop
-  //                 is not inside the shop). It holds a building's name and
-  //                 nothing else, ever: not a street, not an address. Note that
+  //                 "Pharmacy". Absent when the room is not inside a building
+  //                 (every stop). It holds a building's name and nothing
+  //                 else, ever: not a street, not an address. Note that
   //                 doors[].building and master_key.building are a DIFFERENT
-  //                 field holding a building *id* ("acorn"), unrelated to this.
+  //                 field holding a building *id* ("pharmacy"), unrelated to this.
   //   buildingId    the id of the building instance the room is in (see
   //                 BUILDING TYPES), absent outside one. Definition data:
   //                 doMove() records it in state.enteredBuildings.
-  //   area          floor/apartment/street grouping, e.g. "2A"
-  //   room          room type/name, e.g. "Kitchen"
+  //   area          floor/apartment grouping, e.g. "2A"; null on every room
+  //                 today
+  //   room          room type/name, e.g. "Kitchen"; on a mid stop, where it
+  //                 is along its street, "between Calle 10 & Calle 8"
   //   shelter       "none" | "partial" | "full" — whether the room is under
   //                 cover. Required on every room. "partial" is cover without
   //                 enclosure: a balcony under the building's roof overhang, a
-  //                 street node under a conveyor bridge, a block with a bus
-  //                 shelter in it. Nothing reads shelter today — it is laid
+  //                 stop under a bridge, a block with a bus shelter in it. No
+  //                 room is partial today. Nothing reads shelter today — it is laid
   //                 down ahead of its consumers (#58 weather, #6 rooftops) the
   //                 same way LOCATIONS' z is, so those passes need no retrofit
   //                 across every room. An unused field here is not a dead one.
   //                 It is also NOT cannotHaveFire and must never be derived
-  //                 from it: the two are not coextensive, and the divergence
-  //                 runs both ways — the two balconies and the 1A patio carry
-  //                 cannotHaveFire without being fully under cover, and the two
-  //                 partial street nodes are covered and can still host a fire.
-  //                 They are different facts (a fire rule vs. being under
+  //                 from it: the two are not coextensive — a covered porch can
+  //                 forbid a fire and a covered yard can host one. They are
+  //                 different facts (a fire rule vs. being under
   //                 cover). Like every definition field it is never saved,
   //                 so the pass that adds the first consumer needs no
   //                 backfill.
@@ -727,8 +729,8 @@
   //   carContainers optional array of vehicle container objects
   //   exits         array of movement definitions (see EXIT SCHEMA)
   //   locationId    key into LOCATIONS (see below) — real (x,y,z) position.
-  //                 Street/mid-block rooms use their own room id as their
-  //                 locationId; every room on one building floor shares
+  //                 A stop uses its own room id as its locationId; every room
+  //                 on one building floor shares
   //                 that floor's locationId. Required on every room.
   // Optional environmental properties:
   //   sleepSpot      e.g. "couch"/"bed" — enables the Sleep action
@@ -1056,7 +1058,7 @@
     tire_iron: { name:"Tire iron", category:"Tool", unitWeight:1.0, tags:["blunt"] },
     registration_papers: { name:"Registration papers", category:"Misc", unitWeight:0.02 },
     thermos: { name:"Thermos", category:"Misc", unitWeight:0.4 },
-    acorn_apt_2a_key: { name:"Acorn Apt, 2A", category:"Key", unitWeight:0.03, doorId:"2a" },
+    acorn_apt_2a_key: { name:"Acorn Apt, 2A", category:"Key", unitWeight:0.03, doorId:"home-front" },
     bandage: { name:"Bandage", category:"Medical", unitWeight:0.05 },
     campfire_kit: { name:"Campfire Kit", category:"Materials", unitWeight:2.4, tags:["disassemble"],
       disassembleLog:"You untie the bundle — back to {qty} loose firewood." },
@@ -1543,25 +1545,7 @@
   // never read this: "north" in an exit label is the grid's north, the way
   // the town's own streets run. Only the map's north arrow reads it.
   const GRID_BEARING_DEG = 14;
-  const LOCATIONS = {
-    // Building floors — one entry per floor: (x,y) is the building's,
-    // z is the floor's.
-    acorn_f0:       { x:150, y:100, z:0 },
-    acorn_f1:       { x:150, y:100, z:3 },
-    cornerstore_f0: { x:100, y:200, z:0 },
-    cornerstore_f1: { x:100, y:200, z:3 },
-    pharmacy_f0:    { x:250, y:200, z:0 },
-    pharmacy_f1:    { x:250, y:200, z:3 },
-    hardware_f0:    { x:250, y:200, z:0 },
-    hardware_f1:    { x:250, y:200, z:3 },
-    storage_f0:     { x:100, y:300, z:0 },
-    riverbank_f0:   { x:200, y:300, z:0 },
-    oak_f0:         { x:50, y:100, z:0 },
-    oak_f1:         { x:50, y:100, z:3 },
-    auto_shop_f0:   { x:350, y:200, z:0 },
-    police_f0:      { x:300, y:0, z:0 },
-    industrial_f0:  { x:100, y:0, z:0 }
-  };
+  const LOCATIONS = {};
 
   // LIMA'S STREETS. Appendix A of handoffs/lima-release.md, transcribed in
   // its own line format and read once at startup (readLimaData()).
@@ -3711,26 +3695,22 @@ x_sn_9 m_sn_sn_sn sn p
   // LOCATIONS frame (LIMA_RIVER). No stop touches them.
   const RIVER_LINES = LIMA.river;
 
-  // Buildings the map can name: a player-visible name and the Location its
-  // marker sits on. Reference data, the same category as LOCATIONS above —
-  // not every building in the world, only the ones a map marker names. A
-  // building that will never carry a marker has no reason to be listed
-  // here; its rooms' own `building` field already carries its name, and a
-  // second copy would be a second source of truth for it.
-  // MAP_BUILDING_OFFSETS (RENDERING/MAP) is what decides which of these
-  // actually get a marker, and where the label sits relative to the dot.
-  const BUILDINGS = {
-    acorn:       { name:"Acorn Apartments",   anchor:"acorn_f0" },
-    alley:       { name:"Alley",              anchor:"acorn_f0" },
-    cornerstore: { name:"Corner Store",       anchor:"cornerstore_f0" },
-    pharmacy:    { name:"Pharmacy",           anchor:"pharmacy_f0" },
-    hardware:    { name:"Hardware Store",     anchor:"hardware_f0" },
-    storage:     { name:"Storage Facility",   anchor:"storage_f0" },
-    riverbank:   { name:"Riverbank",          anchor:"riverbank_f0" },
-    oak:         { name:"Oak Apartments",     anchor:"oak_f0" },
-    auto_shop:   { name:"Auto Workshop",      anchor:"auto_shop_f0" },
-    police:      { name:"Police Station",     anchor:"police_f0" },
-    industrial:  { name:"Riverside Freight",  anchor:"industrial_f0" }
+  // Named scenery: the town's real institutions and landmarks that the map
+  // names but the player can't enter yet (#250, #285, #252–#257), each a
+  // player-visible name and the stop its marker hangs off. State
+  // institutions keep their real names; a private business is named by what
+  // it is. BUILDINGS merges these with the enterable landmarks.
+  const NAMED_SCENERY = {
+    hospital:     { name:"Municipal hospital",    anchor:"m_c6_c13_av11" },
+    banco_nacion: { name:"Banco Nación",          anchor:"m_av11_c8_c6" },
+    school_ep9:   { name:"Escuela Primaria Nº 9", anchor:"m_av11_c8_c6" },
+    correo:       { name:"Correo Argentino",      anchor:"m_av11_c6_c4" },
+    parroquia:    { name:"San Isidro Labrador",   anchor:"m_av11_c10_c8" },
+    delegacion:   { name:"Delegación Municipal",  anchor:"m_c8_av11_c13" },
+    bomberos:     { name:"Fire station",          anchor:"m_c7_acc_c20" },
+    club:         { name:"Club",                  anchor:"m_c117_c88_c84" },
+    petrol:       { name:"Petrol station",        anchor:"x_acc_av11_c20" },
+    estacion:     { name:"Estación Lima",         anchor:"estacion_lima" }
   };
 
   // BUILDING TYPES. A building is one line of data, an instance, and its
@@ -3950,9 +3930,187 @@ x_sn_9 m_sn_sn_sn sn p
   const HOME_LOCKED_PCT = 60;
   // Every building instance (see BUILDING TYPES). A function, as the old
   // hand-written builders were, so each world build takes fresh placement
-  // objects.
+  // objects. The landmarks come first: the real counterparts of the game's
+  // first buildings (Tom's list on #237), each carrying over the containers
+  // and hand-placed contents of the building it replaces, room by room, so
+  // the start's balance doesn't shift. `marker` puts one on the map
+  // (BUILDINGS). Then one enterable house on every mid stop but the home
+  // stop (generatedHomes()).
+  //   The almacén's site is designed: no grocery in Lima was verified, and
+  //   this corner in the Nueve de Julio neighbourhood was chosen for play
+  //   (#237). Every other site is real (LIMA_STOP_TEXT's sources).
   function buildingInstances(){
-    return [];
+    return landmarkInstances().concat(generatedHomes());
+  }
+  function landmarkInstances(){
+    const neighbourDoor = { locked: stableHash("row_neighbour") % 100 < HOME_LOCKED_PCT };
+    return [
+      // The player's home: a row house on the Barrio Atucha's courtyard
+      // (canon), its front door locked and its back door bolted, with what
+      // the player left in it.
+      { id:"home", type:"row_house", site:HOME_STOP, name:"Home", address:"Calle 90 Bis", marker:true,
+        enter:"Go into your house", leave:"Go out to the courtyard",
+        overrides:{ doors:{ front:{ locked:true } }, rooms:{
+          living:{ desc:"Your living room, as you left it. The television is dark, and your mate is still on the table where you set it down.",
+            containers:[
+              { id:"sideboard", name:"Sideboard", capacityKg:10, spawnPools:["recreation","residential_personal"], items:[
+                { id:"tv_remote", qty:1 }, { id:"paperback_novel", qty:1 } ] },
+              { id:"bookshelf", name:"Bookshelf", capacityKg:20, spawnPools:["recreation","documents_lore"], items:[
+                { id:"box_of_matches", qty:1 }, { id:"photo_album", qty:1 } ] } ] },
+          kitchen:{ desc:"Your kitchen. The gas bottle under the cooker is the one you changed last week.",
+            containers:[
+              { id:"stove", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"], items:[
+                { id:"cooking_pot", qty:1, overrides:{ contents:[ dishFrom("stew", "cooking_pot", ["meat", "vegetables"], "cooked") ] } } ] },
+              { id:"cupboards", name:"Cupboards", capacityKg:15, spawnPools:["kitchen_nonperishable","kitchen_tools"], items:[
+                { id:"canned_soup", qty:3 }, { id:"pasta", qty:2 }, { id:"frying_pan", qty:1 },
+                { id:"plastic_bottle", qty:4, overrides:{ water:{ kind:"clean", fill:1 } } }, { id:"granola_bars", qty:3 } ] },
+              { id:"drawers", name:"Drawers", capacityKg:10, spawnPools:["kitchen_tools"], items:[
+                { id:"kitchen_knife", qty:1 }, { id:"can_opener", qty:1 } ] },
+              { id:"fridge", name:"Fridge", capacityKg:30, tags:["fridge"], spawnPools:["kitchen_perishable"], items:[
+                { id:"leftovers", qty:1, overrides:{ ages:[5*MINUTES_PER_DAY] } } ] },
+              { id:"freezer", name:"Freezer", capacityKg:10, tags:["freezer"], spawnPools:["kitchen_frozen"] } ] },
+          bathroom:{ containers:[
+            { id:"cabinet", name:"Bathroom cabinet", capacityKg:5, spawnPools:["medical_otc","hygiene"], items:[
+              { id:"bandage", qty:4 }, { id:"painkillers", qty:1 } ] },
+            { id:"underbasin", name:"Under-basin cupboard", capacityKg:10, spawnPools:["hygiene","cleaning_supplies"], items:[
+              { id:"toilet_paper", qty:3 }, { id:"bleach", qty:1 } ] } ] },
+          bedroom:{ desc:"Your bedroom. The bed's unmade from whatever morning this all started.",
+            floor:[ { id:"dirty_laundry", qty:1 } ],
+            containers:[
+              { id:"wardrobe", name:"Wardrobe", capacityKg:25, spawnPools:["clothing"], items:[
+                { id:"winter_jacket", qty:1 }, { id:"sturdy_boots", qty:1 }, { id:"worn_backpack", qty:1 } ] },
+              { id:"bedside", name:"Bedside table", capacityKg:5, spawnPools:["residential_personal","documents_lore","self_defense","electronics"], items:[
+                { id:"flashlight", qty:1 }, { id:"spare_batteries", qty:2 }, { id:"wristwatch", qty:1 } ] },
+              { id:"chest", name:"Chest of drawers", capacityKg:15, spawnPools:["clothing","residential_personal"], items:[
+                { id:"folded_clothes", qty:1 }, { id:"crumpled_cash", qty:1 }, { id:"cloth", qty:3 } ] } ] },
+          garden:{ desc:"Your back garden. The parrilla's grill is still greasy from the last asado.",
+            containers:[ { id:"shedbox", name:"Shed box", capacityKg:15, spawnPools:["fuel_fire","tools_general"], items:[
+              { id:"duct_tape", qty:1 }, { id:"rope", qty:1 } ] } ] } } } },
+      // The neighbours' row house on the same courtyard: pools only. A home,
+      // so its door starts locked or not by HOME_LOCKED_PCT.
+      { id:"row_neighbour", type:"row_house", site:HOME_STOP, name:"Row house", address:"Calle 90 Bis", marker:true,
+        enter:"Enter the neighbours' house", leave:"Go out to the courtyard",
+        overrides:{ doors:{ front:neighbourDoor } } },
+      // The Pharmacy's shop and flat.
+      { id:"pharmacy", type:"shop_home", site:"m_c7_c10_c8", name:"Pharmacy", address:"Calle 7", marker:true,
+        enter:"Enter the pharmacy",
+        overrides:{ rooms:{
+          shop:{ desc:"A small pharmacy. The glass counter is cracked, and most of the shelves behind it have been swept clean.",
+            searchLabel:"Search the pharmacy", searchMinutes:20,
+            containers:[
+              { id:"counter", name:"Pharmacy Counter", capacityKg:10, spawnPools:["medical_pharmacy"], items:[
+                { id:"prescription_bottles", qty:2 }, { id:"strong_painkillers", qty:1 } ] },
+              { id:"shelves", name:"Shelves", capacityKg:20, spawnPools:["medical_otc"], items:[
+                { id:"bandage", qty:5 }, { id:"cold_medicine", qty:1 } ] },
+              { id:"backroom", name:"Back Room", capacityKg:25, spawnPools:["medical_pharmacy","medical_otc"], items:[
+                { id:"rubbing_alcohol", qty:2 }, { id:"gauze_rolls", qty:3 } ] } ] },
+          home:{ desc:"The rooms behind the pharmacy. Someone lived here and left in a hurry.",
+            containers:[ { id:"cabinet", name:"Cabinet", capacityKg:10, spawnPools:["kitchen_nonperishable"], items:[
+              { id:"canned_soup", qty:2 } ] } ] } } } },
+      // The Comisaría Zárate 2, a one-off: its front desk and its cells.
+      { id:"comisaria", site:"m_c12_c13_c15", name:"Comisaría Zárate 2", address:"Calle 12", marker:true,
+        enter:"Enter the comisaría",
+        layout:{ label:"comisaría", entry:"desk",
+          rooms:[
+            { role:"desk", room:"Front desk", shelter:"full", cannotHaveFire:true, floorCap:60,
+              desc:"The front desk of the Comisaría Zárate 2. Papers on the floor, a chair on its side.",
+              containers:[
+                { id:"frontdesk", name:"Front Desk", capacityKg:15, spawnPools:["office_supplies","police_gear","electronics"] },
+                { id:"lockerroom", name:"Locker Room", capacityKg:25, spawnPools:["police_gear","clothing"] } ] },
+            { role:"cells", room:"Cells & evidence", shelter:"full", cannotHaveFire:true, floorCap:40,
+              desc:"A corridor of cells, doors open, and a caged room of evidence shelves.",
+              containers:[ { id:"evidencelocker", name:"Evidence Locker", capacityKg:25, spawnPools:["police_evidence"] } ] } ],
+          links:[ { between:["desk", "cells"], label:["Go through to the cells", "Go back to the front desk"], distanceM:5, door:"cells" } ],
+          doors:[
+            { key:"front", between:["street", "desk"], label:"front", lock:"latch", locked:false },
+            { key:"cells", between:["desk", "cells"], locked:false, lockable:false } ],
+          windows:[] } },
+      // The building-materials yard, where the hardware store's stock went.
+      { id:"corralon", type:"galpon", site:"m_cbar_dg2_c107", name:"Building-materials yard", address:"Camino a Baradero", marker:true,
+        enter:"Enter the building-materials yard",
+        overrides:{ rooms:{
+          floor:{ desc:"A yard of stacked bricks, bags of cement and lengths of pipe, under a corrugated roof at the back.",
+            searchLabel:"Search the yard", searchMinutes:20,
+            containers:[
+              { id:"toolwall", name:"Tool Wall", capacityKg:30, spawnPools:["hardware_store","tools_general","self_defense"], items:[
+                { id:"bolt_cutters", qty:1 }, { id:"crowbar", qty:1 }, { id:"hand_axe", qty:1 }, { id:"wrench", qty:1 } ] },
+              { id:"bins", name:"Hardware Bins", capacityKg:25, spawnPools:["hardware_store","tools_general"], items:[
+                { id:"nails", qty:1 }, { id:"duct_tape", qty:3 }, { id:"rope", qty:2 }, { id:"plank", qty:3 } ] },
+              { id:"paintaisle", name:"Paint Aisle", capacityKg:20, spawnPools:["hardware_store","tools_workshop"], items:[
+                { id:"propane_torch", qty:1 }, { id:"work_gloves", qty:1 } ] } ] },
+          office:{ desc:"A cramped office with an order book open on the desk.",
+            containers:[ { id:"shelf", name:"Shelf", capacityKg:10, spawnPools:["recreation","residential_personal"], items:[
+              { id:"work_boots", qty:1 }, { id:"fanny_pack", qty:1 } ] } ] } } } },
+      // The almacén and the family's rooms behind it (a designed site).
+      { id:"almacen", type:"shop_home", site:"x_c113_c50", name:"Almacén", address:"Calle 113", marker:true,
+        enter:"Enter the almacén",
+        overrides:{ rooms:{
+          shop:{ desc:"A neighbourhood almacén: a counter, a fridge for drinks, shelves to the ceiling.",
+            searchLabel:"Search the shop", searchMinutes:25,
+            containers:[
+              { id:"shelves", name:"Shelves", capacityKg:30, spawnPools:["retail_stock_food","retail_stock_general"], items:[
+                { id:"canned_corn", qty:4 }, { id:"potato_chips", qty:3 },
+                { id:"plastic_bottle", qty:5, overrides:{ water:{ kind:"clean", fill:1 } } } ] },
+              { id:"register", name:"Register Counter", capacityKg:5, spawnPools:["valuables","retail_stock_general"], items:[
+                { id:"loose_change", qty:1 }, { id:"lighter", qty:1 } ] },
+              { id:"storage", name:"Storage Room", capacityKg:40, spawnPools:["retail_stock_food","retail_stock_general","cleaning_supplies"], items:[
+                { id:"canned_beans", qty:4 }, { id:"box_cutter", qty:1 }, { id:"bandage", qty:3 } ] } ] },
+          home:{ desc:"The family's rooms behind the shop.",
+            containers:[ { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal"], items:[
+              { id:"old_photographs", qty:1 }, { id:"reading_lamp", qty:1 }, { id:"tote_bag", qty:1 } ] } ] } } } },
+      // The repair shop, where the auto workshop went.
+      { id:"mechanic", type:"galpon", site:"x_c16_c7", name:"Repair shop", address:"Calle 16", marker:true,
+        enter:"Enter the repair shop",
+        overrides:{ rooms:{
+          floor:{ desc:"A workshop with a pit in the floor and an alignment rig. Oil stains, a car up on stands.",
+            containers:[
+              { id:"workbench", name:"Workbench", capacityKg:30, spawnPools:["tools_workshop"] },
+              { id:"partsshelf", name:"Parts Shelf", capacityKg:25, spawnPools:["tools_workshop","warehouse_goods"] } ] },
+          office:{ desc:"A small office with a calendar and a stack of invoices.",
+            containers:[
+              { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore","electronics"] },
+              { id:"filingcabinet", name:"Filing Cabinet", capacityKg:20, spawnPools:["office_supplies","documents_lore","electronics"] } ] } } } },
+      // The station's goods shed, where the storage units' crates went. The
+      // third was never locked.
+      { id:"goods_shed", type:"galpon", site:"estacion_lima", name:"Goods shed", address:"Estación Lima", marker:true,
+        enter:"Enter the goods shed",
+        overrides:{ rooms:{
+          floor:{ desc:"The railway's goods shed. Brick walls, a high roof, a loading door onto the tracks.",
+            containers:[
+              { id:"unit1", name:"Padlocked crate 1", capacityKg:30, locked:true, breakTag:"cutting", spawnPools:["outdoor_camping"], items:[
+                { id:"camping_tent", qty:1 }, { id:"sleeping_bag", qty:1 } ] },
+              { id:"unit2", name:"Padlocked crate 2", capacityKg:30, locked:true, breakTag:"cutting", spawnPools:["recreation","residential_personal"], items:[
+                { id:"old_furniture", qty:1 }, { id:"board_games", qty:1 } ] },
+              { id:"unit3", name:"Crate 3", capacityKg:30, spawnPools:["outdoor_camping"], items:[
+                { id:"fishing_rod", qty:1 }, { id:"tackle_box", qty:1 } ] } ] },
+          office:{ desc:"A cubicle by the door where someone checked the freight in and out." } } } },
+      // The paper mill, down its side road off Calle 111: where the freight
+      // warehouse's racks went.
+      { id:"paper_mill", type:"galpon", site:"r111_papermill", at:[-642, 5725], name:"Paper mill", address:"Calle 111", marker:true,
+        enter:"Enter the paper mill",
+        overrides:{ rooms:{
+          floor:{ desc:"A hall of rollers and vats, gone quiet. The smell of pulp hangs in the air.",
+            containers:[
+              { id:"palletrack1", name:"Pallet Rack 1", capacityKg:35, spawnPools:["warehouse_goods"] },
+              { id:"palletrack2", name:"Pallet Rack 2", capacityKg:35, spawnPools:["warehouse_goods"] } ] },
+          office:{ desc:"The shift office. A clipboard still hangs by the door.",
+            containers:[
+              { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore","electronics"] },
+              { id:"safe", name:"Safe", capacityKg:20, spawnPools:["valuables","documents_lore"] } ] } } } }
+    ];
+  }
+  // One house on every mid stop but the home stop: a `casa` everywhere,
+  // the barrio included, where it stands in for the chalets until a
+  // `chalet` type is researched (Tom, 2026-09-27). Its id is h_<stop id>, its
+  // address the stop's street, and its street door starts locked by
+  // HOME_LOCKED_PCT. Retunable, all of it.
+  function generatedHomes(){
+    return LIMA.stops.filter(s=> s.kind === "m" && s.id !== HOME_STOP).map(s=>{
+      const id = "h_" + s.id;
+      return { id, type:"casa", site:s.id, name:"House", address:streetName(s.street) || UNNAMED_STREET,
+        seed:stableHash(s.id), enter:"Enter a house",
+        overrides:{ doors:{ front:{ locked: stableHash(id) % 100 < HOME_LOCKED_PCT } } } };
+    });
   }
   // One instance expanded: { rooms, doors, windows, streetExit, problems }.
   // `streetExit` is the exit makeDefaultWorld() hangs on the site stop.
@@ -4062,8 +4220,9 @@ x_sn_9 m_sn_sn_sn sn p
   //   object is the two merged (buildDoors()), so every reader sees one shape.
   //   Definition fields:
   //     sides     the two rooms the door physically separates
-  //     building  a BUILDINGS id ("acorn"): which master key opens it. Not
-  //               room.building, which holds a name (see ROOM SCHEMA).
+  //     building  a building instance's id ("pharmacy"): which master key
+  //               opens it. Not room.building, which holds a name (see ROOM
+  //               SCHEMA).
   //     locked    the authored starting lock state
   //     lockable  optional, default true. false: an interior door with no
   //               lock, which never locks, offers no key action and never
@@ -4093,19 +4252,14 @@ x_sn_9 m_sn_sn_sn sn p
   //               door leaves it closed.
   //     broken    whether its lock has been forced, default false. A broken
   //               door is unlocked and never locks again (doorLocks()).
-  // The building's own doors: the entry doors, one per unit, which no unit
-  // template carries. Every interior door of a wired unit, and 1A's patio
-  // door, comes from its panel's template instead (expandOpenings(), and
-  // `doors` in WIRING_TEMPLATES).
+  // Doors authored by hand, for a building no type or wiring template
+  // builds. None today: the building types supply every opening
+  // (buildBuilding()). Kept for the hand-authored buildings to come.
   function authoredDoors(){
-    return {
-      "2a": { locked:false, sides:["hallway2","living"], building:"acorn" },
-      "2b": { locked:true, sides:["hallway2","twobee"], building:"acorn" },
-      "1a": { locked:true, sides:["hallway1","onea"], building:"acorn" },
-      "1b": { locked:true, sides:["hallway1","onebee"], building:"acorn" }
-    };
+    return {};
   }
-  // Every door: the authored ones and the templates' together, lockable doors
+  // Every door: the authored ones, the templates' and the building types'
+  // together, lockable doors
   // ahead of lockless ones, each group in the order it was built. That is the
   // order doorsForRoom() walks, and so the order the Here panel offers Open
   // and Close in.
@@ -4135,15 +4289,9 @@ x_sn_9 m_sn_sn_sn sn p
   //   Saved field:
   //     state      "closed", "open" or "broken". Open, Close and Break are
   //                offered on every window, climbable or not.
-  // The building's own windows, which no unit template carries: 2A's transom
-  // onto the hall and 1B's onto the alley. Every other window of a wired unit
-  // comes from its panel's template (expandOpenings(), and `windows` in
-  // WIRING_TEMPLATES).
+  // Windows authored by hand, as authoredDoors() is: none today.
   function authoredWindows(){
-    return {
-      "2a-transom": { state:"closed", rooms:["hallway2","living"], breakTag:"blunt", label:"transom window", climbable:true },
-      "1b-alley":   { state:"closed", rooms:["alley","onebee"],   breakTag:"blunt", label:"window", climbable:true }
-    };
+    return {};
   }
   function makeDefaultWindows(){
     return Object.assign(authoredWindows(), expandOpenings(WIRING, WIRING_TEMPLATES).windows, expandBuildings().windows);
@@ -4316,8 +4464,8 @@ x_sn_9 m_sn_sn_sn sn p
   //             then "window" ("2a-kitchen-window").
   // The door and window ids must never change: saves key on them.
   // They are the building's doors and windows, not the network's: nothing in
-  // POWER reads them. They sit on the template because the template is what
-  // says which room plays which role in a unit (expandOpenings()).
+  // POWER reads them (expandOpenings()). No template carries any today: the
+  // building types supply every opening (BUILDING TYPES).
   //
   // `apartment`: one flat, by the roles living, kitchen, bathroom, bedroom
   // and balcony (a balcony or a patio). A one-room unit maps every role onto
@@ -4352,26 +4500,10 @@ x_sn_9 m_sn_sn_sn sn p
         { key:"bath_fan",      appliance:"bath_fan",       circuit:"bath",     role:"bathroom" },
         { key:"light_bedroom", appliance:"led_light",      circuit:"bedroom",  role:"bedroom" },
         { key:"smoke_alarm",   appliance:"smoke_alarm",    circuit:"bedroom",  role:"bedroom" }
-      ],
-      // Interior doors, with no lock. A balcony door is a sliding door, which
-      // is taken to have none either (retunable).
-      doors: [
-        { key:"bedroom",      between:["living", "bedroom"],   locked:false, lockable:false },
-        { key:"bathroom",     between:["living", "bathroom"],  locked:false, lockable:false },
-        { key:"bath-bedroom", between:["bedroom", "bathroom"], locked:false, lockable:false },
-        { key:"balcony",      between:["living", "balcony"],   locked:false, lockable:false }
-      ],
-      // One to the outside in each room but the balcony or patio. Which way
-      // each faces is not modelled.
-      windows: [
-        { key:"living",   role:"living",   label:"window", breakTag:"blunt" },
-        { key:"kitchen",  role:"kitchen",  label:"window", breakTag:"blunt" },
-        { key:"bedroom",  role:"bedroom",  label:"window", breakTag:"blunt" },
-        { key:"bathroom", role:"bathroom", label:"window", breakTag:"blunt" }
       ]
     }
   };
-  // WIRING, keyed by BUILDINGS id: one building's network.
+  // WIRING, keyed by building id: one building's network.
   //   board    { name, room, rating, volts?, feeders:[{ panel, label, rating }] }
   //            the complex's main board: the room it hangs in, its main
   //            breaker's rating, and one feeder breaker per panel it feeds.
@@ -4388,521 +4520,25 @@ x_sn_9 m_sn_sn_sn sn p
   //   common   optional, one more panel entry, for the halls and stairs. It
   //            expands exactly as a unit panel does, and the board needs a
   //            feeder for it.
-  // Rooms are named by room id, never by room.building: the flats above the
-  // shops have no `building`. `name` is what the device's Here tab reads
-  // ("Unit 2A panel", "Main board").
-  // The expansion's ids (expandWiring()), stable because saves key on them:
-  //   acorn.board            the board          acorn.board.main  its main
-  //   acorn.board.2A         the feeder for panel 2A
-  //   acorn.2A               the panel          acorn.2A.main     its main
-  //   acorn.2A.<circuit>     a circuit's breaker
-  //   acorn.2A.<fixture>     a load
+  // Rooms are named by room id, never by room.building, which holds a
+  // name. `name` is what the device's Here tab reads ("Unit 2A panel",
+  // "Main board").
+  // The expansion's ids (expandWiring()), stable because saves key on them,
+  // for a building `b` with a panel `2A`:
+  //   b.board            the board          b.board.main  its main
+  //   b.board.2A         the feeder for panel 2A
+  //   b.2A               the panel          b.2A.main     its main
+  //   b.2A.<circuit>     a circuit's breaker
+  //   b.2A.<fixture>     a load
   // A panel's circuit and fixture keys share one namespace, and a panel may
   // not be called `board` or `main`; validateWiring() reports a clash.
   // A room nothing wires falls back to the grid directly (containerPowered()).
   //
-  // `acorn`: 240 V single-phase, as a small four-unit building takes
-  // (PANEL_DEFAULT_VOLTS; bigger apartment buildings are often 120/208 V).
-  // The main board and the house panel hang in the ground-floor hallway, and
-  // each unit's panel inside the unit, in its kitchen (1B's in its one room):
-  // NEC 240.24(B) gives each occupant ready access to the breakers protecting
-  // their unit. 1B plays every role in its one room, so it carries every
-  // fixture the template has. The board's 200 A main is unconfirmed, no
-  // source having been read for a four-unit service; the house panel's 30 A
-  // feeder and main are a judgment call. All three are retunable.
-  const ACORN_HOUSE_ROOMS = ["hallway1", "hallway2", "stairs1", "stairs2"];
-  const WIRING = {
-    acorn: {
-      board: { name:"Main board", room:"hallway1", rating:200,
-        feeders: [
-          { panel:"2A",    label:"2A",    rating:100 },
-          { panel:"2B",    label:"2B",    rating:100 },
-          { panel:"1A",    label:"1A",    rating:100 },
-          { panel:"1B",    label:"1B",    rating:100 },
-          { panel:"house", label:"HOUSE", rating:30 }
-        ] },
-      panels: [
-        { id:"2A", name:"Unit 2A panel", room:"kitchen", template:"apartment",
-          rooms:{ living:"living", kitchen:"kitchen", bathroom:"bathroom", bedroom:"bedroom", balcony:"balcony" } },
-        { id:"2B", name:"Unit 2B panel", room:"twobee_kitchen", template:"apartment",
-          rooms:{ living:"twobee", kitchen:"twobee_kitchen", bathroom:"twobee_bathroom", bedroom:"twobee_bedroom", balcony:"twobee_balcony" } },
-        // 1A's balcony door is its patio door, which locks, as it always
-        // has. Its sides are listed patio first, as they always have been.
-        { id:"1A", name:"Unit 1A panel", room:"onea_kitchen", template:"apartment",
-          rooms:{ living:"onea", kitchen:"onea_kitchen", bathroom:"onea_bathroom", bedroom:"onea_bedroom", balcony:"onea_patio" },
-          overrides:{ doors:{ balcony:{ id:"1a-patio", between:["balcony", "living"], locked:true, lockable:true } } } },
-        // 1B's one window is the building's, onto the alley (authoredWindows()).
-        { id:"1B", name:"Unit 1B panel", room:"onebee", template:"apartment",
-          rooms:{ living:"onebee", kitchen:"onebee", bathroom:"onebee", bedroom:"onebee", balcony:"onebee" },
-          overrides:{ windows:{ living:null, kitchen:null, bedroom:null, bathroom:null } } }
-      ],
-      // The halls and stairs: one lighting circuit, a light in each.
-      common: { id:"house", name:"House panel", room:"hallway1",
-        layout: {
-          main: { rating:30 },
-          circuits: [ { key:"house", label:"HOUSE", rating:15, volts:120, roles:ACORN_HOUSE_ROOMS.slice() } ],
-          fixtures: ACORN_HOUSE_ROOMS.map(r=> ({ key:`light_${r}`, appliance:"hall_light", circuit:"house", role:r }))
-        },
-        rooms: Object.fromEntries(ACORN_HOUSE_ROOMS.map(r=> [r, r])) }
-    }
-  };
-
-  function buildAcornApartments(){
-    return {
-    living: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Living Room", shelter:"full",
-      desc:"A worn couch faces a dark television. Sunlight through the blinds shows how much dust has settled since anyone last cleaned.",
-      sleepSpot:"couch", cannotHaveFire:true, floorCap:80,
-      floor:[],
-      containers:[
-        { id:"tvstand", name:"TV Stand", capacityKg:10, spawnPools:["recreation","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"tv_remote", qty:1 },
-          { id:"paperback_novel", qty:1 } ])},
-        { id:"bookshelf", name:"Bookshelf", capacityKg:20, spawnPools:["recreation","documents_lore"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"box_of_matches", qty:1 },
-          { id:"photo_album", qty:1 } ])}
-      ],
-      exits:[
-        { to:"kitchen", label:"Go to the kitchen", distanceM:4 },
-        { to:"bedroom", label:"Go to the bedroom", distanceM:5 },
-        { to:"bathroom", label:"Go to the bathroom", distanceM:5 },
-        { to:"balcony", label:"Go to the balcony", distanceM:3 },
-        { to:"hallway2", label:"Leave the apartment", distanceM:6, doorId:"2a" } ]
-    },
-    kitchen: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Kitchen", shelter:"full",
-      desc:{ reads:{ kind:"load", id:"acorn.2A.fridge" },
-        variants:{ on:"Grease and old coffee grounds. The fridge still hums, though something inside it has already given up.",
-          off:"Grease and old coffee grounds. The fridge has gone quiet, and something inside it gave up well before it did." } },
-      sink:true, cannotHaveFire:true, floorCap:50, floor:[],
-      containers:[
-        { id:"stove", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"cooking_pot", qty:1, overrides:{ contents:[ dishFrom("stew", "cooking_pot", ["meat", "vegetables"], "cooked") ] } }
-        ])},
-        { id:"cabinets", name:"Cabinets", capacityKg:15, spawnPools:["kitchen_nonperishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"canned_soup", qty:3 },
-          { id:"pasta", qty:2 },
-          { id:"frying_pan", qty:1 } ])},
-        { id:"drawers", name:"Kitchen drawers", capacityKg:10, spawnPools:["kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"kitchen_knife", qty:1 },
-          { id:"can_opener", qty:1 } ])},
-        { id:"fridge", name:"Fridge", capacityKg:30, tags:["fridge"], spawnPools:["kitchen_perishable"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"leftovers", qty:1, overrides:{ ages:[5*MINUTES_PER_DAY] } } ])},
-        { id:"freezer", name:"Freezer", capacityKg:10, tags:["freezer"], spawnPools:["kitchen_frozen"], items:[] },
-        { id:"pantry", name:"Pantry", capacityKg:20, spawnPools:["kitchen_nonperishable"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"plastic_bottle", qty:4, overrides:{ water:{ kind:"clean", fill:1 } } },
-          { id:"granola_bars", qty:3 } ])}
-      ],
-      exits:[
-        { to:"living", label:"Go to the living room", distanceM:4 },
-        { to:"hallway2", label:"Leave the apartment", distanceM:8, doorId:"2a" } ]
-    },
-    bathroom: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Bathroom", shelter:"full",
-      desc:"A cracked mirror over the sink. The cabinet under it is still worth a look.",
-      sink:true, cannotHaveFire:true, floorCap:30, floor:[],
-      containers:[
-        { id:"medcab", name:"Medicine cabinet", capacityKg:5, spawnPools:["medical_otc","hygiene"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"bandage", qty:4 },
-          { id:"painkillers", qty:1 } ])},
-        { id:"undersink", name:"Under-sink cabinet", capacityKg:10, spawnPools:["hygiene","cleaning_supplies"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"toilet_paper", qty:3 },
-          { id:"bleach", qty:1 } ])}
-      ],
-      exits:[
-        { to:"living", label:"Go to the living room", distanceM:5 },
-        { to:"bedroom", label:"Go to the bedroom", distanceM:3 },
-        { to:"hallway2", label:"Leave the apartment", distanceM:7, doorId:"2a" } ]
-    },
-    bedroom: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Bedroom", shelter:"full",
-      desc:"The bed's still unmade from whatever morning this all started. A closet stands half open.",
-      sleepSpot:"bed", cannotHaveFire:true, floorCap:60,
-      floor:itemsFromRegistry([ { id:"dirty_laundry", qty:1 } ]),
-      containers:[
-        { id:"closet", name:"Closet", capacityKg:25, spawnPools:["clothing"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"winter_jacket", qty:1 },
-          { id:"sturdy_boots", qty:1 },
-          { id:"worn_backpack", qty:1 } ])},
-        { id:"nightstand", name:"Nightstand", capacityKg:5, spawnPools:["residential_personal","documents_lore","self_defense","electronics"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"flashlight", qty:1 },
-          { id:"spare_batteries", qty:2 },
-          { id:"wristwatch", qty:1 } ])},
-        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"folded_clothes", qty:1 },
-          { id:"crumpled_cash", qty:1 },
-          { id:"cloth", qty:3 } ])}
-      ],
-      exits:[
-        { to:"living", label:"Go to the living room", distanceM:5 },
-        { to:"bathroom", label:"Go to the bathroom", distanceM:3 },
-        { to:"hallway2", label:"Leave the apartment", distanceM:7, doorId:"2a" } ]
-    },
-    balcony: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2A", room:"Balcony", shelter:"partial",
-      desc:"A narrow concrete ledge overlooking the street below. A dead plant sits in the corner, and a rusted fire escape ladder leads down.",
-      cannotHaveFire:true, floorCap:40, floor:itemsFromRegistry([ { id:"dead_potted_plant", qty:1 } ]),
-      containers:[
-        { id:"storagebin", name:"Storage bin", capacityKg:15, spawnPools:["fuel_fire","tools_general"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"duct_tape", qty:1 },
-          { id:"rope", qty:1 } ])}
-      ],
-      exits:[
-        { to:"living", label:"Go to the living room", distanceM:3 },
-        { to:"alley", label:"Climb down the fire escape" } ]
-    },
-    hallway2: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2nd Floor", room:"Hallway", shelter:"full",
-      desc:{ reads:{ kind:"load", id:"acorn.house.light_hallway2" },
-        variants:{ on:"A dim corridor lit by one flickering bulb. Your door is one of two here, with a small transom window set beside it.",
-          off:"A dark corridor. Your door is one of two here, with a small transom window set beside it." } },
-      cannotHaveFire:true, floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"living", label:"Enter apartment 2A", distanceM:6, doorId:"2a" },
-        { to:"twobee", label:"Enter 2B", distanceM:6, doorId:"2b" },
-        { to:"stairs2", label:"Go to the stairwell", distanceM:10 } ]
-    },
-    twobee: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2B", room:"Living Room", shelter:"full",
-      desc:"Your neighbor's place. A bag sits half-packed by the door, like they meant to come back for it.",
-      cannotHaveFire:true, floorCap:80, floor:[],
-      containers:[
-        { id:"packedbag", name:"Half-packed Bag", capacityKg:10, spawnPools:["clothing","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"canned_beans", qty:2 },
-          { id:"folded_clothes", qty:1 } ])},
-        { id:"shelf", name:"Shelf", capacityKg:15, spawnPools:["recreation","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"board_games", qty:1 },
-          { id:"crumpled_cash", qty:1 } ])}
-      ],
-      exits:[
-        { to:"twobee_kitchen", label:"Go to the kitchen", distanceM:4 },
-        { to:"twobee_bathroom", label:"Go to the bathroom", distanceM:5 },
-        { to:"twobee_bedroom", label:"Go to the bedroom", distanceM:5 },
-        { to:"twobee_balcony", label:"Go to the balcony", distanceM:3 },
-        { to:"hallway2", label:"Leave 2B", distanceM:6, doorId:"2b" } ]
-    },
-    twobee_kitchen: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2B", room:"Kitchen", shelter:"full",
-      desc:"Same layout as yours, messier. Dishes still sit in the sink.",
-      sink:true, cannotHaveFire:true, floorCap:50, floor:[],
-      containers:[
-        { id:"stove", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"burnt_saucepan", qty:1 } ])},
-        { id:"cabinets", name:"Cabinets", capacityKg:15, spawnPools:["kitchen_nonperishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"canned_corn", qty:2 },
-          { id:"pasta", qty:1 } ])},
-        { id:"drawers", name:"Kitchen drawers", capacityKg:10, spawnPools:["kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"kitchen_knife", qty:1 } ])},
-        { id:"fridge", name:"Fridge", capacityKg:30, tags:["fridge"], spawnPools:["kitchen_perishable"], items:[] },
-        { id:"freezer", name:"Freezer", capacityKg:10, tags:["freezer"], spawnPools:["kitchen_frozen"], items:[] },
-        { id:"pantry", name:"Pantry", capacityKg:20, spawnPools:["kitchen_nonperishable"], items:[] }
-      ],
-      exits:[
-        { to:"twobee", label:"Go to the living room", distanceM:4 },
-        { to:"hallway2", label:"Leave 2B", distanceM:8, doorId:"2b" } ]
-    },
-    twobee_bathroom: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2B", room:"Bathroom", shelter:"full",
-      desc:"Same cracked-tile bathroom as yours, one floor mirrored.",
-      sink:true, cannotHaveFire:true, floorCap:30, floor:[],
-      containers:[
-        { id:"medcab", name:"Medicine cabinet", capacityKg:5, spawnPools:["medical_otc","hygiene"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"bandage", qty:2 },
-          { id:"aspirin", qty:1 } ])},
-        { id:"undersink", name:"Under-sink cabinet", capacityKg:10, spawnPools:["hygiene","cleaning_supplies"], items:[] }
-      ],
-      exits:[
-        { to:"twobee", label:"Go to the living room", distanceM:5 },
-        { to:"twobee_bedroom", label:"Go to the bedroom", distanceM:3 },
-        { to:"hallway2", label:"Leave 2B", distanceM:7, doorId:"2b" } ]
-    },
-    twobee_bedroom: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2B", room:"Bedroom", shelter:"full",
-      desc:"The bed's made, unlike yours. Whoever lived here kept things tidy, until they didn't.",
-      sleepSpot:"bed", cannotHaveFire:true, floorCap:60, floor:[],
-      containers:[
-        { id:"closet", name:"Closet", capacityKg:25, spawnPools:["clothing","pet_supplies"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"winter_jacket", qty:1 },
-          { id:"work_gloves", qty:1 },
-          { id:"duffel_bag", qty:1 } ])},
-        { id:"nightstand", name:"Nightstand", capacityKg:5, spawnPools:["residential_personal","documents_lore","self_defense","electronics"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"loose_change", qty:1 },
-          { id:"handwritten_note", qty:1 } ])},
-        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal","pet_supplies"], items:[] }
-      ],
-      exits:[
-        { to:"twobee", label:"Go to the living room", distanceM:5 },
-        { to:"twobee_bathroom", label:"Go to the bathroom", distanceM:3 },
-        { to:"hallway2", label:"Leave 2B", distanceM:7, doorId:"2b" } ]
-    },
-    twobee_balcony: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2B", room:"Balcony", shelter:"partial",
-      desc:"A narrow balcony, mirroring yours. No fire escape here — just a view of the street.",
-      cannotHaveFire:true, floorCap:40, floor:[],
-      containers:[
-        { id:"storagebin", name:"Storage bin", capacityKg:15, spawnPools:["fuel_fire","tools_general"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"rope", qty:1 },
-          { id:"duct_tape", qty:1 } ])}
-      ],
-      exits:[ { to:"twobee", label:"Go to the living room", distanceM:3 } ]
-    },
-    stairs2: { locationId:"acorn_f1", address:"Poplar St", building:"Acorn Apartments", area:"2nd Floor", room:"Stairs", shelter:"full",
-      desc:"A concrete stairwell, cool and echoing. It goes down at least one more floor.",
-      cannotHaveFire:true, floorCap:50, floor:[], containers:[],
-      exits:[
-        { to:"hallway2", label:"Go back to the hallway", distanceM:10 },
-        { to:"stairs1", label:"Head downstairs" } ]
-    },
-    stairs1: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1st Floor", room:"Stairs", shelter:"full",
-      desc:"Ground level. The stairwell door out to the hallway is propped open.",
-      cannotHaveFire:true, floorCap:50, floor:[], containers:[],
-      exits:[
-        { to:"stairs2", label:"Head upstairs" },
-        { to:"hallway1", label:"Go to the hallway", distanceM:10 } ]
-    },
-    hallway1: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1st Floor", room:"Hallway", shelter:"full",
-      desc:"The ground floor corridor, closer to the street. Two more doors here, both shut tight.",
-      cannotHaveFire:true, floorCap:100, floor:itemsFromRegistry([ { id:"empty_soda_can", qty:1 } ]), containers:[],
-      exits:[
-        { to:"stairs1", label:"Go back to the stairwell", distanceM:10 },
-        { to:"mid_poplar_1_2", label:"Step outside" },
-        { to:"onea", label:"Enter 1A", distanceM:6, doorId:"1a" },
-        { to:"onebee", label:"Enter 1B", distanceM:6, doorId:"1b" } ]
-    },
-    onea: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1A", room:"Living Room", shelter:"full",
-      desc:"A family lived here. A child's toy sits abandoned on the floor, and the TV's still pointed at a couch nobody's coming back to sit on.",
-      sleepSpot:"couch", cannotHaveFire:true, floorCap:80,
-      floor:itemsFromRegistry([ { id:"stuffed_toy", qty:1 } ]),
-      containers:[
-        { id:"shelf1a", name:"Shelf", capacityKg:15, spawnPools:["recreation","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"board_games", qty:1 },
-          { id:"photo_album", qty:1 } ])},
-        { id:"tvstand1a", name:"TV Stand", capacityKg:10, spawnPools:["recreation","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"tv_remote", qty:1 } ])}
-      ],
-      exits:[
-        { to:"onea_kitchen", label:"Go to the kitchen", distanceM:4 },
-        { to:"onea_bathroom", label:"Go to the bathroom", distanceM:5 },
-        { to:"onea_bedroom", label:"Go to the bedroom", distanceM:5 },
-        { to:"onea_patio", label:"Go to the patio", distanceM:3 },
-        { to:"hallway1", label:"Leave 1A", distanceM:6, doorId:"1a" } ]
-    },
-    onea_kitchen: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1A", room:"Kitchen", shelter:"full",
-      desc:"A family kitchen, cluttered with kids' cups and a permission slip on the counter that nobody signed.",
-      sink:true, cannotHaveFire:true, floorCap:50, floor:[],
-      containers:[
-        { id:"stove", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"kids_plastic_bowl", qty:1 } ])},
-        { id:"kitchen1a", name:"Kitchen Shelf", capacityKg:15, spawnPools:["kitchen_nonperishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"plastic_bottle", qty:3, overrides:{ water:{ kind:"clean", fill:1 } } },
-          { id:"canned_corn", qty:2 },
-          { id:"cloth", qty:2 } ])},
-        { id:"fridge", name:"Fridge", capacityKg:30, tags:["fridge"], spawnPools:["kitchen_perishable"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"leftovers", qty:1 } ])},
-        { id:"freezer", name:"Freezer", capacityKg:10, tags:["freezer"], spawnPools:["kitchen_frozen"], items:[] }
-      ],
-      exits:[
-        { to:"onea", label:"Go to the living room", distanceM:4 },
-        { to:"hallway1", label:"Leave 1A", distanceM:8, doorId:"1a" } ]
-    },
-    onea_bathroom: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1A", room:"Bathroom", shelter:"full",
-      desc:"A step stool sits by the sink, sized for someone much shorter than you.",
-      sink:true, cannotHaveFire:true, floorCap:30, floor:[],
-      containers:[
-        { id:"medcab1a", name:"Medicine cabinet", capacityKg:5, spawnPools:["medical_otc","hygiene"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"bandage", qty:2 },
-          { id:"childrens_medicine", qty:1 } ])}
-      ],
-      exits:[
-        { to:"onea", label:"Go to the living room", distanceM:5 },
-        { to:"onea_bedroom", label:"Go to the bedroom", distanceM:3 },
-        { to:"hallway1", label:"Leave 1A", distanceM:7, doorId:"1a" } ]
-    },
-    onea_bedroom: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1A", room:"Bedroom", shelter:"full",
-      desc:"A suitcase lies open and half-emptied on the bed, packing abandoned halfway through.",
-      sleepSpot:"bed", cannotHaveFire:true, floorCap:60, floor:[],
-      containers:[
-        { id:"suitcase", name:"Open Suitcase", capacityKg:12, spawnPools:["clothing","residential_personal","baby_items"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"folded_clothes", qty:2 },
-          { id:"winter_jacket", qty:1 },
-          { id:"purse", qty:1 } ])},
-        { id:"dresser1a", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"crumpled_cash", qty:1 },
-          { id:"flashlight", qty:1 } ])}
-      ],
-      exits:[
-        { to:"onea", label:"Go to the living room", distanceM:5 },
-        { to:"onea_bathroom", label:"Go to the bathroom", distanceM:3 },
-        { to:"hallway1", label:"Leave 1A", distanceM:7, doorId:"1a" } ]
-    },
-    onea_patio: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1A", room:"Patio", shelter:"none",
-      desc:"A small concrete patio out back, low fence, a gate leading to the alley.",
-      cannotHaveFire:true, floorCap:40, floor:[],
-      containers:[
-        { id:"storagebin1a", name:"Storage bin", capacityKg:15, spawnPools:["fuel_fire","tools_general"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"firewood", qty:3 },
-          { id:"nails", qty:1 } ])}
-      ],
-      exits:[
-        { to:"onea", label:"Go to the living room", distanceM:3 },
-        { to:"alley", label:"Go through the back gate", distanceM:6 } ]
-    },
-    onebee: { locationId:"acorn_f0", address:"Poplar St", building:"Acorn Apartments", area:"1B", room:null, shelter:"full",
-      desc:"The superintendent's unit — half apartment, half workshop. Someone clearly used this place to fix things. A small gas stove sits in the corner.",
-      cannotHaveFire:true, floorCap:50, floor:[],
-      containers:[
-        { id:"stove", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"dented_saucepan", qty:1 }
-        ])},
-        { id:"fridge", name:"Fridge", capacityKg:30, tags:["fridge"], spawnPools:["kitchen_perishable"], items:[] },
-        { id:"freezer", name:"Freezer", capacityKg:10, tags:["freezer"], spawnPools:["kitchen_frozen"], items:[] },
-        { id:"toolcabinet", name:"Tool Cabinet", capacityKg:25, spawnPools:["tools_general","tools_workshop","cleaning_supplies"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"crowbar", qty:1 },
-          { id:"duct_tape", qty:2 },
-          { id:"wrench", qty:1 },
-          { id:"bolt_cutters", qty:1 },
-          { id:"multimeter", qty:1 } ])},
-        { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore","electronics"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"master_key", qty:1 },
-          { id:"building_ledger", qty:1 },
-          { id:"portable_radio", qty:1 } ])},
-        { id:"closet", name:"Closet", capacityKg:25, spawnPools:["clothing","cleaning_supplies"], items:[] }
-      ],
-      searched:false, searchLabel:"Search the unit", searchMinutes:20,
-      exits:[ { to:"hallway1", label:"Leave through the front door", distanceM:6, doorId:"1b" } ]
-    }
-    };
-  }
-
-  function buildOakApartments(){
-    return {
-    oak_hallway1: { locationId:"oak_f0", address:"Poplar St", building:"Oak Apartments", area:"1st Floor", room:"Hallway", shelter:"full",
-      desc:{ reads:{ kind:"grid" },
-        variants:{ on:"Narrower than Acorn's hallway, and darker — half the bulbs are out.",
-          off:"Narrower than Acorn's hallway, and darker — none of the bulbs work now." } },
-      cannotHaveFire:true, floorCap:80, floor:[], containers:[],
-      exits:[
-        { to:"mid_poplar_2_4", label:"Step outside" },
-        { to:"oak_1a", label:"Enter 1A", distanceM:6 },
-        { to:"oak_1b", label:"Enter 1B", distanceM:6 },
-        { to:"oak_stairs", label:"Go upstairs", distanceM:10 } ]
-    },
-    oak_stairs: { locationId:"oak_f0", address:"Poplar St", building:"Oak Apartments", area:null, room:"Stairwell", shelter:"full",
-      desc:"A tight stairwell, paint peeling on the handrail.",
-      cannotHaveFire:true, floorCap:40, floor:[], containers:[],
-      exits:[
-        { to:"oak_hallway1", label:"Go downstairs", distanceM:10 },
-        { to:"oak_hallway2", label:"Go upstairs" } ]
-    },
-    oak_hallway2: { locationId:"oak_f1", address:"Poplar St", building:"Oak Apartments", area:"2nd Floor", room:"Hallway", shelter:"full",
-      desc:"The upstairs hallway, a little brighter than downstairs. Two doors, both closed.",
-      cannotHaveFire:true, floorCap:80, floor:[], containers:[],
-      exits:[
-        { to:"oak_stairs", label:"Go back downstairs" },
-        { to:"oak_2a", label:"Enter 2A", distanceM:6 },
-        { to:"oak_2b", label:"Enter 2B", distanceM:6 } ]
-    },
-    oak_1a: { locationId:"oak_f0", address:"Poplar St", building:"Oak Apartments", area:"1A", room:null, shelter:"full",
-      desc:"Same layout as yours, roughly — smaller, though, and a half-packed bag still sits by the door.",
-      sleepSpot:"couch", cannotHaveFire:true, floorCap:50, floor:[],
-      containers:[
-        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal","baby_items"], items:[] },
-        { id:"kitchenette", name:"Kitchenette Shelf", capacityKg:10, spawnPools:["kitchen_nonperishable","kitchen_tools"], items:[] }
-      ],
-      exits:[ { to:"oak_hallway1", label:"Leave the apartment", distanceM:6 } ]
-    },
-    oak_1b: { locationId:"oak_f0", address:"Poplar St", building:"Oak Apartments", area:"1B", room:null, shelter:"full",
-      desc:"The blinds are drawn in here, and a mug on the desk has grown a skin of cold coffee.",
-      sleepSpot:"bed", cannotHaveFire:true, floorCap:50, floor:[],
-      containers:[
-        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal","pet_supplies"], items:[] },
-        { id:"kitchenette", name:"Kitchenette Cabinet", capacityKg:10, spawnPools:["kitchen_nonperishable","kitchen_tools"], items:[] }
-      ],
-      exits:[ { to:"oak_hallway1", label:"Leave the apartment", distanceM:6 } ]
-    },
-    oak_2a: { locationId:"oak_f1", address:"Poplar St", building:"Oak Apartments", area:"2A", room:null, shelter:"full",
-      desc:"A single room upstairs, tidy despite everything — someone made the bed before they left.",
-      sleepSpot:"bed", cannotHaveFire:true, floorCap:50, floor:[],
-      containers:[
-        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal","self_defense"], items:[] },
-        { id:"kitchenette", name:"Kitchenette Shelf", capacityKg:10, spawnPools:["kitchen_nonperishable","kitchen_tools"], items:[] }
-      ],
-      exits:[ { to:"oak_hallway2", label:"Leave the apartment", distanceM:6 } ]
-    },
-    oak_2b: { locationId:"oak_f1", address:"Poplar St", building:"Oak Apartments", area:"2B", room:null, shelter:"full",
-      desc:"Boxes still stacked by the window, like a move that never finished.",
-      sleepSpot:"mattress", cannotHaveFire:true, floorCap:50, floor:[],
-      containers:[
-        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal","pet_supplies"], items:[] },
-        { id:"kitchenette", name:"Kitchenette Cabinet", capacityKg:10, spawnPools:["kitchen_nonperishable","kitchen_tools"], items:[] }
-      ],
-      exits:[ { to:"oak_hallway2", label:"Leave the apartment", distanceM:6 } ]
-    }
-    };
-  }
-
-  function buildAutoWorkshop(){
-    return {
-    auto_shop: { locationId:"auto_shop_f0", address:"Main St", building:"Auto Workshop", area:null, room:"Main Bay", shelter:"full",
-      desc:"A car sits mid-repair on the lift, hood up. A workbench runs along the back wall, tools hung in outline on a pegboard above it.",
-      cannotHaveFire:true, floorCap:70, floor:[],
-      containers:[
-        { id:"workbench", name:"Workbench", capacityKg:30, spawnPools:["tools_workshop"], items:[] },
-        { id:"partsshelf", name:"Parts Shelf", capacityKg:25, spawnPools:["tools_workshop","warehouse_goods"], items:[] }
-      ],
-      exits:[
-        { to:"mid_main_3_5", label:"Leave the shop" },
-        { to:"auto_shop_back", label:"Go to the back office", distanceM:5 } ]
-    },
-    auto_shop_back: { locationId:"auto_shop_f0", address:"Main St", building:"Auto Workshop", area:null, room:"Back Office", shelter:"full",
-      desc:"A cramped office off the main bay — a desk buried in paperwork, a filing cabinet in the corner.",
-      cannotHaveFire:true, floorCap:40, floor:[],
-      containers:[
-        { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore","electronics"], items:[] },
-        { id:"filingcabinet", name:"Filing Cabinet", capacityKg:20, spawnPools:["office_supplies","documents_lore","electronics"], items:[] }
-      ],
-      exits:[ { to:"auto_shop", label:"Go back to the main bay", distanceM:5 } ]
-    }
-    };
-  }
-
-  function buildPoliceStation(){
-    return {
-    police_lobby: { locationId:"police_f0", address:"Maple St", building:"Police Station", area:null, room:"Lobby", shelter:"full",
-      desc:"A front desk, a bulletin board thick with old flyers, a waiting-area bench bolted to the floor.",
-      cannotHaveFire:true, floorCap:60, floor:[],
-      containers:[
-        { id:"frontdesk", name:"Front Desk", capacityKg:15, spawnPools:["office_supplies","police_gear","electronics"], items:[] },
-        { id:"lockerroom", name:"Locker Room", capacityKg:25, spawnPools:["police_gear","clothing"], items:[] }
-      ],
-      exits:[
-        { to:"maple3rd", label:"Leave the station" },
-        { to:"police_evidence", label:"Go to the back", distanceM:5 } ]
-    },
-    police_evidence: { locationId:"police_f0", address:"Maple St", building:"Police Station", area:null, room:"Evidence & Holding", shelter:"full",
-      desc:"An evidence locker along one wall, a single holding cell across from it, door hanging open.",
-      cannotHaveFire:true, floorCap:40, floor:[],
-      containers:[
-        { id:"evidencelocker", name:"Evidence Locker", capacityKg:25, spawnPools:["police_evidence"], items:[] }
-      ],
-      exits:[ { to:"police_lobby", label:"Go back to the lobby", distanceM:5 } ]
-    }
-    };
-  }
-
-  function buildRiversideFreight(){
-    return {
-    industrial_floor: { locationId:"industrial_f0", address:"Maple St", building:"Riverside Freight", area:null, room:"Warehouse Floor", shelter:"full",
-      desc:"Pallet racks line both walls, mostly empty. A forklift sits dead in the middle of the floor, parked mid-task.",
-      cannotHaveFire:true, floorCap:70, floor:[],
-      containers:[
-        { id:"palletrack1", name:"Pallet Rack 1", capacityKg:35, spawnPools:["warehouse_goods"], items:[] },
-        { id:"palletrack2", name:"Pallet Rack 2", capacityKg:35, spawnPools:["warehouse_goods"], items:[] }
-      ],
-      exits:[
-        { to:"maple2nd", label:"Leave the warehouse" },
-        { to:"industrial_office", label:"Go to the office", distanceM:5 } ]
-    },
-    industrial_office: { locationId:"industrial_f0", address:"Maple St", building:"Riverside Freight", area:null, room:"Office", shelter:"full",
-      desc:"A small office off the warehouse floor — a desk, and a squat safe in the corner, door shut.",
-      cannotHaveFire:true, floorCap:40, floor:[],
-      containers:[
-        { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore","electronics"], items:[] },
-        { id:"safe", name:"Safe", capacityKg:20, spawnPools:["valuables","documents_lore"], items:[] }
-      ],
-      exits:[ { to:"industrial_floor", label:"Go back to the warehouse floor", distanceM:5 } ]
-    }
-    };
-  }
+  // Empty: no Lima building is wired yet (#289, #250), and wiring one is a
+  // PATCH, since power definitions aren't saved. Every room falls back to the
+  // grid. The `apartment` template stays for the dev seam (simulatePower()
+  // defaults to it) until #289 re-bases it.
+  const WIRING = {};
 
   // Straight-line distance between two Locations, rounded to the nearest
   // whole meter. Computed on demand, never cached — LOCATIONS is the
@@ -4915,10 +4551,10 @@ x_sn_9 m_sn_sn_sn sn p
   // coordinates. Two Locations at the same point have no direction between
   // them and resolve to `null` — that is a different case from pure vertical
   // movement, which resolves to up/down, and the two must not be collapsed:
-  // a building floor shares its street node's (x,y) *and* its z, while a
+  // a building floor shares its site stop's (x,y) *and* its z, while a
   // rooftop or an upper floor differs in z and is genuinely above. Otherwise
-  // the larger of |dx|/|dy| wins, and a true diagonal tie (not expected on
-  // the current rectilinear grid) defaults to the north/south axis.
+  // the larger of |dx|/|dy| wins, and a true diagonal tie (rare, on metre
+  // coordinates) defaults to the north/south axis.
   function computeDirection(a, b){
     const A = LOCATIONS[a], B = LOCATIONS[b];
     const dx = B.x - A.x, dy = B.y - A.y, dz = B.z - A.z;
@@ -4960,161 +4596,8 @@ x_sn_9 m_sn_sn_sn sn p
     }
     return world;
   }
-  function buildCornerStore(){
-    return {
-    cornerstore: { locationId:"cornerstore_f0", address:"Main St", building:"Corner Store", area:null, room:null, shelter:"full",
-      desc:"A small grocery. The door was already unlocked when you got here.",
-      cannotHaveFire:true, floorCap:60, floor:[],
-      containers:[
-        { id:"shelves", name:"Shelves", capacityKg:30, spawnPools:["retail_stock_food","retail_stock_general"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"canned_corn", qty:4 },
-          { id:"potato_chips", qty:3 },
-          { id:"plastic_bottle", qty:5, overrides:{ water:{ kind:"clean", fill:1 } } } ])},
-        { id:"register", name:"Register Counter", capacityKg:5, spawnPools:["valuables","retail_stock_general"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"loose_change", qty:1 },
-          { id:"lighter", qty:1 } ])},
-        { id:"storage", name:"Storage Room", capacityKg:40, spawnPools:["retail_stock_food","retail_stock_general","cleaning_supplies"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"canned_beans", qty:4 },
-          { id:"box_cutter", qty:1 },
-          { id:"bandage", qty:3 } ])}
-      ],
-      searched:false, searchLabel:"Search the store", searchMinutes:25,
-      exits:[
-        { to:"main2nd", label:"Leave the store" },
-        { to:"cornerstore_apt", label:"Go upstairs" } ]
-    },
-    cornerstore_apt: { locationId:"cornerstore_f1", address:"Main St", area:"Apt above Corner Store", room:null, shelter:"full",
-      desc:"A cramped one-room flat over the shop. Whoever ran the register probably lived up here.",
-      cannotHaveFire:true, floorCap:40, floor:[],
-      containers:[
-        { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"old_photographs", qty:1 },
-          { id:"reading_lamp", qty:1 },
-          { id:"tote_bag", qty:1 } ])}
-      ],
-      exits:[ { to:"cornerstore", label:"Go downstairs" } ]
-    }
-    };
-  }
-
-  function buildPharmacy(){
-    return {
-    pharmacy: { locationId:"pharmacy_f0", address:"Main St", building:"Pharmacy", area:null, room:null, shelter:"full",
-      desc:"Dusty shelves, a counter with a chained-off back area. Someone's been through here already, but not thoroughly.",
-      cannotHaveFire:true, floorCap:60, floor:[],
-      containers:[
-        { id:"counter", name:"Pharmacy Counter", capacityKg:10, spawnPools:["medical_pharmacy"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"prescription_bottles", qty:2 },
-          { id:"strong_painkillers", qty:1 } ])},
-        { id:"shelves", name:"Shelves", capacityKg:20, spawnPools:["medical_otc"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"bandage", qty:5 },
-          { id:"cold_medicine", qty:1 } ])},
-        { id:"backroom", name:"Back Room", capacityKg:25, spawnPools:["medical_pharmacy","medical_otc"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"rubbing_alcohol", qty:2 },
-          { id:"gauze_rolls", qty:3 } ])}
-      ],
-      searched:false, searchLabel:"Search the pharmacy", searchMinutes:20,
-      exits:[
-        { to:"mid_main_1_3", label:"Leave the pharmacy" },
-        { to:"pharmacy_apt", label:"Go upstairs" } ]
-    },
-    pharmacy_apt: { locationId:"pharmacy_f1", address:"Main St", area:"Apt above Pharmacy", room:null, shelter:"full",
-      desc:"The pharmacist's old apartment. Smaller than yours, and someone left in a hurry.",
-      cannotHaveFire:true, floorCap:40, floor:[],
-      containers:[
-        { id:"cabinet", name:"Cabinet", capacityKg:10, spawnPools:["kitchen_nonperishable"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"canned_soup", qty:2 } ])}
-      ],
-      exits:[ { to:"pharmacy", label:"Go downstairs" } ]
-    }
-    };
-  }
-
-  function buildHardwareStore(){
-    return {
-    hardware: { locationId:"hardware_f0", address:"Main St", building:"Hardware Store", area:null, room:null, shelter:"full",
-      desc:"Tool racks along one wall, bins of hardware along the other. Better stocked than you expected.",
-      cannotHaveFire:true, floorCap:60, floor:[],
-      containers:[
-        { id:"toolwall", name:"Tool Wall", capacityKg:30, spawnPools:["hardware_store","tools_general","self_defense"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"bolt_cutters", qty:1 },
-          { id:"crowbar", qty:1 },
-          { id:"hand_axe", qty:1 },
-          { id:"wrench", qty:1 } ])},
-        { id:"bins", name:"Hardware Bins", capacityKg:25, spawnPools:["hardware_store","tools_general"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"nails", qty:1 },
-          { id:"duct_tape", qty:3 },
-          { id:"rope", qty:2 },
-          { id:"plank", qty:3 } ])},
-        { id:"paintaisle", name:"Paint Aisle", capacityKg:20, spawnPools:["hardware_store","tools_workshop"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"propane_torch", qty:1 },
-          { id:"work_gloves", qty:1 } ])}
-      ],
-      searched:false, searchLabel:"Search the hardware store", searchMinutes:20,
-      exits:[
-        { to:"mid_main_1_3", label:"Leave the hardware store" },
-        { to:"hardware_apt", label:"Go upstairs" } ]
-    },
-    hardware_apt: { locationId:"hardware_f1", address:"Main St", area:"Apt above Hardware Store", room:null, shelter:"full",
-      desc:"A modest apartment over the shop, plaster cracked from settling.",
-      cannotHaveFire:true, floorCap:40, floor:[],
-      containers:[
-        { id:"shelf", name:"Shelf", capacityKg:10, spawnPools:["recreation","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"work_boots", qty:1 },
-          { id:"fanny_pack", qty:1 } ])}
-      ],
-      exits:[ { to:"hardware", label:"Go downstairs" } ]
-    }
-    };
-  }
-
-  function buildStorageFacility(){
-    return {
-    storage: { locationId:"storage_f0", address:"Water St", building:"Storage Facility", area:null, room:null, shelter:"full",
-      desc:"A row of roll-up storage units. Most are locked. One door hangs open already.",
-      cannotHaveFire:true, floorCap:50, floor:[],
-      containers:[
-        { id:"unit1", name:"Storage Unit 1", capacityKg:30, locked:true, breakTag:"cutting", spawnPools:["outdoor_camping"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"camping_tent", qty:1 },
-          { id:"sleeping_bag", qty:1 } ])},
-        { id:"unit2", name:"Storage Unit 2", capacityKg:30, locked:true, breakTag:"cutting", spawnPools:["recreation","residential_personal"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"old_furniture", qty:1 },
-          { id:"board_games", qty:1 } ])},
-        { id:"unit3", name:"Storage Unit 3", capacityKg:30, spawnPools:["outdoor_camping"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"fishing_rod", qty:1 },
-          { id:"tackle_box", qty:1 } ])}
-      ],
-      exits:[ { to:"water2nd", label:"Back outside" } ]
-    }
-    };
-  }
-
-  function buildRiverbank(){
-    return {
-    riverbank: { locationId:"riverbank_f0", address:"Water St", building:"Riverbank", area:null, room:null, shelter:"none",
-      desc:"Mud and reeds where the paved street gives way to open water. Driftwood is scattered along the bank, and the current's slow enough here to fish without much trouble.",
-      fishable:true, floorCap:40,
-      floor:itemsFromRegistry([ { id:"firewood", qty:4 } ]),
-      containers:[],
-      exits:[ { to:"water1st", label:"Climb back up to the street" } ]
-    }
-    };
-  }
-
   function makeDefaultWorld(){
-    const world = Object.assign({},
-      buildAcornApartments(),
-      buildOakApartments(),
-      buildAutoWorkshop(),
-      buildPoliceStation(),
-      buildRiversideFreight(),
-      buildCornerStore(),
-      buildPharmacy(),
-      buildHardwareStore(),
-      buildStorageFacility(),
-      buildRiverbank(),
-      buildLimaStops()
-    );
+    const world = buildLimaStops();
     // The buildings the types generate, and each one's street exit, hung on
     // its site stop.
     const built = expandBuildings();
@@ -5140,6 +4623,15 @@ x_sn_9 m_sn_sn_sn sn p
   }
   registerBuildingLocations();
   let world = makeDefaultWorld();
+  // Buildings the map can name: a player-visible name and the Location its
+  // marker sits on. The landmarks carrying `marker` (their own name, at
+  // their building's Location) and the named scenery; not every building,
+  // only the ones a map marker names. Built here, once the world is, since
+  // the landmarks are read from landmarkInstances().
+  // MAP_BUILDING_OFFSETS (RENDERING/MAP) is what decides which of these
+  // actually get a marker, and where the label sits relative to the dot.
+  const BUILDINGS = Object.assign(Object.fromEntries(landmarkInstances().filter(b=> b.marker)
+    .map(b=> [b.id, { name:b.name, anchor:b.id + "_f0" }])), NAMED_SCENERY);
   // The runtime doors and windows (DOOR SCHEMA, WINDOW SCHEMA). Built here,
   // below WIRING, because a unit's come from its wiring template.
   let doors = buildDoors(null);
@@ -5167,7 +4659,7 @@ x_sn_9 m_sn_sn_sn sn p
       // close to undebuggable. Its only writer is rollFoodPoisoning(), called
       // only from click handlers.
       rollSeq: 0,
-      currentRoom:HOME_STOP, gait:"walk",
+      currentRoom:"home_living", gait:"walk",
       totalMinutes:0, collapseCount:0,
       // Every building the player has been inside, by `buildingId` (ROOM
       // SCHEMA), in the order first entered. Written by doMove(); Walk to…
@@ -6483,9 +5975,10 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // The exits a room loses when a door is shut. `doors[].sides` names the two
   // rooms a door physically separates; `doorId` on an exit names the exits that
-  // door actually blocks, and the two are not the same set — 2B's kitchen,
-  // bathroom and bedroom each leave through the "2b" door without being one of
-  // its sides. Anything the player is told about a shut door is driven from
+  // door actually blocks, and the two need not be the same set: a room can
+  // leave through a door without being one of its sides (a flat's kitchen
+  // through its front door, in the flats this world first had). Anything the
+  // player is told about a shut door is driven from
   // here, so the rooms that lose an exit are the rooms that explain it. Reads
   // raw `room.exits` on purpose: `getExitsForRoom()` is what drops a locked
   // exit, which is exactly what has to be reported. Deduped by door, so a
@@ -6503,25 +5996,24 @@ x_sn_9 m_sn_sn_sn sn p
     return gated;
   }
   // Every door a room touches: the ones it adjoins as a `sides` member, then
-  // the ones only its exits pass through. The union, not either half — 2B's
-  // kitchen leaves through the "2b" door without being one of its sides, and a
-  // room a door adjoins keeps its key actions even if one of its exits
-  // through that door is authored without a doorId, as 2A's four were until
-  // v0.6.1. `doorsForRoom()` first keeps every key panel's existing label
-  // order intact.
+  // the ones only its exits pass through. The union, not either half — a room
+  // can leave through a door without being one of its sides, and a room a
+  // door adjoins keeps its key actions even if one of its exits through that
+  // door is authored without a doorId. `doorsForRoom()` first keeps every
+  // key panel's existing label order intact.
   function doorsTouchingRoom(roomId){
     const ids = doorsForRoom(roomId);
     gatedExitsForRoom(roomId).forEach(e=>{ if(!ids.includes(e.doorId)) ids.push(e.doorId); });
     return ids;
   }
-  // A door is named by the side the player is not standing on, so the same
-  // door reads correctly from both of its rooms. The composition is
-  // area-then-room because neither field alone survives the current world:
-  // "1a-patio" joins `onea` and `onea_patio`, which share the area "1A", so
-  // naming by area would call it "1A" from inside 1A; and `hallway2` carries
-  // two doors whose far sides (`living`, `twobee`) are both a "Living Room",
-  // so naming by room would give that hallway two identically-labelled doors.
-  // Area first, room only when the two sides share an area, separates both.
+  // A door with a `label` (DOOR SCHEMA) is called that from both sides:
+  // "front", "back". Any other is named by the side the player is not
+  // standing on, so the same door reads correctly from both of its rooms.
+  // The composition is area-then-room because neither field alone is enough
+  // in a building of flats: two rooms sharing an area would name their door
+  // by that area from inside it, and two doors off one hallway into two
+  // living rooms would read alike by room. Area first, room only when the two
+  // sides share an area, separates both.
   // Case is asymmetric on purpose: an area is a proper name and keeps its
   // capitals ("2A", "2nd Floor"); a room is a common noun and is lowercased
   // ("patio", "living room"). Callers supply the article — "the <label> door".
@@ -6620,12 +6112,12 @@ x_sn_9 m_sn_sn_sn sn p
     });
     return exits;
   }
-  // An exit is grid travel if and only if both of its endpoints are
-  // street/mid-block nodes, which the ROOM SCHEMA marks by giving such a room
-  // its own id as its `locationId`. RENDERING splits the two action panels on
-  // this: Move holds grid travel, Here holds everything else, window climbs
-  // included. Deliberately not the cross-Location test — that also
-  // catches stairs, building doors and the fire escape, which are not travel.
+  // An exit is street travel if and only if both of its endpoints are stops,
+  // which the ROOM SCHEMA marks by giving such a room its own id as its
+  // `locationId`. RENDERING splits the two action panels on this: Move holds
+  // street travel, Here holds everything else, window climbs included.
+  // Deliberately not the cross-Location test — that also catches stairs and
+  // building doors, which are not travel.
   function isGridTravel(fromId, toId){
     const from = world[fromId], to = world[toId];
     return !!from && !!to && from.locationId === fromId && to.locationId === toId;
@@ -6744,7 +6236,7 @@ x_sn_9 m_sn_sn_sn sn p
     render();
   }
   // A container a search doesn't hide: one tagged `device`, a fixture the
-  // room's description already names (1B's stove). The Here tab list shows
+  // room's description already names (a kitchen's stove). The Here tab list shows
   // it before a search, and doSearch() leaves it out of what the search
   // found.
   function shownWithoutSearch(container){ return hasTag(container, "device"); }
@@ -9221,7 +8713,7 @@ x_sn_9 m_sn_sn_sn sn p
     worldTab = "floor";
     _uidCounter = 1;
     document.getElementById("log").innerHTML = "";
-    log("You wake up in your apartment. Everything's exactly where you left it — for now.");
+    log("You wake up at home. Everything's exactly where you left it — for now.");
     render();
   }
 
@@ -9681,18 +9173,29 @@ x_sn_9 m_sn_sn_sn sn p
   // reaches it. Where two sit close enough that only one can carry a label,
   // this is where that is said, and the offset, not a second coordinate,
   // is what keeps two markers on one anchor legible as two.
+  // Most sit just south of their stop; the pairs that share a stop (the
+  // home and its neighbour, the bank and the school, the station and its
+  // goods shed) are pulled apart. Judgment calls, retunable.
   const MAP_BUILDING_OFFSETS = {
-    acorn:       { dx:-5,  dy:-28 },
-    alley:       { dx: 32, dy:-5 },
-    cornerstore: { dx:-32, dy:-5 },
-    pharmacy:    { dx:-5,  dy:-28 },
-    hardware:    { dx:-5,  dy: 28 },
-    storage:     { dx: 32, dy: 5 },
-    riverbank:   { dx: 5,  dy: 32 },
-    oak:         { dx: 30, dy: 5 },
-    auto_shop:   { dx:-5,  dy: 28 },
-    police:      { dx: 32, dy:-5 },
-    industrial:  { dx: 32, dy: 5 }
+    home:          { dx:-18, dy:-22 },
+    row_neighbour: { dx: 18, dy: 22 },
+    pharmacy:      { dx: 0,  dy:-22 },
+    comisaria:     { dx: 0,  dy:-22 },
+    corralon:      { dx: 0,  dy:-22 },
+    almacen:       { dx: 0,  dy:-22 },
+    mechanic:      { dx: 0,  dy:-22 },
+    goods_shed:    { dx: 0,  dy:-22 },
+    paper_mill:    { dx: 0,  dy:-22 },
+    hospital:      { dx: 0,  dy:-22 },
+    banco_nacion:  { dx:-22, dy:-22 },
+    school_ep9:    { dx: 22, dy: 22 },
+    correo:        { dx: 0,  dy:-22 },
+    parroquia:     { dx: 0,  dy:-22 },
+    delegacion:    { dx: 0,  dy:-22 },
+    bomberos:      { dx: 0,  dy:-22 },
+    club:          { dx: 0,  dy:-22 },
+    petrol:        { dx: 0,  dy:-22 },
+    estacion:      { dx: 0,  dy: 22 }
   };
 
   let mapZoomMode = "close";
@@ -11040,8 +10543,8 @@ x_sn_9 m_sn_sn_sn sn p
     const moveBox = document.getElementById("moveActions");
     moveBox.innerHTML = "";
     // Sorting by direction rank alone is enough: Array.prototype.sort is
-    // stable, so each intersection's "Head …" stays ahead of its "Step into
-    // the block …" in authoring order without a secondary key.
+    // stable, so two exits pointing the same way keep their authoring order
+    // without a secondary key.
     getExitsForRoom(room, state.currentRoom)
       .filter(exit => isGridTravel(state.currentRoom, exit.to))
       .sort((a,b) => moveDirectionRank(state.currentRoom, a.to) - moveDirectionRank(state.currentRoom, b.to))
@@ -11072,8 +10575,8 @@ x_sn_9 m_sn_sn_sn sn p
     const hereGroup = document.getElementById("hereGroup");
     const hereBox = document.getElementById("hereActions");
     hereBox.innerHTML = "";
-    // Everything that isn't grid travel — stairs, building doors, the fire
-    // escape, window climbs — renders here, first and in authoring order.
+    // Everything that isn't street travel — stairs, building doors, window
+    // climbs — renders here, first and in authoring order.
     getExitsForRoom(room, state.currentRoom)
       .filter(exit => !isGridTravel(state.currentRoom, exit.to))
       .forEach(exit=>{
@@ -11551,7 +11054,7 @@ x_sn_9 m_sn_sn_sn sn p
   // state exists, and its network resolved.
   refreshPower();
   stampMissingAges();
-  log("You wake up in your apartment. Everything's exactly where you left it — for now.");
+  log("You wake up at home. Everything's exactly where you left it — for now.");
   mapSetZoomSpan(mapZoomSpan);
   render();
 
