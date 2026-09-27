@@ -32,6 +32,16 @@ adopts it.
   Nacional de Población, Hogares y Viviendas*, 18 May 2022). A source written
   later still counts if it shows what was there by February 2025. The exact
   day is open.
+- **The collapse is a zombie apocalypse** (Tom, 2026-09-27). The game never
+  says so; the threat itself is #12.
+- **Atucha is in the game, but only what someone on the road would see**
+  (Tom, 2026-09-27; #285). The fence, the gatehouse, the car parks, the
+  contractors' yard for Atucha I's overhaul and the substation are reachable.
+  The reactor buildings stay locked. Atucha I's overhaul (about 2,000 jobs)
+  is texture in Lima itself: rented rooms, work trucks, site canteens, PPE.
+- **No radiation mechanic,** unless the research shows that lack of
+  maintenance really makes radioactive material a hazard (Tom, 2026-09-27;
+  #290).
 - **The game is in English; places keep their Spanish names** (`CLAUDE.md`,
   "Writing game text").
 - **The wider setting is a string of towns with a city nearby:** Lima first,
@@ -50,6 +60,9 @@ adopts it.
   emptied, and its exact day in February 2025.
 - **The player's home in Lima** (#284). The Henderson choice (The Imperial)
   lapsed with the move.
+- **What happens to Atucha after the collapse** (#290, #285): Atucha II
+  running and Atucha I mid-overhaul in February 2025, the staff gone, and the
+  grid failing. It has to be established; the game never states it.
 - **Why the player is still in town** a few days after (#137).
 - **Why grid power fails when it does** (#220). Proposed, not decided: an
   accumulation of unrepaired faults, area by area, rather than one event.
