@@ -99,7 +99,9 @@ game says about them is accurate — checked against a source when it is written
 never recalled or invented, and recorded in `docs/canon/reference/` (see "The
 canon is private" for what to do when a fact isn't there yet). A fact that
 can't be confirmed is marked unconfirmed, not filled with a plausible one.
-Adding something the real town lacks is a design decision (see below). Project
+Adding something the real town lacks is a design decision (see below).
+**Product brands are the exception: no real brand appears in the game.** Items
+are generic ("a sachet of milk"). Fictional brands may be invented later. Project
 Guide, Part 1.
 
 **Content vs. mechanics stay separated.** A change touches WORLD DATA (content)

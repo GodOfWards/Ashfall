@@ -63,6 +63,11 @@ is marked unconfirmed rather than filled in with a plausible one. Where the
 game needs something Lima doesn't have, adding it is a design decision
 (Part 2).
 
+**Product brands are where the rule stops.** No real brand appears in the
+game: an item is "a sachet of milk" or "a bag of yerba", never its maker's
+name. Fictional brands may be invented later, as their own content. Real
+places, businesses and institutions still carry their real names.
+
 The game is written in English, and real places keep their original Spanish
 names: the local spelling, accents included, never translated or
 anglicised. A street is "Calle 15", not "15th Street".
