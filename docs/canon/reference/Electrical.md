@@ -1,5 +1,12 @@
 # Electrical — US wiring, breakers, appliances, meters
 
+> **US figures; the game is now set in Argentina (2026-09-26, #237).** This
+> file stays as the record of what was researched, and as what the current
+> code is built on. The power system is to be re-based on Argentine practice
+> (AEA 90364, 220/380 V, IEC breakers, residual-current devices). What is
+> known so far is in `Lima.md`. Until then, a figure here is sourced but no
+> longer the target.
+
 Real-world facts for the power system (#220 and its sub-issues). See
 `README.md` for the status labels. Dates are when each was checked.
 

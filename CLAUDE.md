@@ -92,14 +92,21 @@ A coding session reads neither: a handoff that depends on a canon fact or a
 reference figure quotes it itself. `.rgignore` keeps the folder out of
 repository searches, so it is read by path, on purpose, or not at all.
 
-**The world is real.** The town is Henderson, Kentucky. Streets, places,
+**The world is real.** The town is Lima, in the Partido de Zárate, Buenos
+Aires province, Argentina. Streets, places,
 businesses, utilities and infrastructure carry their real names, and what the
 game says about them is accurate — checked against a source when it is written,
 never recalled or invented, and recorded in `docs/canon/reference/` (see "The
 canon is private" for what to do when a fact isn't there yet). A fact that
 can't be confirmed is marked unconfirmed, not filled with a plausible one.
-Adding something the real town lacks is a design decision (see below). Project
-Guide, Part 1.
+Adding something the real town lacks is a design decision (see below).
+**Brands and business names are the exception.** No real product brand
+appears ("a sachet of milk", not its maker), and a private business is named by
+what it is ("the pharmacy", "a bank", "the petrol station"), never by its
+trading name. State-owned institutions and government buildings keep their
+real names (Correo Argentino, Banco Nación, the Comisaría, the municipal
+hospital). Fictional
+brands are lore, for later. Project Guide, Part 1.
 
 **Content vs. mechanics stay separated.** A change touches WORLD DATA (content)
 or ACTIONS/SIMULATION (mechanics), and normally not both. Rendering is its own
@@ -262,6 +269,10 @@ Second person, present tense, plain sentences. Understatement over drama — the
 horror is in the mundane detail. Tell the story through what people left behind,
 never through exposition, and never explain the collapse itself. One to three
 sentences. Functional UI text is held to clarity instead, not to this tone.
+
+The game is written in English. Real places keep their original Spanish names,
+spelled as they are locally, accents included ("Calle 15", "Estación Lima").
+They are never translated or anglicised.
 
 The Project Guide, Part 1 has the full checklist and examples. Match the
 existing descriptions; don't invent a new voice.

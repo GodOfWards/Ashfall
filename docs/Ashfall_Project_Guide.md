@@ -51,8 +51,8 @@ invented for this doc:
 
 ### A real place
 
-The town is Henderson, Kentucky, and the world is as real and accurate as
-it can be made. Streets, buildings, businesses, utilities and
+The town is Lima, in the Partido de Zárate, Buenos Aires province,
+Argentina, and the world is as real and accurate as it can be made. Streets, buildings, businesses, utilities and
 infrastructure carry their real names, and what the game says about them
 — where they are, what they do, how they connect — matches the real town.
 That is checked against a source when it is written, never recalled or
@@ -60,8 +60,22 @@ invented, and the fact goes into `docs/canon/reference/` with its source, so
 it is found once rather than searched for again. A fact that isn't there yet
 is asked for or filed as a `Research:` issue. A fact that can't be confirmed
 is marked unconfirmed rather than filled in with a plausible one. Where the
-game needs something Henderson doesn't have, adding it is a design decision
+game needs something Lima doesn't have, adding it is a design decision
 (Part 2).
+
+**Brands and business names are where the rule stops.** No real product brand
+appears in the game: an item is "a sachet of milk" or "a bag of yerba", never
+its maker's name. A private business is named by what it is ("the pharmacy",
+"a bank", "the petrol station", "the hardware store"), never by its trading
+name, though it still stands at its real site. State-owned institutions and
+government buildings keep their real names: Correo Argentino, Banco Nación,
+the Comisaría, the municipal hospital, the Delegación Municipal. Streets, neighbourhoods and
+public places keep theirs too. Fictional brands and trading names are lore,
+to be invented later.
+
+The game is written in English, and real places keep their original Spanish
+names: the local spelling, accents included, never translated or
+anglicised. A street is "Calle 15", not "15th Street".
 
 This sits under the tone rules, not above them. A real name doesn't
 license exposition: a real power plant is still described through what
