@@ -44,8 +44,9 @@ adopts it.
   #290).
 - **The player is from Lima** (Tom, 2026-09-27; #292). They know its streets
   and public landmarks as a local does, but not what's inside or what's left.
-  Their home is proposed as a chalet in the Barrio Complejo Nuclear Atucha
-  (#284). How this fits the opening (#137) is open.
+  **Their home is a row house in the Barrio Complejo Nuclear Atucha** (Tom,
+  2026-09-27; #284), the terraced strip on the barrio's western side, north
+  of the railway. How this fits the opening (#137) is open.
 - **The game is in English; places keep their Spanish names** (`CLAUDE.md`,
   "Writing game text").
 - **The wider setting is a string of towns with a city nearby:** Lima first,

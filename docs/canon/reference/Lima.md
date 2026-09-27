@@ -110,10 +110,11 @@ unknown), not from a survey. Status: estimate.
 - **Paved:** the blocks around the plaza and the main axis through the centre
   (grey surfaces, kerbs, parked cars), the Camino Provincial 038-03 running
   north, and the roads along the railway.
-- **Dirt:** most streets two or three blocks out from the plaza, and almost
-  all of the outer neighbourhoods (tan surfaces, no kerbs). This is
+- **Unpaved:** most streets two or three blocks out from the plaza, and
+  almost all of the outer neighbourhoods (tan surfaces, no kerbs). This is
   consistent with La Nación's "most streets outside the plaza unpaved"
-  (2015/2020).
+  (2015/2020). **They are mostly gravel (*ripio*) rather than bare dirt**
+  (Tom, 2026-09-27, first-hand).
 - **The plaza** is a single block with diagonal paths and trees. The denser,
   larger-roofed buildings (shops, the church, public buildings) cluster
   around it.
@@ -163,14 +164,21 @@ Status: secondary unless marked; read 2026-09-27.
     pumps. When the grid fails, **the tank's contents are all there is**.
     This is derived, not sourced, and it replaces the Henderson reasoning
     about gravity storage.
-  - **Sewers in Lima:** unconfirmed.
+  - **In practice, many homes aren't on the network** (Tom, 2026-09-27,
+    first-hand): "it's really common to not have network water, so each
+    house would have its own tank and pump". A house's own pump fills its
+    own tank, and the house draws from the tank. How many houses are on the
+    network is unconfirmed, as are typical tank sizes and whether the pump
+    draws from a private well (*perforación*).
+  - **Sewers: none. Lima is all septic tanks** (Tom, 2026-09-27,
+    first-hand).
 - **Gas:**
   - **Naturgy BAN** is the distributor for the Partido de Zárate, and Campana
     ([Naturgy BAN](https://www.naturgyban.com.ar/)).
   - **Litoral Gas** covers Baradero, San Pedro, Ramallo and San Nicolás
     ([Litoral Gas](https://www.litoral-gas.com.ar/site/sobre-nosotros/empresa/sobre-nosotros/)).
-  - **Whether Lima has a gas network, or runs on garrafas, or both, is
-    unconfirmed** (#287).
+  - **Lima has no gas network: it's all garrafas** (Tom, 2026-09-27,
+    first-hand). Bottled LPG for cooking and heating.
 - **Fuel:**
   - **Zárate:** Shell (Justa Lima & Castelli), Axion (19 de Marzo &
     Ituzaingó) and YPF (Gallesio & Hipólito Yrigoyen), per La Voz de Zárate
