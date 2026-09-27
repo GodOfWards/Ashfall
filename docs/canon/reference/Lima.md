@@ -79,9 +79,105 @@ town since 2026-09-26 (#237), replacing Henderson, Kentucky.
   above). **Its location isn't confirmed.** It isn't named in OSM. A
   business called "Inglés en Barrio Atucha" is listed at Avenida 11 835
   (findglocal, search summary), which suggests it's near Avenida 11.
+- **Located (2026-09-27), from Tom's Google Maps pin and satellite imagery:**
+  the barrio is **north of the railway, west of the Camino Provincial 038-03**,
+  centred at about **34.0362 S, 59.1935 W** (about 240 m east and 935 m north
+  of the town's centre). Google Maps labels a **"Club Barrio Atucha Lima"** at
+  its north-west corner, with the Nueve de Julio neighbourhood to the south
+  and San Sebastián to the east. From Esri World Imagery (about 0.5 m per
+  pixel; imagery date unknown):
+  - **about 40 detached chalets**, footprints roughly 10 × 12 m, with pitched
+    red-tile roofs, in large gardens under tall trees, on **winding internal
+    lanes**, not the town grid;
+  - a **western section of terraced row houses**: about eight rows of paired,
+    smaller red-roofed units;
+  - **the club** in the north-west corner: a swimming pool, two tennis
+    courts, a blue-roofed building and a large hall;
+  - windbreak rows of tall trees on the north and west sides.
+
+  Status: observed from imagery; the chalets' interiors and number of floors
+  are unconfirmed. Property listings found for "Atucha" are quintas and
+  newer houses, not these chalets.
 - NA-SA had about 1,400 workers at some point (El Destape, 2023, search
   summary) against about 3,000 in a later figure (above). They wore "the
   company's uniform of grayish-brown trousers and a beige shirt".
+
+## Streets and surfaces, from satellite imagery (2026-09-27)
+
+Judged from Esri World Imagery (about 0.5–1 m per pixel; imagery date
+unknown), not from a survey. Status: estimate.
+
+- **Paved:** the blocks around the plaza and the main axis through the centre
+  (grey surfaces, kerbs, parked cars), the Camino Provincial 038-03 running
+  north, and the roads along the railway.
+- **Dirt:** most streets two or three blocks out from the plaza, and almost
+  all of the outer neighbourhoods (tan surfaces, no kerbs). This is
+  consistent with La Nación's "most streets outside the plaza unpaved"
+  (2015/2020).
+- **The plaza** is a single block with diagonal paths and trees. The denser,
+  larger-roofed buildings (shops, the church, public buildings) cluster
+  around it.
+- **Mixed use is the norm** (Tom): a shop on the ground floor with a home on
+  top, anywhere in town, not only in a central district.
+
+## Utilities in Lima and the region
+
+Status: secondary unless marked; read 2026-09-27.
+
+- **Electricity:**
+  - **Lima and Zárate:** the **Cooperativa de Electricidad de Zárate (CEZ)**,
+    distributing since 1935, with about **41,000 users** (30% of energy
+    residential, 70% industrial). It also sells fibre internet and TV.
+  - CEZ is fed from **three Transba transformer stations (Zárate, Las
+    Palmas and Corcemar)** through five 132 kV lines. It has six 33 kV and
+    five 13.2 kV outlets, and **829 transformer substations** at 13.2 kV.
+  - **Public lighting: 2,377 fixtures in Lima** and 13,974 in Zárate, which
+    had changed since La Nación's "scarce".
+  - Source: [CEZ, "La Red Cooperativa"](https://cezarate.com/la-red-cooperativa/)
+    (read directly: **confirmed** for the network figures; no date on the
+    page).
+  - **Transmission:** Transba's 132 kV **Atucha–Zárate line** was sectioned
+    into the **ET Las Palmas**, "between Zárate and Lima" (ENRE Resolución
+    2/2018, search summary). Transba also operates the **500 kV ET Campana**.
+  - **Campana and Baradero:** **EDEN** (Empresa Distribuidora de Energía
+    Norte S.A., Grupo DESA), private, with a branch in Campana
+    ([es.wikipedia](https://es.wikipedia.org/wiki/EDEN_(empresa))). San
+    Pedro's distributor is unconfirmed.
+- **Water:**
+  - **Lima and Zárate:** **Aguas de Zárate SAPEM** (municipal), with AySA
+    running it technically from 2013, extended to Lima six months after
+    Zárate ([Enlace Crítico, 2013-04-16](https://www.enlacecritico.com/zarate/aysa-comenzara-a-operar-tecnicamente-en-aguas-de-zarate-sapem/)).
+    Now through **ENDEZA**, the municipal water entity.
+  - **All from groundwater wells:** **65 electric pumping wells** serve
+    Zárate and Lima, all running at their limit.
+  - **Lima's system is different from Zárate's: pumps lift the water into a
+    tank, and the town is fed from it** (La Voz de Zárate, 2024-10-08, "El
+    problema con el agua en Zárate"; refuses automated readers, read through
+    a search summary). **Where Lima's tank is, and its size, are
+    unconfirmed.**
+  - A new well for Lima was to give about 100,000 litres an hour into the
+    distribution ring (Municipalidad de Zárate, search summary). Pressure is
+    a chronic summer problem, with a "definitive solution" promised for 2027
+    ([Municipalidad, 2025-10-09](https://zarate.gob.ar/programa-de-servicio-de-abastecimiento-de-agua/)).
+  - **What it means for the game:** running water depends on electric well
+    pumps. When the grid fails, **the tank's contents are all there is**.
+    This is derived, not sourced, and it replaces the Henderson reasoning
+    about gravity storage.
+  - **Sewers in Lima:** unconfirmed.
+- **Gas:**
+  - **Naturgy BAN** is the distributor for the Partido de Zárate, and Campana
+    ([Naturgy BAN](https://www.naturgyban.com.ar/)).
+  - **Litoral Gas** covers Baradero, San Pedro, Ramallo and San Nicolás
+    ([Litoral Gas](https://www.litoral-gas.com.ar/site/sobre-nosotros/empresa/sobre-nosotros/)).
+  - **Whether Lima has a gas network, or runs on garrafas, or both, is
+    unconfirmed** (#287).
+- **Fuel:**
+  - **Zárate:** Shell (Justa Lima & Castelli), Axion (19 de Marzo &
+    Ituzaingó) and YPF (Gallesio & Hipólito Yrigoyen), per La Voz de Zárate
+    via a search summary.
+  - **Lima:** Google Maps shows an "Estación de Servicio" towards the south
+    end of Avenida 11 (Tom's screenshot, 2026-09-27). Its brand is
+    unconfirmed, and OSM doesn't map it.
 
 ## Public buildings and businesses in OSM (2026-09-27, secondary)
 
