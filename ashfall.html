@@ -88,6 +88,12 @@
     border-radius:4px; padding:11px 13px; font-family:system-ui,sans-serif; overflow-y:auto;
     box-shadow:0 6px 18px rgba(0,0,0,.45); }
   .pop.open{ display:block; }
+  /* The map's place card opens over the drawer that holds the map, so it and
+     its backdrop sit above #sideMenu's 20 and below a full panel's 30. */
+  #mapCardBackdrop{ z-index:25; }
+  #mapCard{ z-index:26; }
+  /* Walk to…'s list: one row per place, its button or its "no way through". */
+  .walk-list{ display:flex; flex-direction:column; gap:6px; }
   .pop-actions{ display:flex; flex-direction:column; align-items:stretch; gap:6px; }
   .pop-actions button.action{ text-align:left; }
   /* The stove timer's add buttons, side by side in the device pop-up,
@@ -139,9 +145,11 @@
   .map-street{ stroke:var(--line); stroke-width:3; fill:none; }
   .map-street-thin{ stroke:var(--line); stroke-width:calc(1.5px * var(--map-k, 1)); opacity:.6; fill:none; }
   .map-rail{ stroke:var(--ink-faint); stroke-width:calc(1.2px * var(--map-k, 1)); stroke-dasharray:calc(6px * var(--map-k, 1)) calc(4px * var(--map-k, 1)); fill:none; opacity:.7; }
-  .map-node-dot{ fill:var(--ink-faint); }
+  /* A stop's dot and a building's marker take a tap (the map card): the
+     transparent stroke widens the target past the dot. */
+  .map-node-dot{ fill:var(--ink-faint); stroke:transparent; stroke-width:10; cursor:pointer; }
   .map-street-name{ fill:var(--ink-dim); font-size:15px; font-family:system-ui,sans-serif; letter-spacing:.5px; font-weight:600; }
-  .map-bldg-dot{ fill:var(--panel-2); stroke:var(--accent-dim); stroke-width:1.5; }
+  .map-bldg-dot{ fill:var(--panel-2); stroke:var(--accent-dim); stroke-width:1.5; cursor:pointer; }
   .map-bldg-label{ fill:var(--ink); font-size:10px; font-weight:600; font-family:system-ui,sans-serif; }
   .map-river{ fill:none; stroke:#2a4a5c; stroke-width:calc(10px * var(--map-k, 1)); stroke-linecap:round; stroke-linejoin:round; opacity:.5; }
   #mapPlayer{ fill:var(--accent); }
@@ -286,6 +294,10 @@
 <div id="itemPop" class="pop" tabindex="-1"></div>
 <div id="devicePopBackdrop" class="pop-backdrop"></div>
 <div id="devicePop" class="pop" tabindex="-1"></div>
+<div id="walkPopBackdrop" class="pop-backdrop"></div>
+<div id="walkPop" class="pop" tabindex="-1"></div>
+<div id="mapCardBackdrop" class="pop-backdrop"></div>
+<div id="mapCard" class="pop" tabindex="-1"></div>
 <div id="menuBackdrop"></div>
 <aside id="sideMenu">
   <h2>Menu <button id="closeMenu">✕</button></h2>
@@ -4681,11 +4693,14 @@ x_sn_9 m_sn_sn_sn sn p
   // actually get a marker, and where the label sits relative to the dot.
   const BUILDINGS = Object.assign(Object.fromEntries(landmarkInstances().filter(b=> b.marker)
     .map(b=> [b.id, { name:b.name, anchor:b.id + "_f0" }])), NAMED_SCENERY);
-  // Every building with a water tank, by building id: its size in litres
-  // (BUILDING TYPES' `water`). Read by tankOf().
-  const BUILDING_TANKS = Object.fromEntries(buildingInstances()
-    .map(b=> [b.id, (b.layout || BUILDING_TYPES[b.type] || {}).water])
-    .filter(([id, w])=> w && w.tankL > 0).map(([id, w])=> [id, w.tankL]));
+  // Every building, by id: { name, site, entry, tankL } — its name, its site
+  // stop, the room its street exit leads into, and its water tank in litres
+  // (BUILDING TYPES' `water`), 0 for none. Read by tankOf() and Walk to….
+  const BUILDING_INFO = Object.fromEntries(buildingInstances().map(b=>{
+    const type = b.layout || BUILDING_TYPES[b.type] || {};
+    return [b.id, { name: b.name || type.label, site: b.site, entry: `${b.id}_${type.entry}`,
+      tankL: type.water ? type.water.tankL : 0 }];
+  }));
   // The runtime doors and windows (DOOR SCHEMA, WINDOW SCHEMA). Built here,
   // below WIRING, because a unit's come from its wiring template.
   let doors = buildDoors(null);
@@ -4764,6 +4779,12 @@ x_sn_9 m_sn_sn_sn sn p
   // resolveDeviceTarget() looks it up again on every render. UI-only and
   // never saved, like detailItem.
   let deviceTarget = null;
+  // Whether Walk to…'s list is open, and the map card's place and where it
+  // was tapped ({ place, x, y }, client coordinates), or null when closed.
+  // UI-only and never saved, like detailItem: both look their place up
+  // afresh on every render.
+  let walkListOpen = false;
+  let mapCard = null;
   // The open menu layers, bottom to top — the pop-ups, the drawer, a
   // full-screen panel. UI-only and never saved, like detailItem. See
   // openLayer() in EVENTS / UI HELPERS for what an entry holds.
@@ -4959,11 +4980,13 @@ x_sn_9 m_sn_sn_sn sn p
     const floor = gridTravel ? MIN_MOVE_MIN * distanceM / BLOCK_M : MIN_MOVE_MIN;
     return Math.max(floor, distanceM / (GAITS[effectiveGait()].speed * overloadSpeedFactor(playerLoad())) / 60);
   }
-  function exitMinutes(exit){
-    const fromLoc = world[state.currentRoom].locationId;
+  // An exit's cost from `fromId`, the room it leaves, the player's by
+  // default; Walk to… prices a whole route with it (walkRoutes()).
+  function exitMinutes(exit, fromId = state.currentRoom){
+    const fromLoc = world[fromId].locationId;
     const toLoc = world[exit.to].locationId;
     const d = (fromLoc === toLoc) ? exit.distanceM : locationDistance(fromLoc, toLoc);
-    return moveMinutes(d, isGridTravel(state.currentRoom, exit.to));
+    return moveMinutes(d, isGridTravel(fromId, exit.to));
   }
   // A room's label reads outward-in: the address, then the building it is in,
   // then the area within that building, then the room. `area` and `room` join
@@ -6189,14 +6212,14 @@ x_sn_9 m_sn_sn_sn sn p
   function minutesSinceCollapse(){ return START_DAYS_AFTER_COLLAPSE * MINUTES_PER_DAY + state.totalMinutes; }
   function gridUp(m = minutesSinceCollapse()){ return m < POWER_FAILS_DAY * MINUTES_PER_DAY; }
   // Water: a room's sink runs while the grid does, and a room in a building
-  // with its own tank (BUILDING_TANKS) runs on after it fails, until the
+  // with its own tank (BUILDING_INFO's tankL) runs on after it fails, until the
   // tank is drawn dry. The tank's pump is unwired, so it stops with the grid
   // (#245, #289 can change that), and the tank is full at that moment, since
   // nobody else draws on it. tankOf() is the room's building's tank in
   // litres, or 0 for none; tankLeft() what it holds now.
   function tankOf(roomId){
     const room = world[roomId];
-    return (room && room.buildingId && BUILDING_TANKS[room.buildingId]) || 0;
+    return (room && room.buildingId && BUILDING_INFO[room.buildingId] && BUILDING_INFO[room.buildingId].tankL) || 0;
   }
   function tankLeft(roomId, m = minutesSinceCollapse()){
     const size = tankOf(roomId);
@@ -6266,7 +6289,8 @@ x_sn_9 m_sn_sn_sn sn p
     const start = 1 / OVERLOAD_HARM_MINUTES_PER_HEALTH_START, end = 1 / OVERLOAD_HARM_MINUTES_PER_HEALTH_END;
     return start + harmFraction(load) * (end - start);
   }
-  function doMove(exit){
+  // `walking`: a step of Walk to…, which renders once, when the walk ends.
+  function doMove(exit, walking){
     const minutes = exitMinutes(exit);
     // The gait this move is actually made at — the effective one, not the
     // preference, so a locked player isn't charged for a pace they aren't
@@ -6294,6 +6318,109 @@ x_sn_9 m_sn_sn_sn sn p
     if(entered && !state.enteredBuildings.includes(entered)) state.enteredBuildings.push(entered);
     worldTab = "floor";
     detailItem = null;
+    if(!walking) render();
+  }
+  // WALK TO… (#292). Travel to a known place along the shortest route, run
+  // exit by exit through doMove(), so time, hunger, thirst, fatigue,
+  // spoilage and overload all run as if each step were clicked.
+  //
+  // The known places (Tom, #292 option C): every stop, every building the
+  // map names (BUILDINGS: the landmarks and the named scenery), and every
+  // building the player has entered (state.enteredBuildings). A place is
+  // { key, name, room, buildingId? }: the room a walk ends in — a
+  // building's entry room, a scenery marker's stop — and, for a building,
+  // its id, since being anywhere in it is being there.
+  function stopPlaceName(id){
+    const r = world[id];
+    return r.room ? `${r.address}, ${r.room}` : r.address;
+  }
+  function placeForStop(id){ return { key:"stop:" + id, name:stopPlaceName(id), room:id }; }
+  function placeForBuilding(id){
+    const info = BUILDING_INFO[id];
+    if(info) return { key:"b:" + id, room:info.entry, buildingId:id,
+      name: BUILDINGS[id] ? BUILDINGS[id].name : `${info.name}, ${stopPlaceName(info.site)}` };
+    const scenery = NAMED_SCENERY[id];
+    return scenery ? { key:"b:" + id, name:scenery.name, room:scenery.anchor } : null;
+  }
+  // Walk to…'s list: home first, then every other building the map names
+  // and every building entered, once each.
+  function listedPlaces(){
+    const ids = ["home"].concat(Object.keys(BUILDINGS), state.enteredBuildings)
+      .filter((id, i, all)=> all.indexOf(id) === i);
+    return ids.map(placeForBuilding).filter(Boolean);
+  }
+  // Whether the player is at a place already: in its building, or in its room.
+  function atPlace(place){
+    return place.buildingId ? world[state.currentRoom].buildingId === place.buildingId : state.currentRoom === place.room;
+  }
+  // The shortest routes from the player's room to every room, by
+  // exitMinutes() at the current gait and load, over the exits
+  // getExitsForRoom() offers, so a locked door is not a route: { dist, prev },
+  // Dijkstra over a binary heap. A room missing from `dist` has no route.
+  function walkRoutes(){
+    const start = state.currentRoom;
+    const dist = { [start]:0 }, prev = {};
+    const heap = [[0, start]];
+    const push = (item)=>{
+      heap.push(item);
+      for(let i = heap.length - 1; i > 0;){
+        const p = (i - 1) >> 1;
+        if(heap[p][0] <= heap[i][0]) break;
+        [heap[p], heap[i]] = [heap[i], heap[p]]; i = p;
+      }
+    };
+    const pop = ()=>{
+      const top = heap[0], last = heap.pop();
+      if(heap.length){
+        heap[0] = last;
+        for(let i = 0;;){
+          const l = 2 * i + 1, r = l + 1;
+          let m = i;
+          if(l < heap.length && heap[l][0] < heap[m][0]) m = l;
+          if(r < heap.length && heap[r][0] < heap[m][0]) m = r;
+          if(m === i) break;
+          [heap[m], heap[i]] = [heap[i], heap[m]]; i = m;
+        }
+      }
+      return top;
+    };
+    while(heap.length){
+      const [d, id] = pop();
+      if(d > dist[id]) continue;
+      getExitsForRoom(world[id], id).forEach(e=>{
+        if(!world[e.to]) return;
+        const nd = d + exitMinutes(e, id);
+        if(dist[e.to] === undefined || nd < dist[e.to]){ dist[e.to] = nd; prev[e.to] = { from:id, exit:e }; push([nd, e.to]); }
+      });
+    }
+    return { dist, prev };
+  }
+  // The exits from the player's room to `room`, in order, or null when there
+  // is no route.
+  function routeTo(routes, room){
+    if(routes.dist[room] === undefined) return null;
+    const steps = [];
+    for(let at = room; at !== state.currentRoom; at = routes.prev[at].from) steps.unshift(routes.prev[at].exit);
+    return steps;
+  }
+  // The walk. It stops early when the player collapses, the run ends, or the
+  // next exit is no longer offered, and logs one line either way, with the
+  // time it took. A walk is never saved: it runs within one click. The
+  // lines are functional, retunable.
+  function doWalk(place){
+    const route = routeTo(walkRoutes(), place.room);
+    if(!route || atPlace(place)) return;
+    const startMin = state.totalMinutes, collapses = state.collapseCount;
+    let stopped = false;
+    for(const step of route){
+      const exit = getExitsForRoom(world[state.currentRoom], state.currentRoom)
+        .find(e=> e.to === step.to && e.label === step.label);
+      if(!exit || gameOver){ stopped = true; break; }
+      doMove(exit, true);
+      if(gameOver || state.collapseCount !== collapses){ stopped = state.currentRoom !== place.room; break; }
+    }
+    const took = fmtDuration(state.totalMinutes - startMin);
+    if(!gameOver) log(stopped ? `You stop at ${world[state.currentRoom].address} ${took}.` : `You walk to ${place.name} ${took}.`);
     render();
   }
   function doRest(){
@@ -8984,7 +9111,7 @@ x_sn_9 m_sn_sn_sn sn p
   function showDevicePop(){ devicePop.classList.add("open"); devicePopBackdrop.classList.add("show"); }
   function hideDevicePop(){ deviceTarget = null; devicePop.classList.remove("open"); devicePopBackdrop.classList.remove("show"); }
   devicePopBackdrop.addEventListener("click", ()=> closeLayer(devicePop));
-  function positionPops(){ positionItemPop(); positionDevicePop(); }
+  function positionPops(){ positionItemPop(); positionDevicePop(); positionWalkPop(); positionMapCard(); }
   window.addEventListener("resize", positionPops);
   // Capture phase, because scroll doesn't bubble and a scroll inside
   // #sidebar moves the anchor as surely as a page scroll does. A scroll
@@ -8993,6 +9120,8 @@ x_sn_9 m_sn_sn_sn sn p
     const inside = (pop)=> e.target instanceof Node && pop.contains(e.target);
     if(!inside(itemPop)) positionItemPop();
     if(!inside(devicePop)) positionDevicePop();
+    if(!inside(walkPop)) positionWalkPop();
+    if(!inside(mapCardEl)) positionMapCard();
   }, true);
 
   // The drawer.
@@ -9769,7 +9898,7 @@ x_sn_9 m_sn_sn_sn sn p
     });
     MAP_STREET_NODE_IDS.forEach(id=>{
       const p = mapNodeSvg(id);
-      html += `<circle class="map-node-dot" cx="${p.x}" cy="${p.y}" r="3"/>`;
+      html += `<circle class="map-node-dot" data-stop="${id}" cx="${p.x}" cy="${p.y}" r="3"/>`;
     });
     // A name is written here but not placed here: the viewBox slides under
     // this markup without rebuilding it, so a build-time position stops
@@ -9792,7 +9921,7 @@ x_sn_9 m_sn_sn_sn sn p
       const off = MAP_BUILDING_OFFSETS[id];
       const anchor = LOCATIONS[BUILDINGS[id].anchor];
       const p = mapToSvg(anchor.x + off.dx, anchor.y + off.dy);
-      html += `<circle class="map-bldg-dot" cx="${p.x}" cy="${p.y}" r="${MAP_BLDG_DOT_R}"/>`;
+      html += `<circle class="map-bldg-dot" data-bldg="${id}" cx="${p.x}" cy="${p.y}" r="${MAP_BLDG_DOT_R}"/>`;
       const name = BUILDINGS[id].name;
       const lineCount = name.indexOf(" ") === -1 ? 1 : 2;
       for(let k = 0; k < lineCount; k++){
@@ -10594,6 +10723,100 @@ x_sn_9 m_sn_sn_sn sn p
     if(!deviceTarget || !layerOpen(devicePop)) return;
     placePop(devicePop, document.getElementById("worldStrip").getBoundingClientRect());
   }
+  // WALK TO… (see doWalk()). Its list opens from the Here panel's Walk to…
+  // button, a pop-up hanging from the Here actions, as the device pop-up
+  // hangs from its strip: Home first, then every other listed place nearest
+  // first, each a button with its walking time, or "no way through" and no
+  // button. The place the player is at is left out. The card opens from a
+  // tap on the map, on a stop's dot or a building's marker: the place's name,
+  // its walking time and Walk here. Both are drawn afresh on every render,
+  // and close on an outside tap or Esc. Functional UI text, retunable.
+  const walkPop = document.getElementById("walkPop");
+  const walkPopBackdrop = document.getElementById("walkPopBackdrop");
+  function showWalkPop(){ walkPop.classList.add("open"); walkPopBackdrop.classList.add("show"); }
+  function hideWalkPop(){ walkListOpen = false; walkPop.classList.remove("open"); walkPopBackdrop.classList.remove("show"); }
+  walkPopBackdrop.addEventListener("click", ()=> closeLayer(walkPop));
+  function openWalkList(){ walkListOpen = true; render(); }
+  const WALK_LIST_LABEL = "Walk to…";
+  function walkButtonIn(root){
+    return Array.from(root.querySelectorAll("button")).find(b=> b.textContent === WALK_LIST_LABEL) || null;
+  }
+  function renderWalkPop(){
+    if(!walkListOpen){ closeLayer(walkPop); return; }
+    const routes = walkRoutes();
+    const places = listedPlaces().filter(pl=> !atPlace(pl))
+      .map(pl=> ({ pl, min: routes.dist[pl.room] }));
+    const home = places.filter(x=> x.pl.buildingId === "home");
+    const rest = places.filter(x=> x.pl.buildingId !== "home")
+      .sort((a, b)=> (a.min === undefined) - (b.min === undefined) || a.min - b.min);
+    rebuildKeepingFocus(walkPop, ()=>{
+      walkPop.innerHTML = "";
+      const box = document.createElement("div");
+      box.className = "detailBox";
+      const title = document.createElement("b");
+      title.textContent = "Walk to";
+      box.appendChild(title);
+      walkPop.appendChild(box);
+      const list = document.createElement("div");
+      list.className = "walk-list";
+      home.concat(rest).forEach(({ pl, min })=>{
+        list.appendChild(min === undefined ? hereNote(`${pl.name} — no way through`)
+          : actionButton(pl.name, ()=>{ closeLayer(walkPop); doWalk(pl); }, { cost: fmtDuration(min) }));
+      });
+      walkPop.appendChild(list);
+    });
+    if(!layerOpen(walkPop)) openLayer(walkPop, showWalkPop, hideWalkPop,
+      { el:null, uid:null, find: ()=> walkButtonIn(document.getElementById("hereActions")) });
+    positionWalkPop();
+  }
+  function positionWalkPop(){
+    if(!walkListOpen || !layerOpen(walkPop)) return;
+    placePop(walkPop, document.getElementById("hereGroup").getBoundingClientRect());
+  }
+  const mapCardEl = document.getElementById("mapCard");
+  const mapCardBackdrop = document.getElementById("mapCardBackdrop");
+  function showMapCard(){ mapCardEl.classList.add("open"); mapCardBackdrop.classList.add("show"); }
+  function hideMapCard(){ mapCard = null; mapCardEl.classList.remove("open"); mapCardBackdrop.classList.remove("show"); }
+  mapCardBackdrop.addEventListener("click", ()=> closeLayer(mapCardEl));
+  // A tap on a stop's dot or a building's marker opens its card.
+  document.getElementById("mapSvg").addEventListener("click", (e)=>{
+    const t = e.target.closest && e.target.closest("[data-stop], [data-bldg]");
+    if(!t) return;
+    const place = t.dataset.stop ? placeForStop(t.dataset.stop) : placeForBuilding(t.dataset.bldg);
+    if(!place) return;
+    mapCard = { place, x:e.clientX, y:e.clientY };
+    render();
+  });
+  const MAP_CARD_W = 220;
+  function renderMapCard(){
+    if(!mapCard || gameOver){ closeLayer(mapCardEl); return; }
+    const place = mapCard.place;
+    const min = walkRoutes().dist[place.room];
+    rebuildKeepingFocus(mapCardEl, ()=>{
+      mapCardEl.innerHTML = "";
+      const box = document.createElement("div");
+      box.className = "detailBox";
+      const name = document.createElement("b");
+      name.textContent = place.name;
+      box.appendChild(name);
+      const line = document.createElement("div");
+      line.textContent = atPlace(place) ? "You're here." : min === undefined ? "No way through." : "Walking: " + fmtDuration(min).replace(/[()]/g, "");
+      box.appendChild(line);
+      mapCardEl.appendChild(box);
+      if(!atPlace(place) && min !== undefined){
+        const actions = document.createElement("div");
+        actions.className = "pop-actions";
+        actions.appendChild(actionButton("Walk here", ()=>{ closeLayer(mapCardEl); doWalk(place); }));
+        mapCardEl.appendChild(actions);
+      }
+    });
+    if(!layerOpen(mapCardEl)) openLayer(mapCardEl, showMapCard, hideMapCard);
+    positionMapCard();
+  }
+  function positionMapCard(){
+    if(!mapCard || !layerOpen(mapCardEl)) return;
+    placePop(mapCardEl, { left: mapCard.x - MAP_CARD_W / 2, width: MAP_CARD_W, top: mapCard.y, bottom: mapCard.y });
+  }
   // What picks a room's text when its `desc` is state variants (ROOM SCHEMA),
   // keyed by `reads.kind`: each entry's `states` are the variant keys it
   // returns, and `read(reads)` which one holds now. Render-safe: each reads a
@@ -10728,6 +10951,7 @@ x_sn_9 m_sn_sn_sn sn p
       if(d.broken) hereBox.appendChild(hereNote(`The lock on the ${label} is broken.`));
       else if(locksByHandHere(d)) hereBox.appendChild(actionButton(doorLockKind(d) === "bolt" ? `Bolt the ${label}` : `Lock the ${label}`, ()=> doToggleLock(doorId)));
     });
+    hereBox.appendChild(actionButton(WALK_LIST_LABEL, openWalkList));
     hereBox.appendChild(actionButton("Rest " + fmtDuration(REST_DURATION_MIN), doRest));
     if(room.sleepSpot){
       if(sleepAvailable()){
@@ -11156,8 +11380,10 @@ x_sn_9 m_sn_sn_sn sn p
     // the device pop-up to the Here strip.
     renderItemPop();
     renderDevicePop();
+    renderWalkPop();
     renderCraftingPanel();
     renderMap();
+    renderMapCard();
   }
 
   document.title = "Ashfall — v" + GAME_CONFIG.VERSION;
