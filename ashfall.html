@@ -6916,10 +6916,11 @@ x_sn_9 m_sn_sn_sn sn p
       });
     });
     tickStoveTimers(min);
-    Object.keys(world).forEach(id=>{
+    for(const id of roomIds()){
       const r = world[id];
+      if(!r.heatActive) continue;
       // Before the fire burns down, so a step the heat was on for counts.
-      if(r.heatActive) cookInHeat(r, min);
+      cookInHeat(r, min);
       if(r.heatActive && r.fireMinutesLeft != null){
         r.fireMinutesLeft -= min;
         if(r.fireMinutesLeft <= 0){
@@ -6928,7 +6929,7 @@ x_sn_9 m_sn_sn_sn sn p
           if(id === state.currentRoom) log("The fire burns down and goes out.", "warn");
         }
       }
-    });
+    }
   }
   function applyEnergyBaseline(min, multiplier){
     state.vitals.energy = clamp(state.vitals.energy - DECAY.energy*min*multiplier);
@@ -7956,16 +7957,19 @@ x_sn_9 m_sn_sn_sn sn p
   }
   function tickStoveTimers(dt){
     const here = world[state.currentRoom];
-    Object.keys(world).forEach(id=>{
+    // Plain loops: this runs every minute over every room in town.
+    for(const id of roomIds()){
       const room = world[id];
-      room.containers.forEach(c=>{
-        if(!(c.timerMinutes > 0)) return;
+      for(const c of room.containers){
+        if(!(c.timerMinutes > 0)) continue;
         c.timerMinutes -= dt;
-        if(c.timerMinutes > TICK_EPSILON) return;
+        if(c.timerMinutes > TICK_EPSILON) continue;
         c.timerMinutes = 0;
-        if(here.building && here.building === room.building) log("You hear the ringing sound of the timer.");
-      });
-    });
+        // Heard anywhere in the same building, by id: every generated home
+        // is called "House".
+        if(here.buildingId && here.buildingId === room.buildingId) log("You hear the ringing sound of the timer.");
+      }
+    }
   }
   // Waits out the soonest-finishing item. Not interruptible (#212). The log
   // line's wording is retunable.
@@ -8095,7 +8099,7 @@ x_sn_9 m_sn_sn_sn sn p
     });
     return out;
   }
-  // forEachItemList(): calls visit(list, roomId) once for every item array
+  // forEachItemList(): calls visit(list, roomId) once for every non-empty item array
   // reachable from the current `state` and `world` — the inventory pools,
   // every room's floor, containers and car containers, and the `contents` of
   // any item in any of those, to any depth. Every scan over item lists goes
@@ -8107,19 +8111,32 @@ x_sn_9 m_sn_sn_sn sn p
   // nested under — an authored or car container — or null for the floor, a
   // floor bag and anything carried. A caller that only needs the list
   // ignores both.
+  // An empty list is skipped: every visitor acts on the items in a list, and
+  // the town's thousands of unopened containers are empty, so passing them
+  // over is what keeps a one-minute tick cheap (applyWorldTicking() walks the
+  // lists twice a minute).
+  // The world's room ids, listed once per world: no room is added or removed
+  // after a build (makeDefaultWorld(), buildWorld()), so the list holds until
+  // `world` itself is replaced, by a restart or a load. The per-minute scans
+  // read it rather than enumerating thousands of keys each tick.
+  let roomIdsWorld = null, roomIdsList = [];
+  function roomIds(){
+    if(roomIdsWorld !== world){ roomIdsWorld = world; roomIdsList = Object.keys(world); }
+    return roomIdsList;
+  }
   function forEachItemList(visit){
     const walk = (list, roomId, container)=>{
-      if(!Array.isArray(list)) return;
+      if(!Array.isArray(list) || !list.length) return;
       visit(list, roomId, container);
-      list.forEach(it=>{ if(it && Array.isArray(it.contents)) walk(it.contents, roomId, container); });
+      for(const it of list) if(it && Array.isArray(it.contents)) walk(it.contents, roomId, container);
     };
     invPools().forEach(list=> walk(list, null, null));
-    Object.keys(world).forEach(roomId=>{
+    for(const roomId of roomIds()){
       const room = world[roomId];
       walk(room.floor, roomId, null);
-      (room.containers || []).forEach(c=>walk(c.items, roomId, c));
-      (room.carContainers || []).forEach(c=>walk(c.items, roomId, c));
-    });
+      if(room.containers) for(const c of room.containers) walk(c.items, roomId, c);
+      if(room.carContainers) for(const c of room.carContainers) walk(c.items, roomId, c);
+    }
   }
   function resyncUidCounter(){
     let maxSeen = 0;
