@@ -17,7 +17,7 @@ with the branch pushed after every phase:
 | Phase | Issue | What |
 |---|---|---|
 | 1 | #295 | Rooms split into definition and saved state; the save carries only what play changed, and which buildings the player has entered |
-| 2 | #291 | Building types: a type generates a building's rooms, exits, doors, windows and containers from one line of data; doors that lock by key from outside only |
+| 2 | #291 | Building types: a type generates a building's rooms, exits, doors, windows and containers from one line of data; doors that lock by key from outside only, and forcing one with a crowbar |
 | 3 | #237 | The map engine: metre coordinates, streets at any angle, a north arrow, the river and the railway, a new zoom ladder; the crossing-lights code removed |
 | 4 | #237 | Lima's streets: 777 stops and 1,008 links from Appendix A, one exit per direction, text by street type |
 | 5 | #237, #284 | Lima's landmarks and homes, the player's row house, the start; every invented building removed |
@@ -31,8 +31,9 @@ except the ones where you clearly saw paved streets. The rest on the outside
 would be just dirt roads." And for the buildings: "Go unwired. Then wiring
 would be just a PATCH."
 
-**Read Open questions for Tom before starting.** Three answers are needed
-before phases 2, 4 and 5 can be finished.
+Tom answered the planning session's last three questions on 2026-09-27
+(locked homes, fishing, the chalets); the answers are folded into the phases
+below and recorded under Open questions for Tom.
 
 ## Relevant existing state
 
@@ -258,8 +259,28 @@ An instance:
 - **Barred windows** carry the label "barred window". Nothing else changes:
   a window to the outside is already never a route. Cutting bars is out of
   scope.
-- Every home type's street door is a `latch`. Its starting `locked` for
-  generated homes is **Open question 1**.
+- Every home type's street door is a `latch`.
+- **Starting lock** (Tom, 2026-09-27): a **generated home's** street door
+  starts locked when the stable hash of its building id, mod 100, is below
+  `HOME_LOCKED_PCT = 60`: about 60% of homes, the same ones in every run.
+  Retunable. The player's home starts locked (phase 5). **Landmarks' street
+  doors start unlocked**, as the buildings they replace were enterable
+  without a key; retunable. Back doors (`bolt`) start bolted.
+- **Forcing a door** (Tom, 2026-09-27), a new action:
+  - Offered from the **outside** room of a locked `latch` door while the
+    player carries a `prying` tool (the crowbar today): **Force the front
+    door**. Never offered for a `bolt` or a `"key"` door.
+  - Takes `FORCE_DOOR_MIN = 5` minutes (`advanceTime()`) and costs
+    `FORCE_DOOR_MIN * BASELINE_STAMINA_RATE` Exertion, the rate chopping
+    uses. Both retunable.
+  - The door becomes unlocked and **`broken: true`**, a new saved door field
+    (default false). A broken door never locks again: no lock action is
+    offered from either side, and the Here panel notes "The lock on the front
+    door is broken." Open and Close still work.
+  - Log: "You work the crowbar into the frame by the lock until it gives."
+    (functional; retunable).
+  - `validateReachability()`'s comment that `prying` gates nothing is
+    rewritten: it now gates forcing a door.
 
 **The types.** Room text is true of every building of that type, per
 "Writing game text". Container names, capacities and pools reuse the Acorn
@@ -475,10 +496,11 @@ start's balance doesn't shift. Contents are renamed by phase 6.
   `estacion_lima` ("Estación Lima").
 - **Generated homes: one enterable home on every `mid` stop but the home stop** (427), plus
   the neighbour row house at the home stop. Retunable. By stop type:
-  `barrio` → `casa` (**stand-in** for the chalets, whose interiors are
-  unconfirmed; Open question 3), everything else → `casa`. Instance id
-  `h_<stop id>`, `name` "House", `address` the stop's street name, `seed`
-  its hash. Their street doors' starting lock is Open question 1.
+  every stop type → `casa`. In the barrio the `casa` is a **stand-in** for
+  the chalets, whose interiors are unconfirmed, until a `chalet` type is
+  researched (Tom, 2026-09-27). Instance id `h_<stop id>`, `name` "House",
+  `address` the stop's street name, `seed` its hash. Their street doors
+  start locked or not by `HOME_LOCKED_PCT` (phase 2).
 - **Exits to buildings**, from the site stop: "Enter <the building's
   label>" ("Enter the pharmacy", "Enter the comisaría", "Enter a house");
   the player's home, "Go into your house"; the neighbour's, "Enter the
@@ -608,13 +630,13 @@ Record each choice in the changelog's Notes/assumptions.
 ## Data / schema changes
 
 - **Save:** `{ version, state, rooms, doors, windows }`; `world` no longer
-  saved. Saved door state gains nothing (a `broken` field only if Open
-  question 1 adds forcing).
+  saved. Saved door state gains `broken` (phase 2).
 - **PLAYER STATE:** `enteredBuildings` (phase 1), `tankDrawn` (phase 7).
   `currentRoom` default `"home_living"`; keychain `house_key`.
 - **ROOM SCHEMA:** `buildingId` (definition). The address rule's examples
   move to Lima; mid-stop `room` is "between A & B".
-- **DOOR SCHEMA:** `lock` ("key" | "latch" | "bolt"), `inside`, `label`.
+- **DOOR SCHEMA:** `lock` ("key" | "latch" | "bolt"), `inside`, `label`
+  (definition); `broken` (saved).
 - **WORLD DATA:** `BUILDING_TYPES`, the building instances, the Lima street
   data, `GRID_BEARING_DEG`, `LIMA_RIVER` polylines.
 - **ITEM_REGISTRY / SPAWN_POOLS:** phase 6's table; pools `car_boot`,
@@ -627,7 +649,7 @@ Record each choice in the changelog's Notes/assumptions.
 ## In scope
 
 - [ ] Phase 1: save split, `enteredBuildings`, old saves refused, backfills retired.
-- [ ] Phase 2: `BUILDING_TYPES`, the builder, `lock`/`inside`/`label` on doors, the four types.
+- [ ] Phase 2: `BUILDING_TYPES`, the builder, `lock`/`inside`/`label` on doors, starting locks, Force the door (`broken`), the four types.
 - [ ] Phase 3: metre map, north arrow, slanted labels, river, rail, zoom ladder, crossing code removed.
 - [ ] Phase 4: Lima's 777 stops and 1,008 links, exits, stop text.
 - [ ] Phase 5: landmarks, named scenery, 428 generated homes, the player's row house and the start; the old town removed.
@@ -645,13 +667,15 @@ Record each choice in the changelog's Notes/assumptions.
 - **The water network and the town tank** (#294's remainder), showers and
   toilets drawing water, contamination.
 - **Garrafas as fuel** (#287, #259); **fuel at the petrol station**.
-- **Cutting window bars**; **forcing doors**, unless Open question 1 says
-  otherwise.
+- **Cutting window bars**; forcing a bolted door or a window.
 - **The other real businesses and institutions** as enterable buildings
   (#250, #285, #252–#257): they are PATCH content once phase 1 lands.
 - **Trains, the bell ringing, anything at the Atucha plant** beyond its shut
   gate (#290).
-- **Fishing**, unless Open question 2 adds the riverside stop.
+- **Fishing** (Tom, 2026-09-27): with the Riverbank gone, no Lima stop is
+  `fishable` and Go Fishing is never offered in this release. The first
+  PATCH after it adds a riverside stop at the Balcón al río (the costanera).
+  The fishing items and the action stay as they are.
 - **#296's remainder** (above).
 
 ## Sections touched
@@ -677,7 +701,7 @@ Tom's decision on #237. Each phase keeps to one side where it can.
   the railway dashed, a new zoom ladder, building markers for landmarks and
   named scenery, a tap card with **Walk here**.
 - Here panel: four compass exits at most corners instead of eight; latch and
-  bolt actions on doors from inside; **Walk to…**; "The tap is dry."
+  bolt actions on doors from inside; **Force the front door** with a crowbar; **Walk to…**; "The tap is dry."
 - The locator bar reads Lima addresses ("Calle 7, between Calle 10 &
   Calle 8").
 
@@ -687,31 +711,24 @@ Tom's decision on #237. Each phase keeps to one side where it can.
 - Updates #220's hub: the power bundle moves to the next MINOR after this.
 - #235 (crossing lights): its code is removed; the coding session comments
   there that it's gone.
-- **File at the wrap:** the chalet and *PH* types; the water network and
-  town tank; Walk to… bookmarks; #296's remainder if not already listed;
+- **File at the wrap:** the riverside stop at the Balcón al río (fishable;
+  Tom agreed, the first PATCH after this); the chalet and *PH* types; the
+  water network and
+  the town tank; Walk to… bookmarks; #296's remainder if not already listed;
   anything else cut.
 - Research gaps to leave marked, not fill: 184 unnamed street links (#288);
   the plant's gate position (placed at the road's end); the town tank.
 
 ## Open questions for Tom
 
-This handoff is **not final** until these are answered.
+None. Resolved by Tom on 2026-09-27, as proposed:
 
-1. **Getting into a locked home.** Every home's street door locks by key
-   from outside (Tom). Proposed: **about 60% of generated homes start with
-   the street door locked** (stable per home; retunable), and a **Force the
-   door** action with a `prying` tool (the crowbar) breaks a latch in 5
-   minutes, costing Exertion as chopping does; a forced door never locks
-   again (saved `broken`). Alternatives: every home locked and forcing
-   added; or no forcing yet, so only unlocked homes are enterable.
-2. **Fishing.** Lima's frame has no water in reach: the river runs past the
-   plant, and the Riverbank goes. Proposed: accept that fishing has no
-   place in this release and add **one riverside stop at the Balcón al río
-   (the costanera)** as the first PATCH after it. Alternative: add that stop
-   in phase 4, which widens the frame Tom set.
-3. **The chalets.** The barrio's chalets have no sourced interior. Proposed:
-   the `casa` stands in for them until a `chalet` type is researched (new
-   issue). Alternative: barrio mid stops get no enterable home until then.
+1. **Locked homes:** about 60% of generated homes start with the street
+   door locked, and a crowbar can force a latch (phase 2).
+2. **Fishing:** none in this release; a riverside stop at the Balcón al río
+   is the first PATCH after it (Out of scope; filed at the wrap).
+3. **The chalets:** the `casa` stands in until a `chalet` type is
+   researched (phase 5; filed at the wrap).
 
 ## After implementation
 
