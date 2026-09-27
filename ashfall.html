@@ -687,7 +687,7 @@
   //                 "Pharmacy". Absent when the room is not inside a building
   //                 (every stop). It holds a building's name and nothing
   //                 else, ever: not a street, not an address. Note that
-  //                 doors[].building and master_key.building are a DIFFERENT
+  //                 doors[].building and a master key's `building` are a DIFFERENT
   //                 field holding a building *id* ("pharmacy"), unrelated to this.
   //   buildingId    the id of the building instance the room is in (see
   //                 BUILDING TYPES), absent outside one. Definition data:
@@ -988,7 +988,7 @@
     spare_batteries: { name:"Spare batteries", category:"Materials", unitWeight:0.05, tags:["battery"] },
     wristwatch: { name:"Wristwatch", category:"Electronics", unitWeight:0.05, isWatch:true },
     folded_clothes: { name:"Folded clothes", category:"Clothing", unitWeight:1.0 },
-    crumpled_cash: { name:"Crumpled cash", category:"Misc", unitWeight:0.01 },
+    crumpled_cash: { name:"Crumpled pesos", category:"Misc", unitWeight:0.01 },
     cloth: { name:"Cloth", category:"Materials", unitWeight:0.1 },
     dead_potted_plant: { name:"Dead potted plant", category:"Misc", unitWeight:2.0 },
     duct_tape: { name:"Duct tape", category:"Materials", unitWeight:0.3 },
@@ -1021,8 +1021,6 @@
       vessel:{ kind:"roasting_pan", capacityKg:3, waterKg:0 } },
     crowbar: { name:"Crowbar", category:"Tool", unitWeight:2.5, tags:["blunt","prying"] },
     wrench: { name:"Wrench", category:"Tool", unitWeight:0.8, tags:["blunt"] },
-    master_key: { name:"Master key", category:"Key", unitWeight:0.03, masterKey:true, building:"acorn" },
-    building_ledger: { name:"Building ledger", category:"Literature", unitWeight:0.5 },
     portable_radio: { name:"Portable radio", category:"Electronics", unitWeight:0.4, on:false, hasBatteries:true, durability:{ current:100, max:100, mode:"time" }, drainRate:100/2880 },
     tow_chain: { name:"Tow chain", category:"Materials", unitWeight:2.0 },
     owners_manual: { name:"Owner's manual", category:"Literature", unitWeight:0.2 },
@@ -1056,9 +1054,10 @@
     propane_torch: { name:"Propane torch", category:"Tool", unitWeight:0.9, tags:["heat"] },
     work_boots: { name:"Work boots", category:"Clothing", unitWeight:1.1 },
     tire_iron: { name:"Tire iron", category:"Tool", unitWeight:1.0, tags:["blunt"] },
-    registration_papers: { name:"Registration papers", category:"Misc", unitWeight:0.02 },
+    // A car's registration card, kept in its glovebox.
+    cedula_verde: { name:"Cédula verde", category:"Misc", unitWeight:0.02 },
     thermos: { name:"Thermos", category:"Misc", unitWeight:0.4 },
-    acorn_apt_2a_key: { name:"Acorn Apt, 2A", category:"Key", unitWeight:0.03, doorId:"home-front" },
+    house_key: { name:"House key", category:"Key", unitWeight:0.03, doorId:"home-front" },
     bandage: { name:"Bandage", category:"Medical", unitWeight:0.05 },
     campfire_kit: { name:"Campfire Kit", category:"Materials", unitWeight:2.4, tags:["disassemble"],
       disassembleLog:"You untie the bundle — back to {qty} loose firewood." },
@@ -1075,12 +1074,12 @@
       ingredient:{ role:"meat", label:"Tuna" } },
     cereal_box: { name:"Box of cereal", category:"Food", unitWeight:0.5, restores:{hunger:15}, verb:"Eat", sealed:true },
     crackers: { name:"Crackers", category:"Food", unitWeight:0.2, restores:{hunger:8}, verb:"Eat" },
-    peanut_butter: { name:"Peanut butter", category:"Food", unitWeight:0.5, restores:{hunger:20}, verb:"Eat", sealed:true },
+    dulce_de_leche: { name:"Jar of dulce de leche", category:"Food", unitWeight:0.5, restores:{hunger:20}, verb:"Eat", sealed:true },
     candy_bar: { name:"Candy bar", category:"Food", unitWeight:0.05, restores:{hunger:5}, verb:"Eat" },
     rice_bag: { name:"Bag of rice", category:"Food", unitWeight:1.0,
       ingredient:{ role:"grain", label:"Rice", restores:{hunger:120}, addPortion:0.25 } },
     coffee_grounds: { name:"Coffee grounds", category:"Food", unitWeight:0.3 },
-    milk: { name:"Milk", category:"Food", unitWeight:1.0, restores:{thirst:20, hunger:5}, verb:"Drink",
+    milk: { name:"Sachet of milk", category:"Food", unitWeight:1.0, restores:{thirst:20, hunger:5}, verb:"Drink",
       spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
     bread: { name:"Bread", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat",
       spoils:{ staleAfter:3*MINUTES_PER_DAY, rottenAfter:7*MINUTES_PER_DAY } },
@@ -1105,7 +1104,7 @@
     jeans: { name:"Jeans", category:"Clothing", unitWeight:0.6 },
     police_uniform: { name:"Police uniform", category:"Clothing", unitWeight:1.0 },
     jewelry_piece: { name:"Piece of jewelry", category:"Misc", unitWeight:0.02 },
-    cash_bundle: { name:"Bundle of cash", category:"Misc", unitWeight:0.05 },
+    cash_bundle: { name:"Bundle of pesos", category:"Misc", unitWeight:0.05 },
     playing_cards: { name:"Deck of playing cards", category:"Misc", unitWeight:0.1 },
     comic_book: { name:"Comic book", category:"Literature", unitWeight:0.1 },
     spare_parts_box: { name:"Box of spare parts", category:"Materials", unitWeight:1.5 },
@@ -1155,15 +1154,23 @@
     dated_newspaper: { name:"Dated newspaper", category:"Literature", unitWeight:0.1 },
     personal_journal: { name:"Personal journal", category:"Literature", unitWeight:0.3 },
     unsent_letter: { name:"Unsent letter", category:"Literature", unitWeight:0.02 },
-    utility_bill: { name:"Utility bill", category:"Literature", unitWeight:0.02 },
+    // From the electricity co-operative, which it never names.
+    utility_bill: { name:"Electricity bill", category:"Literature", unitWeight:0.02 },
     missing_person_flyer: { name:"Missing person flyer", category:"Literature", unitWeight:0.02 },
     // Electronics
     walkie_talkie: { name:"Walkie-talkie", category:"Electronics", unitWeight:0.3 },
     dead_cellphone: { name:"Dead cellphone", category:"Electronics", unitWeight:0.15 },
     disposable_camera: { name:"Disposable camera", category:"Electronics", unitWeight:0.2 },
+    // Argentine staples (#296). Each is modelled on the item named: its tags,
+    // and its food values where it has any. The weights are judgment calls,
+    // retunable: a 500 g bag of yerba, a box of six alfajores.
+    yerba_mate: { name:"Bag of yerba mate", category:"Food", unitWeight:0.5 },                 // coffee_grounds
+    mate_bombilla: { name:"Mate and bombilla", category:"Misc", unitWeight:0.3 },              // thermos
+    alfajores: { name:"Box of alfajores", category:"Food", unitWeight:0.3, restores:{hunger:5}, verb:"Eat" },   // candy_bar
+    galletitas: { name:"Pack of galletitas", category:"Food", unitWeight:0.2, restores:{hunger:8}, verb:"Eat" }, // crackers
+    dni_card: { name:"DNI card", category:"Misc", unitWeight:0.01 },
     // Money / valuables
-    gift_card: { name:"Now-useless gift card", category:"Misc", unitWeight:0.01 },
-    checkbook: { name:"Checkbook", category:"Misc", unitWeight:0.1 },
+    us_dollars: { name:"Envelope of US dollars", category:"Misc", unitWeight:0.05 },           // cash_bundle
     // Equippable bags — same shape as worn_backpack: a found item whose
     // slotType/capacityKg make it an equippable container. `slotLabel` is
     // what the inventory tab reads (see SLOT_LABELS below); omit it and the
@@ -1293,12 +1300,22 @@
   //   ice cream 0.4, emptyChance 0.2) is chosen too: the freezers postdate the
   //   conversion. So are `kitchen_tools`' cooking pot (0.15) and roasting
   //   pan (0.10), which postdate it as well. Retunable.
+  //   So are the Argentine items' (#296): yerba mate, alfajores and
+  //   galletitas in `kitchen_nonperishable` (0.35, 0.15, 0.25) and
+  //   `retail_stock_food` (0.30, 0.25, 0.25), the mate and bombilla in
+  //   `kitchen_tools` (0.30), the DNI card in `documents_lore` (0.25) and
+  //   `residential_personal` (0.15), the US dollars in `valuables` (0.15), and
+  //   the whole `car_boot` and `car_glovebox` pools. Retunable.
   //   Replacing an item id keeps its entry's derived chance: the retired
   //   spoiled foods' entries now name the fresh food they were
   //   (rotten_leftovers → leftovers, and so on; the pot of spoiled stew is
   //   a cooking pot of stew). The trash's leftovers keep
   //   their old state as well — their `state` pins the unit at the age it
-  //   turns Rotten, so the bin still holds rotten leftovers.
+  //   turns Rotten, so the bin still holds rotten leftovers. So do the
+  //   Lima release's renames: registration_papers → cedula_verde and
+  //   peanut_butter → dulce_de_leche. The entries removed with their items
+  //   (the checkbook, the gift card, the building ledger) took their chances
+  //   with them; nothing was renormalised.
   // Which containers draw from which pools is recorded on the containers
   // themselves, in their `spawnPools` field.
   const SPAWN_POOLS = {
@@ -1326,8 +1343,11 @@
       { itemId:"potato_chips", chance:0.124339, qtyMin:1, qtyMax:2 },
       { itemId:"rice_bag", chance:0.124339, qtyMin:1, qtyMax:1 },
       { itemId:"cereal_box", chance:0.124339, qtyMin:1, qtyMax:1 },
-      { itemId:"peanut_butter", chance:0.100345, qtyMin:1, qtyMax:1 },
-      { itemId:"coffee_grounds", chance:0.100345, qtyMin:1, qtyMax:1 } ]},
+      { itemId:"dulce_de_leche", chance:0.100345, qtyMin:1, qtyMax:1 },
+      { itemId:"coffee_grounds", chance:0.100345, qtyMin:1, qtyMax:1 },
+      { itemId:"yerba_mate", chance:0.35, qtyMin:1, qtyMax:1 },
+      { itemId:"alfajores", chance:0.15, qtyMin:1, qtyMax:1 },
+      { itemId:"galletitas", chance:0.25, qtyMin:1, qtyMax:1 } ]},
     kitchen_frozen: { emptyChance:0.2, entries:[
       { itemId:"meat", chance:0.5, qtyMin:1, qtyMax:2 },
       { itemId:"vegetables", chance:0.5, qtyMin:1, qtyMax:2 },
@@ -1340,7 +1360,8 @@
       { itemId:"dented_saucepan", chance:0.145957, qtyMin:1, qtyMax:1 },
       { itemId:"burnt_saucepan", chance:0.110947, qtyMin:1, qtyMax:1 },
       { itemId:"cooking_pot", chance:0.15, qtyMin:1, qtyMax:1 },
-      { itemId:"roasting_pan", chance:0.10, qtyMin:1, qtyMax:1 } ]},
+      { itemId:"roasting_pan", chance:0.10, qtyMin:1, qtyMax:1 },
+      { itemId:"mate_bombilla", chance:0.30, qtyMin:1, qtyMax:1 } ]},
     hygiene: { emptyChance:0.15, entries:[
       { itemId:"toilet_paper", chance:0.236111, qtyMin:1, qtyMax:2 },
       { itemId:"bar_soap", chance:0.208116, qtyMin:1, qtyMax:1 },
@@ -1374,7 +1395,8 @@
       { itemId:"wristwatch", chance:0.136230, qtyMin:1, qtyMax:1 },
       { itemId:"dead_cellphone", chance:0.222168, qtyMin:1, qtyMax:1 },
       { itemId:"disposable_camera", chance:0.136230, qtyMin:1, qtyMax:1 },
-      { itemId:"jewelry_piece", chance:0.091797, qtyMin:1, qtyMax:1 } ]},
+      { itemId:"jewelry_piece", chance:0.091797, qtyMin:1, qtyMax:1 },
+      { itemId:"dni_card", chance:0.15, qtyMin:1, qtyMax:1 } ]},
     clothing: { emptyChance:0.15, entries:[
       { itemId:"folded_clothes", chance:0.293629, qtyMin:1, qtyMax:2 },
       { itemId:"t_shirt", chance:0.259349, qtyMin:1, qtyMax:1 },
@@ -1387,14 +1409,14 @@
       { itemId:"handwritten_note", chance:0.127407, qtyMin:1, qtyMax:1 },
       { itemId:"old_photographs", chance:0.106996, qtyMin:1, qtyMax:1 },
       { itemId:"photo_album", chance:0.086255, qtyMin:1, qtyMax:1 },
-      { itemId:"registration_papers", chance:0.065185, qtyMin:1, qtyMax:1 },
+      { itemId:"cedula_verde", chance:0.065185, qtyMin:1, qtyMax:1 },
       { itemId:"owners_manual", chance:0.065185, qtyMin:1, qtyMax:1 },
       { itemId:"dated_newspaper", chance:0.127407, qtyMin:1, qtyMax:1 },
       { itemId:"utility_bill", chance:0.106996, qtyMin:1, qtyMax:2 },
       { itemId:"unsent_letter", chance:0.086255, qtyMin:1, qtyMax:1 },
       { itemId:"personal_journal", chance:0.086255, qtyMin:1, qtyMax:1 },
       { itemId:"missing_person_flyer", chance:0.065185, qtyMin:1, qtyMax:1 },
-      { itemId:"building_ledger", chance:0.043786, qtyMin:1, qtyMax:1 } ]},
+      { itemId:"dni_card", chance:0.25, qtyMin:1, qtyMax:1 } ]},
     recreation: { emptyChance:0.25, entries:[
       { itemId:"board_games", chance:0.258503, qtyMin:1, qtyMax:1 },
       { itemId:"paperback_novel", chance:0.258503, qtyMin:1, qtyMax:1 },
@@ -1420,8 +1442,7 @@
       { itemId:"hand_axe", chance:0.084082, qtyMin:1, qtyMax:1 },
       { itemId:"propane_torch", chance:0.042449, qtyMin:1, qtyMax:1 } ]},
     office_supplies: { emptyChance:0.25, entries:[
-      { itemId:"building_ledger", chance:0.167942, qtyMin:1, qtyMax:1 },
-      { itemId:"registration_papers", chance:0.136054, qtyMin:1, qtyMax:1 },
+      { itemId:"cedula_verde", chance:0.136054, qtyMin:1, qtyMax:1 },
       { itemId:"reading_lamp", chance:0.136054, qtyMin:1, qtyMax:1 },
       { itemId:"owners_manual", chance:0.136054, qtyMin:1, qtyMax:1 },
       { itemId:"dead_cellphone", chance:0.136054, qtyMin:1, qtyMax:1 },
@@ -1435,7 +1456,10 @@
       { itemId:"canned_corn", chance:0.238925, qtyMin:1, qtyMax:2 },
       { itemId:"canned_soup", chance:0.238925, qtyMin:1, qtyMax:2 },
       { itemId:"granola_bars", chance:0.238925, qtyMin:1, qtyMax:2 },
-      { itemId:"chewing_gum", chance:0.238925, qtyMin:1, qtyMax:1 } ]},
+      { itemId:"chewing_gum", chance:0.238925, qtyMin:1, qtyMax:1 },
+      { itemId:"yerba_mate", chance:0.30, qtyMin:1, qtyMax:1 },
+      { itemId:"alfajores", chance:0.25, qtyMin:1, qtyMax:1 },
+      { itemId:"galletitas", chance:0.25, qtyMin:1, qtyMax:1 } ]},
     retail_stock_general: { emptyChance:0.15, entries:[
       { itemId:"candy_bar", chance:0.394965, qtyMin:1, qtyMax:1 },
       { itemId:"chewing_gum", chance:0.394965, qtyMin:1, qtyMax:1 },
@@ -1467,8 +1491,7 @@
       { itemId:"jewelry_piece", chance:0.080000, qtyMin:1, qtyMax:1 },
       { itemId:"cash_bundle", chance:0.060000, qtyMin:1, qtyMax:1 },
       { itemId:"wristwatch", chance:0.060000, qtyMin:1, qtyMax:1 },
-      { itemId:"gift_card", chance:0.100000, qtyMin:1, qtyMax:1 },
-      { itemId:"checkbook", chance:0.080000, qtyMin:1, qtyMax:1 } ]},
+      { itemId:"us_dollars", chance:0.15, qtyMin:1, qtyMax:1 } ]},
     police_evidence: { emptyChance:0.4, entries:[
       { itemId:"evidence_bag", chance:0.333333, qtyMin:1, qtyMax:1 },
       { itemId:"sealed_evidence_box", chance:0.166667, qtyMin:1, qtyMax:1 } ]},
@@ -1521,7 +1544,21 @@
     electronics: { emptyChance:0.3, entries:[
       { itemId:"dead_cellphone", chance:0.233333, qtyMin:1, qtyMax:1 },
       { itemId:"disposable_camera", chance:0.166667, qtyMin:1, qtyMax:1 },
-      { itemId:"walkie_talkie", chance:0.100000, qtyMin:1, qtyMax:1 } ]}
+      { itemId:"walkie_talkie", chance:0.100000, qtyMin:1, qtyMax:1 } ]},
+    // A parked car's boot and glovebox (buildLimaStops()).
+    car_boot: { emptyChance:0.3, entries:[
+      { itemId:"tow_chain", chance:0.2, qtyMin:1, qtyMax:1 },
+      { itemId:"work_gloves", chance:0.3, qtyMin:1, qtyMax:1 },
+      { itemId:"tire_iron", chance:0.3, qtyMin:1, qtyMax:1 },
+      { itemId:"motor_oil", chance:0.2, qtyMin:1, qtyMax:1 },
+      { itemId:"spare_parts_box", chance:0.1, qtyMin:1, qtyMax:1 } ]},
+    car_glovebox: { emptyChance:0.2, entries:[
+      { itemId:"cedula_verde", chance:0.8, qtyMin:1, qtyMax:1 },
+      { itemId:"flashlight", chance:0.2, qtyMin:1, qtyMax:1 },
+      { itemId:"owners_manual", chance:0.4, qtyMin:1, qtyMax:1 },
+      { itemId:"loose_change", chance:0.3, qtyMin:1, qtyMax:1 },
+      { itemId:"chewing_gum", chance:0.2, qtyMin:1, qtyMax:1 },
+      { itemId:"dead_cellphone", chance:0.05, qtyMin:1, qtyMax:1 } ]}
   };
 
   // LOCATIONS: real integer (x,y,z) coordinates in metres for every stop
@@ -3647,8 +3684,8 @@ x_sn_9 m_sn_sn_sn sn p
       if(town && h % PARKED_CAR_EVERY === 0){
         room.carLocked = Math.floor(h / 10) % 10 % 2 === 0;
         room.carContainers = [
-          { id:"boot", name:"Boot", capacityKg:25, spawnPools:["tools_general"], items:[] },
-          { id:"glovebox", name:"Glovebox", capacityKg:3, spawnPools:["documents_lore"], items:[] } ];
+          { id:"boot", name:"Boot", capacityKg:25, spawnPools:["car_boot"], items:[] },
+          { id:"glovebox", name:"Glovebox", capacityKg:3, spawnPools:["car_glovebox"], items:[] } ];
       }
       world[s.id] = room;
     });
@@ -3952,6 +3989,7 @@ x_sn_9 m_sn_sn_sn sn p
         enter:"Go into your house", leave:"Go out to the courtyard",
         overrides:{ doors:{ front:{ locked:true } }, rooms:{
           living:{ desc:"Your living room, as you left it. The television is dark, and your mate is still on the table where you set it down.",
+            floor:[ { id:"mate_bombilla", qty:1 } ],
             containers:[
               { id:"sideboard", name:"Sideboard", capacityKg:10, spawnPools:["recreation","residential_personal"], items:[
                 { id:"tv_remote", qty:1 }, { id:"paperback_novel", qty:1 } ] },
@@ -4687,7 +4725,7 @@ x_sn_9 m_sn_sn_sn sn p
       vitals:{ hunger:75, thirst:75, energy:85, health:100, stamina:100, fatigue:0 },
       inventory:{ name:"Inventory", unitWeight:0, items:[] },
       keychain:{ name:"Keychain", unitWeight:0.05, capacityKg:null, items:itemsFromRegistry([
-        { id:"acorn_apt_2a_key", qty:1 } ])}
+        { id:"house_key", qty:1 } ])}
     };
     // Every equippable container slot starts empty. Derived from
     // CONTAINER_SLOTS so a new bag type needs only its ITEM_REGISTRY
