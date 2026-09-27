@@ -231,6 +231,19 @@ Status: secondary unless marked; read 2026-09-27.
     own tank, and the house draws from the tank. How many houses are on the
     network is unconfirmed, as are typical tank sizes and whether the pump
     draws from a private well (*perforación*).
+  - **House tank sizes, from a guideline elsewhere in the country**
+    (secondary, 2026-09-27, read through search summaries): Río Negro's
+    water users' regulation requires every family home to have a raised
+    reserve tank of **at least 800 L**. The water authority (ARSA) reckons
+    **250 L per person per day**, so **about 1,000 L for a family of four**
+    ([Río Negro, ARSA](https://salud.rionegro.gov.ar/articulo/51906/arsa-remarca-la-importancia-de-contar-con-tanque-de-reserva-domiciliario),
+    [Río Negro, tanques de reserva](https://salud.rionegro.gov.ar/articulo/48105/tanques-de-reserva-elemento-clave-en-el-hogar-para-asegurar-el-servicio)).
+    Not a Buenos Aires province rule, and not measured in Lima. **The
+    Barrio Atucha's own tanks are unconfirmed.** The game uses 1,000 L per
+    home, as a retunable figure (`handoffs/lima-release.md`, phase 7).
+  - **House pumps:** a typical tank-filling pump sold in Argentina is
+    **½ HP (about 370 W)**, moving on the order of **33 L a minute**
+    (retail listings, secondary, 2026-09-27; figures vary by model).
   - **Sewers: none. Lima is all septic tanks** (Tom, 2026-09-27,
     first-hand).
 - **Gas:**
