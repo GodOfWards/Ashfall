@@ -45,6 +45,44 @@ town since 2026-09-26 (#237), replacing Henderson, Kentucky.
   - **Buenos Aires** is about 100 km away (Atucha's distance, below).
   - Secondary, 2026-09-26: Wikidata entities for each town.
 
+## The town's character
+
+- **Low houses and tree-lined streets.** Lima grew around the station, opened
+  in 1885 on the Mitre between Zárate and Baradero. The first lots were
+  auctioned on 24 June 1888. There were about 300 houses at first, mostly
+  Swiss, Italian and Basque settlers. The town's name comes from Justa Lima de
+  Atucha, the 19th-century landowner whose lands became Colonia Lima.
+  Secondary, 2026-09-27:
+  [El Destape, 2023](https://www.eldestapeweb.com/informacion-general/atucha/la-energia-de-lo-publico-el-dia-a-dia-de-quienes-estan-detras-de-la-central-nuclear-atucha-202310513590)
+  and [GENTE](https://www.revistagente.com/lifestyle/turismo/asi-es-lima-la-ciudad-oculta-entre-zarate-y-baradero-elegida-por-los-turistas/)
+  (search summaries).
+- **As La Nación described it** ("Delicias de un pueblo nuclear",
+  11 Nov 2015, updated 6 Sep 2020; a summary was read, not the full text):
+  - about 15,000 inhabitants;
+  - **most streets outside the plaza unpaved**, with public lighting scarce
+    in the centre and almost none on the outskirts;
+  - **no hospital**, only municipal health centres and private clinics;
+  - housing of houses, flats and *PH*, all low-rise;
+  - **"From their homes, residents can see the concrete domes of the Atucha
+    Complex"**, and they take the regular nuclear emergency drills in their
+    stride;
+  - about 200 Lima residents worked at the plant.
+
+  [La Nación](https://www.lanacion.com.ar/lifestyle/delicias-de-un-pueblo-nuclear-nid1844445/).
+  Unconfirmed for February 2025: paving and lighting may have changed since
+  2015–2020. Municipal works were paving Calle 17 under an agreement with
+  NA-SA ([Municipalidad de Zárate](http://www.zarate.gob.ar/lima/), undated).
+- **The Barrio Complejo Nuclear Atucha,** "the German neighbourhood": six
+  blocks of roomy chalets with front gardens, built for the plant's
+  (largely German) staff. It was fenced and guarded by two Gendarmería
+  posts, and a stretch of the fence came down only in 2008 (La Nación,
+  above). **Its location isn't confirmed.** It isn't named in OSM. A
+  business called "Inglés en Barrio Atucha" is listed at Avenida 11 835
+  (findglocal, search summary), which suggests it's near Avenida 11.
+- NA-SA had about 1,400 workers at some point (El Destape, 2023, search
+  summary) against about 3,000 in a later figure (above). They wore "the
+  company's uniform of grayish-brown trousers and a beige shirt".
+
 ## The street grid
 
 Measured 2026-09-26 from OpenStreetMap (© OpenStreetMap contributors, ODbL)
@@ -80,6 +118,20 @@ through the OSM API (`api/0.6/map`, the box 34.070–34.025 S, 59.225–59.170 W
 - **Two level crossings inside the town** (OSM `railway=level_crossing`), and
   more along the line outside it. Whether they have lights, barriers or
   bells is unconfirmed (#288).
+- **Automatic barriers on the Zárate–Rosario Mitre, as of April 2025:**
+  - The state bought and installed barriers, luminous signals and traffic
+    lights at crossings in Zárate, Alsina, Baradero, Río Tala, San Pedro and
+    beyond. They were **never switched on**, left "covered with black nylon",
+    with the arms missing.
+  - The concession holder refused to activate them, and its rights were
+    revoked in December 2024.
+  - **Lima isn't in the list.** Residents elsewhere on the line asked for
+    barriers that had been removed and never replaced.
+  - Secondary, 2026-09-27:
+    [La Opinión (San Pedro), 2025-04-13](https://www.laopinionsemanario.com.ar/noticia/ferrocarril-mitre-las-barreras-automaticas-que-no-funcionan-y-podrian-evitar-accidentes),
+    [Pilar a Diario](https://www.pilaradiario.com/policiales/nuevo-accidente-un-paso-nivel-del-tren-mitre-piden-barreras-n5450406).
+  - **What Lima's crossings had in February 2025 is still unconfirmed:**
+    lights, a bell, a St Andrew's cross, or nothing working.
 - Secondary, 2026-09-26: OSM, as above. Whether passenger trains ran to Lima
   in the era is unconfirmed.
 
@@ -115,6 +167,10 @@ through the OSM API (`api/0.6/map`, the box 34.070–34.025 S, 59.225–59.170 W
     [Mejor Energía, Mar 2024](https://www.mejorenergia.com.ar/noticias/2024/03/22/2605-buscan-postergar-hasta-septiembre-la-parada-de-atucha-i-para-las-obras-de-extension-de-vida),
     [EconoJournal, Atucha I delay](https://econojournal.com.ar/energia/centrales-nucleares-la-extension-de-vida-de-atucha-i-se-retrasara-hasta-la-segunda-mitad-de-2027/),
     [es.wikipedia](https://es.wikipedia.org/wiki/Complejo_Nuclear_Atucha).
+- **CAREM25,** CNEA's prototype small reactor, is being built on a site in
+  the Atucha complex area. Its state in February 2025 is unconfirmed.
+  Secondary: [argentina.gob.ar/cnea](https://www.argentina.gob.ar/cnea/carem/el-proyecto-carem/localizacion)
+  (search summary), 2026-09-27.
 - **Around the plant (OSM, 2026-09-26, secondary):**
   - The **Atucha substation**, and lines tagged **"Atucha 132kV"** and
     **"Atucha 220kV"**.
