@@ -681,6 +681,9 @@
   //                 nothing else, ever: not a street, not an address. Note that
   //                 doors[].building and master_key.building are a DIFFERENT
   //                 field holding a building *id* ("acorn"), unrelated to this.
+  //   buildingId    the id of the building instance the room is in (see
+  //                 BUILDING TYPES), absent outside one. Definition data:
+  //                 doMove() records it in state.enteredBuildings.
   //   area          floor/apartment/street grouping, e.g. "2A"
   //   room          room type/name, e.g. "Kitchen"
   //   shelter       "none" | "partial" | "full" — whether the room is under
@@ -837,9 +840,8 @@
   //                   Inventory (#242). `voltage-test` offers Test on a
   //                   load or a breaker there, and `current-clamp` Clamp on
   //                   a breaker (doMeterTest(), doMeterClamp()).
-  //                   Declared, with no consumer yet: prying — an item
-  //                   carrying it makes a claim nothing currently acts on,
-  //                   which is correct to write and not yet load-bearing.
+  //                   `prying` forces a locked latch door from outside
+  //                   (doForceDoor()).
   //     durability    { current, max, mode } — mode is "uses" or "time"
   //     restores      { hunger, thirst } — consumable effect
   //     verb          display/use verb, e.g. "Eat", "Drink"
@@ -1764,6 +1766,324 @@
     industrial:  { name:"Riverside Freight",  anchor:"industrial_f0" }
   };
 
+  // BUILDING TYPES. A building is one line of data, an instance, and its
+  // type generates its rooms, exits, doors, windows and containers
+  // (buildBuilding()). Types are the mechanic's own definition data; the
+  // instances are content (buildingInstances()).
+  //
+  // A type:
+  //   { label, entry, rooms:[…], links:[…], doors:[…], windows:[…], water? }
+  //   label    what the building is called in its street exit's default
+  //            label ("Enter the row house") and, capitalised, the name its
+  //            rooms carry when the instance gives none.
+  //   entry    the role the street exit leads into.
+  //   rooms    { role, room, shelter, desc, floorCap, containers:[…], sink?,
+  //            sleepSpot?, cannotHaveFire?, searchLabel?, searchMinutes?,
+  //            floor? }: ROOM SCHEMA's fields, by role. `desc` may be a list
+  //            of variants, one picked by the instance's `seed`. A container
+  //            is { id, name, capacityKg, spawnPools?, tags?, locked?,
+  //            breakTag?, items?, spawnRolled? }; `items` and `floor` are
+  //            placement refs (itemsFromRegistry()), and a container with
+  //            items starts spawnRolled unless it says otherwise, the rule
+  //            CONTAINER SCHEMA gives for hand-placed contents.
+  //   links    { between:[role, role], label:[a→b, b→a], distanceM, door? }:
+  //            a same-Location exit each way, gated by the door whose `key`
+  //            is `door`, if any.
+  //   doors    { key, between:[role, role] | ["street", role], label?, lock?,
+  //            locked, lockable? }: DOOR SCHEMA's fields. "street" is the
+  //            site stop. The second role is the inside, which is the
+  //            door's `inside` when it locks by latch or bolt.
+  //   windows  { role, label, breakTag }: a window to the outside, starting
+  //            closed (WINDOW SCHEMA).
+  //
+  // An instance:
+  //   { id, type | layout, site, at?, name?, address, seed?, enter?, leave?,
+  //     overrides? }
+  //   type     a BUILDING_TYPES id; or `layout`, a type-shaped object of its
+  //            own, for a one-off building (the comisaría), as WIRING's
+  //            panels take `template` or `layout`.
+  //   site     the stop id the building hangs off; its street exit is there.
+  //   at       [u, v], the building's own position, when it isn't the
+  //            site's (the paper mill, down its side road).
+  //   name     the name every room carries (ROOM SCHEMA's `building`) and
+  //            the map shows; the type's label, capitalised, when absent.
+  //   address  every room's address: the street it fronts, and never a
+  //            house number.
+  //   seed     picks among a type's text variants, where it offers some.
+  //            Definitions never read state.seed: which home is where is the
+  //            same in every run.
+  //   enter, leave  the street exit's labels, in and out. Defaults:
+  //            "Enter the <label>" and "Go out to the street".
+  //   overrides { rooms:{ role:{ …fields } }, addRooms:[…], links:[…],
+  //            doors:{ key:{ …fields } | null } }, merged over the type's: a
+  //            room's fields replace the type's field by field (so
+  //            `containers` replaces the whole list), a door's likewise, and
+  //            null removes a door, leaving its link an open passage.
+  // Ids, which saves key on and so must never change: rooms `<id>_<role>`,
+  // doors `<id>-<key>`, windows `<id>-<role>-window`. Every room gets
+  // `buildingId` (the instance id), `building` (its name), `address`,
+  // `area: null` and `locationId` `<id>_f0`, one Location per building.
+  // Nothing a type builds is wired: every room falls back to the grid
+  // (containerPowered()).
+  //
+  // Containers shared by the home types. Names, capacities and pools follow
+  // the flats the types replace; the capacities are judgment calls,
+  // retunable.
+  const KITCHEN_CONTAINERS = [
+    { id:"stove", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"] },
+    { id:"cupboards", name:"Cupboards", capacityKg:15, spawnPools:["kitchen_nonperishable","kitchen_tools"] },
+    { id:"drawers", name:"Drawers", capacityKg:10, spawnPools:["kitchen_tools"] },
+    { id:"fridge", name:"Fridge", capacityKg:30, tags:["fridge"], spawnPools:["kitchen_perishable"] },
+    { id:"freezer", name:"Freezer", capacityKg:10, tags:["freezer"], spawnPools:["kitchen_frozen"] }
+  ];
+  const BEDROOM_CONTAINERS = [
+    { id:"wardrobe", name:"Wardrobe", capacityKg:25, spawnPools:["clothing"] },
+    { id:"bedside", name:"Bedside table", capacityKg:5, spawnPools:["residential_personal","documents_lore","self_defense","electronics"] },
+    { id:"chest", name:"Chest of drawers", capacityKg:15, spawnPools:["clothing","residential_personal"] }
+  ];
+  const BATHROOM_CONTAINERS = [
+    { id:"cabinet", name:"Bathroom cabinet", capacityKg:5, spawnPools:["medical_otc","hygiene"] },
+    { id:"underbasin", name:"Under-basin cupboard", capacityKg:10, spawnPools:["hygiene","cleaning_supplies"] }
+  ];
+  const SHED_BOX = { id:"shedbox", name:"Shed box", capacityKg:15, spawnPools:["fuel_fire","tools_general"] };
+  const BUILDING_TYPES = {
+    // The Barrio Atucha's terraced row house (#284): one storey, about 11 ×
+    // 10.5 m inside, entered from its courtyard. Nothing is wired; the
+    // fixtures its text names (the garrafa cooker and heater, the fridge,
+    // the washing machine, the house pump, the tablero, the parrilla, the
+    // clothesline, the septic tank) are words only.
+    row_house: { label:"row house", entry:"living",
+      rooms: [
+        { role:"living", room:"Living room", shelter:"full", sleepSpot:"couch", cannotHaveFire:true, floorCap:80,
+          desc:"A living room with the dining table at one end. The bars on the window throw stripes across the floor, and a gas heater stands against the wall.",
+          containers:[
+            { id:"sideboard", name:"Sideboard", capacityKg:10, spawnPools:["recreation","residential_personal"] },
+            { id:"bookshelf", name:"Bookshelf", capacityKg:20, spawnPools:["recreation","documents_lore"] } ] },
+        { role:"kitchen", room:"Kitchen", shelter:"full", sink:true, cannotHaveFire:true, floorCap:50,
+          desc:"A narrow kitchen, open to the living room. The cooker runs off a gas bottle in the cupboard beneath it.",
+          containers:KITCHEN_CONTAINERS },
+        { role:"laundry", room:"Laundry", shelter:"full", sink:true, cannotHaveFire:true, floorCap:40,
+          desc:"A washing machine, a deep sink, and the pump that fills the house's water tank. The back door opens onto the garden.",
+          containers:[ { id:"shelf", name:"Shelf", capacityKg:15, spawnPools:["cleaning_supplies","tools_general"] } ] },
+        { role:"hallway", room:"Hallway", shelter:"full", cannotHaveFire:true, floorCap:50,
+          desc:"A short hallway. The breaker box is on the wall by the bathroom door.",
+          containers:[] },
+        { role:"bedroom", room:"Bedroom", shelter:"full", sleepSpot:"bed", cannotHaveFire:true, floorCap:60,
+          desc:"A double bed and a wardrobe. The window has bars, like every other in the house.",
+          containers:BEDROOM_CONTAINERS },
+        { role:"bedroom2", room:"Bedroom 2", shelter:"full", sleepSpot:"bed", cannotHaveFire:true, floorCap:60,
+          desc:"The smaller bedroom. A single bed pushed against the wall.",
+          containers:[
+            { id:"wardrobe", name:"Wardrobe", capacityKg:25, spawnPools:["clothing","baby_items"] },
+            { id:"chest", name:"Chest of drawers", capacityKg:15, spawnPools:["clothing","recreation"] } ] },
+        { role:"bathroom", room:"Bathroom", shelter:"full", sink:true, cannotHaveFire:true, floorCap:30,
+          desc:"Shower, toilet, bidet and basin, tiled to the ceiling. The window is small and high up.",
+          containers:BATHROOM_CONTAINERS },
+        { role:"garden", room:"Back garden", shelter:"none", floorCap:40,
+          desc:"A patch of grass behind the house. A brick parrilla against the back wall, a clothesline, and the concrete lid of the septic tank.",
+          containers:[ SHED_BOX ] }
+      ],
+      links: [
+        { between:["living", "kitchen"], label:["Go to the kitchen", "Go to the living room"], distanceM:3 },
+        { between:["living", "hallway"], label:["Go to the hallway", "Go to the living room"], distanceM:4 },
+        { between:["hallway", "bedroom"], label:["Go to the bedroom", "Go to the hallway"], distanceM:3, door:"bedroom" },
+        { between:["hallway", "bedroom2"], label:["Go to the second bedroom", "Go to the hallway"], distanceM:3, door:"bedroom2" },
+        { between:["hallway", "bathroom"], label:["Go to the bathroom", "Go to the hallway"], distanceM:3, door:"bathroom" },
+        { between:["kitchen", "laundry"], label:["Go to the laundry", "Go to the kitchen"], distanceM:3 },
+        { between:["laundry", "garden"], label:["Go out to the back garden", "Go back inside"], distanceM:3, door:"back" }
+      ],
+      doors: [
+        { key:"front", between:["street", "living"], label:"front", lock:"latch", locked:false },
+        { key:"back", between:["garden", "laundry"], label:"back", lock:"bolt", locked:true },
+        { key:"bedroom", between:["hallway", "bedroom"], locked:false, lockable:false },
+        { key:"bedroom2", between:["hallway", "bedroom2"], locked:false, lockable:false },
+        { key:"bathroom", between:["hallway", "bathroom"], locked:false, lockable:false }
+      ],
+      windows: [
+        { role:"living", label:"barred window", breakTag:"blunt" },
+        { role:"kitchen", label:"barred window", breakTag:"blunt" },
+        { role:"bedroom", label:"barred window", breakTag:"blunt" },
+        { role:"bedroom2", label:"barred window", breakTag:"blunt" },
+        { role:"bathroom", label:"small window", breakTag:"blunt" }
+      ] },
+    // The plain Lima house (#291). Designed: its layout is not sourced. The
+    // living room's containers are none, as designed; the distances are
+    // judgment calls, retunable.
+    casa: { label:"house", entry:"living",
+      rooms: [
+        { role:"living", room:"Living room", shelter:"full", sleepSpot:"couch", cannotHaveFire:true, floorCap:80,
+          desc:"A front room that is living room and dining room both. Barred windows onto the street, the blinds half down.",
+          containers:[] },
+        { role:"kitchen", room:"Kitchen", shelter:"full", sink:true, cannotHaveFire:true, floorCap:50,
+          desc:"A kitchen with a gas cooker fed from a bottle, and a table with two chairs.",
+          containers:KITCHEN_CONTAINERS },
+        { role:"bedroom", room:"Bedroom", shelter:"full", sleepSpot:"bed", cannotHaveFire:true, floorCap:60,
+          desc:"A bedroom. The bed is made, more or less.",
+          containers:BEDROOM_CONTAINERS },
+        { role:"bathroom", room:"Bathroom", shelter:"full", sink:true, cannotHaveFire:true, floorCap:30,
+          desc:"A small bathroom with a bidet beside the toilet.",
+          containers:BATHROOM_CONTAINERS },
+        { role:"patio", room:"Patio", shelter:"none", floorCap:40,
+          desc:"A paved patio at the back, walled in, with a few pots and a clothesline.",
+          containers:[ SHED_BOX ] }
+      ],
+      links: [
+        { between:["living", "kitchen"], label:["Go to the kitchen", "Go to the living room"], distanceM:4 },
+        { between:["living", "bedroom"], label:["Go to the bedroom", "Go to the living room"], distanceM:4, door:"bedroom" },
+        { between:["kitchen", "bathroom"], label:["Go to the bathroom", "Go to the kitchen"], distanceM:3, door:"bathroom" },
+        { between:["kitchen", "patio"], label:["Go out to the patio", "Go back inside"], distanceM:3, door:"back" }
+      ],
+      doors: [
+        { key:"front", between:["street", "living"], label:"front", lock:"latch", locked:false },
+        { key:"back", between:["patio", "kitchen"], label:"back", lock:"bolt", locked:true },
+        { key:"bedroom", between:["living", "bedroom"], locked:false, lockable:false },
+        { key:"bathroom", between:["kitchen", "bathroom"], locked:false, lockable:false }
+      ],
+      windows: [
+        { role:"living", label:"barred window", breakTag:"blunt" },
+        { role:"bedroom", label:"barred window", breakTag:"blunt" }
+      ] },
+    // A shop on the street with the family's rooms behind it, the way most
+    // of Lima's shops are kept (mixed use). Its text and containers come
+    // from the instance's overrides.
+    shop_home: { label:"shop", entry:"shop",
+      rooms: [
+        { role:"shop", room:null, shelter:"full", cannotHaveFire:true, floorCap:60, desc:"A shop.", containers:[] },
+        { role:"home", room:"Back rooms", shelter:"full", sink:true, sleepSpot:"couch", cannotHaveFire:true, floorCap:40,
+          desc:"The rooms behind the shop.", containers:[] }
+      ],
+      links: [
+        { between:["shop", "home"], label:["Go through to the back rooms", "Go through to the shop"], distanceM:5, door:"home" }
+      ],
+      doors: [
+        { key:"front", between:["street", "shop"], label:"front", lock:"latch", locked:false },
+        { key:"home", between:["shop", "home"], locked:false, lockable:false }
+      ],
+      windows: [ { role:"shop", label:"barred window", breakTag:"blunt" } ] },
+    // A shed or works building: its floor, and an office off it. Text and
+    // containers from the instance's overrides.
+    galpon: { label:"building", entry:"floor",
+      rooms: [
+        { role:"floor", room:null, shelter:"full", cannotHaveFire:true, floorCap:70, desc:"A shed.", containers:[] },
+        { role:"office", room:"Office", shelter:"full", cannotHaveFire:true, floorCap:40, desc:"An office.", containers:[] }
+      ],
+      links: [
+        { between:["floor", "office"], label:["Go to the office", "Leave the office"], distanceM:5, door:"office" }
+      ],
+      doors: [
+        { key:"front", between:["street", "floor"], label:"front", lock:"latch", locked:false },
+        { key:"office", between:["floor", "office"], locked:false, lockable:false }
+      ],
+      windows: [] }
+  };
+  // The share of generated homes whose street door starts locked, in
+  // percent: a home's door is locked when stableHash() of its building id,
+  // mod 100, is below it, so the same homes are locked in every run. About
+  // 60% (Tom, 2026-09-27); retunable.
+  const HOME_LOCKED_PCT = 60;
+  // Every building instance (see BUILDING TYPES). A function, as the old
+  // hand-written builders were, so each world build takes fresh placement
+  // objects.
+  function buildingInstances(){
+    return [];
+  }
+  // One instance expanded: { rooms, doors, windows, streetExit, problems }.
+  // `streetExit` is the exit makeDefaultWorld() hangs on the site stop.
+  function buildBuilding(inst){
+    const problems = [];
+    const type = inst.layout || BUILDING_TYPES[inst.type];
+    if(!type){ problems.push(`building ${inst.id}: unknown type "${inst.type}"`); return { rooms:{}, doors:{}, windows:{}, streetExit:null, problems }; }
+    const ov = inst.overrides || {};
+    const locationId = inst.id + "_f0";
+    const name = inst.name || type.label.charAt(0).toUpperCase() + type.label.slice(1);
+    const roomId = role=> role === "street" ? inst.site : `${inst.id}_${role}`;
+    const specs = type.rooms.map(r=> Object.assign({}, r, (ov.rooms || {})[r.role] || {})).concat(ov.addRooms || []);
+    const rooms = {};
+    specs.forEach(r=>{
+      const desc = Array.isArray(r.desc) ? r.desc[(inst.seed || 0) % r.desc.length] : r.desc;
+      const room = { locationId, address:inst.address, building:name, buildingId:inst.id, area:null, room:r.room || null,
+        shelter:r.shelter, desc, floorCap:r.floorCap, floor:itemsFromRegistry(r.floor || []),
+        containers:(r.containers || []).map(c=>{
+          const out = Object.assign({}, c, { items:itemsFromRegistry(c.items || []) });
+          if(c.tags) out.tags = c.tags.slice();
+          if(c.spawnPools) out.spawnPools = c.spawnPools.slice();
+          if(c.spawnRolled === undefined && c.items && c.items.length) out.spawnRolled = true;
+          return out;
+        }),
+        exits:[] };
+      ["sink", "sleepSpot", "cannotHaveFire", "searchLabel", "searchMinutes"].forEach(f=>{ if(r[f] !== undefined) room[f] = r[f]; });
+      if(room.searchLabel) room.searched = false;
+      rooms[roomId(r.role)] = room;
+    });
+    const doorSpecs = {};
+    type.doors.forEach(d=>{
+      const o = (ov.doors || {})[d.key];
+      if(o === null) return;
+      doorSpecs[d.key] = Object.assign({}, d, o || {});
+    });
+    Object.keys(ov.doors || {}).forEach(k=>{ if(ov.doors[k] && !doorSpecs[k]) doorSpecs[k] = Object.assign({ key:k }, ov.doors[k]); });
+    const doors = {};
+    Object.keys(doorSpecs).forEach(k=>{
+      const d = doorSpecs[k];
+      const sides = d.between.map(roomId);
+      const def = { locked:!!d.locked, sides, building:inst.id };
+      if(d.lockable === false) def.lockable = false;
+      if(d.label) def.label = d.label;
+      if(d.lock && d.lock !== "key"){ def.lock = d.lock; def.inside = sides[1]; }
+      doors[`${inst.id}-${k}`] = def;
+    });
+    const doorOf = key=> key && doorSpecs[key] ? `${inst.id}-${key}` : null;
+    const exit = (to, label, distanceM, doorId)=>{
+      const e = { to, label };
+      if(distanceM !== undefined) e.distanceM = distanceM;
+      if(doorId) e.doorId = doorId;
+      return e;
+    };
+    type.links.concat(ov.links || []).forEach(l=>{
+      const [a, b] = l.between.map(roomId);
+      if(!rooms[a] || !rooms[b]){ problems.push(`building ${inst.id}: link ${l.between.join("-")} names a role with no room`); return; }
+      rooms[a].exits.push(exit(b, l.label[0], l.distanceM, doorOf(l.door)));
+      rooms[b].exits.push(exit(a, l.label[1], l.distanceM, doorOf(l.door)));
+    });
+    const entry = roomId(type.entry);
+    const frontKey = Object.keys(doorSpecs).find(k=> doorSpecs[k].between.includes("street"));
+    const front = doorOf(frontKey);
+    if(!rooms[entry]) problems.push(`building ${inst.id}: entry "${type.entry}" has no room`);
+    else rooms[entry].exits.push(exit(inst.site, inst.leave || "Go out to the street", undefined, front));
+    const streetExit = exit(entry, inst.enter || `Enter the ${type.label}`, undefined, front);
+    const windows = {};
+    (type.windows || []).forEach(w=>{
+      if(!rooms[roomId(w.role)]){ problems.push(`building ${inst.id}: window in role "${w.role}", which has no room`); return; }
+      windows[`${inst.id}-${w.role}-window`] = { state:"closed", rooms:[roomId(w.role)], breakTag:w.breakTag, label:w.label };
+    });
+    return { rooms, doors, windows, streetExit, problems };
+  }
+  // Every instance expanded, merged: { rooms, doors, windows, streetExits:
+  // [{ site, exit }], problems }. A clashing id keeps the first and is
+  // reported, as expandOpenings() does.
+  function expandBuildings(){
+    const out = { rooms:{}, doors:{}, windows:{}, streetExits:[], problems:[] };
+    buildingInstances().forEach(inst=>{
+      const b = buildBuilding(inst);
+      out.problems.push(...b.problems);
+      ["rooms", "doors", "windows"].forEach(kind=> Object.keys(b[kind]).forEach(id=>{
+        if(out[kind][id]) out.problems.push(`building ${inst.id}: ${kind.slice(0, -1)} id "${id}" clashes`);
+        else out[kind][id] = b[kind][id];
+      }));
+      if(b.streetExit) out.streetExits.push({ site:inst.site, exit:b.streetExit });
+    });
+    return out;
+  }
+  // Each building's one Location, <id>_f0: its `at`, or its site's. Run once,
+  // at startup, once the stops' Locations exist.
+  function registerBuildingLocations(){
+    buildingInstances().forEach(inst=>{
+      const site = LOCATIONS[inst.site];
+      const at = inst.at ? { x:inst.at[0], y:inst.at[1] } : site;
+      if(at) LOCATIONS[inst.id + "_f0"] = { x:at.x, y:at.y, z:0 };
+    });
+  }
+
   // DOOR SCHEMA (one entry per key in the object makeDefaultDoors() returns):
   //   Definitions come from two places: the building's own doors, authored
   //   below (authoredDoors()), and a wired unit's interior doors, which its
@@ -1781,6 +2101,21 @@
   //     lockable  optional, default true. false: an interior door with no
   //               lock, which never locks, offers no key action and never
   //               shows the locked note.
+  //     lock      optional, how it locks, default "key":
+  //                 "key"    a key locks and unlocks it from either side
+  //                 "latch"  from outside only a key does; from inside it
+  //                          locks and unlocks by hand. Every home's and
+  //                          shop's street door. A locked one can be forced
+  //                          from outside with a `prying` tool
+  //                          (doForceDoor()).
+  //                 "bolt"   from outside it can't be opened at all; from
+  //                          inside it bolts and unbolts by hand. The row
+  //                          house's back door.
+  //     inside    the room on the inside, required when `lock` is "latch"
+  //               or "bolt". The building builder sets it from its type's
+  //               `between` (buildBuilding()).
+  //     label     optional, what the door is called ("front", "back"):
+  //               doorLabel() uses it first when present.
   //   Saved fields:
   //     locked    whether it is locked now; only `locked` gates an exit
   //     open      whether it stands open, default false. A locked door is
@@ -1789,6 +2124,8 @@
   //               carbon monoxide (#248), the way ROOM SCHEMA's `shelter` was.
   //               Movement ignores it: passing through a closed, unlocked
   //               door leaves it closed.
+  //     broken    whether its lock has been forced, default false. A broken
+  //               door is unlocked and never locks again (doorLocks()).
   // The building's own doors: the entry doors, one per unit, which no unit
   // template carries. Every interior door of a wired unit, and 1A's patio
   // door, comes from its panel's template instead (expandOpenings(), and
@@ -1806,7 +2143,7 @@
   // order doorsForRoom() walks, and so the order the Here panel offers Open
   // and Close in.
   function makeDefaultDoors(){
-    const all = Object.assign(authoredDoors(), expandOpenings(WIRING, WIRING_TEMPLATES).doors);
+    const all = Object.assign(authoredDoors(), expandOpenings(WIRING, WIRING_TEMPLATES).doors, expandBuildings().doors);
     const out = {};
     [true, false].forEach(lockable=> Object.keys(all).forEach(id=>{
       if(doorLockable(all[id]) === lockable) out[id] = all[id];
@@ -1842,10 +2179,15 @@
     };
   }
   function makeDefaultWindows(){
-    return Object.assign(authoredWindows(), expandOpenings(WIRING, WIRING_TEMPLATES).windows);
+    return Object.assign(authoredWindows(), expandOpenings(WIRING, WIRING_TEMPLATES).windows, expandBuildings().windows);
   }
   const WINDOW_STATES = ["closed", "open", "broken"];
   function doorLockable(door){ return door.lockable !== false; }
+  // Whether a door can be locked now: it has a lock, and nobody has forced
+  // it. Every lock action, by key or by hand, asks this.
+  function doorLocks(door){ return doorLockable(door) && !door.broken; }
+  // How a door locks (DOOR SCHEMA's `lock`), "key" when it doesn't say.
+  function doorLockKind(door){ return door.lock || "key"; }
   // The runtime doors and windows: the definitions, rebuilt fresh, with the
   // saved fields of `saved` (a save's `doors` / `windows`, or null for a new
   // game) applied to the ids the definitions still have. A saved id the
@@ -1859,11 +2201,13 @@
     Object.keys(out).forEach(id=>{
       const d = out[id], s = saved && saved[id];
       d.open = false;
+      d.broken = false;
       if(s && typeof s === "object"){
         if(typeof s.locked === "boolean") d.locked = s.locked;
         if(typeof s.open === "boolean") d.open = s.open;
+        if(typeof s.broken === "boolean") d.broken = s.broken;
       }
-      if(!doorLockable(d)) d.locked = false;
+      if(!doorLocks(d)) d.locked = false;
       if(d.locked) d.open = false;
     });
     return out;
@@ -4518,6 +4862,14 @@
       buildSeventhSt(),
       buildNinthSt()
     );
+    // The buildings the types generate, and each one's street exit, hung on
+    // its site stop.
+    const built = expandBuildings();
+    Object.assign(world, built.rooms);
+    built.streetExits.forEach(({ site, exit })=>{
+      if(world[site]) world[site].exits.push(exit);
+      else console.warn(`makeDefaultWorld: building site "${site}" is not a room`);
+    });
     return applyComputedDirections(stampTemplateDoorIds(world));
   }
   // Gives every exit through a template door its doorId: an exit from one of
@@ -4533,6 +4885,7 @@
     });
     return world;
   }
+  registerBuildingLocations();
   let world = makeDefaultWorld();
   // The runtime doors and windows (DOOR SCHEMA, WINDOW SCHEMA). Built here,
   // below WIRING, because a unit's come from its wiring template.
@@ -4733,6 +5086,12 @@
     return h >>> 0;
   }
   function hashKey(seed, parts){ return fnv1a(parts.join(KEY_SEP), seed); }
+  // A string's stable hash, the same in every run: FNV-1a from the standard
+  // offset basis. The one helper the world's definitions use for a stable
+  // per-place pick (which homes start locked, which stops have a parked car,
+  // which text variant a stop reads), since definitions never read
+  // state.seed.
+  function stableHash(str){ return fnv1a(str, FNV_OFFSET_BASIS); }
   // A key's value in [0,1). mulberry32's avalanche, without its stepping —
   // there is no cursor to step. Strictly below 1, which both callers rely on.
   function rollValueFor(seed, parts){
@@ -5768,11 +6127,11 @@
       actions.push({ label:"Equip", onClick:()=>doEquip(side, index) });
     if(it.category === "Key"){
       if(it.masterKey){
-        doorsTouchingRoom(state.currentRoom).filter(doorId=>doors[doorId].building===it.building && doorLockable(doors[doorId])).forEach(doorId=>{
+        doorsTouchingRoom(state.currentRoom).filter(doorId=>doors[doorId].building===it.building && doorLocks(doors[doorId])).forEach(doorId=>{
           const label = (doors[doorId].locked ? "Unlock the " : "Lock the ") + doorLabel(doorId, state.currentRoom) + " door";
           actions.push({ label, onClick:()=>doToggleLock(doorId) });
         });
-      } else if(it.doorId && doors[it.doorId] && doorLockable(doors[it.doorId]) && doorsTouchingRoom(state.currentRoom).includes(it.doorId)){
+      } else if(it.doorId && doors[it.doorId] && doorLocks(doors[it.doorId]) && doorsTouchingRoom(state.currentRoom).includes(it.doorId)){
         const label = (doors[it.doorId].locked ? "Unlock the " : "Lock the ") + doorLabel(it.doorId, state.currentRoom) + " door";
         actions.push({ label, onClick:()=>doToggleLock(it.doorId) });
       }
@@ -5922,6 +6281,7 @@
     const door = doors[doorId];
     const near = world[fromRoomId];
     if(!door || !near) return doorId;
+    if(door.label) return door.label;
     const farId = door.sides.includes(fromRoomId)
       ? door.sides.find(id => id !== fromRoomId)
       : (gatedExitsForRoom(fromRoomId).find(e => e.doorId === doorId) || {}).to;
@@ -6167,14 +6527,45 @@
   }
   // Locking an open door closes it too: a locked door is always closed (see
   // DOOR SCHEMA).
+  // A latch or bolt worked by hand from inside (DOOR SCHEMA's `lock`) goes
+  // through here too: the Here panel offers it only in the door's `inside`
+  // room. A bolt's lines name the bolt; functional, retunable.
   function doToggleLock(doorId){
     const d = doors[doorId];
-    if(!doorLockable(d)) return;
+    if(!doorLocks(d)) return;
     const wasOpen = d.open;
     d.locked = !d.locked;
     if(d.locked) d.open = false;
-    log(!d.locked ? "You unlock the door."
+    if(doorLockKind(d) === "bolt"){
+      const label = doorLabel(doorId, state.currentRoom);
+      log(d.locked ? `You bolt the ${label} door.` : `You draw the bolt on the ${label} door.`, "good");
+    } else log(!d.locked ? "You unlock the door."
       : wasOpen ? "You close the door and lock it." : "You lock the door behind you.", "good");
+    render();
+  }
+  // Whether the player stands inside a door that locks by hand from there:
+  // its `inside` room, when it is a latch or a bolt.
+  function locksByHandHere(d){
+    return doorLockKind(d) !== "key" && d.inside === state.currentRoom;
+  }
+  // Forcing a locked latch door from outside with a `prying` tool: the lock
+  // gives, the door is unlocked and `broken`, and it never locks again
+  // (doorLocks()). A bolt, and a door locked by key alone, can't be forced.
+  // The time and its Exertion, at the rate chopping uses, are judgment
+  // calls, retunable; so is the line.
+  const FORCE_DOOR_MIN = 5;
+  const FORCE_DOOR_EXERTION = FORCE_DOOR_MIN * BASELINE_STAMINA_RATE;
+  function canForceDoor(d){
+    return doorLockKind(d) === "latch" && d.locked && !d.broken && d.inside !== state.currentRoom && hasTool("prying");
+  }
+  function doForceDoor(doorId){
+    const d = doors[doorId];
+    if(!d || !canForceDoor(d)) return;
+    advanceTime(FORCE_DOOR_MIN);
+    applyExertion(FORCE_DOOR_EXERTION);
+    d.locked = false;
+    d.broken = true;
+    log("You work the crowbar into the frame by the lock until it gives.", "warn");
     render();
   }
   // Opening and closing a door, instant like the windows'. Only an unlocked
@@ -7628,7 +8019,7 @@
   // changed on top of them. `rooms` holds, per room id, the fields of
   // ROOM_STATE_FIELDS and CONTAINER_STATE_FIELDS that differ from a freshly
   // built world (savedRoomState(), applied back by buildWorld()); `doors` and
-  // `windows` carry `{ locked, open }` per door and `{ state }` per
+  // `windows` carry `{ locked, open, broken }` per door and `{ state }` per
   // window (buildDoors(), buildWindows()). _uid is not persisted specially —
   // resyncUidCounter() scans every item location after a load so
   // newly-created items during the next session keep getting unique ids, and
@@ -7636,7 +8027,7 @@
   // system.
   function savedDoorState(){
     const out = {};
-    Object.keys(doors).forEach(id=>{ out[id] = { locked: doors[id].locked, open: doors[id].open }; });
+    Object.keys(doors).forEach(id=>{ out[id] = { locked: doors[id].locked, open: doors[id].open, broken: doors[id].broken }; });
     return out;
   }
   function savedWindowState(){
@@ -8194,6 +8585,31 @@
     if(unwired.length) console.warn(`validateWiring: ${unwired.length} fully sheltered room${unwired.length === 1 ? "" : "s"} with no wiring yet (a warning until #258)`, unwired);
     return { problems, unwired };
   }
+  // validateBuildings(): dev-only console helper (not wired to any button or
+  // UI, runs nothing automatically), sibling to validateWiring(). Reports what
+  // the building builder found (expandBuildings()): an unknown type, a link,
+  // window or entry naming a role with no room, a clashing id; and every
+  // instance whose site is not a room or has no Location, every door whose
+  // `lock` is a latch or a bolt without an `inside` among its sides, and every
+  // door side that is not a room. Call it as
+  // `ashfallDev.validateBuildings()` from the browser console when auditing.
+  function validateBuildings(){
+    const built = expandBuildings();
+    const problems = built.problems.slice();
+    const rooms = makeDefaultWorld();
+    buildingInstances().forEach(inst=>{
+      if(!rooms[inst.site]) problems.push(`building ${inst.id}: site "${inst.site}" is not a room`);
+      if(!LOCATIONS[inst.id + "_f0"]) problems.push(`building ${inst.id}: no Location ${inst.id}_f0`);
+    });
+    Object.keys(built.doors).forEach(id=>{
+      const d = built.doors[id];
+      if(doorLockKind(d) !== "key" && !d.sides.includes(d.inside)) problems.push(`door ${id}: a ${d.lock} with no inside room`);
+      d.sides.forEach(r=>{ if(!rooms[r]) problems.push(`door ${id}: side "${r}" is not a room`); });
+    });
+    if(problems.length) console.warn("validateBuildings: problems", problems);
+    else console.log(`validateBuildings: ${buildingInstances().length} buildings expand cleanly`);
+    return problems;
+  }
   // Items an action produces rather than a container holding them. Written
   // down because validateReachability() cannot derive it: each grant lives
   // inside an action's body, not in any table the helper could walk.
@@ -8204,15 +8620,16 @@
   //   spare_batteries  the powered-equipment "Remove batteries" action
   const ACTION_GRANTED_ITEM_IDS = ["firewood", "fish", "spare_batteries"];
   // The tool tags validateReachability() counts, written down for the same
-  // reason. The first eleven are what hasTool()/hasMatchUses() actually gate
+  // reason. Every one is what hasTool()/hasMatchUses() actually gate
   // an action on, and they include the `breakTag` values windows (blunt) and
   // locked storage units (cutting) carry, the `tool` a recipe asks for
   // (blade), `heat`, which lights an unpowered stove by hand
-  // (stoveLighting()), and the meters' two (doMeterTest(), doMeterClamp()). `prying` gates nothing at all and is counted
-  // precisely for that reason: renderHereActionsPanel() records that forcing
-  // a vehicle was deliberately NOT gated on it because one item carries it,
-  // and #111 is the standing question of whether to gate on it once that
-  // stops being true. The count is the evidence that question wants.
+  // (stoveLighting()), the meters' two (doMeterTest(), doMeterClamp()), and
+  // `prying`, which gates forcing a locked latch door (doForceDoor()).
+  // Forcing a vehicle is still deliberately not gated on it, because one
+  // item carries it (renderHereActionsPanel()), and #111 is the standing
+  // question of whether to gate that too once that stops being true. The
+  // count is the evidence that question wants.
   const REPORTED_TOOL_TAGS = ["fire-starter", "fishing", "tackle", "chopping",
     "cutting", "blunt", "can-opening", "blade", "heat", "voltage-test", "current-clamp", "prying"];
   // Whether the registry entry for `id` carries `tag`, the test every tag
@@ -10318,6 +10735,20 @@
     // sit above an empty row — mirrors hereGroup's own hiding rule.
     moveGroup.style.display = moveBox.children.length ? "" : "none";
   }
+  // What the Here panel calls each door a room touches: "<label> door", and
+  // where two of them would read the same (two row houses' front doors on
+  // one courtyard), each followed by its building's name. Functional UI
+  // text, retunable.
+  function doorNamesFor(roomId){
+    const ids = doorsTouchingRoom(roomId);
+    const plain = id=> doorLabel(id, roomId) + " door";
+    return (doorId)=>{
+      const name = plain(doorId);
+      if(ids.filter(id=> plain(id) === name).length < 2) return name;
+      const b = world[doors[doorId].sides.find(r=> r !== roomId)];
+      return b && b.building ? `${name} (${b.building})` : name;
+    };
+  }
   function renderHereActionsPanel(){
     const room = world[state.currentRoom];
     const hereGroup = document.getElementById("hereGroup");
@@ -10330,25 +10761,39 @@
       .forEach(exit=>{
         hereBox.appendChild(actionButton(exit.label, ()=> doMove(exit), { cost: fmtDuration(exitMinutes(exit)) }));
       });
+    // A locked door: from inside a latch or a bolt, its hand action; from
+    // outside a bolt, the note that says why; otherwise Unlock with a key,
+    // or the locked note, and Force while a `prying` tool is carried
+    // (canForceDoor()). Functional UI text, retunable.
+    const doorName = doorNamesFor(state.currentRoom);
     gatedExitsForRoom(state.currentRoom).forEach(({doorId})=>{
-      if(!doors[doorId].locked) return;
-      const label = doorLabel(doorId, state.currentRoom);
-      const key = findKeyForDoor(doorId);
-      if(key){
-        hereBox.appendChild(actionButton(`Unlock the ${label} door`, ()=> doToggleLock(doorId)));
+      const d = doors[doorId];
+      if(!d.locked) return;
+      const label = doorName(doorId);
+      if(locksByHandHere(d)){
+        hereBox.appendChild(actionButton(doorLockKind(d) === "bolt" ? `Draw the bolt on the ${label}` : `Unlock the ${label}`, ()=> doToggleLock(doorId)));
+      } else if(doorLockKind(d) === "bolt"){
+        hereBox.appendChild(hereNote(`The ${label} is bolted from the inside.`));
+      } else if(findKeyForDoor(doorId)){
+        hereBox.appendChild(actionButton(`Unlock the ${label}`, ()=> doToggleLock(doorId)));
       } else {
-        hereBox.appendChild(hereNote(`The ${label} door is locked.`));
+        hereBox.appendChild(hereNote(`The ${label} is locked.`));
       }
+      if(canForceDoor(d)) hereBox.appendChild(actionButton(`Force the ${label}`, ()=> doForceDoor(doorId), { cls:"locked", cost:fmtDuration(FORCE_DOOR_MIN) }));
     });
     // Open / Close on every door the room touches, as its key actions are
     // offered. A locked door offers neither: it has to be unlocked first.
+    // From inside, an unlocked latch or bolt offers its hand lock; a forced
+    // one says so instead.
     doorsTouchingRoom(state.currentRoom).forEach(doorId=>{
       const d = doors[doorId];
       if(d.locked) return;
-      const label = doorLabel(doorId, state.currentRoom);
+      const label = doorName(doorId);
       hereBox.appendChild(d.open
-        ? actionButton(`Close the ${label} door`, ()=> doCloseDoor(doorId))
-        : actionButton(`Open the ${label} door`, ()=> doOpenDoor(doorId)));
+        ? actionButton(`Close the ${label}`, ()=> doCloseDoor(doorId))
+        : actionButton(`Open the ${label}`, ()=> doOpenDoor(doorId)));
+      if(d.broken) hereBox.appendChild(hereNote(`The lock on the ${label} is broken.`));
+      else if(locksByHandHere(d)) hereBox.appendChild(actionButton(doorLockKind(d) === "bolt" ? `Bolt the ${label}` : `Lock the ${label}`, ()=> doToggleLock(doorId)));
     });
     hereBox.appendChild(actionButton("Rest " + fmtDuration(REST_DURATION_MIN), doRest));
     if(room.sleepSpot){
@@ -10789,13 +11234,13 @@
   mapSetZoomStep(mapZoomStep);
   render();
 
-  // Dev seam. The five validators, the two seed reports and the power
+  // Dev seam. The six validators, the two seed reports and the power
   // simulation above are local bindings inside this IIFE, so
   // `validateReachability()` typed into devtools is a ReferenceError. This is
   // the one deliberate hole in the closure: read-only reporting helpers,
   // nothing that writes game state, and nothing else belongs on it.
   window.ashfallDev = { validateItemRegistry, validateLocations, validateRoomSchema, validateReachability,
-    validateWiring, simulateSeed, sampleSeeds, simulatePower };
+    validateWiring, validateBuildings, simulateSeed, sampleSeeds, simulatePower };
 })();
 </script>
 </body>
