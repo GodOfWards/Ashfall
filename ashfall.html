@@ -523,9 +523,10 @@
   // collapse; the grid fails on POWER_FAILS_DAY after it. Nothing is stored:
   // minutesSinceCollapse() derives the clock from state.totalMinutes. Running
   // water has no day of its own: the pumps run on the grid, so the water
-  // stops with it (waterRunning() is gridUp()). #149's separate water option
-  // is moot while that holds. Both are retunable; the Day N clock still
-  // counts from the start of the run.
+  // stops with it, except where a house's own tank keeps its taps running a
+  // while longer (waterRunningIn(), HOUSE_TANK_L). #149's separate water
+  // option is moot while that holds. Both are retunable; the Day N clock
+  // still counts from the start of the run.
   const START_DAYS_AFTER_COLLAPSE = 2;
   const POWER_FAILS_DAY = 21;
   // The power network's figures (see POWER in SURVIVAL / TIME SIMULATION).
@@ -745,7 +746,7 @@
   //   fireMinutesLeft remaining fuel minutes for an active fire
   //   campfireBuilt  a campfire structure has been assembled here
   //   sink           the room has a sink: while the water runs
-  //                  (waterRunning(), which follows the grid: gridUp()), a
+  //                  (waterRunningIn(): the grid, or the building's tank), a
   //                  water-holding item can be filled at it (doFillAtSink())
   //
   // CONTAINER SCHEMA:
@@ -3779,6 +3780,10 @@ x_sn_9 m_sn_sn_sn sn p
   //            door's `inside` when it locks by latch or bolt.
   //   windows  { role, label, breakTag }: a window to the outside, starting
   //            closed (WINDOW SCHEMA).
+  //   water    optional, { tankL }: the building has its own water tank of
+  //            that many litres, filled by a house pump, which keeps its sinks
+  //            running after the grid fails until it is drawn dry
+  //            (waterRunningIn()). Absent: its sinks run on the grid alone.
   //
   // An instance:
   //   { id, type | layout, site, at?, name?, address, seed?, enter?, leave?,
@@ -3830,13 +3835,19 @@ x_sn_9 m_sn_sn_sn sn p
     { id:"underbasin", name:"Under-basin cupboard", capacityKg:10, spawnPools:["hygiene","cleaning_supplies"] }
   ];
   const SHED_BOX = { id:"shedbox", name:"Shed box", capacityKg:15, spawnPools:["fuel_fire","tools_general"] };
+  // A home's own water tank, in litres (#294). Many Lima homes have a tank
+  // and a pump of their own (Tom, first-hand); the figure is a guideline, at
+  // least 800 L per dwelling and about 1,000 L for a family of four at 250 L
+  // per person per day (Río Negro's water authority, secondary). The
+  // Barrio Atucha's own tanks are unconfirmed. Retunable.
+  const HOUSE_TANK_L = 1000;
   const BUILDING_TYPES = {
     // The Barrio Atucha's terraced row house (#284): one storey, about 11 ×
     // 10.5 m inside, entered from its courtyard. Nothing is wired; the
     // fixtures its text names (the garrafa cooker and heater, the fridge,
     // the washing machine, the house pump, the tablero, the parrilla, the
     // clothesline, the septic tank) are words only.
-    row_house: { label:"row house", entry:"living",
+    row_house: { label:"row house", entry:"living", water:{ tankL:HOUSE_TANK_L },
       rooms: [
         { role:"living", room:"Living room", shelter:"full", sleepSpot:"couch", cannotHaveFire:true, floorCap:80,
           desc:"A living room with the dining table at one end. The bars on the window throw stripes across the floor, and a gas heater stands against the wall.",
@@ -3893,7 +3904,7 @@ x_sn_9 m_sn_sn_sn sn p
     // The plain Lima house (#291). Designed: its layout is not sourced. The
     // living room's containers are none, as designed; the distances are
     // judgment calls, retunable.
-    casa: { label:"house", entry:"living",
+    casa: { label:"house", entry:"living", water:{ tankL:HOUSE_TANK_L },
       rooms: [
         { role:"living", room:"Living room", shelter:"full", sleepSpot:"couch", cannotHaveFire:true, floorCap:80,
           desc:"A front room that is living room and dining room both. Barred windows onto the street, the blinds half down.",
@@ -3930,7 +3941,7 @@ x_sn_9 m_sn_sn_sn sn p
     // A shop on the street with the family's rooms behind it, the way most
     // of Lima's shops are kept (mixed use). Its text and containers come
     // from the instance's overrides.
-    shop_home: { label:"shop", entry:"shop",
+    shop_home: { label:"shop", entry:"shop", water:{ tankL:HOUSE_TANK_L },
       rooms: [
         { role:"shop", room:null, shelter:"full", cannotHaveFire:true, floorCap:60, desc:"A shop.", containers:[] },
         { role:"home", room:"Back rooms", shelter:"full", sink:true, sleepSpot:"couch", cannotHaveFire:true, floorCap:40,
@@ -4670,6 +4681,11 @@ x_sn_9 m_sn_sn_sn sn p
   // actually get a marker, and where the label sits relative to the dot.
   const BUILDINGS = Object.assign(Object.fromEntries(landmarkInstances().filter(b=> b.marker)
     .map(b=> [b.id, { name:b.name, anchor:b.id + "_f0" }])), NAMED_SCENERY);
+  // Every building with a water tank, by building id: its size in litres
+  // (BUILDING TYPES' `water`). Read by tankOf().
+  const BUILDING_TANKS = Object.fromEntries(buildingInstances()
+    .map(b=> [b.id, (b.layout || BUILDING_TYPES[b.type] || {}).water])
+    .filter(([id, w])=> w && w.tankL > 0).map(([id, w])=> [id, w.tankL]));
   // The runtime doors and windows (DOOR SCHEMA, WINDOW SCHEMA). Built here,
   // below WIRING, because a unit's come from its wiring template.
   let doors = buildDoors(null);
@@ -4703,6 +4719,10 @@ x_sn_9 m_sn_sn_sn sn p
       // SCHEMA), in the order first entered. Written by doMove(); Walk to…
       // reads it.
       enteredBuildings:[],
+      // Litres drawn from each building's tank since the grid failed, by
+      // building id. Written only then (doFillAtSink()): while the grid is up
+      // its pump keeps every tank full. See tankLeft().
+      tankDrawn:{},
       // Running illnesses, keyed by ILLNESSES id: the minutes each has left.
       // A missing or 0 entry means not ill with it.
       illnesses:{},
@@ -5533,15 +5553,33 @@ x_sn_9 m_sn_sn_sn sn p
     });
   }
   // Sinks. A water-holding item — a bottle — can be filled at the sink of the
-  // room it is in while the water runs, unless it is already full, of either
-  // kind. One unit fills, to full; its water is clean unless it already held
-  // tainted water, since any tainted water taints everything it mixes with.
-  // Instant. After the water fails the sink gives nothing, and whatever was
-  // left in the pipes is #47's. The line's wording is retunable.
+  // room it is in while the water runs (waterRunningIn()), unless it is
+  // already full, of either kind. One unit fills, to full; its water is clean
+  // unless it already held tainted water, since any tainted water taints
+  // everything it mixes with. Instant. After the water fails the sink gives
+  // nothing, and whatever was left in the pipes is #47's.
   // A vessel fills too, while it holds no dish and no water.
+  // Off a tank, after the grid has failed, a fill draws the litres it adds
+  // (1 kg of water is 1 L) and takes only what the tank has left: a bottle
+  // fills part way on the last of it, and a vessel, whose water is all or
+  // nothing, needs its whole waterKg. The lines are functional, retunable.
   function canFillAtSink(it){
     const room = world[state.currentRoom];
-    return !!room.sink && waterRunning() && canTakeWater(it);
+    if(!room.sink || !waterRunningIn(state.currentRoom) || !canTakeWater(it)) return false;
+    return gridUp() || !vesselDefOf(it) || tankLeft(state.currentRoom) >= sinkLitresFor(it);
+  }
+  // Whether the room's sink is dry for an item that could take water: its
+  // tank drawn empty after the grid failed. What the pop-up says in the fill
+  // action's place.
+  function tapDryFor(it){
+    const room = world[state.currentRoom];
+    return !!room.sink && canTakeWater(it) && tankOf(state.currentRoom) > 0 && !canFillAtSink(it);
+  }
+  // The litres filling one unit of `it` to full would add.
+  function sinkLitresFor(it){
+    const def = registryEntryOf(it);
+    if(def && def.holdsWater) return def.holdsWater.kg * (1 - (it.water ? it.water.fill : 0));
+    return def && def.vessel ? def.vessel.waterKg : 0;
   }
   // Whether an item can take more water: a bottle that is not full, or a
   // vessel holding none, since a vessel's water is all or nothing (#47).
@@ -5560,9 +5598,10 @@ x_sn_9 m_sn_sn_sn sn p
   // Puts water of `kind` into one unit: a bottle full to the top, a vessel
   // full. Any tainted water already there taints it, and new water in a
   // vessel starts its boil over.
-  function addWater(unit, kind){
+  // A bottle can be filled to `fill` short of the top (a tank's last litres).
+  function addWater(unit, kind, fill = 1){
     const k = waterKindOf(unit) === "tainted" ? "tainted" : kind;
-    unit.water = vesselDefOf(unit) ? { kind:k } : { kind:k, fill:1 };
+    unit.water = vesselDefOf(unit) ? { kind:k } : { kind:k, fill };
     delete unit.boilMinutes;
   }
   function doFillAtSink(sourceKind, index){
@@ -5570,10 +5609,22 @@ x_sn_9 m_sn_sn_sn sn p
     const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
     const it = getItemAt(src && src.items, index);
     if(!it || !canFillAtSink(it)) return;
-    const filled = changeOneUnit(src.items, it, unit=> addWater(unit, "clean"));
+    const need = sinkLitresFor(it);
+    const fromTank = !gridUp() && tankOf(state.currentRoom) > 0;
+    // Rounded to the millilitre, so a tank's running total and a bottle's
+    // part fill don't carry float noise.
+    const litres = Math.round((fromTank ? Math.min(need, tankLeft(state.currentRoom)) : need) * 1000) / 1000;
+    const def = registryEntryOf(it);
+    const fill = def && def.holdsWater ? Math.round(((it.water ? it.water.fill : 0) + litres / def.holdsWater.kg) * 1000) / 1000 : 1;
+    const filled = changeOneUnit(src.items, it, unit=> addWater(unit, "clean", Math.min(1, fill)));
+    if(fromTank){
+      const b = world[state.currentRoom].buildingId;
+      state.tankDrawn[b] = Math.round(((state.tankDrawn[b] || 0) + litres) * 1000) / 1000;
+    }
     // The pop-up follows the filled bottle, as doOpen()'s follows the opened can.
     detailItem = { uid: ensureUid(filled), side: sourceKind };
-    log(`You fill the ${it.name.toLowerCase()} at the sink.`);
+    log(fromTank && tankLeft(state.currentRoom) <= 0 ? "The tap coughs, spits, and runs dry."
+      : `You fill the ${it.name.toLowerCase()} at the sink.`);
     render();
   }
   // Vessels within reach of an item: every vessel in the lists crafting
@@ -5842,7 +5893,9 @@ x_sn_9 m_sn_sn_sn sn p
   // has already resolved via findItemByUid() for the *current* state, so the
   // resulting closures capture a correct index for this render. It still
   // validates defensively (getItemAt) so a future caller that passes a stale
-  // pair fails safe instead of throwing on `undefined.qty`.
+  // pair fails safe instead of throwing on `undefined.qty`. An entry with
+  // `note` is not an action: a line shown in one's place, as "The tap is
+  // dry." stands where Fill at the sink would.
   function getItemActions(list, index, side){
     const it = getItemAt(list, index);
     if(!it) return [];
@@ -5906,6 +5959,7 @@ x_sn_9 m_sn_sn_sn sn p
     if(it.sealed && (!it.opensWith || hasTool(it.opensWith)))
       actions.push({ label:"Open", onClick:()=>doOpen(side, index) });
     if(canFillAtSink(it)) actions.push({ label:"Fill at the sink", onClick:()=>doFillAtSink(side, index) });
+    else if(tapDryFor(it)) actions.push({ label:"The tap is dry.", note:true });
     if(it.category==="Container" && it.slotType && !state[it.slotType])
       actions.push({ label:"Equip", onClick:()=>doEquip(side, index) });
     if(it.category === "Key"){
@@ -6134,7 +6188,24 @@ x_sn_9 m_sn_sn_sn sn p
   // without the grid yet, and the rule still holds once generators do (#245).
   function minutesSinceCollapse(){ return START_DAYS_AFTER_COLLAPSE * MINUTES_PER_DAY + state.totalMinutes; }
   function gridUp(m = minutesSinceCollapse()){ return m < POWER_FAILS_DAY * MINUTES_PER_DAY; }
-  function waterRunning(m = minutesSinceCollapse()){ return gridUp(m); }
+  // Water: a room's sink runs while the grid does, and a room in a building
+  // with its own tank (BUILDING_TANKS) runs on after it fails, until the
+  // tank is drawn dry. The tank's pump is unwired, so it stops with the grid
+  // (#245, #289 can change that), and the tank is full at that moment, since
+  // nobody else draws on it. tankOf() is the room's building's tank in
+  // litres, or 0 for none; tankLeft() what it holds now.
+  function tankOf(roomId){
+    const room = world[roomId];
+    return (room && room.buildingId && BUILDING_TANKS[room.buildingId]) || 0;
+  }
+  function tankLeft(roomId, m = minutesSinceCollapse()){
+    const size = tankOf(roomId);
+    if(!size || gridUp(m)) return size;
+    return Math.max(0, size - (state.tankDrawn[world[roomId].buildingId] || 0));
+  }
+  function waterRunningIn(roomId, m = minutesSinceCollapse()){
+    return gridUp(m) || tankLeft(roomId, m) > 0;
+  }
   function getWindowsInRoom(roomId){
     return Object.keys(windows).filter(id=>windows[id].rooms.includes(roomId)).map(id=>Object.assign({id}, windows[id]));
   }
@@ -8148,6 +8219,7 @@ x_sn_9 m_sn_sn_sn sn p
     const base = makeDefaultState();
     const nextState = { ...base, ...data.state, vitals: { ...base.vitals, ...(data.state.vitals || {}) } };
     if(!Array.isArray(nextState.enteredBuildings)) nextState.enteredBuildings = [];
+    if(!nextState.tankDrawn || typeof nextState.tankDrawn !== "object" || Array.isArray(nextState.tankDrawn)) nextState.tankDrawn = {};
     // Rebuilt from the definitions, with the save's fields applied.
     const nextWorld = buildWorld(data.rooms);
     const nextDoors = buildDoors(data.doors);
@@ -10041,6 +10113,8 @@ x_sn_9 m_sn_sn_sn sn p
       const actions = document.createElement("div");
       actions.className = "pop-actions";
       getItemActions(found.list, found.index, detailItem.side).forEach(a=>{
+        // A note stands where an action would be (hereNote()'s style).
+        if(a.note){ actions.appendChild(hereNote(a.label)); return; }
         const btn = document.createElement("button");
         btn.className = "action" + (a.disabled ? " blocked" : "");
         btn.textContent = a.label;
