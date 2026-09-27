@@ -1522,29 +1522,19 @@
       { itemId:"walkie_talkie", chance:0.100000, qtyMin:1, qtyMax:1 } ]}
   };
 
-  // LOCATIONS: real integer (x,y,z) coordinates in meters for every
-  // street/mid-block node and building floor. Origin
-  // (0,0,0) = maple4th (town SW corner), street level. +X = east, +Y =
-  // north, +Z = up. Block size 100m; floor height 3m (no basements/roofs
-  // yet — this is the convention for when they're added). Every room
-  // carries a `locationId` key into this table (see ROOM SCHEMA above).
-  //   Street/mid-block Locations: id = the room id itself, z:0, (x,y) =
-  //   the former MAP_NODES {col,row} * 100 (same grid, just scaled to
-  //   real meters). The grid:
-  //     col -1..6 = 6th, 4th, 2nd, 1st(center), 3rd, 5th, 7th, 9th St
-  //     (west->east; the centered even/odd scheme — evens west of 1st,
-  //     odds east, magnitude growing with distance from center).
-  //     row -4..3 = Dock, Mill, Cedar, Elm, Maple, Poplar, Main, Water St
-  //     (south->north). Water is the river / north hard limit; the town
-  //     grew *away* from the water, so Elm/Cedar/Mill/Dock all sit south
-  //     of Maple: Elm/Cedar continue the residential tree-name ring,
-  //     Mill/Dock are the industrial and rail-freight edge. Origin
-  //     (0,0,0) is maple4th, which is why the grid has negative x and y.
-  //   Building-floor Locations: one per floor, shared by every room on
-  //   that floor. (x,y) = the building's former MAP_ANCHORS node. Two
-  //   buildings sharing an anchor (Pharmacy/Hardware Store) correctly
-  //   share the same real (x,y) — MAP_BUILDING_OFFSETS' dx/dy label-offset
-  //   (in RENDERING/MAP) is what keeps their map markers visually distinct.
+  // LOCATIONS: real integer (x,y,z) coordinates in metres for every stop
+  // and building floor. Every room carries a `locationId` key into this table
+  // (see ROOM SCHEMA above). The frame is Lima's street grid: origin (0,0,0)
+  // is 34.0447 S, 59.1961 W at street level; +x runs along the grid's east,
+  // +y along its "up", which is GRID_BEARING_DEG east of true north, and +z
+  // is up. Floor height 3 m (no basements or roofs yet — the convention for
+  // when they're added). The coordinates come already rotated into this frame
+  // (LIMA_STOPS), so "north" in an exit label is the grid's.
+  //   Stop Locations: id = the stop's room id, z:0, (x,y) = its (u, v) from
+  //   LIMA_STOPS, registered at startup from the appendix data below.
+  //   Building-floor Locations: one per floor, shared by every room on it;
+  //   a type-built building's is <id>_f0, at its site stop's (x,y) unless it
+  //   gives its own (registerBuildingLocations()).
   //   Z is laid down for every Location but not consumed by anything yet
   //   (the map is top-down) — future systems can rely on it without a
   //   retrofit.
@@ -1554,187 +1544,6 @@
   // the town's own streets run. Only the map's north arrow reads it.
   const GRID_BEARING_DEG = 14;
   const LOCATIONS = {
-    maple4th:       { x:0, y:0, z:0 },
-    maple2nd:       { x:100, y:0, z:0 },
-    maple1st:       { x:200, y:0, z:0 },
-    maple3rd:       { x:300, y:0, z:0 },
-    maple5th:       { x:400, y:0, z:0 },
-    poplar4th:      { x:0, y:100, z:0 },
-    poplar2nd:      { x:100, y:100, z:0 },
-    outside:        { x:200, y:100, z:0 },
-    poplar3rd:      { x:300, y:100, z:0 },
-    poplar5th:      { x:400, y:100, z:0 },
-    main4th:        { x:0, y:200, z:0 },
-    main2nd:        { x:100, y:200, z:0 },
-    main1st:        { x:200, y:200, z:0 },
-    main3rd:        { x:300, y:200, z:0 },
-    main5th:        { x:400, y:200, z:0 },
-    water4th:       { x:0, y:300, z:0 },
-    water2nd:       { x:100, y:300, z:0 },
-    water1st:       { x:200, y:300, z:0 },
-    water3rd:       { x:300, y:300, z:0 },
-    water5th:       { x:400, y:300, z:0 },
-    mid_maple_2_4:  { x:50, y:0, z:0 },
-    mid_maple_1_2:  { x:150, y:0, z:0 },
-    mid_maple_1_3:  { x:250, y:0, z:0 },
-    mid_maple_3_5:  { x:350, y:0, z:0 },
-    mid_poplar_2_4: { x:50, y:100, z:0 },
-    mid_poplar_1_2: { x:150, y:100, z:0 },
-    mid_poplar_1_3: { x:250, y:100, z:0 },
-    mid_poplar_3_5: { x:350, y:100, z:0 },
-    mid_main_2_4:   { x:50, y:200, z:0 },
-    mid_main_1_2:   { x:150, y:200, z:0 },
-    mid_main_1_3:   { x:250, y:200, z:0 },
-    mid_main_3_5:   { x:350, y:200, z:0 },
-    mid_water_2_4:  { x:50, y:300, z:0 },
-    mid_water_1_2:  { x:150, y:300, z:0 },
-    mid_water_1_3:  { x:250, y:300, z:0 },
-    mid_water_3_5:  { x:350, y:300, z:0 },
-    mid_4th_mp_p:   { x:0, y:50, z:0 },
-    mid_4th_p_m:    { x:0, y:150, z:0 },
-    mid_4th_m_w:    { x:0, y:250, z:0 },
-    mid_2nd_mp_p:   { x:100, y:50, z:0 },
-    mid_2nd_p_m:    { x:100, y:150, z:0 },
-    mid_2nd_m_w:    { x:100, y:250, z:0 },
-    mid_1st_mp_p:   { x:200, y:50, z:0 },
-    mid_1st_o_m:    { x:200, y:150, z:0 },
-    mid_1st_m_w:    { x:200, y:250, z:0 },
-    mid_3rd_mp_p:   { x:300, y:50, z:0 },
-    mid_3rd_p_m:    { x:300, y:150, z:0 },
-    mid_3rd_m_w:    { x:300, y:250, z:0 },
-    mid_5th_mp_p:   { x:400, y:50, z:0 },
-    mid_5th_p_m:    { x:400, y:150, z:0 },
-    mid_5th_m_w:    { x:400, y:250, z:0 },
-
-    // Outer grid — 3 numbered streets (6th/7th/9th) and 4 named streets
-    // (Dock/Mill/Cedar/Elm), all south of Maple so Water St stays the
-    // river's edge and the town's north limit.
-    dock6th:        { x:-100, y:-400, z:0 },
-    mid_dock_4_6:   { x:-50, y:-400, z:0 },
-    dock4th:        { x:0, y:-400, z:0 },
-    mid_dock_2_4:   { x:50, y:-400, z:0 },
-    dock2nd:        { x:100, y:-400, z:0 },
-    mid_dock_1_2:   { x:150, y:-400, z:0 },
-    dock1st:        { x:200, y:-400, z:0 },
-    mid_dock_1_3:   { x:250, y:-400, z:0 },
-    dock3rd:        { x:300, y:-400, z:0 },
-    mid_dock_3_5:   { x:350, y:-400, z:0 },
-    dock5th:        { x:400, y:-400, z:0 },
-    mid_dock_5_7:   { x:450, y:-400, z:0 },
-    dock7th:        { x:500, y:-400, z:0 },
-    mid_dock_7_9:   { x:550, y:-400, z:0 },
-    dock9th:        { x:600, y:-400, z:0 },
-    mill6th:        { x:-100, y:-300, z:0 },
-    mid_mill_4_6:   { x:-50, y:-300, z:0 },
-    mill4th:        { x:0, y:-300, z:0 },
-    mid_mill_2_4:   { x:50, y:-300, z:0 },
-    mill2nd:        { x:100, y:-300, z:0 },
-    mid_mill_1_2:   { x:150, y:-300, z:0 },
-    mill1st:        { x:200, y:-300, z:0 },
-    mid_mill_1_3:   { x:250, y:-300, z:0 },
-    mill3rd:        { x:300, y:-300, z:0 },
-    mid_mill_3_5:   { x:350, y:-300, z:0 },
-    mill5th:        { x:400, y:-300, z:0 },
-    mid_mill_5_7:   { x:450, y:-300, z:0 },
-    mill7th:        { x:500, y:-300, z:0 },
-    mid_mill_7_9:   { x:550, y:-300, z:0 },
-    mill9th:        { x:600, y:-300, z:0 },
-    cedar6th:       { x:-100, y:-200, z:0 },
-    mid_cedar_4_6:  { x:-50, y:-200, z:0 },
-    cedar4th:       { x:0, y:-200, z:0 },
-    mid_cedar_2_4:  { x:50, y:-200, z:0 },
-    cedar2nd:       { x:100, y:-200, z:0 },
-    mid_cedar_1_2:  { x:150, y:-200, z:0 },
-    cedar1st:       { x:200, y:-200, z:0 },
-    mid_cedar_1_3:  { x:250, y:-200, z:0 },
-    cedar3rd:       { x:300, y:-200, z:0 },
-    mid_cedar_3_5:  { x:350, y:-200, z:0 },
-    cedar5th:       { x:400, y:-200, z:0 },
-    mid_cedar_5_7:  { x:450, y:-200, z:0 },
-    cedar7th:       { x:500, y:-200, z:0 },
-    mid_cedar_7_9:  { x:550, y:-200, z:0 },
-    cedar9th:       { x:600, y:-200, z:0 },
-    elm6th:         { x:-100, y:-100, z:0 },
-    mid_elm_4_6:    { x:-50, y:-100, z:0 },
-    elm4th:         { x:0, y:-100, z:0 },
-    mid_elm_2_4:    { x:50, y:-100, z:0 },
-    elm2nd:         { x:100, y:-100, z:0 },
-    mid_elm_1_2:    { x:150, y:-100, z:0 },
-    elm1st:         { x:200, y:-100, z:0 },
-    mid_elm_1_3:    { x:250, y:-100, z:0 },
-    elm3rd:         { x:300, y:-100, z:0 },
-    mid_elm_3_5:    { x:350, y:-100, z:0 },
-    elm5th:         { x:400, y:-100, z:0 },
-    mid_elm_5_7:    { x:450, y:-100, z:0 },
-    elm7th:         { x:500, y:-100, z:0 },
-    mid_elm_7_9:    { x:550, y:-100, z:0 },
-    elm9th:         { x:600, y:-100, z:0 },
-    maple6th:       { x:-100, y:0, z:0 },
-    mid_maple_4_6:  { x:-50, y:0, z:0 },
-    mid_maple_5_7:  { x:450, y:0, z:0 },
-    maple7th:       { x:500, y:0, z:0 },
-    mid_maple_7_9:  { x:550, y:0, z:0 },
-    maple9th:       { x:600, y:0, z:0 },
-    poplar6th:      { x:-100, y:100, z:0 },
-    mid_poplar_4_6: { x:-50, y:100, z:0 },
-    mid_poplar_5_7: { x:450, y:100, z:0 },
-    poplar7th:      { x:500, y:100, z:0 },
-    mid_poplar_7_9: { x:550, y:100, z:0 },
-    poplar9th:      { x:600, y:100, z:0 },
-    main6th:        { x:-100, y:200, z:0 },
-    mid_main_4_6:   { x:-50, y:200, z:0 },
-    mid_main_5_7:   { x:450, y:200, z:0 },
-    main7th:        { x:500, y:200, z:0 },
-    mid_main_7_9:   { x:550, y:200, z:0 },
-    main9th:        { x:600, y:200, z:0 },
-    water6th:       { x:-100, y:300, z:0 },
-    mid_water_4_6:  { x:-50, y:300, z:0 },
-    mid_water_5_7:  { x:450, y:300, z:0 },
-    water7th:       { x:500, y:300, z:0 },
-    mid_water_7_9:  { x:550, y:300, z:0 },
-    water9th:       { x:600, y:300, z:0 },
-    mid_6th_d_mi:   { x:-100, y:-350, z:0 },
-    mid_6th_mi_c:   { x:-100, y:-250, z:0 },
-    mid_6th_c_e:    { x:-100, y:-150, z:0 },
-    mid_6th_e_mp:   { x:-100, y:-50, z:0 },
-    mid_6th_mp_p:   { x:-100, y:50, z:0 },
-    mid_6th_p_m:    { x:-100, y:150, z:0 },
-    mid_6th_m_w:    { x:-100, y:250, z:0 },
-    mid_4th_d_mi:   { x:0, y:-350, z:0 },
-    mid_4th_mi_c:   { x:0, y:-250, z:0 },
-    mid_4th_c_e:    { x:0, y:-150, z:0 },
-    mid_4th_e_mp:   { x:0, y:-50, z:0 },
-    mid_2nd_d_mi:   { x:100, y:-350, z:0 },
-    mid_2nd_mi_c:   { x:100, y:-250, z:0 },
-    mid_2nd_c_e:    { x:100, y:-150, z:0 },
-    mid_2nd_e_mp:   { x:100, y:-50, z:0 },
-    mid_1st_d_mi:   { x:200, y:-350, z:0 },
-    mid_1st_mi_c:   { x:200, y:-250, z:0 },
-    mid_1st_c_e:    { x:200, y:-150, z:0 },
-    mid_1st_e_mp:   { x:200, y:-50, z:0 },
-    mid_3rd_d_mi:   { x:300, y:-350, z:0 },
-    mid_3rd_mi_c:   { x:300, y:-250, z:0 },
-    mid_3rd_c_e:    { x:300, y:-150, z:0 },
-    mid_3rd_e_mp:   { x:300, y:-50, z:0 },
-    mid_5th_d_mi:   { x:400, y:-350, z:0 },
-    mid_5th_mi_c:   { x:400, y:-250, z:0 },
-    mid_5th_c_e:    { x:400, y:-150, z:0 },
-    mid_5th_e_mp:   { x:400, y:-50, z:0 },
-    mid_7th_d_mi:   { x:500, y:-350, z:0 },
-    mid_7th_mi_c:   { x:500, y:-250, z:0 },
-    mid_7th_c_e:    { x:500, y:-150, z:0 },
-    mid_7th_e_mp:   { x:500, y:-50, z:0 },
-    mid_7th_mp_p:   { x:500, y:50, z:0 },
-    mid_7th_p_m:    { x:500, y:150, z:0 },
-    mid_7th_m_w:    { x:500, y:250, z:0 },
-    mid_9th_d_mi:   { x:600, y:-350, z:0 },
-    mid_9th_mi_c:   { x:600, y:-250, z:0 },
-    mid_9th_c_e:    { x:600, y:-150, z:0 },
-    mid_9th_e_mp:   { x:600, y:-50, z:0 },
-    mid_9th_mp_p:   { x:600, y:50, z:0 },
-    mid_9th_p_m:    { x:600, y:150, z:0 },
-    mid_9th_m_w:    { x:600, y:250, z:0 },
-
     // Building floors — one entry per floor: (x,y) is the building's,
     // z is the floor's.
     acorn_f0:       { x:150, y:100, z:0 },
@@ -1754,9 +1563,2153 @@
     industrial_f0:  { x:100, y:0, z:0 }
   };
 
+  // LIMA'S STREETS. Appendix A of handoffs/lima-release.md, transcribed in
+  // its own line format and read once at startup (readLimaData()).
+  // Generated from OpenStreetMap (© OpenStreetMap contributors, ODbL; read
+  // 2026-09-26/27) and Esri World Imagery. Secondary. Coordinates are
+  // grid-frame metres (u, v), rounded: origin 34.0447 S, 59.1961 W, +v the
+  // grid's "up", GRID_BEARING_DEG east of true north. Stop ids are room ids,
+  // and saves key on them: they must never change.
+  //   LIMA_STREET_CODES  `code = name`. `sn` is a street OSM has no name for
+  //                      (#288), `rail` the FC Mitre's track, `fwd` the
+  //                      station forecourt.
+  //   LIMA_STOPS         `id u v type kind streets [flags]`. Type sets a
+  //                      stop's text (STOP_TEXT): core, gravel, dirt, barrio,
+  //                      rural, rail, station. Kind: c corner, m mid, r rural,
+  //                      t rail, s station. Streets: a corner's codes joined
+  //                      by +, a mid's `street:crossA,crossB`, `-` for none.
+  //                      Flags: plaza, crossing, L:<landmark>, S:<scenery>; a
+  //                      flagged, rural, rail or station stop reads its own
+  //                      text (LIMA_STOP_TEXT).
+  //   LIMA_LINKS         `a b street surface`, walkable both ways. Surface:
+  //                      p paved, g gravel (ripio), d dirt, r the railway.
+  //                      Only `r` is read today (the map's rail); the rest
+  //                      is laid down ahead of a consumer.
+  //   LIMA_RIVER         the Paraná de las Palmas near the plant: one polyline
+  //                      of `u,v` pairs per line, simplified to 25 m. Drawn
+  //                      only.
+
+  const LIMA_STREET_CODES = `
+c1 = Calle 1
+c2 = Calle 2
+c3 = Calle 3
+c4 = Calle 4
+c5 = Calle 5
+c6 = Calle 6
+c7 = Calle 7
+c8 = Calle 8
+c9 = Calle 9
+sn = unnamed
+acc = Acceso a Lima
+c10 = Calle 10
+c12 = Calle 12
+c13 = Calle 13
+c14 = Calle 14
+c15 = Calle 15
+c16 = Calle 16
+c17 = Calle 17
+c18 = Calle 18
+c19 = Calle 19
+c20 = Calle 20
+c21 = Calle 21
+c23 = Calle 23
+c24 = Calle 24
+c25 = Calle 25
+c27 = Calle 27
+c28 = Calle 28
+c29 = Calle 29
+c2b = Calle 2 Bis
+c31 = Calle 31
+c33 = Calle 33
+c35 = Calle 35
+c44 = Calle 44
+c46 = Calle 46
+c48 = Calle 48
+c50 = Calle 50
+c52 = Calle 52
+c54 = Calle 54
+c84 = Calle 84
+c88 = Calle 88
+c90 = Calle 90
+dg2 = Diagonal 2
+dg4 = Diagonal 4
+fwd = (station forecourt)
+av11 = Avenida 11
+c101 = Calle 101
+c103 = Calle 103
+c105 = Calle 105
+c107 = Calle 107
+c109 = Calle 109
+c111 = Calle 111
+c113 = Calle 113
+c115 = Calle 115
+c117 = Calle 117
+c119 = Calle 119
+c121 = Calle 121
+c123 = Calle 123
+c16b = Calle 16 Bis
+c18b = Calle 18 Bis
+c90b = Calle 90 Bis
+cbar = Camino a Baradero
+cp01 = Camino Provincial Secundario 038-01
+rail = FC Mitre (along the tracks)
+dgmorgan = Diagonal Morgan
+`;
+  const LIMA_STOPS = `
+x_acc 51 -1021 core c acc
+x_acc_av11_c20 53 -625 core c acc+av11+c20 L:petrol
+x_acc_c24 52 -829 core c acc+c24
+x_acc_c7 51 -912 core c acc+c7
+x_av11_c10 56 -67 core c av11+c10 plaza
+x_av11_c12 55 -176 core c av11+c12
+x_av11_c14 54 -287 core c av11+c14
+x_av11_c16 54 -401 core c av11+c16
+x_av11_c18 53 -513 core c av11+c18
+x_av11_c2_c4 57 277 core c av11+c2+c4
+x_av11_c6 57 160 core c av11+c6
+x_av11_c8 56 50 core c av11+c8
+x_c1 621 131 core c c1+sn
+x_c101 612 383 gravel c c101+sn
+x_c101_2 610 720 gravel c c101+sn
+x_c101_c44 612 438 gravel c c101+c44+sn
+x_c101_c46 612 516 gravel c c101+c46+sn
+x_c101_c48 613 587 gravel c c101+c48
+x_c101_c50 611 674 gravel c c101+c50+sn
+x_c101_c52 608 770 gravel c c101+c52
+x_c101_c54 608 866 gravel c c101+c54
+x_c103 505 385 gravel c c103+sn
+x_c103_2 509 955 gravel c c103+sn
+x_c103_c44 505 438 gravel c c103+c44
+x_c103_c46 505 515 gravel c c103+c46
+x_c103_c48 506 588 gravel c c103+c48
+x_c103_c50 506 674 gravel c c103+c50
+x_c103_c52 506 768 gravel c c103+c52
+x_c103_c54 508 865 gravel c c103+c54
+x_c105 413 386 gravel c c105+sn
+x_c105_2 406 955 gravel c c105+sn
+x_c105_c44 402 438 gravel c c105+c44
+x_c105_c46 402 514 gravel c c105+c46
+x_c105_c48 401 588 gravel c c105+c48
+x_c105_c50 401 675 gravel c c105+c50
+x_c105_c52 402 768 gravel c c105+c52
+x_c105_c54 404 865 gravel c c105+c54
+x_c107 303 954 gravel c c107+sn
+x_c107_c2_c7 284 302 core c c107+c2+c7+sn crossing
+x_c107_c44 295 443 gravel c c107+c44
+x_c107_c46 297 513 gravel c c107+c46
+x_c107_c48_dgmorgan 297 589 gravel c c107+c48+dgmorgan
+x_c107_c50 298 678 gravel c c107+c50
+x_c107_c52 299 768 gravel c c107+c52
+x_c107_c54 301 865 gravel c c107+c54
+x_c107_cbar 290 371 core c c107+cbar
+x_c107_cp01 296 334 core c c107+cp01
+x_c109 194 953 barrio c c109+sn
+x_c109_c48 191 590 gravel c c109+c48
+x_c109_c50_dgmorgan 191 677 gravel c c109+c50+dgmorgan
+x_c109_c52 193 768 barrio c c109+c52
+x_c109_c54 193 865 barrio c c109+c54
+x_c10_c13 -58 -67 core c c10+c13
+x_c10_c15 -171 -66 core c c10+c15
+x_c10_c17 -283 -66 gravel c c10+c17
+x_c10_c19 -398 -65 gravel c c10+c19
+x_c10_c21 -511 -65 gravel c c10+c21
+x_c10_c23 -607 -64 gravel c c10+c23
+x_c10_c25 -702 -64 gravel c c10+c25
+x_c10_c27 -798 -63 gravel c c10+c27
+x_c10_c29 -894 -63 dirt c c10+c29
+x_c10_c3 506 -69 gravel c c10+c3
+x_c10_c5 397 -69 gravel c c10+c5
+x_c10_c7 279 -68 core c c10+c7
+x_c10_c9 168 -68 core c c10+c9
+x_c111 66 1199 core c c111+sn
+x_c111_2 66 1278 core c c111
+x_c111_c48 64 591 core c c111+c48
+x_c111_c50 69 676 core c c111+c50
+x_c111_c52 42 752 barrio c c111+c52
+x_c111_c52_dgmorgan 71 751 core c c111+c52+dgmorgan
+x_c111_c54 68 869 barrio c c111+c54
+x_c111_c84 -2 1138 barrio c c111+c84
+x_c111_c84_2 67 1140 barrio c c111+c84
+x_c111_c88 24 941 barrio c c111+c88
+x_c111_c88_2 68 964 barrio c c111+c88+sn
+x_c111_cbar 57 473 core c c111+cbar
+x_c113 -52 740 gravel c c113+sn
+x_c113_c48 -53 592 gravel c c113+c48
+x_c113_c50 -52 676 gravel c c113+c50 L:almacen
+x_c113_c52 -24 750 barrio c c113+c52
+x_c113_c84 -68 1135 barrio c c113+c84
+x_c113_c88 -46 940 barrio c c113+c88
+x_c113_cbar -56 524 core c c113+cbar
+x_c115 -125 741 barrio c c115+sn
+x_c115_c50 -126 676 gravel c c115+c50
+x_c115_c52 -92 749 barrio c c115+c52
+x_c115_c84 -132 1136 barrio c c115+c84
+x_c115_c88 -111 939 barrio c c115+c88
+x_c115_cbar -130 555 core c c115+cbar
+x_c117 -199 740 barrio c c117+sn
+x_c117_c15_cp01_cbar -184 552 core c c117+c15+cp01+cbar
+x_c117_c50 -200 677 gravel c c117+c50
+x_c117_c52 -168 749 barrio c c117+c52
+x_c117_c84 -201 1132 barrio c c117+c84
+x_c117_c88 -184 937 barrio c c117+c88
+x_c117_c90 -180 880 barrio c c117+c90
+x_c117_c90b -174 811 barrio c c117+c90b
+x_c119 -279 979 barrio c c119
+x_c119_2 -280 1043 barrio c c119
+x_c119_3 -283 1082 barrio c c119
+x_c119_c50 -277 679 gravel c c119+c50
+x_c119_c52 -290 745 gravel c c119+c52+sn
+x_c119_c88 -278 936 barrio c c119+c88
+x_c119_c90 -279 877 barrio c c119+c90
+x_c119_c90b -278 810 barrio c c119+c90b
+x_c119_cp01 -278 583 core c c119+cp01
+x_c12 1169 -178 dirt c c12
+x_c121_c50 -350 680 gravel c c121+c50
+x_c121_c52 -350 744 gravel c c121+c52
+x_c121_cp01 -350 615 core c c121+cp01
+x_c123_c50 -425 681 gravel c c123+c50
+x_c123_c52 -426 745 gravel c c123+c52
+x_c123_cp01 -425 648 core c c123+cp01
+x_c12_2 830 -177 dirt c c12+sn
+x_c12_c13 -59 -175 core c c12+c13
+x_c12_c15 -172 -175 core c c12+c15
+x_c12_c17 -285 -175 gravel c c12+c17
+x_c12_c19 -399 -175 gravel c c12+c19
+x_c12_c21 -511 -174 gravel c c12+c21
+x_c12_c23 -607 -174 gravel c c12+c23
+x_c12_c25 -703 -174 gravel c c12+c25
+x_c12_c27 -799 -174 gravel c c12+c27
+x_c12_c29 -894 -173 dirt c c12+c29
+x_c12_c3 506 -177 gravel c c12+c3
+x_c12_c5 393 -176 gravel c c12+c5
+x_c12_c7 279 -176 core c c12+c7
+x_c12_c9 167 -176 core c c12+c9
+x_c13_c14 -59 -287 core c c13+c14
+x_c13_c16 -60 -400 core c c13+c16
+x_c13_c18 -61 -512 core c c13+c18
+x_c13_c2 -55 332 core c c13+c2
+x_c13_c20 -62 -624 core c c13+c20
+x_c13_c4 -55 273 core c c13+c4
+x_c13_c6 -56 161 core c c13+c6
+x_c13_c8 -57 50 core c c13+c8
+x_c14 -1146 -283 dirt c c14+sn
+x_c14_c15 -173 -286 gravel c c14+c15
+x_c14_c17 -286 -286 gravel c c14+c17
+x_c14_c19 -400 -285 gravel c c14+c19
+x_c14_c21 -511 -285 gravel c c14+c21
+x_c14_c23 -607 -285 gravel c c14+c23
+x_c14_c25 -703 -284 gravel c c14+c25
+x_c14_c27 -800 -284 gravel c c14+c27
+x_c14_c29 -895 -284 gravel c c14+c29
+x_c14_c3 506 -290 gravel c c14+c3
+x_c14_c5 393 -289 gravel c c14+c5
+x_c14_c7 279 -288 gravel c c14+c7
+x_c14_c9 166 -288 core c c14+c9
+x_c15_c16 -173 -399 gravel c c15+c16
+x_c15_c17_c2 -252 393 core c c15+c17+c2
+x_c15_c18 -174 -511 gravel c c15+c18
+x_c15_c2 -171 382 core c c15+c2
+x_c15_c20 -174 -623 gravel c c15+c20
+x_c15_c4 -170 274 gravel c c15+c4
+x_c15_c6 -170 162 gravel c c15+c6
+x_c15_c8 -171 51 core c c15+c8
+x_c15_dg4 -209 494 core c c15+dg4 crossing
+x_c16 -758 -401 gravel c c16+sn
+x_c16_2 -678 -392 gravel c c16+sn
+x_c16_3 -708 -391 gravel c c16+sn
+x_c16_c17 -287 -398 gravel c c16+c17
+x_c16_c21 -511 -394 gravel c c16+c21
+x_c16_c23 -610 -393 gravel c c16+c23
+x_c16_c3 505 -405 gravel c c16+c3
+x_c16_c5 392 -402 gravel c c16+c5
+x_c16_c7 279 -403 gravel c c16+c7 L:mechanic
+x_c16_c9 165 -402 gravel c c16+c9
+x_c16b -1146 -342 dirt c c16b+sn
+x_c16b_c27 -801 -348 gravel c c16b+c27
+x_c16b_c29 -896 -347 gravel c c16b+c29
+x_c16b_c5 393 -460 gravel c c16b+c5
+x_c16b_c7 279 -457 gravel c c16b+c7
+x_c17 -287 -437 gravel c c17+sn
+x_c17_c18 -288 -511 gravel c c17+c18
+x_c17_c20 -289 -622 gravel c c17+c20
+x_c17_c24 -291 -819 gravel c c17+c24
+x_c17_c28 -292 -1020 dirt c c17+c28
+x_c17_c4 -280 275 gravel c c17+c4
+x_c17_c6 -281 162 gravel c c17+c6
+x_c17_c8 -282 52 gravel c c17+c8
+x_c18_c5 394 -516 gravel c c18+c5
+x_c18_c7 278 -514 gravel c c18+c7
+x_c18_c9 164 -514 gravel c c18+c9
+x_c18b_c5 394 -571 dirt c c18b+c5
+x_c18b_c7 277 -569 gravel c c18b+c7
+x_c19 -393 454 gravel c c19+sn
+x_c19_c2 -393 388 gravel c c19+c2
+x_c19_c4 -394 276 gravel c c19+c4
+x_c19_c44 -392 504 gravel c c19+c44
+x_c19_c6 -395 163 gravel c c19+c6
+x_c19_c8 -396 52 gravel c c19+c8
+x_c19_dg4 -392 572 core c c19+dg4
+x_c1_c10 624 -70 gravel c c1+c10
+x_c1_c12 622 -177 gravel c c1+c12
+x_c1_c14 621 -289 gravel c c1+c14
+x_c1_c16 620 -406 dirt c c1+c16
+x_c1_c8 622 47 gravel c c1+c8
+x_c2 -1011 395 dirt c c2+sn
+x_c20 -677 -619 gravel c c20+sn
+x_c20_2 -709 -618 gravel c c20+sn
+x_c20_3 -1146 -609 gravel c c20+sn
+x_c20_c21 -511 -621 gravel c c20+c21
+x_c20_c23 -613 -620 gravel c c20+c23
+x_c20_c27 -806 -616 gravel c c20+c27
+x_c20_c29 -901 -614 gravel c c20+c29
+x_c20_c5 387 -626 dirt c c20+c5
+x_c20_c7 277 -626 gravel c c20+c7
+x_c20_c9 163 -626 gravel c c20+c9
+x_c21 -511 -435 gravel c c21+sn
+x_c21_c4 -510 277 gravel c c21+c4
+x_c21_c44 -509 504 gravel c c21+c44
+x_c21_c46 -509 543 gravel c c21+c46
+x_c21_c6 -510 164 gravel c c21+c6
+x_c21_c8 -510 53 gravel c c21+c8
+x_c21_dg4 -509 622 core c c21+dg4
+x_c23_c4 -606 277 gravel c c23+c4
+x_c23_c6 -606 165 gravel c c23+c6
+x_c23_c8 -607 53 gravel c c23+c8
+x_c24 -710 -807 dirt c c24+sn
+x_c25_c4 -701 278 gravel c c25+c4
+x_c25_c46 -700 545 gravel c c25+c46
+x_c25_c48 -700 597 gravel c c25+c48
+x_c25_c6 -701 166 gravel c c25+c6
+x_c25_c8 -702 54 gravel c c25+c8
+x_c25_dg4 -699 704 core c c25+dg4
+x_c27 -804 -539 gravel c c27+sn
+x_c27_2 -803 -471 gravel c c27+sn
+x_c27_3 -802 -407 gravel c c27+sn
+x_c27_4 -796 513 gravel c c27
+x_c27_c4 -797 281 gravel c c27+c4
+x_c27_c48 -795 598 gravel c c27+c48
+x_c27_c6 -797 166 gravel c c27+c6
+x_c27_c8 -798 54 gravel c c27+c8
+x_c28 -714 -1008 dirt c c28+sn
+x_c29 -900 -536 gravel c c29+sn
+x_c29_2 -899 -470 gravel c c29+sn
+x_c29_3 -897 -406 gravel c c29+sn
+x_c29_c4 -891 279 gravel c c29+c4
+x_c29_c48 -888 599 gravel c c29+c48
+x_c29_c6 -892 167 gravel c c29+c6
+x_c29_c8 -893 55 dirt c c29+c8
+x_c29_dg4 -886 787 core c c29+dg4
+x_c2_2 -1114 399 dirt c c2
+x_c2_c21 -508 391 gravel c c2+c21
+x_c2_c23 -604 390 gravel c c2+c23
+x_c2_c25 -699 391 gravel c c2+c25
+x_c2_c27 -797 392 gravel c c2+c27
+x_c2_c29 -891 392 gravel c c2+c29
+x_c2_c4 21 292 core c c2+c4
+x_c2_c9 173 234 core c c2+c9
+x_c2b -1113 467 dirt c c2b
+x_c2b_c29 -890 466 gravel c c2b+c29
+x_c3 510 182 core c c3+sn
+x_c31 -1001 707 dirt c c31+sn
+x_c31_c48 -1002 601 gravel c c31+c48
+x_c31_dg4 -1000 836 core c c31+dg4
+x_c33 -1056 709 dirt c c33+sn
+x_c33_c48 -1058 601 dirt c c33+c48
+x_c33_dg4 -1053 859 core c c33+dg4
+x_c35 -1113 669 dirt c c35
+x_c35_2 -1113 709 dirt c c35+sn
+x_c35_3 -1112 813 dirt c c35
+x_c35_c48 -1113 602 dirt c c35+c48
+x_c35_dg4 -1112 885 core c c35+dg4
+x_c3_c6 508 156 gravel c c3+c6
+x_c3_c8 507 47 gravel c c3+c8
+x_c4 -1016 280 dirt c c4+sn
+x_c48 797 590 gravel c c48+sn
+x_c48_2 956 590 dirt c c48+sn
+x_c48_3 -956 600 gravel c c48+sn
+x_c48_dg2 148 590 gravel c c48+dg2
+x_c5 393 235 core c c5+sn
+x_c52 -554 744 dirt c c52+sn
+x_c5_c6 395 160 gravel c c5+c6
+x_c5_c8 397 48 gravel c c5+c8
+x_c6_c7 280 160 gravel c c6+c7
+x_c6_c9 169 161 core c c6+c9
+x_c7_c8 278 49 core c c7+c8
+x_c8 701 45 gravel c c8+sn
+x_c8_2 746 46 gravel c c8+sn
+x_c8_c9 168 49 core c c8+c9
+x_cbar_dg2 90 460 core c cbar+dg2
+x_cp01 799 116 core c cp01
+x_cp01_2 598 204 core c cp01+sn
+x_cp01_3 -557 704 core c cp01+sn
+x_cp01_4 -748 789 core c cp01
+x_cp01_5 -921 866 core c cp01
+x_dg4 -275 523 core c dg4+sn
+x_sn -1146 -529 dirt c sn
+x_sn_10 753 74 core c sn
+x_sn_11 596 253 gravel c sn
+x_sn_12 787 272 dirt c sn
+x_sn_13 763 314 dirt c sn
+x_sn_14 820 344 dirt c sn
+x_sn_15 533 370 gravel c sn
+x_sn_16 596 373 gravel c sn
+x_sn_17 818 381 dirt c sn
+x_sn_18 725 382 dirt c sn
+x_sn_19 798 453 gravel c sn
+x_sn_2 -709 -499 gravel c sn
+x_sn_20 973 454 dirt c sn
+x_sn_21 798 524 gravel c sn
+x_sn_22 964 524 dirt c sn
+x_sn_23 -954 648 gravel c sn
+x_sn_24 797 657 gravel c sn
+x_sn_25 948 657 dirt c sn
+x_sn_26 937 721 dirt c sn
+x_sn_27 797 722 gravel c sn
+x_sn_28 -554 834 dirt c sn
+x_sn_29 -405 834 dirt c sn
+x_sn_3 -779 -497 gravel c sn
+x_sn_30 331 963 gravel c sn
+x_sn_31 539 963 gravel c sn
+x_sn_32 228 964 barrio c sn
+x_sn_33 440 964 gravel c sn
+x_sn_34 598 1036 dirt c sn
+x_sn_35 145 1037 barrio c sn
+x_sn_36 230 1037 barrio c sn
+x_sn_37 538 1038 gravel c sn
+x_sn_38 439 1040 gravel c sn
+x_sn_39 332 1041 gravel c sn
+x_sn_4 -1146 -467 dirt c sn
+x_sn_40 141 1111 gravel c sn
+x_sn_41 228 1112 gravel c sn
+x_sn_42 538 1113 dirt c sn
+x_sn_43 440 1114 gravel c sn
+x_sn_44 598 1114 dirt c sn
+x_sn_45 333 1117 gravel c sn
+x_sn_46 538 1195 dirt c sn
+x_sn_47 228 1196 barrio c sn
+x_sn_48 336 1196 dirt c sn
+x_sn_49 439 1196 dirt c sn
+x_sn_5 838 -417 dirt c sn
+x_sn_6 -1146 -404 dirt c sn
+x_sn_7 1165 -106 core c sn
+x_sn_8 747 -31 gravel c sn
+x_sn_9 830 40 core c sn
+atucha_gate -2957 7845 rural r c111
+atucha_halt -10000 4821 rail t -
+estacion_lima 39 405 station s - L:goods_shed
+fcm_crossing_11km -9621 4651 rail t - crossing
+fcm_crossing_6km -5446 2817 rail t - crossing
+m_acc_av11_c24 52 -727 core m acc:av11,c24
+m_acc_c24_c7 52 -871 core m acc:c24,c7
+m_acc_c7_sn 51 -966 core m acc:c7,sn
+m_av11_acc_c18 53 -569 core m av11:acc,c18
+m_av11_c10_c8 56 -9 core m av11:c10,c8 plaza S:parroquia
+m_av11_c12_c10 55 -121 core m av11:c12,c10 plaza
+m_av11_c14_c12 55 -231 core m av11:c14,c12
+m_av11_c16_c14 54 -344 core m av11:c16,c14
+m_av11_c18_c16 54 -457 core m av11:c18,c16
+m_av11_c6_c4 57 216 core m av11:c6,c4 S:correo
+m_av11_c8_c6 56 105 core m av11:c8,c6 S:banco_nacion S:school_ep9
+m_c101_c54_c101 608 818 gravel m c101:c54,c101
+m_c101_sn_c54 604 944 dirt m c101:sn,c54
+m_c103_c46_c44 505 477 gravel m c103:c46,c44
+m_c103_c48_c50 506 631 gravel m c103:c48,c50
+m_c103_c50_c52 506 721 gravel m c103:c50,c52
+m_c103_c52_c54 507 817 gravel m c103:c52,c54
+m_c103_c54_sn 509 910 gravel m c103:c54,sn
+m_c105_c46_c44 402 476 gravel m c105:c46,c44
+m_c105_c50_c48 401 631 gravel m c105:c50,c48
+m_c105_c52_c50 402 721 gravel m c105:c52,c50
+m_c105_c54_c52 404 816 gravel m c105:c54,c52
+m_c105_sn_c54 405 910 gravel m c105:sn,c54
+m_c107_c46_c48 297 551 gravel m c107:c46,c48
+m_c107_c48_c50 297 633 gravel m c107:c48,c50
+m_c107_c50_c52 298 723 gravel m c107:c50,c52
+m_c107_c52_c54 300 817 gravel m c107:c52,c54
+m_c107_c54_sn 302 909 gravel m c107:c54,sn
+m_c109_c50_c48 191 633 gravel m c109:c50,c48
+m_c109_c52_c50 192 723 gravel m c109:c52,c50
+m_c109_c54_c52 193 816 barrio m c109:c54,c52
+m_c109_sn_c54 193 909 barrio m c109:sn,c54
+m_c10_av11_c9 112 -68 core m c10:av11,c9 plaza
+m_c10_c13_av11 -1 -67 core m c10:c13,av11 plaza
+m_c10_c15_c13 -115 -67 core m c10:c15,c13
+m_c10_c17_c15 -227 -66 gravel m c10:c17,c15
+m_c10_c19_c17 -341 -66 gravel m c10:c19,c17
+m_c10_c21_c19 -454 -65 gravel m c10:c21,c19
+m_c10_c23_c21 -559 -65 gravel m c10:c23,c21
+m_c10_c25_c23 -655 -64 gravel m c10:c25,c23
+m_c10_c27_c25 -750 -64 gravel m c10:c27,c25
+m_c10_c29_c27 -846 -63 dirt m c10:c29,c27
+m_c10_c3_c1 565 -70 gravel m c10:c3,c1
+m_c10_c5_c3 452 -69 gravel m c10:c5,c3
+m_c10_c7_c5 338 -69 gravel m c10:c7,c5
+m_c10_c9_c7 223 -68 core m c10:c9,c7
+m_c111_c48_cbar 61 532 core m c111:c48,cbar
+m_c111_c50_c48 67 634 core m c111:c50,c48
+m_c111_c52_c88 30 846 barrio m c111:c52,c88
+m_c111_c54_dgmorgan 70 821 barrio m c111:c54,dgmorgan
+m_c111_c84_sn 67 1052 barrio m c111:c84,sn
+m_c111_c88_c84 21 1041 barrio m c111:c88,c84
+m_c111_sn_sn 66 1239 core m c111:sn,sn
+m_c113_c50_c48 -53 634 gravel m c113:c50,c48
+m_c113_c52_c88 -41 844 barrio m c113:c52,c88
+m_c113_c88_c84 -50 1038 barrio m c113:c88,c84
+m_c115_c84_c88 -114 1038 barrio m c115:c84,c88
+m_c115_c88_c52 -108 843 barrio m c115:c88,c52
+m_c115_cbar_c50 -128 615 gravel m c115:cbar,c50
+m_c117_c50_cp01 -202 615 gravel m c117:c50,cp01
+m_c117_c88_c84 -188 1035 barrio m c117:c88,c84 S:club_barrio_atucha
+m_c119_cp01_c50 -278 631 gravel m c119:cp01,c50
+m_c12_av11_c13 -2 -175 core m c12:av11,c13
+m_c12_c13_c15 -115 -175 core m c12:c13,c15 L:comisaria
+m_c12_c15_c17 -228 -175 gravel m c12:c15,c17
+m_c12_c17_c19 -342 -175 gravel m c12:c17,c19
+m_c12_c19_c21 -455 -174 gravel m c12:c19,c21
+m_c12_c1_c3 564 -177 gravel m c12:c1,c3
+m_c12_c21_c23 -559 -174 gravel m c12:c21,c23
+m_c12_c23_c25 -655 -174 gravel m c12:c23,c25
+m_c12_c25_c27 -751 -174 gravel m c12:c25,c27
+m_c12_c27_c29 -847 -174 dirt m c12:c27,c29
+m_c12_c3_c5 450 -176 gravel m c12:c3,c5
+m_c12_c5_c7 336 -176 gravel m c12:c5,c7
+m_c12_c7_c9 223 -176 core m c12:c7,c9
+m_c12_c9_av11 111 -176 core m c12:c9,av11
+m_c12_sn_c1 726 -177 gravel m c12:sn,c1
+m_c12_sn_sn 1000 -178 dirt m c12:sn,sn
+m_c13_c10_c12 -58 -121 core m c13:c10,c12
+m_c13_c12_c14 -59 -231 core m c13:c12,c14
+m_c13_c14_c16 -60 -343 core m c13:c14,c16
+m_c13_c16_c18 -61 -456 core m c13:c16,c18
+m_c13_c18_c20 -62 -568 core m c13:c18,c20
+m_c13_c4_c6 -56 217 core m c13:c4,c6
+m_c13_c6_c8 -56 106 core m c13:c6,c8
+m_c13_c8_c10 -57 -8 core m c13:c8,c10
+m_c14_av11_c13 -2 -287 gravel m c14:av11,c13
+m_c14_c13_c15 -116 -287 gravel m c14:c13,c15
+m_c14_c15_c17 -229 -286 gravel m c14:c15,c17
+m_c14_c17_c19 -343 -286 gravel m c14:c17,c19
+m_c14_c19_c21 -455 -285 gravel m c14:c19,c21
+m_c14_c1_c3 563 -290 gravel m c14:c1,c3
+m_c14_c21_c23 -559 -285 gravel m c14:c21,c23
+m_c14_c23_c25 -655 -284 gravel m c14:c23,c25
+m_c14_c25_c27 -752 -284 gravel m c14:c25,c27
+m_c14_c27_c29 -848 -284 gravel m c14:c27,c29
+m_c14_c29_sn -1020 -283 dirt m c14:c29,sn
+m_c14_c3_c5 449 -290 gravel m c14:c3,c5
+m_c14_c5_c7 336 -289 gravel m c14:c5,c7
+m_c14_c7_c9 223 -288 gravel m c14:c7,c9
+m_c14_c9_av11 110 -287 gravel m c14:c9,av11
+m_c15_c10_c12 -172 -121 core m c15:c10,c12
+m_c15_c12_c14 -172 -231 gravel m c15:c12,c14
+m_c15_c14_c16 -173 -342 gravel m c15:c14,c16
+m_c15_c16_c18 -173 -455 gravel m c15:c16,c18
+m_c15_c18_c20 -174 -567 gravel m c15:c18,c20
+m_c15_c2_c4 -170 325 gravel m c15:c2,c4
+m_c15_c4_c6 -170 218 gravel m c15:c4,c6
+m_c15_c6_c8 -171 106 gravel m c15:c6,c8
+m_c15_c8_c10 -171 -8 core m c15:c8,c10
+m_c16_av11_c13 -3 -400 gravel m c16:av11,c13
+m_c16_c13_c15 -117 -399 gravel m c16:c13,c15
+m_c16_c15_c17 -230 -398 gravel m c16:c15,c17
+m_c16_c17_c21 -399 -396 gravel m c16:c17,c21
+m_c16_c1_c3 562 -405 dirt m c16:c1,c3
+m_c16_c21_c23 -561 -394 gravel m c16:c21,c23
+m_c16_c3_c5 448 -403 gravel m c16:c3,c5
+m_c16_c5_c7 336 -402 gravel m c16:c5,c7
+m_c16_c7_c9 222 -402 gravel m c16:c7,c9
+m_c16_c9_av11 109 -401 gravel m c16:c9,av11
+m_c16b_c29_c27 -848 -348 gravel m c16b:c29,c27
+m_c16b_c5_c7 336 -459 gravel m c16b:c5,c7
+m_c16b_sn_c29 -1021 -345 gravel m c16b:sn,c29
+m_c17_c10_c8 -283 -7 gravel m c17:c10,c8
+m_c17_c12_c10 -284 -120 gravel m c17:c12,c10
+m_c17_c14_c12 -285 -230 gravel m c17:c14,c12
+m_c17_c16_c14 -286 -342 gravel m c17:c16,c14
+m_c17_c20_c18 -288 -566 gravel m c17:c20,c18
+m_c17_c24_c20 -290 -721 gravel m c17:c24,c20
+m_c17_c28_c24 -291 -920 dirt m c17:c28,c24
+m_c17_c4_c2 -281 333 gravel m c17:c4,c2
+m_c17_c6_c4 -281 219 gravel m c17:c6,c4
+m_c17_c8_c6 -282 107 gravel m c17:c8,c6
+m_c18_av11_c9 109 -513 gravel m c18:av11,c9
+m_c18_c13_av11 -4 -513 gravel m c18:c13,av11
+m_c18_c15_c13 -118 -512 gravel m c18:c15,c13
+m_c18_c17_c15 -231 -511 gravel m c18:c17,c15
+m_c18_c7_c5 336 -515 gravel m c18:c7,c5
+m_c18_c9_c7 221 -514 gravel m c18:c9,c7
+m_c18b_c5_c7 335 -570 dirt m c18b:c5,c7
+m_c19_c10_c8 -397 -7 gravel m c19:c10,c8
+m_c19_c12_c10 -398 -120 gravel m c19:c12,c10
+m_c19_c14_c12 -399 -230 gravel m c19:c14,c12
+m_c19_c4_c2 -394 332 gravel m c19:c4,c2
+m_c19_c6_c4 -395 220 gravel m c19:c6,c4
+m_c19_c8_c6 -396 108 gravel m c19:c8,c6
+m_c1_c10_c12 623 -123 gravel m c1:c10,c12
+m_c1_c12_c14 621 -233 gravel m c1:c12,c14
+m_c1_c14_c16 620 -348 dirt m c1:c14,c16
+m_c1_c8_c10 623 -12 gravel m c1:c8,c10
+m_c1_sn_c8 622 89 gravel m c1:sn,c8
+m_c20_acc_c13 -5 -624 core m c20:acc,c13
+m_c20_c13_c15 -118 -624 gravel m c20:c13,c15
+m_c20_c15_c17 -232 -623 gravel m c20:c15,c17
+m_c20_c17_c21 -400 -622 gravel m c20:c17,c21
+m_c20_c21_c23 -562 -620 gravel m c20:c21,c23
+m_c20_c27_c29 -853 -615 gravel m c20:c27,c29
+m_c20_c29_sn -1024 -611 gravel m c20:c29,sn
+m_c20_c5_c7 332 -626 dirt m c20:c5,c7
+m_c20_c7_c9 220 -626 gravel m c20:c7,c9
+m_c20_c9_acc 108 -625 gravel m c20:c9,acc
+m_c20_sn_c27 -757 -617 dirt m c20:sn,c27
+m_c21_c10_c12 -511 -120 gravel m c21:c10,c12
+m_c21_c12_c14 -511 -230 gravel m c21:c12,c14
+m_c21_c14_c16 -511 -340 gravel m c21:c14,c16
+m_c21_c2_c4 -509 334 gravel m c21:c2,c4
+m_c21_c44_c2 -509 447 gravel m c21:c44,c2
+m_c21_c4_c6 -510 220 gravel m c21:c4,c6
+m_c21_c6_c8 -510 109 gravel m c21:c6,c8
+m_c21_c8_c10 -510 -6 gravel m c21:c8,c10
+m_c21_dg4_c46 -509 583 gravel m c21:dg4,c46
+m_c21_sn_c20 -511 -528 gravel m c21:sn,c20
+m_c23_c10_c8 -607 -6 gravel m c23:c10,c8
+m_c23_c12_c10 -607 -119 gravel m c23:c12,c10
+m_c23_c14_c12 -607 -229 gravel m c23:c14,c12
+m_c23_c16_c14 -610 -339 gravel m c23:c16,c14
+m_c23_c20_c16 -612 -506 gravel m c23:c20,c16
+m_c23_c4_c2 -605 334 gravel m c23:c4,c2
+m_c23_c6_c4 -606 221 gravel m c23:c6,c4
+m_c23_c8_c6 -606 109 gravel m c23:c8,c6
+m_c24_acc_c17 -119 -824 gravel m c24:acc,c17
+m_c24_c17_sn -500 -813 gravel m c24:c17,sn
+m_c25_c10_c12 -703 -119 gravel m c25:c10,c12
+m_c25_c12_c14 -703 -229 gravel m c25:c12,c14
+m_c25_c2_c4 -700 335 gravel m c25:c2,c4
+m_c25_c46_c2 -699 468 gravel m c25:c46,c2
+m_c25_c4_c6 -701 222 gravel m c25:c4,c6
+m_c25_c6_c8 -702 110 gravel m c25:c6,c8
+m_c25_c8_c10 -702 -5 gravel m c25:c8,c10
+m_c25_dg4_c48 -699 650 gravel m c25:dg4,c48
+m_c27_c10_c8 -798 -5 gravel m c27:c10,c8
+m_c27_c12_c10 -799 -119 gravel m c27:c12,c10
+m_c27_c14_c12 -800 -229 gravel m c27:c14,c12
+m_c27_c20_sn -805 -577 gravel m c27:c20,sn
+m_c27_c48_sn -796 556 gravel m c27:c48,sn
+m_c27_c4_c2 -797 336 gravel m c27:c4,c2
+m_c27_c6_c4 -797 224 gravel m c27:c6,c4
+m_c27_c8_c6 -797 110 gravel m c27:c8,c6
+m_c28_c17_sn -503 -1014 dirt m c28:c17,sn
+m_c29_c10_c8 -893 -4 dirt m c29:c10,c8
+m_c29_c12_c10 -894 -118 dirt m c29:c12,c10
+m_c29_c14_c12 -895 -229 dirt m c29:c14,c12
+m_c29_c20_sn -901 -575 gravel m c29:c20,sn
+m_c29_c2b_c48 -889 533 gravel m c29:c2b,c48
+m_c29_c48_dg4 -887 693 gravel m c29:c48,dg4
+m_c29_c4_c2 -891 336 gravel m c29:c4,c2
+m_c29_c6_c4 -891 223 gravel m c29:c6,c4
+m_c29_c8_c6 -892 111 dirt m c29:c8,c6
+m_c2_av11_c9 113 252 core m c2:av11,c9
+m_c2_c13_c15 -113 357 core m c2:c13,c15
+m_c2_c13_sn -17 307 core m c2:c13,sn
+m_c2_c15_c13 -113 349 core m c2:c15,c13
+m_c2_c15_c15 -210 391 core m c2:c15,c15
+m_c2_c15_c15_2 -206 398 core m c2:c15,c15
+m_c2_c17_c19 -337 390 gravel m c2:c17,c19
+m_c2_c19_c21 -451 390 gravel m c2:c19,c21
+m_c2_c21_c23 -556 390 gravel m c2:c21,c23
+m_c2_c23_c25 -651 391 gravel m c2:c23,c25
+m_c2_c25_c27 -748 392 gravel m c2:c25,c27
+m_c2_c27_c29 -844 392 gravel m c2:c27,c29
+m_c2_c29_sn -951 393 dirt m c2:c29,sn
+m_c2_c7_c9 243 218 core m c2:c7,c9
+m_c2_c9_av11 116 259 core m c2:c9,av11
+m_c2_c9_c7 247 208 core m c2:c9,c7
+m_c2_sn_c13 -16 316 core m c2:sn,c13
+m_c2_sn_sn -1062 397 dirt m c2:sn,sn
+m_c2b_c29_sn -1002 467 dirt m c2b:c29,sn
+m_c31_c48_sn -1002 654 gravel m c31:c48,sn
+m_c31_sn_dg4 -1001 772 dirt m c31:sn,dg4
+m_c33_dg4_sn -1056 784 dirt m c33:dg4,sn
+m_c33_sn_c48 -1057 655 dirt m c33:sn,c48
+m_c35_sn_sn -1112 761 dirt m c35:sn,sn
+m_c3_c10_c12 506 -123 gravel m c3:c10,c12
+m_c3_c12_c14 506 -233 gravel m c3:c12,c14
+m_c3_c14_c16 505 -348 gravel m c3:c14,c16
+m_c3_c6_c8 507 102 gravel m c3:c6,c8
+m_c3_c8_c10 507 -11 gravel m c3:c8,c10
+m_c44_c105_c107 348 441 gravel m c44:c105,c107
+m_c44_c19_c21 -451 504 gravel m c44:c19,c21
+m_c44_sn_c105 453 438 gravel m c44:sn,c105
+m_c44_sn_sn 558 438 gravel m c44:sn,sn
+m_c46_c105_sn 453 515 gravel m c46:c105,sn
+m_c46_c107_c105 349 514 gravel m c46:c107,c105
+m_c46_c21_c25 -604 544 gravel m c46:c21,c25
+m_c46_sn_sn 558 515 gravel m c46:sn,sn
+m_c48_c101_c103 559 587 gravel m c48:c101,c103
+m_c48_c103_c105 453 588 gravel m c48:c103,c105
+m_c48_c105_c107 349 588 gravel m c48:c105,c107
+m_c48_c107_c109 244 589 gravel m c48:c107,c109
+m_c48_c111_c113 5 592 gravel m c48:c111,c113
+m_c48_c25_c27 -748 597 gravel m c48:c25,c27
+m_c48_c27_c29 -842 598 gravel m c48:c27,c29
+m_c48_dg2_c111 106 590 gravel m c48:dg2,c111
+m_c48_sn_c101 705 591 gravel m c48:sn,c101
+m_c48_sn_sn 877 590 dirt m c48:sn,sn
+m_c4_c13_c15 -112 274 gravel m c4:c13,c15
+m_c4_c15_c17 -225 274 gravel m c4:c15,c17
+m_c4_c17_c19 -337 275 gravel m c4:c17,c19
+m_c4_c19_c21 -452 276 gravel m c4:c19,c21
+m_c4_c21_c23 -558 277 gravel m c4:c21,c23
+m_c4_c23_c25 -654 278 gravel m c4:c23,c25
+m_c4_c25_c27 -749 279 gravel m c4:c25,c27
+m_c4_c27_c29 -844 280 gravel m c4:c27,c29
+m_c4_c29_sn -953 280 dirt m c4:c29,sn
+m_c4_sn_c13 -17 273 gravel m c4:sn,c13
+m_c50_c101_c103 559 674 gravel m c50:c101,c103
+m_c50_c103_c105 453 675 gravel m c50:c103,c105
+m_c50_c105_c107 349 677 gravel m c50:c105,c107
+m_c50_c107_c109 245 678 gravel m c50:c107,c109
+m_c50_c109_c111 130 679 gravel m c50:c109,c111
+m_c50_c111_c113 8 676 gravel m c50:c111,c113
+m_c50_c117_c119 -239 678 gravel m c50:c117,c119
+m_c50_c121_c123 -388 680 gravel m c50:c121,c123
+m_c52_c101_c103 557 769 gravel m c52:c101,c103
+m_c52_c103_c105 454 768 gravel m c52:c103,c105
+m_c52_c105_c107 351 768 gravel m c52:c105,c107
+m_c52_c107_c109 246 768 gravel m c52:c107,c109
+m_c52_c109_dgmorgan 137 768 gravel m c52:c109,dgmorgan
+m_c52_c115_c117 -130 749 barrio m c52:c115,c117
+m_c52_c117_c119 -223 748 barrio m c52:c117,c119
+m_c52_c121_c123 -388 745 gravel m c52:c121,c123
+m_c52_c123_sn -490 745 dirt m c52:c123,sn
+m_c54_c103_sn 558 865 gravel m c54:c103,sn
+m_c54_c105_c103 456 865 gravel m c54:c105,c103
+m_c54_c107_c105 353 865 gravel m c54:c107,c105
+m_c54_c109_c107 247 865 gravel m c54:c109,c107
+m_c54_c111_c109 130 867 barrio m c54:c111,c109
+m_c5_c10_c12 395 -123 gravel m c5:c10,c12
+m_c5_c12_c14 393 -233 gravel m c5:c12,c14
+m_c5_c14_c16 392 -346 gravel m c5:c14,c16
+m_c5_c6_c8 396 104 gravel m c5:c6,c8
+m_c5_c8_c10 397 -10 gravel m c5:c8,c10
+m_c6_av11_c9 113 160 core m c6:av11,c9
+m_c6_c13_av11 0 160 core m c6:c13,av11 S:hospital
+m_c6_c15_c13 -113 161 gravel m c6:c15,c13
+m_c6_c17_c15 -226 162 gravel m c6:c17,c15
+m_c6_c19_c17 -338 163 gravel m c6:c19,c17
+m_c6_c21_c19 -453 164 gravel m c6:c21,c19
+m_c6_c23_c21 -558 165 gravel m c6:c23,c21
+m_c6_c25_c23 -654 165 gravel m c6:c25,c23
+m_c6_c27_c25 -749 166 gravel m c6:c27,c25
+m_c6_c29_c27 -844 167 gravel m c6:c29,c27
+m_c6_c5_c3 451 158 gravel m c6:c5,c3
+m_c6_c7_c5 337 160 gravel m c6:c7,c5
+m_c6_c9_c7 224 161 gravel m c6:c9,c7
+m_c7_acc_c20 192 -783 dirt m c7:acc,c20 S:bomberos
+m_c7_c10_c8 279 -10 gravel m c7:c10,c8 L:pharmacy
+m_c7_c12_c10 279 -122 gravel m c7:c12,c10
+m_c7_c14_c12 279 -232 gravel m c7:c14,c12
+m_c7_c16_c14 279 -345 gravel m c7:c16,c14
+m_c7_c6_c2 281 223 gravel m c7:c6,c2
+m_c7_c8_c6 279 104 gravel m c7:c8,c6
+m_c88_c117_c119 -231 937 barrio m c88:c117,c119
+m_c8_av11_c13 0 50 core m c8:av11,c13 S:delegacion
+m_c8_c13_c15 -114 51 core m c8:c13,c15
+m_c8_c15_c17 -227 51 gravel m c8:c15,c17
+m_c8_c17_c19 -339 52 gravel m c8:c17,c19
+m_c8_c19_c21 -453 53 gravel m c8:c19,c21
+m_c8_c1_c3 565 47 gravel m c8:c1,c3
+m_c8_c21_c23 -558 53 gravel m c8:c21,c23
+m_c8_c23_c25 -654 54 gravel m c8:c23,c25
+m_c8_c25_c27 -750 54 gravel m c8:c25,c27
+m_c8_c27_c29 -845 55 gravel m c8:c27,c29
+m_c8_c3_c5 452 48 gravel m c8:c3,c5
+m_c8_c5_c7 338 48 gravel m c8:c5,c7
+m_c8_c7_c9 223 49 core m c8:c7,c9
+m_c8_c9_av11 112 49 core m c8:c9,av11
+m_c90_c119_c117 -229 879 barrio m c90:c119,c117
+m_c90b_c117_c119 -226 810 barrio m c90b:c117,c119 L:home
+m_c9_c10_c12 167 -122 core m c9:c10,c12
+m_c9_c12_c14 166 -232 core m c9:c12,c14
+m_c9_c14_c16 165 -345 gravel m c9:c14,c16
+m_c9_c16_c18 165 -458 gravel m c9:c16,c18
+m_c9_c18_c20 164 -570 gravel m c9:c18,c20
+m_c9_c6_c8 169 105 core m c9:c6,c8
+m_c9_c8_c10 168 -9 core m c9:c8,c10
+m_cbar_c113_c111 1 499 core m cbar:c113,c111
+m_cbar_c115_c113 -93 540 core m cbar:c115,c113
+m_cbar_dg2_c107 191 416 core m cbar:dg2,c107 L:corralon
+m_cp01_c107_sn 447 269 core m cp01:c107,sn
+m_cp01_c117_c119 -241 568 core m cp01:c117,c119
+m_cp01_c119_c121 -314 599 core m cp01:c119,c121
+m_cp01_c121_c123 -388 631 core m cp01:c121,c123
+m_cp01_c123_sn -491 676 core m cp01:c123,sn
+m_cp01_sn_sn 699 160 core m cp01:sn,sn
+m_cp01_sn_sn_2 -652 746 core m cp01:sn,sn
+m_cp01_sn_sn_3 -834 827 core m cp01:sn,sn
+m_dg2_cbar_c48 119 525 gravel m dg2:cbar,c48
+m_dg4_c19_c21 -450 597 core m dg4:c19,c21
+m_dg4_c21_c25 -604 663 core m dg4:c21,c25
+m_dg4_c25_c29 -792 745 core m dg4:c25,c29
+m_dg4_c29_c31 -943 812 core m dg4:c29,c31
+m_dg4_sn_c19 -333 547 core m dg4:sn,c19
+m_dgmorgan_c109_c107 244 633 gravel m dgmorgan:c109,c107
+m_dgmorgan_c52_c109 136 723 gravel m dgmorgan:c52,c109
+m_sn_c105_c103 458 955 gravel m sn:c105,c103
+m_sn_c105_sn 459 385 gravel m sn:c105,sn
+m_sn_c107_c105 355 954 gravel m sn:c107,c105
+m_sn_c109_c107 248 953 gravel m sn:c109,c107
+m_sn_c111_sn 147 1197 barrio m sn:c111,sn
+m_sn_c119_c117 -239 740 barrio m sn:c119,c117
+m_sn_c12_sn 834 -297 dirt m sn:c12,sn
+m_sn_c16_c20 -677 -505 gravel m sn:c16,c20
+m_sn_c16_sn -758 -449 gravel m sn:c16,sn
+m_sn_c16_sn_2 -709 -445 gravel m sn:c16,sn
+m_sn_c19_dg4 -302 453 gravel m sn:c19,dg4
+m_sn_c1_sn 687 102 core m sn:c1,sn
+m_sn_c20_c24 -710 -713 dirt m sn:c20,c24
+m_sn_c21_c17 -399 -436 gravel m sn:c21,c17
+m_sn_c24_c28 -712 -908 dirt m sn:c24,c28
+m_sn_c29_c27 -852 -538 gravel m sn:c29,c27
+m_sn_c29_c27_2 -851 -471 gravel m sn:c29,c27
+m_sn_c29_c27_3 -850 -407 gravel m sn:c29,c27
+m_sn_c2_c4 -1013 337 dirt m sn:c2,c4
+m_sn_c2_c5 336 260 core m sn:c2,c5
+m_sn_c3_c1 566 157 core m sn:c3,c1
+m_sn_c52_sn -554 789 dirt m sn:c52,sn
+m_sn_c5_c3 452 208 core m sn:c5,c3
+m_sn_c8_c8 697 -31 gravel m sn:c8,c8
+m_sn_c8_sn 747 7 gravel m sn:c8,sn
+m_sn_sn_c101 704 658 gravel m sn:sn,c101
+m_sn_sn_c101_2 703 721 gravel m sn:sn,c101
+m_sn_sn_c105 369 963 gravel m sn:sn,c105
+m_sn_sn_c107 266 964 gravel m sn:sn,c107
+m_sn_sn_c109 135 952 barrio m sn:sn,c109
+m_sn_sn_c109_2 136 964 barrio m sn:sn,c109
+m_sn_sn_c12 830 -69 gravel m sn:sn,c12
+m_sn_sn_c20 -1146 -569 dirt m sn:sn,c20
+m_sn_sn_c20_2 -709 -558 gravel m sn:sn,c20
+m_sn_sn_c29 -1023 -532 gravel m sn:sn,c29
+m_sn_sn_c29_2 -1022 -468 gravel m sn:sn,c29
+m_sn_sn_c29_3 -1022 -405 gravel m sn:sn,c29
+m_sn_sn_sn 998 -33 core m sn:sn,sn
+m_sn_sn_sn_10 885 454 dirt m sn:sn,sn
+m_sn_sn_sn_11 705 524 gravel m sn:sn,sn
+m_sn_sn_sn_12 881 524 gravel m sn:sn,sn
+m_sn_sn_sn_13 872 657 dirt m sn:sn,sn
+m_sn_sn_sn_14 867 722 dirt m sn:sn,sn
+m_sn_sn_sn_15 -480 834 dirt m sn:sn,sn
+m_sn_sn_sn_16 539 1001 gravel m sn:sn,sn
+m_sn_sn_sn_17 332 1002 gravel m sn:sn,sn
+m_sn_sn_sn_18 440 1002 gravel m sn:sn,sn
+m_sn_sn_sn_19 187 1037 barrio m sn:sn,sn
+m_sn_sn_sn_2 791 57 core m sn:sn,sn
+m_sn_sn_sn_20 489 1039 gravel m sn:sn,sn
+m_sn_sn_sn_21 281 1040 gravel m sn:sn,sn
+m_sn_sn_sn_22 386 1041 gravel m sn:sn,sn
+m_sn_sn_sn_23 598 1075 dirt m sn:sn,sn
+m_sn_sn_sn_24 333 1079 gravel m sn:sn,sn
+m_sn_sn_sn_25 185 1112 gravel m sn:sn,sn
+m_sn_sn_sn_26 489 1113 gravel m sn:sn,sn
+m_sn_sn_sn_27 387 1116 gravel m sn:sn,sn
+m_sn_sn_sn_28 280 1119 gravel m sn:sn,sn
+m_sn_sn_sn_29 228 1154 dirt m sn:sn,sn
+m_sn_sn_sn_3 533 291 gravel m sn:sn,sn
+m_sn_sn_sn_30 538 1154 dirt m sn:sn,sn
+m_sn_sn_sn_31 439 1155 dirt m sn:sn,sn
+m_sn_sn_sn_32 334 1157 dirt m sn:sn,sn
+m_sn_sn_sn_33 597 1180 dirt m sn:sn,sn
+m_sn_sn_sn_34 282 1196 dirt m sn:sn,sn
+m_sn_sn_sn_35 387 1196 dirt m sn:sn,sn
+m_sn_sn_sn_36 488 1196 dirt m sn:sn,sn
+m_sn_sn_sn_4 647 301 dirt m sn:sn,sn
+m_sn_sn_sn_5 596 313 gravel m sn:sn,sn
+m_sn_sn_sn_6 935 381 dirt m sn:sn,sn
+m_sn_sn_sn_7 668 382 gravel m sn:sn,sn
+m_sn_sn_sn_8 558 384 gravel m sn:sn,sn
+m_sn_sn_sn_9 705 453 gravel m sn:sn,sn
+r111_2752m -169 3790 rural r c111
+r111_7180m -2169 7269 rural r c111
+r111_7334m -2307 7315 rural r c111
+r111_767m -58 1810 rural r c111
+r111_973m -77 2014 rural r c111
+r111_papermill -284 5846 rural r c111
+`;
+  const LIMA_LINKS = `
+estacion_lima x_c107_c2_c7 rail r
+estacion_lima x_c111_cbar fwd p
+estacion_lima x_c15_dg4 rail r
+fcm_crossing_11km atucha_halt rail r
+fcm_crossing_6km fcm_crossing_11km rail r
+m_acc_av11_c24 x_acc_c24 acc p
+m_acc_c24_c7 x_acc_c7 acc p
+m_acc_c7_sn x_acc acc p
+m_av11_acc_c18 x_av11_c18 av11 p
+m_av11_c10_c8 x_av11_c8 av11 p
+m_av11_c12_c10 x_av11_c10 av11 p
+m_av11_c14_c12 x_av11_c12 av11 p
+m_av11_c16_c14 x_av11_c14 av11 p
+m_av11_c18_c16 x_av11_c16 av11 p
+m_av11_c6_c4 x_av11_c2_c4 av11 p
+m_av11_c8_c6 x_av11_c6 av11 p
+m_c101_c54_c101 x_c101_c52 c101 g
+m_c101_sn_c54 x_c101_c54 c101 d
+m_c103_c46_c44 x_c103_c44 c103 g
+m_c103_c48_c50 x_c103_c50 c103 g
+m_c103_c50_c52 x_c103_c52 c103 g
+m_c103_c52_c54 x_c103_c54 c103 g
+m_c103_c54_sn x_c103_2 c103 g
+m_c105_c46_c44 x_c105_c44 c105 g
+m_c105_c50_c48 x_c105_c48 c105 g
+m_c105_c52_c50 x_c105_c50 c105 g
+m_c105_c54_c52 x_c105_c52 c105 g
+m_c105_sn_c54 x_c105_c54 c105 g
+m_c107_c46_c48 x_c107_c48_dgmorgan c107 g
+m_c107_c48_c50 x_c107_c50 c107 g
+m_c107_c50_c52 x_c107_c52 c107 g
+m_c107_c52_c54 x_c107_c54 c107 g
+m_c107_c54_sn x_c107 c107 g
+m_c109_c50_c48 x_c109_c48 c109 g
+m_c109_c52_c50 x_c109_c50_dgmorgan c109 g
+m_c109_c54_c52 x_c109_c52 c109 g
+m_c109_sn_c54 x_c109_c54 c109 g
+m_c10_av11_c9 x_c10_c9 c10 p
+m_c10_c13_av11 x_av11_c10 c10 p
+m_c10_c15_c13 x_c10_c13 c10 p
+m_c10_c17_c15 x_c10_c15 c10 g
+m_c10_c19_c17 x_c10_c17 c10 g
+m_c10_c21_c19 x_c10_c19 c10 g
+m_c10_c23_c21 x_c10_c21 c10 g
+m_c10_c25_c23 x_c10_c23 c10 g
+m_c10_c27_c25 x_c10_c25 c10 g
+m_c10_c29_c27 x_c10_c27 c10 d
+m_c10_c3_c1 x_c1_c10 c10 g
+m_c10_c5_c3 x_c10_c3 c10 g
+m_c10_c7_c5 x_c10_c5 c10 g
+m_c10_c9_c7 x_c10_c7 c10 p
+m_c111_c48_cbar x_c111_cbar c111 p
+m_c111_c50_c48 x_c111_c48 c111 p
+m_c111_c52_c88 x_c111_c88 c111 g
+m_c111_c54_dgmorgan x_c111_c52_dgmorgan c111 p
+m_c111_c84_sn x_c111_c88_2 c111 p
+m_c111_c88_c84 x_c111_c84 c111 g
+m_c111_sn_sn x_c111 c111 p
+m_c113_c50_c48 x_c113_c48 c113 g
+m_c113_c52_c88 x_c113_c88 c113 g
+m_c113_c88_c84 x_c113_c84 c113 g
+m_c115_c84_c88 x_c115_c88 c115 g
+m_c115_c88_c52 x_c115_c52 c115 g
+m_c115_cbar_c50 x_c115_c50 c115 g
+m_c117_c50_cp01 x_c117_c15_cp01_cbar c117 g
+m_c117_c88_c84 x_c117_c84 c117 g
+m_c119_cp01_c50 x_c119_c50 c119 g
+m_c12_av11_c13 x_c12_c13 c12 p
+m_c12_c13_c15 x_c12_c15 c12 p
+m_c12_c15_c17 x_c12_c17 c12 g
+m_c12_c17_c19 x_c12_c19 c12 g
+m_c12_c19_c21 x_c12_c21 c12 g
+m_c12_c1_c3 x_c12_c3 c12 g
+m_c12_c21_c23 x_c12_c23 c12 g
+m_c12_c23_c25 x_c12_c25 c12 g
+m_c12_c25_c27 x_c12_c27 c12 g
+m_c12_c27_c29 x_c12_c29 c12 d
+m_c12_c3_c5 x_c12_c5 c12 g
+m_c12_c5_c7 x_c12_c7 c12 g
+m_c12_c7_c9 x_c12_c9 c12 p
+m_c12_c9_av11 x_av11_c12 c12 p
+m_c12_sn_c1 x_c1_c12 c12 g
+m_c12_sn_sn x_c12_2 c12 d
+m_c13_c10_c12 x_c12_c13 c13 p
+m_c13_c12_c14 x_c13_c14 c13 p
+m_c13_c14_c16 x_c13_c16 c13 p
+m_c13_c16_c18 x_c13_c18 c13 p
+m_c13_c18_c20 x_c13_c20 c13 p
+m_c13_c4_c6 x_c13_c6 c13 p
+m_c13_c6_c8 x_c13_c8 c13 p
+m_c13_c8_c10 x_c10_c13 c13 p
+m_c14_av11_c13 x_c13_c14 c14 g
+m_c14_c13_c15 x_c14_c15 c14 g
+m_c14_c15_c17 x_c14_c17 c14 g
+m_c14_c17_c19 x_c14_c19 c14 g
+m_c14_c19_c21 x_c14_c21 c14 g
+m_c14_c1_c3 x_c14_c3 c14 g
+m_c14_c21_c23 x_c14_c23 c14 g
+m_c14_c23_c25 x_c14_c25 c14 g
+m_c14_c25_c27 x_c14_c27 c14 g
+m_c14_c27_c29 x_c14_c29 c14 g
+m_c14_c29_sn x_c14 c14 d
+m_c14_c3_c5 x_c14_c5 c14 g
+m_c14_c5_c7 x_c14_c7 c14 g
+m_c14_c7_c9 x_c14_c9 c14 g
+m_c14_c9_av11 x_av11_c14 c14 g
+m_c15_c10_c12 x_c12_c15 c15 p
+m_c15_c12_c14 x_c14_c15 c15 g
+m_c15_c14_c16 x_c15_c16 c15 g
+m_c15_c16_c18 x_c15_c18 c15 g
+m_c15_c18_c20 x_c15_c20 c15 g
+m_c15_c2_c4 x_c15_c4 c15 g
+m_c15_c4_c6 x_c15_c6 c15 g
+m_c15_c6_c8 x_c15_c8 c15 g
+m_c15_c8_c10 x_c10_c15 c15 p
+m_c16_av11_c13 x_c13_c16 c16 g
+m_c16_c13_c15 x_c15_c16 c16 g
+m_c16_c15_c17 x_c16_c17 c16 g
+m_c16_c17_c21 x_c16_c21 c16 g
+m_c16_c1_c3 x_c16_c3 c16 d
+m_c16_c21_c23 x_c16_c23 c16 g
+m_c16_c3_c5 x_c16_c5 c16 g
+m_c16_c5_c7 x_c16_c7 c16 g
+m_c16_c7_c9 x_c16_c9 c16 g
+m_c16_c9_av11 x_av11_c16 c16 g
+m_c16b_c29_c27 x_c16b_c27 c16b g
+m_c16b_c5_c7 x_c16b_c7 c16b g
+m_c16b_sn_c29 x_c16b_c29 c16b g
+m_c17_c10_c8 x_c17_c8 c17 g
+m_c17_c12_c10 x_c10_c17 c17 g
+m_c17_c14_c12 x_c12_c17 c17 g
+m_c17_c16_c14 x_c14_c17 c17 g
+m_c17_c20_c18 x_c17_c18 c17 g
+m_c17_c24_c20 x_c17_c20 c17 g
+m_c17_c28_c24 x_c17_c24 c17 d
+m_c17_c4_c2 x_c15_c17_c2 c17 g
+m_c17_c6_c4 x_c17_c4 c17 g
+m_c17_c8_c6 x_c17_c6 c17 g
+m_c18_av11_c9 x_c18_c9 c18 g
+m_c18_c13_av11 x_av11_c18 c18 g
+m_c18_c15_c13 x_c13_c18 c18 g
+m_c18_c17_c15 x_c15_c18 c18 g
+m_c18_c7_c5 x_c18_c5 c18 g
+m_c18_c9_c7 x_c18_c7 c18 g
+m_c18b_c5_c7 x_c18b_c7 c18b d
+m_c19_c10_c8 x_c19_c8 c19 g
+m_c19_c12_c10 x_c10_c19 c19 g
+m_c19_c14_c12 x_c12_c19 c19 g
+m_c19_c4_c2 x_c19_c2 c19 g
+m_c19_c6_c4 x_c19_c4 c19 g
+m_c19_c8_c6 x_c19_c6 c19 g
+m_c1_c10_c12 x_c1_c12 c1 g
+m_c1_c12_c14 x_c1_c14 c1 g
+m_c1_c14_c16 x_c1_c16 c1 d
+m_c1_c8_c10 x_c1_c10 c1 g
+m_c1_sn_c8 x_c1_c8 c1 g
+m_c20_acc_c13 x_c13_c20 c20 p
+m_c20_c13_c15 x_c15_c20 c20 g
+m_c20_c15_c17 x_c17_c20 c20 g
+m_c20_c17_c21 x_c20_c21 c20 g
+m_c20_c21_c23 x_c20_c23 c20 g
+m_c20_c27_c29 x_c20_c29 c20 g
+m_c20_c29_sn x_c20_3 c20 g
+m_c20_c5_c7 x_c20_c7 c20 d
+m_c20_c7_c9 x_c20_c9 c20 g
+m_c20_c9_acc x_acc_av11_c20 c20 g
+m_c20_sn_c27 x_c20_c27 c20 d
+m_c21_c10_c12 x_c12_c21 c21 g
+m_c21_c12_c14 x_c14_c21 c21 g
+m_c21_c14_c16 x_c16_c21 c21 g
+m_c21_c2_c4 x_c21_c4 c21 g
+m_c21_c44_c2 x_c2_c21 c21 g
+m_c21_c4_c6 x_c21_c6 c21 g
+m_c21_c6_c8 x_c21_c8 c21 g
+m_c21_c8_c10 x_c10_c21 c21 g
+m_c21_dg4_c46 x_c21_c46 c21 g
+m_c21_sn_c20 x_c20_c21 c21 g
+m_c23_c10_c8 x_c23_c8 c23 g
+m_c23_c12_c10 x_c10_c23 c23 g
+m_c23_c14_c12 x_c12_c23 c23 g
+m_c23_c16_c14 x_c14_c23 c23 g
+m_c23_c20_c16 x_c16_c23 c23 g
+m_c23_c4_c2 x_c2_c23 c23 g
+m_c23_c6_c4 x_c23_c4 c23 g
+m_c23_c8_c6 x_c23_c6 c23 g
+m_c24_acc_c17 x_c17_c24 c24 g
+m_c24_c17_sn x_c24 c24 g
+m_c25_c10_c12 x_c12_c25 c25 g
+m_c25_c12_c14 x_c14_c25 c25 g
+m_c25_c2_c4 x_c25_c4 c25 g
+m_c25_c46_c2 x_c2_c25 c25 g
+m_c25_c4_c6 x_c25_c6 c25 g
+m_c25_c6_c8 x_c25_c8 c25 g
+m_c25_c8_c10 x_c10_c25 c25 g
+m_c25_dg4_c48 x_c25_c48 c25 g
+m_c27_c10_c8 x_c27_c8 c27 g
+m_c27_c12_c10 x_c10_c27 c27 g
+m_c27_c14_c12 x_c12_c27 c27 g
+m_c27_c20_sn x_c27 c27 g
+m_c27_c48_sn x_c27_4 c27 g
+m_c27_c4_c2 x_c2_c27 c27 g
+m_c27_c6_c4 x_c27_c4 c27 g
+m_c27_c8_c6 x_c27_c6 c27 g
+m_c28_c17_sn x_c28 c28 d
+m_c29_c10_c8 x_c29_c8 c29 d
+m_c29_c12_c10 x_c10_c29 c29 d
+m_c29_c14_c12 x_c12_c29 c29 d
+m_c29_c20_sn x_c29 c29 g
+m_c29_c2b_c48 x_c29_c48 c29 g
+m_c29_c48_dg4 x_c29_dg4 c29 g
+m_c29_c4_c2 x_c2_c29 c29 g
+m_c29_c6_c4 x_c29_c4 c29 g
+m_c29_c8_c6 x_c29_c6 c29 d
+m_c2_av11_c9 x_c2_c9 c2 p
+m_c2_c13_c15 x_c15_c2 c2 p
+m_c2_c13_sn x_c2_c4 c2 p
+m_c2_c15_c13 x_c13_c2 c2 p
+m_c2_c15_c15 x_c15_c2 c2 p
+m_c2_c15_c15_2 x_c15_c17_c2 c2 p
+m_c2_c17_c19 x_c19_c2 c2 g
+m_c2_c19_c21 x_c2_c21 c2 g
+m_c2_c21_c23 x_c2_c23 c2 g
+m_c2_c23_c25 x_c2_c25 c2 g
+m_c2_c25_c27 x_c2_c27 c2 g
+m_c2_c27_c29 x_c2_c29 c2 g
+m_c2_c29_sn x_c2 c2 d
+m_c2_c7_c9 x_c2_c9 c2 p
+m_c2_c9_av11 x_av11_c2_c4 c2 p
+m_c2_c9_c7 x_c107_c2_c7 c2 p
+m_c2_sn_c13 x_c13_c2 c2 p
+m_c2_sn_sn x_c2_2 c2 d
+m_c2b_c29_sn x_c2b c2b d
+m_c31_c48_sn x_c31 c31 g
+m_c31_sn_dg4 x_c31_dg4 c31 d
+m_c33_dg4_sn x_c33 c33 d
+m_c33_sn_c48 x_c33_c48 c33 d
+m_c35_sn_sn x_c35_3 c35 d
+m_c3_c10_c12 x_c12_c3 c3 g
+m_c3_c12_c14 x_c14_c3 c3 g
+m_c3_c14_c16 x_c16_c3 c3 g
+m_c3_c6_c8 x_c3_c8 c3 g
+m_c3_c8_c10 x_c10_c3 c3 g
+m_c44_c105_c107 x_c107_c44 c44 g
+m_c44_c19_c21 x_c21_c44 c44 g
+m_c44_sn_c105 x_c105_c44 c44 g
+m_c44_sn_sn x_c103_c44 c44 g
+m_c46_c105_sn x_c103_c46 c46 g
+m_c46_c107_c105 x_c105_c46 c46 g
+m_c46_c21_c25 x_c25_c46 c46 g
+m_c46_sn_sn x_c101_c46 c46 g
+m_c48_c101_c103 x_c103_c48 c48 g
+m_c48_c103_c105 x_c105_c48 c48 g
+m_c48_c105_c107 x_c107_c48_dgmorgan c48 g
+m_c48_c107_c109 x_c109_c48 c48 g
+m_c48_c111_c113 x_c113_c48 c48 g
+m_c48_c25_c27 x_c27_c48 c48 g
+m_c48_c27_c29 x_c29_c48 c48 g
+m_c48_dg2_c111 x_c111_c48 c48 g
+m_c48_sn_c101 x_c101_c48 c48 g
+m_c48_sn_sn x_c48 c48 d
+m_c4_c13_c15 x_c15_c4 c4 g
+m_c4_c15_c17 x_c17_c4 c4 g
+m_c4_c17_c19 x_c19_c4 c4 g
+m_c4_c19_c21 x_c21_c4 c4 g
+m_c4_c21_c23 x_c23_c4 c4 g
+m_c4_c23_c25 x_c25_c4 c4 g
+m_c4_c25_c27 x_c27_c4 c4 g
+m_c4_c27_c29 x_c29_c4 c4 g
+m_c4_c29_sn x_c4 c4 d
+m_c4_sn_c13 x_c13_c4 c4 g
+m_c50_c101_c103 x_c103_c50 c50 g
+m_c50_c103_c105 x_c105_c50 c50 g
+m_c50_c105_c107 x_c107_c50 c50 g
+m_c50_c107_c109 x_c109_c50_dgmorgan c50 g
+m_c50_c109_c111 x_c111_c50 c50 g
+m_c50_c111_c113 x_c113_c50 c50 g
+m_c50_c117_c119 x_c119_c50 c50 g
+m_c50_c121_c123 x_c123_c50 c50 g
+m_c52_c101_c103 x_c103_c52 c52 g
+m_c52_c103_c105 x_c105_c52 c52 g
+m_c52_c105_c107 x_c107_c52 c52 g
+m_c52_c107_c109 x_c109_c52 c52 g
+m_c52_c109_dgmorgan x_c111_c52_dgmorgan c52 g
+m_c52_c115_c117 x_c117_c52 c52 g
+m_c52_c117_c119 x_c119_c52 c52 g
+m_c52_c121_c123 x_c123_c52 c52 g
+m_c52_c123_sn x_c52 c52 d
+m_c54_c103_sn x_c101_c54 c54 g
+m_c54_c105_c103 x_c103_c54 c54 g
+m_c54_c107_c105 x_c105_c54 c54 g
+m_c54_c109_c107 x_c107_c54 c54 g
+m_c54_c111_c109 x_c109_c54 c54 g
+m_c5_c10_c12 x_c12_c5 c5 g
+m_c5_c12_c14 x_c14_c5 c5 g
+m_c5_c14_c16 x_c16_c5 c5 g
+m_c5_c6_c8 x_c5_c8 c5 g
+m_c5_c8_c10 x_c10_c5 c5 g
+m_c6_av11_c9 x_c6_c9 c6 p
+m_c6_c13_av11 x_av11_c6 c6 p
+m_c6_c15_c13 x_c13_c6 c6 g
+m_c6_c17_c15 x_c15_c6 c6 g
+m_c6_c19_c17 x_c17_c6 c6 g
+m_c6_c21_c19 x_c19_c6 c6 g
+m_c6_c23_c21 x_c21_c6 c6 g
+m_c6_c25_c23 x_c23_c6 c6 g
+m_c6_c27_c25 x_c25_c6 c6 g
+m_c6_c29_c27 x_c27_c6 c6 g
+m_c6_c5_c3 x_c3_c6 c6 g
+m_c6_c7_c5 x_c5_c6 c6 g
+m_c6_c9_c7 x_c6_c7 c6 g
+m_c7_acc_c20 x_c20_c7 c7 d
+m_c7_c10_c8 x_c7_c8 c7 g
+m_c7_c12_c10 x_c10_c7 c7 g
+m_c7_c14_c12 x_c12_c7 c7 g
+m_c7_c16_c14 x_c14_c7 c7 g
+m_c7_c6_c2 x_c107_c2_c7 c7 g
+m_c7_c8_c6 x_c6_c7 c7 g
+m_c88_c117_c119 x_c119_c88 c88 g
+m_c8_av11_c13 x_c13_c8 c8 p
+m_c8_c13_c15 x_c15_c8 c8 p
+m_c8_c15_c17 x_c17_c8 c8 g
+m_c8_c17_c19 x_c19_c8 c8 g
+m_c8_c19_c21 x_c21_c8 c8 g
+m_c8_c1_c3 x_c3_c8 c8 g
+m_c8_c21_c23 x_c23_c8 c8 g
+m_c8_c23_c25 x_c25_c8 c8 g
+m_c8_c25_c27 x_c27_c8 c8 g
+m_c8_c27_c29 x_c29_c8 c8 g
+m_c8_c3_c5 x_c5_c8 c8 g
+m_c8_c5_c7 x_c7_c8 c8 g
+m_c8_c7_c9 x_c8_c9 c8 p
+m_c8_c9_av11 x_av11_c8 c8 p
+m_c90_c119_c117 x_c117_c90 c90 g
+m_c90b_c117_c119 x_c119_c90b c90b g
+m_c9_c10_c12 x_c12_c9 c9 p
+m_c9_c12_c14 x_c14_c9 c9 p
+m_c9_c14_c16 x_c16_c9 c9 g
+m_c9_c16_c18 x_c18_c9 c9 g
+m_c9_c18_c20 x_c20_c9 c9 g
+m_c9_c6_c8 x_c8_c9 c9 p
+m_c9_c8_c10 x_c10_c9 c9 p
+m_cbar_c113_c111 x_c111_cbar cbar p
+m_cbar_c115_c113 x_c113_cbar cbar p
+m_cbar_dg2_c107 x_c107_cbar cbar p
+m_cp01_c107_sn x_cp01_2 cp01 p
+m_cp01_c117_c119 x_c119_cp01 cp01 p
+m_cp01_c119_c121 x_c121_cp01 cp01 p
+m_cp01_c121_c123 x_c123_cp01 cp01 p
+m_cp01_c123_sn x_cp01_3 cp01 p
+m_cp01_sn_sn x_cp01 cp01 p
+m_cp01_sn_sn_2 x_cp01_4 cp01 p
+m_cp01_sn_sn_3 x_cp01_5 cp01 p
+m_dg2_cbar_c48 x_c48_dg2 dg2 g
+m_dg4_c19_c21 x_c21_dg4 dg4 p
+m_dg4_c21_c25 x_c25_dg4 dg4 p
+m_dg4_c25_c29 x_c29_dg4 dg4 p
+m_dg4_c29_c31 x_c31_dg4 dg4 p
+m_dg4_sn_c19 x_c19_dg4 dg4 p
+m_dgmorgan_c109_c107 x_c107_c48_dgmorgan dgmorgan g
+m_dgmorgan_c52_c109 x_c109_c50_dgmorgan dgmorgan g
+m_sn_c105_c103 x_c103_2 sn g
+m_sn_c105_sn x_c103 sn g
+m_sn_c107_c105 x_c105_2 sn g
+m_sn_c109_c107 x_c107 sn g
+m_sn_c111_sn x_sn_47 sn d
+m_sn_c119_c117 x_c117 sn g
+m_sn_c12_sn x_sn_5 sn d
+m_sn_c16_c20 x_c20 sn g
+m_sn_c16_sn x_sn_3 sn g
+m_sn_c16_sn_2 x_sn_2 sn g
+m_sn_c19_dg4 x_dg4 sn g
+m_sn_c1_sn x_sn_10 sn p
+m_sn_c20_c24 x_c24 sn d
+m_sn_c21_c17 x_c17 sn g
+m_sn_c24_c28 x_c28 sn d
+m_sn_c29_c27 x_c27 sn g
+m_sn_c29_c27_2 x_c27_2 sn g
+m_sn_c29_c27_3 x_c27_3 sn g
+m_sn_c2_c4 x_c4 sn d
+m_sn_c2_c5 x_c5 sn p
+m_sn_c3_c1 x_c1 sn p
+m_sn_c52_sn x_sn_28 sn d
+m_sn_c5_c3 x_c3 sn p
+m_sn_c8_sn x_sn_8 sn g
+m_sn_sn_c101 x_c101_c50 sn g
+m_sn_sn_c101_2 x_c101_2 sn g
+m_sn_sn_c105 x_c105_2 sn g
+m_sn_sn_c107 x_c107 sn g
+m_sn_sn_c109 x_c109 sn g
+m_sn_sn_c109_2 x_c109 sn g
+m_sn_sn_c12 x_c12_2 sn g
+m_sn_sn_c20 x_c20_3 sn d
+m_sn_sn_c20_2 x_c20_2 sn g
+m_sn_sn_c29 x_c29 sn g
+m_sn_sn_c29_2 x_c29_2 sn g
+m_sn_sn_c29_3 x_c29_3 sn g
+m_sn_sn_sn x_sn_7 sn p
+m_sn_sn_sn_10 x_sn_20 sn d
+m_sn_sn_sn_11 x_sn_21 sn g
+m_sn_sn_sn_12 x_sn_22 sn g
+m_sn_sn_sn_13 x_sn_24 sn d
+m_sn_sn_sn_14 x_sn_27 sn d
+m_sn_sn_sn_15 x_sn_29 sn d
+m_sn_sn_sn_16 x_sn_37 sn g
+m_sn_sn_sn_17 x_sn_39 sn g
+m_sn_sn_sn_18 x_sn_38 sn g
+m_sn_sn_sn_19 x_sn_36 sn g
+m_sn_sn_sn_2 x_sn_9 sn p
+m_sn_sn_sn_20 x_sn_37 sn g
+m_sn_sn_sn_21 x_sn_39 sn g
+m_sn_sn_sn_22 x_sn_38 sn g
+m_sn_sn_sn_23 x_sn_34 sn d
+m_sn_sn_sn_24 x_sn_45 sn g
+m_sn_sn_sn_25 x_sn_40 sn g
+m_sn_sn_sn_26 x_sn_43 sn g
+m_sn_sn_sn_27 x_sn_45 sn g
+m_sn_sn_sn_28 x_sn_41 sn g
+m_sn_sn_sn_29 x_sn_41 sn d
+m_sn_sn_sn_3 x_sn_15 sn g
+m_sn_sn_sn_30 x_sn_46 sn d
+m_sn_sn_sn_31 x_sn_49 sn d
+m_sn_sn_sn_32 x_sn_48 sn d
+m_sn_sn_sn_33 x_sn_44 sn d
+m_sn_sn_sn_34 x_sn_48 sn d
+m_sn_sn_sn_35 x_sn_49 sn d
+m_sn_sn_sn_36 x_sn_46 sn d
+m_sn_sn_sn_4 x_sn_13 sn d
+m_sn_sn_sn_5 x_sn_11 sn g
+m_sn_sn_sn_6 x_sn_17 sn d
+m_sn_sn_sn_7 x_sn_18 sn g
+m_sn_sn_sn_8 x_c101 sn g
+m_sn_sn_sn_9 x_sn_19 sn g
+r111_2752m r111_papermill c111 p
+r111_7180m r111_7334m c111 p
+r111_7334m atucha_gate c111 p
+r111_767m r111_973m c111 p
+r111_973m r111_2752m c111 p
+r111_papermill r111_7180m c111 p
+x_acc_av11_c20 m_acc_av11_c24 acc p
+x_acc_av11_c20 m_av11_acc_c18 av11 p
+x_acc_av11_c20 m_c20_acc_c13 c20 p
+x_acc_c24 m_acc_c24_c7 acc p
+x_acc_c24 m_c24_acc_c17 c24 g
+x_acc_c7 m_acc_c7_sn acc p
+x_acc_c7 m_c7_acc_c20 c7 d
+x_av11_c10 m_av11_c10_c8 av11 p
+x_av11_c10 m_c10_av11_c9 c10 p
+x_av11_c12 m_av11_c12_c10 av11 p
+x_av11_c12 m_c12_av11_c13 c12 p
+x_av11_c14 m_av11_c14_c12 av11 p
+x_av11_c14 m_c14_av11_c13 c14 g
+x_av11_c16 m_av11_c16_c14 av11 p
+x_av11_c16 m_c16_av11_c13 c16 g
+x_av11_c18 m_av11_c18_c16 av11 p
+x_av11_c18 m_c18_av11_c9 c18 g
+x_av11_c2_c4 m_c2_av11_c9 c2 p
+x_av11_c2_c4 x_c2_c4 c4 g
+x_av11_c6 m_av11_c6_c4 av11 p
+x_av11_c6 m_c6_av11_c9 c6 p
+x_av11_c8 m_av11_c8_c6 av11 p
+x_av11_c8 m_c8_av11_c13 c8 p
+x_c1 m_c1_sn_c8 c1 g
+x_c1 m_sn_c1_sn sn p
+x_c101 m_sn_sn_sn_7 sn g
+x_c101_2 x_c101_c50 c101 g
+x_c101_c44 m_c44_sn_sn c44 g
+x_c101_c44 m_sn_sn_sn_9 sn g
+x_c101_c44 x_c101 c101 g
+x_c101_c46 m_sn_sn_sn_11 sn g
+x_c101_c46 x_c101_c44 c101 g
+x_c101_c48 m_c48_c101_c103 c48 g
+x_c101_c48 x_c101_c46 c101 g
+x_c101_c50 m_c50_c101_c103 c50 g
+x_c101_c50 x_c101_c48 c101 g
+x_c101_c52 m_c52_c101_c103 c52 g
+x_c101_c52 x_c101_2 c101 g
+x_c101_c54 m_c101_c54_c101 c101 g
+x_c103 m_sn_sn_sn_8 sn g
+x_c103_2 x_sn_31 sn g
+x_c103_c44 m_c44_sn_c105 c44 g
+x_c103_c44 x_c103 c103 g
+x_c103_c46 m_c103_c46_c44 c103 g
+x_c103_c46 m_c46_sn_sn c46 g
+x_c103_c48 m_c103_c48_c50 c103 g
+x_c103_c48 m_c48_c103_c105 c48 g
+x_c103_c48 x_c103_c46 c103 g
+x_c103_c50 m_c103_c50_c52 c103 g
+x_c103_c50 m_c50_c103_c105 c50 g
+x_c103_c52 m_c103_c52_c54 c103 g
+x_c103_c52 m_c52_c103_c105 c52 g
+x_c103_c54 m_c103_c54_sn c103 g
+x_c103_c54 m_c54_c103_sn c54 g
+x_c105 m_sn_c105_sn sn g
+x_c105_2 m_c105_sn_c54 c105 g
+x_c105_2 m_sn_c105_c103 sn g
+x_c105_2 x_sn_33 sn g
+x_c105_c44 m_c44_c105_c107 c44 g
+x_c105_c44 x_c105 c105 g
+x_c105_c46 m_c105_c46_c44 c105 g
+x_c105_c46 m_c46_c105_sn c46 g
+x_c105_c48 m_c48_c105_c107 c48 g
+x_c105_c48 x_c105_c46 c105 g
+x_c105_c50 m_c105_c50_c48 c105 g
+x_c105_c50 m_c50_c105_c107 c50 g
+x_c105_c52 m_c105_c52_c50 c105 g
+x_c105_c52 m_c52_c105_c107 c52 g
+x_c105_c54 m_c105_c54_c52 c105 g
+x_c105_c54 m_c54_c105_c103 c54 g
+x_c107 m_sn_c107_c105 sn g
+x_c107 x_sn_30 sn g
+x_c107_c2_c7 m_c2_c7_c9 c2 p
+x_c107_c2_c7 m_sn_c2_c5 sn p
+x_c107_c2_c7 x_c107_cp01 c107 p
+x_c107_c44 x_c107_c46 c107 g
+x_c107_c46 m_c107_c46_c48 c107 g
+x_c107_c46 m_c46_c107_c105 c46 g
+x_c107_c48_dgmorgan m_c107_c48_c50 c107 g
+x_c107_c48_dgmorgan m_c48_c107_c109 c48 g
+x_c107_c50 m_c107_c50_c52 c107 g
+x_c107_c50 m_c50_c107_c109 c50 g
+x_c107_c52 m_c107_c52_c54 c107 g
+x_c107_c52 m_c52_c107_c109 c52 g
+x_c107_c54 m_c107_c54_sn c107 g
+x_c107_c54 m_c54_c107_c105 c54 g
+x_c107_cbar x_c107_c44 c107 g
+x_c107_cp01 m_cp01_c107_sn cp01 p
+x_c107_cp01 x_c107_cbar c107 p
+x_c109 m_c109_sn_c54 c109 g
+x_c109 m_sn_c109_c107 sn g
+x_c109 x_sn_32 sn g
+x_c109_c48 x_c48_dg2 c48 g
+x_c109_c50_dgmorgan m_c109_c50_c48 c109 g
+x_c109_c50_dgmorgan m_c50_c109_c111 c50 g
+x_c109_c50_dgmorgan m_dgmorgan_c109_c107 dgmorgan g
+x_c109_c52 m_c109_c52_c50 c109 g
+x_c109_c52 m_c52_c109_dgmorgan c52 g
+x_c109_c54 m_c109_c54_c52 c109 g
+x_c109_c54 m_c54_c109_c107 c54 g
+x_c10_c13 m_c10_c13_av11 c10 p
+x_c10_c13 m_c13_c10_c12 c13 p
+x_c10_c15 m_c10_c15_c13 c10 p
+x_c10_c15 m_c15_c10_c12 c15 p
+x_c10_c17 m_c10_c17_c15 c10 g
+x_c10_c17 m_c17_c10_c8 c17 g
+x_c10_c19 m_c10_c19_c17 c10 g
+x_c10_c19 m_c19_c10_c8 c19 g
+x_c10_c21 m_c10_c21_c19 c10 g
+x_c10_c21 m_c21_c10_c12 c21 g
+x_c10_c23 m_c10_c23_c21 c10 g
+x_c10_c23 m_c23_c10_c8 c23 g
+x_c10_c25 m_c10_c25_c23 c10 g
+x_c10_c25 m_c25_c10_c12 c25 g
+x_c10_c27 m_c10_c27_c25 c10 g
+x_c10_c27 m_c27_c10_c8 c27 g
+x_c10_c29 m_c10_c29_c27 c10 d
+x_c10_c29 m_c29_c10_c8 c29 d
+x_c10_c3 m_c10_c3_c1 c10 g
+x_c10_c3 m_c3_c10_c12 c3 g
+x_c10_c5 m_c10_c5_c3 c10 g
+x_c10_c5 m_c5_c10_c12 c5 g
+x_c10_c7 m_c10_c7_c5 c10 g
+x_c10_c7 m_c7_c10_c8 c7 g
+x_c10_c9 m_c10_c9_c7 c10 p
+x_c10_c9 m_c9_c10_c12 c9 p
+x_c111 m_sn_c111_sn sn d
+x_c111 x_c111_c84_2 c111 p
+x_c111_2 m_c111_sn_sn c111 p
+x_c111_2 r111_767m c111 p
+x_c111_c48 m_c111_c48_cbar c111 p
+x_c111_c48 m_c48_c111_c113 c48 g
+x_c111_c50 m_c111_c50_c48 c111 p
+x_c111_c50 m_c50_c111_c113 c50 g
+x_c111_c52 m_c111_c52_c88 c111 g
+x_c111_c52 x_c113_c52 c52 g
+x_c111_c52_dgmorgan m_dgmorgan_c52_c109 dgmorgan g
+x_c111_c52_dgmorgan x_c111_c50 c111 p
+x_c111_c52_dgmorgan x_c111_c52 c52 g
+x_c111_c54 m_c111_c54_dgmorgan c111 p
+x_c111_c54 m_c54_c111_c109 c54 g
+x_c111_c84 x_c113_c84 c84 d
+x_c111_c84_2 m_c111_c84_sn c111 p
+x_c111_c84_2 x_c111_c84 c84 d
+x_c111_c88 m_c111_c88_c84 c111 g
+x_c111_c88 x_c113_c88 c88 g
+x_c111_c88_2 m_sn_sn_c109 sn g
+x_c111_c88_2 m_sn_sn_c109_2 sn g
+x_c111_c88_2 x_c111_c54 c111 p
+x_c111_c88_2 x_c111_c88 c88 g
+x_c111_cbar x_cbar_dg2 cbar p
+x_c113 x_c113_c50 c113 g
+x_c113_c48 x_c113_cbar c113 g
+x_c113_c50 m_c113_c50_c48 c113 g
+x_c113_c50 x_c115_c50 c50 g
+x_c113_c52 m_c113_c52_c88 c113 g
+x_c113_c52 x_c115_c52 c52 g
+x_c113_c84 x_c115_c84 c84 d
+x_c113_c88 m_c113_c88_c84 c113 g
+x_c113_c88 x_c115_c88 c88 g
+x_c113_cbar m_cbar_c113_c111 cbar p
+x_c115 x_c113 sn g
+x_c115_c50 x_c115 c115 g
+x_c115_c50 x_c117_c50 c50 g
+x_c115_c52 m_c52_c115_c117 c52 g
+x_c115_c84 m_c115_c84_c88 c115 g
+x_c115_c84 x_c117_c84 c84 d
+x_c115_c88 m_c115_c88_c52 c115 g
+x_c115_c88 x_c117_c88 c88 g
+x_c115_cbar m_c115_cbar_c50 c115 g
+x_c115_cbar m_cbar_c115_c113 cbar p
+x_c117 x_c115 sn g
+x_c117 x_c117_c50 c117 g
+x_c117_c15_cp01_cbar m_cp01_c117_c119 cp01 p
+x_c117_c15_cp01_cbar x_c115_cbar cbar p
+x_c117_c50 m_c117_c50_cp01 c117 g
+x_c117_c50 m_c50_c117_c119 c50 g
+x_c117_c52 m_c52_c117_c119 c52 g
+x_c117_c52 x_c117_c90b c117 g
+x_c117_c88 m_c117_c88_c84 c117 g
+x_c117_c88 m_c88_c117_c119 c88 g
+x_c117_c90 x_c117_c88 c117 g
+x_c117_c90b m_c90b_c117_c119 c90b g
+x_c117_c90b x_c117_c90 c117 g
+x_c119 x_c119_c88 c119 g
+x_c119_2 x_c119 c119 g
+x_c119_3 x_c119_2 c119 d
+x_c119_c50 x_c119_c52 c119 g
+x_c119_c50 x_c121_c50 c50 g
+x_c119_c52 m_sn_c119_c117 sn g
+x_c119_c52 x_c121_c52 c52 g
+x_c119_c88 x_c119_c90 c119 g
+x_c119_c90 m_c90_c119_c117 c90 g
+x_c119_c90 x_c119_c90b c119 g
+x_c119_c90b x_c119_c52 c119 g
+x_c119_cp01 m_c119_cp01_c50 c119 g
+x_c119_cp01 m_cp01_c119_c121 cp01 p
+x_c12 m_c12_sn_sn c12 d
+x_c121_c50 m_c50_c121_c123 c50 g
+x_c121_c50 x_c121_cp01 c121 g
+x_c121_c52 m_c52_c121_c123 c52 g
+x_c121_c52 x_c121_c50 c121 g
+x_c121_cp01 m_cp01_c121_c123 cp01 p
+x_c123_c50 x_c123_c52 c123 g
+x_c123_c52 m_c52_c123_sn c52 d
+x_c123_cp01 m_cp01_c123_sn cp01 p
+x_c123_cp01 x_c123_c50 c123 g
+x_c12_2 m_c12_sn_c1 c12 g
+x_c12_2 m_sn_c12_sn sn d
+x_c12_c13 m_c12_c13_c15 c12 p
+x_c12_c13 m_c13_c12_c14 c13 p
+x_c12_c15 m_c12_c15_c17 c12 g
+x_c12_c15 m_c15_c12_c14 c15 g
+x_c12_c17 m_c12_c17_c19 c12 g
+x_c12_c17 m_c17_c12_c10 c17 g
+x_c12_c19 m_c12_c19_c21 c12 g
+x_c12_c19 m_c19_c12_c10 c19 g
+x_c12_c21 m_c12_c21_c23 c12 g
+x_c12_c21 m_c21_c12_c14 c21 g
+x_c12_c23 m_c12_c23_c25 c12 g
+x_c12_c23 m_c23_c12_c10 c23 g
+x_c12_c25 m_c12_c25_c27 c12 g
+x_c12_c25 m_c25_c12_c14 c25 g
+x_c12_c27 m_c12_c27_c29 c12 d
+x_c12_c27 m_c27_c12_c10 c27 g
+x_c12_c29 m_c29_c12_c10 c29 d
+x_c12_c3 m_c12_c3_c5 c12 g
+x_c12_c3 m_c3_c12_c14 c3 g
+x_c12_c5 m_c12_c5_c7 c12 g
+x_c12_c5 m_c5_c12_c14 c5 g
+x_c12_c7 m_c12_c7_c9 c12 p
+x_c12_c7 m_c7_c12_c10 c7 g
+x_c12_c9 m_c12_c9_av11 c12 p
+x_c12_c9 m_c9_c12_c14 c9 p
+x_c13_c14 m_c13_c14_c16 c13 p
+x_c13_c14 m_c14_c13_c15 c14 g
+x_c13_c16 m_c13_c16_c18 c13 p
+x_c13_c16 m_c16_c13_c15 c16 g
+x_c13_c18 m_c13_c18_c20 c13 p
+x_c13_c18 m_c18_c13_av11 c18 g
+x_c13_c2 m_c2_c13_c15 c2 p
+x_c13_c2 m_c2_c13_sn c2 p
+x_c13_c2 x_c13_c4 c13 p
+x_c13_c20 m_c20_c13_c15 c20 g
+x_c13_c4 m_c13_c4_c6 c13 p
+x_c13_c4 m_c4_c13_c15 c4 g
+x_c13_c6 m_c13_c6_c8 c13 p
+x_c13_c6 m_c6_c13_av11 c6 p
+x_c13_c8 m_c13_c8_c10 c13 p
+x_c13_c8 m_c8_c13_c15 c8 p
+x_c14 x_c16b sn d
+x_c14_c15 m_c14_c15_c17 c14 g
+x_c14_c15 m_c15_c14_c16 c15 g
+x_c14_c17 m_c14_c17_c19 c14 g
+x_c14_c17 m_c17_c14_c12 c17 g
+x_c14_c19 m_c14_c19_c21 c14 g
+x_c14_c19 m_c19_c14_c12 c19 g
+x_c14_c21 m_c14_c21_c23 c14 g
+x_c14_c21 m_c21_c14_c16 c21 g
+x_c14_c23 m_c14_c23_c25 c14 g
+x_c14_c23 m_c23_c14_c12 c23 g
+x_c14_c25 m_c14_c25_c27 c14 g
+x_c14_c27 m_c14_c27_c29 c14 g
+x_c14_c27 m_c27_c14_c12 c27 g
+x_c14_c29 m_c14_c29_sn c14 d
+x_c14_c29 m_c29_c14_c12 c29 d
+x_c14_c3 m_c14_c3_c5 c14 g
+x_c14_c3 m_c3_c14_c16 c3 g
+x_c14_c5 m_c14_c5_c7 c14 g
+x_c14_c5 m_c5_c14_c16 c5 g
+x_c14_c7 m_c14_c7_c9 c14 g
+x_c14_c7 m_c7_c14_c12 c7 g
+x_c14_c9 m_c14_c9_av11 c14 g
+x_c14_c9 m_c9_c14_c16 c9 g
+x_c15_c16 m_c15_c16_c18 c15 g
+x_c15_c16 m_c16_c15_c17 c16 g
+x_c15_c17_c2 m_c2_c15_c15 c2 p
+x_c15_c17_c2 m_c2_c17_c19 c2 g
+x_c15_c17_c2 x_c15_dg4 c15 p
+x_c15_c18 m_c15_c18_c20 c15 g
+x_c15_c18 m_c18_c15_c13 c18 g
+x_c15_c2 m_c15_c2_c4 c15 g
+x_c15_c2 m_c2_c15_c13 c2 p
+x_c15_c2 m_c2_c15_c15_2 c2 p
+x_c15_c20 m_c20_c15_c17 c20 g
+x_c15_c4 m_c15_c4_c6 c15 g
+x_c15_c4 m_c4_c15_c17 c4 g
+x_c15_c6 m_c15_c6_c8 c15 g
+x_c15_c6 m_c6_c15_c13 c6 g
+x_c15_c8 m_c15_c8_c10 c15 p
+x_c15_c8 m_c8_c15_c17 c8 g
+x_c15_dg4 fcm_crossing_6km rail r
+x_c15_dg4 x_c117_c15_cp01_cbar c15 p
+x_c15_dg4 x_dg4 dg4 p
+x_c16 m_sn_c16_sn sn g
+x_c16_2 m_sn_c16_c20 sn g
+x_c16_2 x_c16_3 c16 g
+x_c16_3 m_sn_c16_sn_2 sn g
+x_c16_3 x_c16 c16 g
+x_c16_c17 m_c16_c17_c21 c16 g
+x_c16_c17 m_c17_c16_c14 c17 g
+x_c16_c21 m_c16_c21_c23 c16 g
+x_c16_c21 x_c21 c21 g
+x_c16_c23 m_c23_c16_c14 c23 g
+x_c16_c23 x_c16_2 c16 g
+x_c16_c3 m_c16_c3_c5 c16 g
+x_c16_c5 m_c16_c5_c7 c16 g
+x_c16_c5 x_c16b_c5 c5 g
+x_c16_c7 m_c16_c7_c9 c16 g
+x_c16_c7 m_c7_c16_c14 c7 g
+x_c16_c9 m_c16_c9_av11 c16 g
+x_c16_c9 m_c9_c16_c18 c9 g
+x_c16b m_c16b_sn_c29 c16b g
+x_c16b x_sn_6 sn d
+x_c16b_c27 x_c14_c27 c27 g
+x_c16b_c29 m_c16b_c29_c27 c16b g
+x_c16b_c29 x_c14_c29 c29 g
+x_c16b_c5 m_c16b_c5_c7 c16b g
+x_c16b_c5 x_c18_c5 c5 g
+x_c16b_c7 x_c16_c7 c7 g
+x_c17 x_c16_c17 c17 g
+x_c17_c18 m_c18_c17_c15 c18 g
+x_c17_c18 x_c17 c17 g
+x_c17_c20 m_c17_c20_c18 c17 g
+x_c17_c20 m_c20_c17_c21 c20 g
+x_c17_c24 m_c17_c24_c20 c17 g
+x_c17_c24 m_c24_c17_sn c24 g
+x_c17_c28 m_c17_c28_c24 c17 d
+x_c17_c28 m_c28_c17_sn c28 d
+x_c17_c4 m_c17_c4_c2 c17 g
+x_c17_c4 m_c4_c17_c19 c4 g
+x_c17_c6 m_c17_c6_c4 c17 g
+x_c17_c6 m_c6_c17_c15 c6 g
+x_c17_c8 m_c17_c8_c6 c17 g
+x_c17_c8 m_c8_c17_c19 c8 g
+x_c18_c5 x_c18b_c5 c5 d
+x_c18_c7 m_c18_c7_c5 c18 g
+x_c18_c7 x_c16b_c7 c7 g
+x_c18_c9 m_c18_c9_c7 c18 g
+x_c18_c9 m_c9_c18_c20 c9 g
+x_c18b_c5 m_c18b_c5_c7 c18b d
+x_c18b_c5 x_c20_c5 c5 d
+x_c18b_c7 x_c18_c7 c7 g
+x_c19 m_sn_c19_dg4 sn g
+x_c19 x_c19_c44 c19 g
+x_c19_c2 m_c2_c19_c21 c2 g
+x_c19_c2 x_c19 c19 g
+x_c19_c4 m_c19_c4_c2 c19 g
+x_c19_c4 m_c4_c19_c21 c4 g
+x_c19_c44 m_c44_c19_c21 c44 g
+x_c19_c44 x_c19_dg4 c19 g
+x_c19_c6 m_c19_c6_c4 c19 g
+x_c19_c6 m_c6_c19_c17 c6 g
+x_c19_c8 m_c19_c8_c6 c19 g
+x_c19_c8 m_c8_c19_c21 c8 g
+x_c19_dg4 m_dg4_c19_c21 dg4 p
+x_c1_c10 m_c1_c10_c12 c1 g
+x_c1_c12 m_c12_c1_c3 c12 g
+x_c1_c12 m_c1_c12_c14 c1 g
+x_c1_c14 m_c14_c1_c3 c14 g
+x_c1_c14 m_c1_c14_c16 c1 d
+x_c1_c16 m_c16_c1_c3 c16 d
+x_c1_c8 m_c1_c8_c10 c1 g
+x_c1_c8 m_c8_c1_c3 c8 g
+x_c2 m_c2_sn_sn c2 d
+x_c2 m_sn_c2_c4 sn d
+x_c20 x_c20_2 c20 g
+x_c20_2 m_c20_sn_c27 c20 d
+x_c20_2 m_sn_c20_c24 sn d
+x_c20_c21 m_c20_c21_c23 c20 g
+x_c20_c23 m_c23_c20_c16 c23 g
+x_c20_c23 x_c20 c20 g
+x_c20_c27 m_c20_c27_c29 c20 g
+x_c20_c27 m_c27_c20_sn c27 g
+x_c20_c29 m_c20_c29_sn c20 g
+x_c20_c29 m_c29_c20_sn c29 g
+x_c20_c5 m_c20_c5_c7 c20 d
+x_c20_c7 m_c20_c7_c9 c20 g
+x_c20_c7 x_c18b_c7 c7 g
+x_c20_c9 m_c20_c9_acc c20 g
+x_c21 m_c21_sn_c20 c21 g
+x_c21 m_sn_c21_c17 sn g
+x_c21_c4 m_c21_c4_c6 c21 g
+x_c21_c4 m_c4_c21_c23 c4 g
+x_c21_c44 m_c21_c44_c2 c21 g
+x_c21_c46 m_c46_c21_c25 c46 g
+x_c21_c46 x_c21_c44 c21 g
+x_c21_c6 m_c21_c6_c8 c21 g
+x_c21_c6 m_c6_c21_c19 c6 g
+x_c21_c8 m_c21_c8_c10 c21 g
+x_c21_c8 m_c8_c21_c23 c8 g
+x_c21_dg4 m_c21_dg4_c46 c21 g
+x_c21_dg4 m_dg4_c21_c25 dg4 p
+x_c23_c4 m_c23_c4_c2 c23 g
+x_c23_c4 m_c4_c23_c25 c4 g
+x_c23_c6 m_c23_c6_c4 c23 g
+x_c23_c6 m_c6_c23_c21 c6 g
+x_c23_c8 m_c23_c8_c6 c23 g
+x_c23_c8 m_c8_c23_c25 c8 g
+x_c24 m_sn_c24_c28 sn d
+x_c25_c4 m_c25_c4_c6 c25 g
+x_c25_c4 m_c4_c25_c27 c4 g
+x_c25_c46 m_c25_c46_c2 c25 g
+x_c25_c48 m_c48_c25_c27 c48 g
+x_c25_c48 x_c25_c46 c25 g
+x_c25_c6 m_c25_c6_c8 c25 g
+x_c25_c6 m_c6_c25_c23 c6 g
+x_c25_c8 m_c25_c8_c10 c25 g
+x_c25_c8 m_c8_c25_c27 c8 g
+x_c25_dg4 m_c25_dg4_c48 c25 g
+x_c25_dg4 m_dg4_c25_c29 dg4 p
+x_c27 x_c27_2 c27 g
+x_c27_2 x_c27_3 c27 g
+x_c27_3 x_c16b_c27 c27 g
+x_c27_c4 m_c27_c4_c2 c27 g
+x_c27_c4 m_c4_c27_c29 c4 g
+x_c27_c48 m_c27_c48_sn c27 g
+x_c27_c48 m_c48_c27_c29 c48 g
+x_c27_c6 m_c27_c6_c4 c27 g
+x_c27_c6 m_c6_c27_c25 c6 g
+x_c27_c8 m_c27_c8_c6 c27 g
+x_c27_c8 m_c8_c27_c29 c8 g
+x_c29 m_sn_c29_c27 sn g
+x_c29 x_c29_2 c29 g
+x_c29_2 m_sn_c29_c27_2 sn g
+x_c29_2 x_c29_3 c29 g
+x_c29_3 m_sn_c29_c27_3 sn g
+x_c29_3 x_c16b_c29 c29 g
+x_c29_c4 m_c29_c4_c2 c29 g
+x_c29_c4 m_c4_c29_sn c4 d
+x_c29_c48 m_c29_c48_dg4 c29 g
+x_c29_c48 x_c48_3 c48 g
+x_c29_c6 m_c29_c6_c4 c29 g
+x_c29_c6 m_c6_c29_c27 c6 g
+x_c29_c8 m_c29_c8_c6 c29 d
+x_c29_dg4 m_dg4_c29_c31 dg4 p
+x_c2_c21 m_c21_c2_c4 c21 g
+x_c2_c21 m_c2_c21_c23 c2 g
+x_c2_c23 m_c2_c23_c25 c2 g
+x_c2_c25 m_c25_c2_c4 c25 g
+x_c2_c25 m_c2_c25_c27 c2 g
+x_c2_c27 m_c2_c27_c29 c2 g
+x_c2_c29 m_c2_c29_sn c2 d
+x_c2_c29 x_c2b_c29 c29 g
+x_c2_c4 m_c2_sn_c13 c2 p
+x_c2_c4 m_c4_sn_c13 c4 g
+x_c2_c9 m_c2_c9_av11 c2 p
+x_c2_c9 m_c2_c9_c7 c2 p
+x_c2_c9 x_c6_c9 c9 g
+x_c2b_c29 m_c29_c2b_c48 c29 g
+x_c2b_c29 m_c2b_c29_sn c2b d
+x_c3 m_sn_c3_c1 sn p
+x_c3 x_c3_c6 c3 g
+x_c31 m_c31_sn_dg4 c31 d
+x_c31_c48 m_c31_c48_sn c31 g
+x_c31_c48 x_c33_c48 c48 d
+x_c31_dg4 x_c33_dg4 dg4 p
+x_c33 m_c33_sn_c48 c33 d
+x_c33 x_c31 sn d
+x_c33_c48 x_c35_c48 c48 d
+x_c33_dg4 m_c33_dg4_sn c33 d
+x_c33_dg4 x_c35_dg4 dg4 p
+x_c35 x_c35_2 c35 d
+x_c35_2 m_c35_sn_sn c35 d
+x_c35_2 x_c33 sn d
+x_c35_3 x_c35_dg4 c35 d
+x_c35_c48 x_c35 c35 d
+x_c3_c6 m_c3_c6_c8 c3 g
+x_c3_c8 m_c3_c8_c10 c3 g
+x_c3_c8 m_c8_c3_c5 c8 g
+x_c48 m_c48_sn_c101 c48 g
+x_c48 x_sn_21 sn g
+x_c48_2 m_c48_sn_sn c48 d
+x_c48_2 x_sn_22 sn d
+x_c48_3 x_c31_c48 c48 g
+x_c48_3 x_sn_23 sn g
+x_c48_dg2 m_c48_dg2_c111 c48 g
+x_c5 m_sn_c5_c3 sn p
+x_c5 x_c5_c6 c5 g
+x_c52 m_sn_c52_sn sn d
+x_c5_c6 m_c5_c6_c8 c5 g
+x_c5_c6 m_c6_c5_c3 c6 g
+x_c5_c8 m_c5_c8_c10 c5 g
+x_c5_c8 m_c8_c5_c7 c8 g
+x_c6_c7 m_c6_c7_c5 c6 g
+x_c6_c7 m_c7_c6_c2 c7 g
+x_c6_c9 m_c6_c9_c7 c6 g
+x_c6_c9 m_c9_c6_c8 c9 p
+x_c7_c8 m_c7_c8_c6 c7 g
+x_c7_c8 m_c8_c7_c9 c8 p
+x_c8 m_sn_c8_c8 sn g
+x_c8 x_c1_c8 c8 g
+x_c8_2 m_sn_c8_sn sn g
+x_c8_2 x_c8 c8 g
+x_c8_c9 m_c8_c9_av11 c8 p
+x_c8_c9 m_c9_c8_c10 c9 p
+x_cbar_dg2 m_cbar_dg2_c107 cbar p
+x_cbar_dg2 m_dg2_cbar_c48 dg2 g
+x_cp01_2 m_cp01_sn_sn cp01 p
+x_cp01_3 m_cp01_sn_sn_2 cp01 p
+x_cp01_3 x_c52 sn d
+x_cp01_4 m_cp01_sn_sn_3 cp01 p
+x_dg4 m_dg4_sn_c19 dg4 p
+x_sn m_sn_sn_c20 sn d
+x_sn m_sn_sn_c29 sn g
+x_sn_10 m_sn_sn_sn_2 sn p
+x_sn_10 x_c8_2 sn d
+x_sn_11 m_sn_sn_sn_3 sn g
+x_sn_11 x_cp01_2 sn d
+x_sn_13 x_sn_12 sn d
+x_sn_13 x_sn_14 sn d
+x_sn_14 x_sn_17 sn d
+x_sn_16 m_sn_sn_sn_5 sn g
+x_sn_18 m_sn_sn_sn_4 sn d
+x_sn_18 x_sn_13 sn d
+x_sn_18 x_sn_17 sn d
+x_sn_19 m_sn_sn_sn_10 sn d
+x_sn_19 x_sn_17 sn d
+x_sn_2 m_sn_sn_c20_2 sn g
+x_sn_2 x_sn_3 sn g
+x_sn_20 m_sn_sn_sn_6 sn d
+x_sn_21 m_sn_sn_sn_12 sn g
+x_sn_21 x_sn_19 sn g
+x_sn_22 x_sn_20 sn d
+x_sn_24 m_sn_sn_c101 sn g
+x_sn_24 x_c48 sn g
+x_sn_25 m_sn_sn_sn_13 sn d
+x_sn_25 x_c48_2 sn d
+x_sn_26 m_sn_sn_sn_14 sn d
+x_sn_26 x_sn_25 sn d
+x_sn_27 m_sn_sn_c101_2 sn g
+x_sn_27 x_sn_24 sn g
+x_sn_28 m_sn_sn_sn_15 sn d
+x_sn_30 m_sn_sn_c105 sn g
+x_sn_30 m_sn_sn_sn_17 sn g
+x_sn_31 m_c101_sn_c54 sn d
+x_sn_31 m_sn_sn_sn_16 sn g
+x_sn_32 m_sn_sn_c107 sn g
+x_sn_33 m_sn_sn_sn_18 sn g
+x_sn_33 x_c103_2 sn g
+x_sn_35 m_sn_sn_sn_19 sn g
+x_sn_36 m_sn_sn_sn_21 sn g
+x_sn_36 x_sn_32 sn g
+x_sn_37 x_sn_34 sn d
+x_sn_37 x_sn_42 sn d
+x_sn_38 m_sn_sn_sn_20 sn g
+x_sn_38 x_sn_43 sn g
+x_sn_39 m_sn_sn_sn_22 sn g
+x_sn_39 m_sn_sn_sn_24 sn g
+x_sn_4 m_sn_sn_c29_2 sn g
+x_sn_4 x_sn sn d
+x_sn_41 m_sn_sn_sn_25 sn g
+x_sn_41 x_sn_36 sn g
+x_sn_42 m_sn_sn_sn_26 sn g
+x_sn_42 m_sn_sn_sn_30 sn d
+x_sn_43 m_sn_sn_sn_27 sn g
+x_sn_43 m_sn_sn_sn_31 sn d
+x_sn_44 m_sn_sn_sn_23 sn d
+x_sn_44 x_sn_42 sn d
+x_sn_45 m_sn_sn_sn_28 sn g
+x_sn_45 m_sn_sn_sn_32 sn d
+x_sn_46 m_sn_sn_sn_33 sn d
+x_sn_47 m_sn_sn_sn_29 sn d
+x_sn_47 m_sn_sn_sn_34 sn d
+x_sn_48 m_sn_sn_sn_35 sn d
+x_sn_49 m_sn_sn_sn_36 sn d
+x_sn_6 m_sn_sn_c29_3 sn g
+x_sn_6 x_sn_4 sn d
+x_sn_9 m_sn_sn_c12 sn g
+x_sn_9 m_sn_sn_sn sn p
+`;
+  const LIMA_RIVER = `
+3004,6963 2626,7036 2161,7185 1408,7708 136,7902 -139,8014 -228,8079 -280,8242 -309,8217 -264,8126 -350,8195 -300,8284 -568,8691 -842,9225
+-7402,9368 -7205,9286 -6358,9377 -5468,9399 -4371,9625 -4244,9713 -3978,9695 -3685,9570 -3564,9461 -3252,8949 -3029,8881 -2894,8883 -2480,9031 -1888,9443 -1426,9640 -1036,9668 -564,9514 -334,9240 -50,8583 192,8284 492,8161 1122,8265 1301,8225 1731,7979 2356,7452 2567,7374 3096,7269
+-900,9273 -1004,9313 -1203,9313 -1368,9263 -1367,9232 -1648,9088 -1669,9114 -2316,8669 -2679,8572 -2724,8531 -2754,8347 -2760,8552 -2817,8534 -2847,8388 -2846,8548 -2920,8537 -2962,8388 -3005,8376 -2962,8531 -3139,8515 -3311,8550 -3473,8657 -3730,9033 -4004,9287 -4673,9202 -5371,8991 -6501,9038 -6830,9026 -7165,8945
+-842,9225 -900,9273
+`;
+  // The hand-written stops' text (Appendix B), by stop id: the plaza, the
+  // level crossings, the landmarks' and named scenery's blocks, the road
+  // north, the railway and the station. Each was checked against its source
+  // when written (OSM, imagery, directories, Tom first-hand); the game names
+  // none of them. The almacén's corner is a designed placement.
+  const LIMA_STOP_TEXT = {
+    x_av11_c10: "The corner of the plaza, where Avenida 11 meets Calle 10. Paths cut diagonally across the square under the trees.",
+    m_av11_c12_c10: "Avenida 11, along the side of the plaza. Benches under the trees, a shopping bag left on one of them.",
+    m_av11_c10_c8: "Avenida 11 by the plaza. The parish church of San Isidro Labrador stands on this block, its doors shut.",
+    m_c10_av11_c9: "Calle 10, along the plaza. On this side, shop fronts with their shutters down; across the street, the trees.",
+    m_c10_c13_av11: "Calle 10, on the plaza's far side. A bicycle leans against a tree, unlocked.",
+    m_av11_c8_c6: "Avenida 11. The Banco Nación is on this block, its shutter down, and the Escuela Primaria Nº 9 a little further on.",
+    m_av11_c6_c4: "Avenida 11, outside the Correo Argentino office. A notice is taped to the inside of the glass, too faded to read from here.",
+    m_c6_c13_av11: "Calle 6, outside the municipal hospital. The ambulance bay is empty, and a chain is looped through the doors' handles.",
+    m_c8_av11_c13: "Calle 8, by the Delegación Municipal. Through the window, a row of plastic chairs where people used to wait.",
+    m_c7_acc_c20: "The volunteer fire station is on this block. One bay door is open, and the bay is empty.",
+    m_c117_c88_c84: "The barrio's club runs along here behind a wire fence: tennis courts, a hall, a pool with leaves floating in it.",
+    m_c90b_c117_c119: "The courtyard in front of your row, in the Barrio Atucha. Four houses under red-tile roofs face the paths and the parking spaces. The neighbours' blinds are down.",
+    m_c7_c10_c8: "Calle 7. A pharmacy takes up the front of a house here, its window full of sun-faded posters.",
+    m_c12_c13_c15: "Calle 12, outside the Comisaría Zárate 2. A patrol car is parked across the entrance with its doors open.",
+    m_cbar_dg2_c107: "The Camino a Baradero. A building-materials yard stands behind a wire fence: sand, bricks, stacked pipes.",
+    x_c16_c7: "The corner of Calle 16 and Calle 7. A repair shop's roller door is half up, tyres stacked beside it.",
+    x_acc_av11_c20: "Where the Acceso a Lima meets Avenida 11. The petrol station's forecourt is empty, the nozzles hung up on the pumps.",
+    x_c113_c50: "A corner in the Nueve de Julio neighbourhood. The almacén's door opens onto the corner itself, under a faded awning.",
+    x_c15_dg4: "Calle 15 crosses the railway here. A bell on a post beside the tracks, and nothing else.",
+    x_c107_c2_c7: "The level crossing on Calle 2. A bell on a post: no barrier, no lights.",
+    estacion_lima: "Estación Lima. The station buildings, the platform, and the goods shed beside them. The platform is empty.",
+    fcm_crossing_6km: "The tracks cross a country road here. A bell on a post, nothing else.",
+    fcm_crossing_11km: "Another road crossing on the line, with its bell.",
+    atucha_halt: "The Atucha halt: a platform beside the tracks, and not much else.",
+    r111_767m: "Calle 111, heading north out of town between fields. A side road branches west here.",
+    r111_973m: "Calle 111, open country on both sides. Another side road branches off.",
+    r111_2752m: "Calle 111. An unpaved road runs off to the west.",
+    r111_papermill: "Calle 111. The paper mill stands off to the west, down a side road.",
+    r111_7180m: "Calle 111, near the river. The Camino Provincial 038-03 branches off here.",
+    r111_7334m: "Calle 111. The Camino Provincial 038-09 branches off here.",
+    atucha_gate: "The road ends at the Atucha complex. The fence runs off both ways, and the gate is shut. Beyond it, the plant's domes."
+  };
+  // The text every other stop reads, by its type, a mid stop's and a
+  // corner's: one variant per stop, picked by stableHash() of its id mod the
+  // count, so a stop reads the same in every run. Each text is true of every
+  // stop of its type: paved around the plaza, on the main axis and along
+  // the railway; mostly gravel (ripio) elsewhere; dirt where the town meets
+  // the fields; the Barrio Atucha's lanes (reference: Lima.md, "Streets and
+  // surfaces", from imagery and Tom first-hand).
+  const STOP_TEXT = {
+    core: {
+      mid: [
+        "A paved block of low houses built wall to wall. Every window has bars, and every door is shut.",
+        "Low house fronts along the pavement, the paint faded. Nothing moves behind the bars.",
+        "The street is paved here, with kerbs and a line of trees. It is very quiet." ],
+      corner: [
+        "A paved corner. Nobody is waiting to cross.",
+        "Two paved streets meet. No cars, no voices." ] },
+    gravel: {
+      mid: [
+        "A gravel street, the stones pushed into two ruts by tyres. The houses sit back behind low walls and wire fences.",
+        "Loose gravel and dust. Each house along here is set back behind its own gate.",
+        "A gravel street between low houses. Weeds grow along the edges, where the cars didn't reach." ],
+      corner: [
+        "Two gravel streets meet. The crossing is just a wider patch of stones.",
+        "A gravel corner, rutted where the cars used to turn." ] },
+    dirt: {
+      mid: [
+        "The street is packed earth here. Past the last houses, the fields begin.",
+        "A dirt street at the edge of town, the ruts baked hard. Beyond the fences, open ground." ],
+      corner: [
+        "Two dirt tracks cross at the edge of town." ] },
+    barrio: {
+      mid: [
+        "A lane in the Barrio Atucha. Chalets with red-tile roofs sit back in wide gardens under tall trees.",
+        "Big gardens and tall trees along the lane. The lawns are already overdue for mowing." ],
+      corner: [
+        "A junction of the barrio's lanes. Red-tile roofs show between the trees." ] }
+  };
+  // The stop the player's home hangs off, in the Barrio Atucha's courtyard
+  // of row houses (canon). The map falls back to it.
+  const HOME_STOP = "m_c90b_c117_c119";
+  // What a stop's address reads when none of its streets has a name (#288),
+  // and what a stop on the railway's reads.
+  const UNNAMED_STREET = "Unnamed street";
+  const RAIL_ADDRESS = "FC Mitre";
+  // Parked cars: a town stop (a corner or a mid) whose stableHash() mod
+  // PARKED_CAR_EVERY is 0 has one, about one stop in ten, and it is locked
+  // when the hash's next digit is even. Retunable.
+  const PARKED_CAR_EVERY = 10;
+  // The appendix's four blocks, read once: { codes: code → name | null,
+  // stops: [{ id, x, y, type, kind, street, cross, streets, flags }], links:
+  // [{ a, b, code, surface }], river: [[[x, y]]] }. `streets` is every code a
+  // stop is on; `street` and `cross` a mid's own and its two ends'. A name of
+  // null is a street with none (`sn`) or no street at all (`rail`, `fwd`).
+  const LIMA = (function readLimaData(){
+    const lines = (text)=> text.trim().split("\n").map(l=> l.trim()).filter(Boolean);
+    const codes = {};
+    lines(LIMA_STREET_CODES).forEach(l=>{
+      const [code, name] = l.split(" = ");
+      codes[code] = ["sn", "rail", "fwd"].includes(code) ? null : name;
+    });
+    const stops = lines(LIMA_STOPS).map(l=>{
+      const [id, u, v, type, kind, streetsField, ...flags] = l.split(/\s+/);
+      const stop = { id, x:Number(u), y:Number(v), type, kind, street:null, cross:[], streets:[], flags };
+      if(kind === "m"){
+        const [street, cross] = streetsField.split(":");
+        stop.street = street;
+        stop.cross = cross.split(",");
+        stop.streets = [street];
+      } else if(streetsField !== "-") stop.streets = streetsField.split("+");
+      return stop;
+    });
+    const links = lines(LIMA_LINKS).map(l=>{
+      const [a, b, code, surface] = l.split(/\s+/);
+      return { a, b, code, surface };
+    });
+    const river = lines(LIMA_RIVER).map(l=> l.split(/\s+/).map(p=> p.split(",").map(Number)));
+    return { codes, stops, links, river };
+  })();
+  // A code's street name, or null.
+  function streetName(code){ return LIMA.codes[code] || null; }
+  // A stop's address and `room` (ROOM SCHEMA): a corner is at its streets,
+  // unnamed ones left out; a mid is on its street, and `room` places it
+  // between its two named ends, or near the one.
+  function stopAddress(stop){
+    if(stop.kind === "r") return streetName("c111");
+    if(stop.kind === "t") return RAIL_ADDRESS;
+    if(stop.kind === "s") return "Estación Lima";
+    const names = stop.streets.map(streetName).filter(Boolean);
+    return names.length ? names.join(" & ") : UNNAMED_STREET;
+  }
+  function stopRoomName(stop){
+    if(stop.kind !== "m") return null;
+    const ends = stop.cross.map(streetName).filter((n, i, all)=> n && all.indexOf(n) === i);
+    if(ends.length === 2) return `between ${ends[0]} & ${ends[1]}`;
+    return ends.length === 1 ? `near ${ends[0]}` : null;
+  }
+  function stopDesc(stop){
+    if(LIMA_STOP_TEXT[stop.id]) return LIMA_STOP_TEXT[stop.id];
+    const set = STOP_TEXT[stop.type][stop.kind === "c" ? "corner" : "mid"];
+    return set[stableHash(stop.id) % set.length];
+  }
+  // A stop's exit along `link` to `to`, before any clash between two exits
+  // pointing the same way is settled (limaStopExits()). The compass word is
+  // computeDirection()'s.
+  function stopExitLabel(from, to, link){
+    const dir = computeDirection(from.id, to.id);
+    if(link.code === "rail") return `Follow the tracks ${dir}`;
+    if(link.code === "fwd") return to.kind === "s" ? "Walk to the station" : `Walk out to ${stopAddress(to)}`;
+    const name = streetName(link.code);
+    if(!name) return `Head ${dir} along the unnamed street`;
+    if(from.kind === "m" && to.kind === "c"){
+      const cross = to.streets.filter(c=> c !== link.code).map(streetName).filter(Boolean);
+      if(cross.length) return `Head ${dir} toward ${cross.join(" & ")}`;
+    }
+    return `Head ${dir} on ${name}`;
+  }
+  // Every stop's exits, one per link each way. Exits of one stop that point
+  // the same way are told apart, each step only for what the last left
+  // alike: first each gets " toward " and its target's address, the link's
+  // own street and any unnamed one left out; then a later twin gets ", " and
+  // its target's `room`; then the group's compass words become the
+  // eight-point ones (COMPASS_8); and last a later twin is numbered. The
+  // wording past the first step is a judgment call, retunable: Calle 2's
+  // two carriageways and a few unnamed lanes need all of it.
+  const COMPASS_8 = ["east", "northeast", "north", "northwest", "west", "southwest", "south", "southeast"];
+  function compass8(a, b){
+    const A = LOCATIONS[a], B = LOCATIONS[b];
+    const deg = Math.atan2(B.y - A.y, B.x - A.x) * 180 / Math.PI;
+    return COMPASS_8[((Math.round(deg / 45) % 8) + 8) % 8];
+  }
+  function limaStopExits(byId){
+    const out = {};
+    LIMA.stops.forEach(s=>{ out[s.id] = []; });
+    LIMA.links.forEach(link=>{
+      [[link.a, link.b], [link.b, link.a]].forEach(([f, t])=>{
+        out[f].push({ to:t, label:stopExitLabel(byId[f], byId[t], link), link, dir:computeDirection(f, t) });
+      });
+    });
+    Object.keys(out).forEach(id=>{
+      const groups = {};
+      out[id].forEach(e=>{ (groups[e.dir] = groups[e.dir] || []).push(e); });
+      Object.values(groups).filter(g=> g.length > 1).forEach(g=>{
+        const twins = ()=> g.filter((e, i)=> g.slice(0, i).some(o=> o.label === e.label));
+        g.forEach(e=>{
+          const own = e.link.code === "rail" ? RAIL_ADDRESS : streetName(e.link.code);
+          const rest = stopAddress(byId[e.to]).split(" & ").filter(n=> n !== own && n !== UNNAMED_STREET).join(" & ");
+          if(rest) e.label = `${e.label} toward ${rest}`;
+        });
+        twins().forEach(e=>{ const room = stopRoomName(byId[e.to]); if(room) e.label = `${e.label}, ${room}`; });
+        if(twins().length) g.forEach(e=>{ e.label = e.label.replace(e.dir, compass8(id, e.to)); });
+        twins().forEach((e, n)=>{ e.label = `${e.label} (${["second", "third", "fourth"][n] || n + 2})`; });
+      });
+    });
+    return out;
+  }
+  // Every stop's Location, registered once at startup: its own id, at its
+  // (u, v), street level.
+  LIMA.stops.forEach(s=>{ LOCATIONS[s.id] = { x:s.x, y:s.y, z:0 }; });
+  // Every stop's room (ROOM SCHEMA): the street, open to the sky, with its
+  // text, its trees and its parked car.
+  function buildLimaStops(){
+    const byId = {};
+    LIMA.stops.forEach(s=>{ byId[s.id] = s; });
+    const exits = limaStopExits(byId);
+    const world = {};
+    LIMA.stops.forEach(s=>{
+      const town = s.kind === "c" || s.kind === "m";
+      const room = { locationId:s.id, address:stopAddress(s), area:null, room:stopRoomName(s), shelter:"none",
+        desc:stopDesc(s), floorCap: s.kind === "c" ? 100 : 20, floor:[], containers:[],
+        exits: exits[s.id].map(e=> ({ to:e.to, label:e.label })) };
+      if(s.flags.includes("plaza") || (s.type === "barrio" && s.kind === "m")) room.hasTree = true;
+      const h = stableHash(s.id);
+      if(town && h % PARKED_CAR_EVERY === 0){
+        room.carLocked = Math.floor(h / 10) % 10 % 2 === 0;
+        room.carContainers = [
+          { id:"boot", name:"Boot", capacityKg:25, spawnPools:["tools_general"], items:[] },
+          { id:"glovebox", name:"Glovebox", capacityKg:3, spawnPools:["documents_lore"], items:[] } ];
+      }
+      world[s.id] = room;
+    });
+    return world;
+  }
+  // The map's streets: every street's links chained into maximal paths, one
+  // entry per path, { name, chain, rail? } — `name` upper-cased as the map
+  // prints it, null for a street with none. A path runs through every stop
+  // where its street neither ends nor branches.
+  function limaMapStreets(){
+    const byCode = {};
+    LIMA.links.forEach(l=>{ (byCode[l.code] = byCode[l.code] || []).push(l); });
+    const out = [];
+    Object.keys(byCode).forEach(code=>{
+      const adj = {};
+      const used = new Set();
+      byCode[code].forEach((l, i)=>{
+        (adj[l.a] = adj[l.a] || []).push({ to:l.b, i });
+        (adj[l.b] = adj[l.b] || []).push({ to:l.a, i });
+      });
+      const walk = (start)=>{
+        const chain = [start];
+        let at = start;
+        for(;;){
+          const next = (adj[at] || []).find(e=> !used.has(e.i));
+          if(!next) break;
+          used.add(next.i);
+          chain.push(next.to);
+          at = next.to;
+          if(adj[at].length !== 2) break;
+        }
+        return chain;
+      };
+      const name = streetName(code);
+      const push = (chain)=> out.push(Object.assign({ name: name ? name.toUpperCase() : null, chain }, code === "rail" ? { rail:true } : {}));
+      Object.keys(adj).filter(id=> adj[id].length !== 2).forEach(id=>{
+        while(adj[id].some(e=> !used.has(e.i))) push(walk(id));
+      });
+      Object.keys(adj).forEach(id=>{ while(adj[id].some(e=> !used.has(e.i))) push(walk(id)); });
+    });
+    return out;
+  }
   // The river, drawn and nothing more: polylines of [x, y] metres in the
-  // LOCATIONS frame. No stop touches them.
-  const RIVER_LINES = [ [[-119, 300], [619, 300]] ];
+  // LOCATIONS frame (LIMA_RIVER). No stop touches them.
+  const RIVER_LINES = LIMA.river;
 
   // Buildings the map can name: a player-visible name and the Location its
   // marker sits on. Reference data, the same category as LOCATIONS above —
@@ -3148,1703 +5101,6 @@
     };
   }
 
-  function buildDockSt(){
-    return {
-    dock6th: { locationId:"dock6th", address:"Dock St & 6th St", area:null, room:null, shelter:"none",
-      desc:"Dock St and 6th, the far corner of town. Beyond the fence the rail bed runs off west into scrub.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"dock4th", label:"Head east on Dock St" },
-        { to:"mid_dock_4_6", label:"Step into the block (east)" },
-        { to:"mill6th", label:"Head north on 6th St" },
-        { to:"mid_6th_d_mi", label:"Step into the block (north)" } ]
-    },
-    mid_dock_4_6: { locationId:"mid_dock_4_6", address:"Dock St", area:null, room:"between 4th & 6th", shelter:"none",
-      desc:"Dock St's west end. Two empty trailers stand on their landing gear, doors banded shut.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"dock6th", label:"Head west toward 6th St" },
-        { to:"dock4th", label:"Head east toward 4th St" } ]
-    },
-    dock4th: { locationId:"dock4th", address:"Dock St & 4th St", area:null, room:null, shelter:"none",
-      desc:"Dock and 4th. A loading dock stands at truck height on the corner, its rubber bumpers cracked and grey.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"dock6th", label:"Head west on Dock St" },
-        { to:"mid_dock_4_6", label:"Step into the block (west)" },
-        { to:"dock2nd", label:"Head east on Dock St" },
-        { to:"mid_dock_2_4", label:"Step into the block (east)" },
-        { to:"mill4th", label:"Head north on 4th St" },
-        { to:"mid_4th_d_mi", label:"Step into the block (north)" } ]
-    },
-    mid_dock_2_4: { locationId:"mid_dock_2_4", address:"Dock St", area:null, room:"between 2nd & 4th", shelter:"none",
-      desc:"A block of Dock St with the rail spur alongside it, ballast crunching underfoot where the pavement's washed out.",
-      floorCap:20, floor:itemsFromRegistry([ { id:"tow_chain", qty:1 } ]), containers:[],
-      exits:[
-        { to:"dock4th", label:"Head west toward 4th St" },
-        { to:"dock2nd", label:"Head east toward 2nd St" } ]
-    },
-    dock2nd: { locationId:"dock2nd", address:"Dock St & 2nd St", area:null, room:null, shelter:"none",
-      desc:"The corner of Dock and 2nd, where a spur of track crosses the street at an angle that ruins your stride.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"dock4th", label:"Head west on Dock St" },
-        { to:"mid_dock_2_4", label:"Step into the block (west)" },
-        { to:"dock1st", label:"Head east on Dock St" },
-        { to:"mid_dock_1_2", label:"Step into the block (east)" },
-        { to:"mill2nd", label:"Head north on 2nd St" },
-        { to:"mid_2nd_d_mi", label:"Step into the block (north)" } ]
-    },
-    mid_dock_1_2: { locationId:"mid_dock_1_2", address:"Dock St", area:null, room:"between 1st & 2nd", shelter:"none",
-      desc:"Dock St, mid-block. A forklift is parked nose-in to a bay with its forks still raised, a broken pallet underneath.",
-      floorCap:20, floor:itemsFromRegistry([ { id:"plank", qty:2 } ]), containers:[],
-      exits:[
-        { to:"dock2nd", label:"Head west toward 2nd St" },
-        { to:"dock1st", label:"Head east toward 1st St" } ]
-    },
-    dock1st: { locationId:"dock1st", address:"Dock St & 1st St", area:null, room:null, shelter:"none",
-      desc:"Dock St and 1st. A gantry crane sits parked at the end of its rails, hook swinging a little.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"dock2nd", label:"Head west on Dock St" },
-        { to:"mid_dock_1_2", label:"Step into the block (west)" },
-        { to:"dock3rd", label:"Head east on Dock St" },
-        { to:"mid_dock_1_3", label:"Step into the block (east)" },
-        { to:"mill1st", label:"Head north on 1st St" },
-        { to:"mid_1st_d_mi", label:"Step into the block (north)" } ]
-    },
-    mid_dock_1_3: { locationId:"mid_dock_1_3", address:"Dock St", area:null, room:"between 1st & 3rd", shelter:"none",
-      desc:"The middle of Dock St. Pallet strapping and torn shrink wrap have collected against the base of the fence.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"dock1st", label:"Head west toward 1st St" },
-        { to:"dock3rd", label:"Head east toward 3rd St" } ]
-    },
-    dock3rd: { locationId:"dock3rd", address:"Dock St & 3rd St", area:null, room:null, shelter:"none",
-      desc:"Dock and 3rd. Shipping containers stacked three high make the corner feel like a hallway.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"dock1st", label:"Head west on Dock St" },
-        { to:"mid_dock_1_3", label:"Step into the block (west)" },
-        { to:"dock5th", label:"Head east on Dock St" },
-        { to:"mid_dock_3_5", label:"Step into the block (east)" },
-        { to:"mill3rd", label:"Head north on 3rd St" },
-        { to:"mid_3rd_d_mi", label:"Step into the block (north)" } ]
-    },
-    mid_dock_3_5: { locationId:"mid_dock_3_5", address:"Dock St", area:null, room:"between 3rd & 5th", shelter:"none",
-      desc:"Dock St behind the containers. The shade down here never lifts and the pavement's still damp.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"dock3rd", label:"Head west toward 3rd St" },
-        { to:"dock5th", label:"Head east toward 5th St" } ]
-    },
-    dock5th: { locationId:"dock5th", address:"Dock St & 5th St", area:null, room:null, shelter:"none",
-      desc:"Dock St and 5th, where a line of dock doors runs the length of the block, every one of them shut.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"dock3rd", label:"Head west on Dock St" },
-        { to:"mid_dock_3_5", label:"Step into the block (west)" },
-        { to:"dock7th", label:"Head east on Dock St" },
-        { to:"mid_dock_5_7", label:"Step into the block (east)" },
-        { to:"mill5th", label:"Head north on 5th St" },
-        { to:"mid_5th_d_mi", label:"Step into the block (north)" } ]
-    },
-    mid_dock_5_7: { locationId:"mid_dock_5_7", address:"Dock St", area:null, room:"between 5th & 7th", shelter:"none",
-      desc:"This end of Dock St is mostly turning space for trucks, painted with arrows that don't agree with each other.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"dock5th", label:"Head west toward 5th St" },
-        { to:"dock7th", label:"Head east toward 7th St" } ]
-    },
-    dock7th: { locationId:"dock7th", address:"Dock St & 7th St", area:null, room:null, shelter:"none",
-      desc:"Dock and 7th. Somebody chalked a load number on the pavement, and the rain hasn't quite taken it yet.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"dock5th", label:"Head west on Dock St" },
-        { to:"mid_dock_5_7", label:"Step into the block (west)" },
-        { to:"dock9th", label:"Head east on Dock St" },
-        { to:"mid_dock_7_9", label:"Step into the block (east)" },
-        { to:"mill7th", label:"Head north on 7th St" },
-        { to:"mid_7th_d_mi", label:"Step into the block (north)" } ]
-    },
-    mid_dock_7_9: { locationId:"mid_dock_7_9", address:"Dock St", area:null, room:"between 7th & 9th", shelter:"none",
-      desc:"The last block of Dock St. Past the fence the rail bed runs east until the heat blurs it.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"dock7th", label:"Head west toward 7th St" },
-        { to:"dock9th", label:"Head east toward 9th St" } ]
-    },
-    dock9th: { locationId:"dock9th", address:"Dock St & 9th St", area:null, room:null, shelter:"none",
-      desc:"The southeast corner of everything. Dock St and 9th both stop at a fence with the gate standing open.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"dock7th", label:"Head west on Dock St" },
-        { to:"mid_dock_7_9", label:"Step into the block (west)" },
-        { to:"mill9th", label:"Head north on 9th St" },
-        { to:"mid_9th_d_mi", label:"Step into the block (north)" } ]
-    }
-    };
-  }
-
-  function buildMillSt(){
-    return {
-    mill6th: { locationId:"mill6th", address:"Mill St & 6th St", area:null, room:null, shelter:"none",
-      desc:"Mill St and 6th, both of them running along the back of a fenced yard stacked with pallets.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"mill4th", label:"Head east on Mill St" },
-        { to:"mid_mill_4_6", label:"Step into the block (east)" },
-        { to:"dock6th", label:"Head south on 6th St" },
-        { to:"mid_6th_d_mi", label:"Step into the block (south)" },
-        { to:"cedar6th", label:"Head north on 6th St" },
-        { to:"mid_6th_mi_c", label:"Step into the block (north)" } ]
-    },
-    mid_mill_4_6: { locationId:"mid_mill_4_6", address:"Mill St", area:null, room:"between 4th & 6th", shelter:"none",
-      desc:"A stretch of Mill St with a truck scale on one side and nothing at all on the other.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"mill6th", label:"Head west toward 6th St" },
-        { to:"mill4th", label:"Head east toward 4th St" } ]
-    },
-    mill4th: { locationId:"mill4th", address:"Mill St & 4th St", area:null, room:null, shelter:"none",
-      desc:{ reads:{ kind:"grid" },
-        variants:{ on:"The corner of Mill and 4th. A weighbridge is set into the pavement, its readout showing zeros.",
-          off:"The corner of Mill and 4th. A weighbridge is set into the pavement, its readout dark." } },
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"mill6th", label:"Head west on Mill St" },
-        { to:"mid_mill_4_6", label:"Step into the block (west)" },
-        { to:"mill2nd", label:"Head east on Mill St" },
-        { to:"mid_mill_2_4", label:"Step into the block (east)" },
-        { to:"dock4th", label:"Head south on 4th St" },
-        { to:"mid_4th_d_mi", label:"Step into the block (south)" },
-        { to:"cedar4th", label:"Head north on 4th St" },
-        { to:"mid_4th_mi_c", label:"Step into the block (north)" } ]
-    },
-    mid_mill_2_4: { locationId:"mid_mill_2_4", address:"Mill St", area:null, room:"between 2nd & 4th", shelter:"none",
-      desc:"Mill St runs between two fenced yards here, and the grain dust on the pavement still smells faintly sweet.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"mill4th", label:"Head west toward 4th St" },
-        { to:"mill2nd", label:"Head east toward 2nd St" } ]
-    },
-    mill2nd: { locationId:"mill2nd", address:"Mill St & 2nd St", area:null, room:null, shelter:"partial",
-      desc:"Mill and 2nd, under a conveyor bridge that crosses overhead from one building to another.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"mill4th", label:"Head west on Mill St" },
-        { to:"mid_mill_2_4", label:"Step into the block (west)" },
-        { to:"mill1st", label:"Head east on Mill St" },
-        { to:"mid_mill_1_2", label:"Step into the block (east)" },
-        { to:"dock2nd", label:"Head south on 2nd St" },
-        { to:"mid_2nd_d_mi", label:"Step into the block (south)" },
-        { to:"cedar2nd", label:"Head north on 2nd St" },
-        { to:"mid_2nd_mi_c", label:"Step into the block (north)" } ]
-    },
-    mid_mill_1_2: { locationId:"mid_mill_1_2", address:"Mill St", area:null, room:"between 1st & 2nd", shelter:"none",
-      desc:"The mill's long side. Windows too high to see into, and a fire door propped open with a brick.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"mill2nd", label:"Head west toward 2nd St" },
-        { to:"mill1st", label:"Head east toward 1st St" } ]
-    },
-    mill1st: { locationId:"mill1st", address:"Mill St & 1st St", area:null, room:null, shelter:"none",
-      desc:"Mill crosses 1st beside the feed mill's loading side. Four bay doors, all of them down.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"mill2nd", label:"Head west on Mill St" },
-        { to:"mid_mill_1_2", label:"Step into the block (west)" },
-        { to:"mill3rd", label:"Head east on Mill St" },
-        { to:"mid_mill_1_3", label:"Step into the block (east)" },
-        { to:"dock1st", label:"Head south on 1st St" },
-        { to:"mid_1st_d_mi", label:"Step into the block (south)" },
-        { to:"cedar1st", label:"Head north on 1st St" },
-        { to:"mid_1st_mi_c", label:"Step into the block (north)" } ]
-    },
-    mid_mill_1_3: { locationId:"mid_mill_1_3", address:"Mill St", area:null, room:"between 1st & 3rd", shelter:"none",
-      desc:"Mill St mid-block. A row of employee parking spaces, each stencilled with a name worn half away.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"mill1st", label:"Head west toward 1st St" },
-        { to:"mill3rd", label:"Head east toward 3rd St" } ]
-    },
-    mill3rd: { locationId:"mill3rd", address:"Mill St & 3rd St", area:null, room:null, shelter:"none",
-      desc:"Mill and 3rd. A flatbed trailer sits uncoupled on the corner lot, tires flat on the rims.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"mill1st", label:"Head west on Mill St" },
-        { to:"mid_mill_1_3", label:"Step into the block (west)" },
-        { to:"mill5th", label:"Head east on Mill St" },
-        { to:"mid_mill_3_5", label:"Step into the block (east)" },
-        { to:"dock3rd", label:"Head south on 3rd St" },
-        { to:"mid_3rd_d_mi", label:"Step into the block (south)" },
-        { to:"cedar3rd", label:"Head north on 3rd St" },
-        { to:"mid_3rd_mi_c", label:"Step into the block (north)" } ]
-    },
-    mid_mill_3_5: { locationId:"mid_mill_3_5", address:"Mill St", area:null, room:"between 3rd & 5th", shelter:"none",
-      desc:"Mill St past the yards. A hopper car sits on a spur that crosses the road, and nobody moved it.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"mill3rd", label:"Head west toward 3rd St" },
-        { to:"mill5th", label:"Head east toward 5th St" } ]
-    },
-    mill5th: { locationId:"mill5th", address:"Mill St & 5th St", area:null, room:null, shelter:"none",
-      desc:"Mill St and 5th, where the chain-link gives way to a low brick wall topped with broken glass set in mortar.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"mill3rd", label:"Head west on Mill St" },
-        { to:"mid_mill_3_5", label:"Step into the block (west)" },
-        { to:"mill7th", label:"Head east on Mill St" },
-        { to:"mid_mill_5_7", label:"Step into the block (east)" },
-        { to:"dock5th", label:"Head south on 5th St" },
-        { to:"mid_5th_d_mi", label:"Step into the block (south)" },
-        { to:"cedar5th", label:"Head north on 5th St" },
-        { to:"mid_5th_mi_c", label:"Step into the block (north)" } ]
-    },
-    mid_mill_5_7: { locationId:"mid_mill_5_7", address:"Mill St", area:null, room:"between 5th & 7th", shelter:"none",
-      desc:"This stretch of Mill is all fence and weeds, with a gate padlocked from the inside.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"mill5th", label:"Head west toward 5th St" },
-        { to:"mill7th", label:"Head east toward 7th St" } ]
-    },
-    mill7th: { locationId:"mill7th", address:"Mill St & 7th St", area:null, room:null, shelter:"none",
-      desc:"Mill and 7th. Rail ties are stacked shoulder-high on the corner, waiting on a crew.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"mill5th", label:"Head west on Mill St" },
-        { to:"mid_mill_5_7", label:"Step into the block (west)" },
-        { to:"mill9th", label:"Head east on Mill St" },
-        { to:"mid_mill_7_9", label:"Step into the block (east)" },
-        { to:"dock7th", label:"Head south on 7th St" },
-        { to:"mid_7th_d_mi", label:"Step into the block (south)" },
-        { to:"cedar7th", label:"Head north on 7th St" },
-        { to:"mid_7th_mi_c", label:"Step into the block (north)" } ]
-    },
-    mid_mill_7_9: { locationId:"mid_mill_7_9", address:"Mill St", area:null, room:"between 7th & 9th", shelter:"none",
-      desc:"The east end of Mill St. Gravel, thistle, and a NO TRESPASSING sign that predates all of this.",
-      floorCap:20, floor:itemsFromRegistry([ { id:"scrap_metal", qty:2 } ]), containers:[],
-      exits:[
-        { to:"mill7th", label:"Head west toward 7th St" },
-        { to:"mill9th", label:"Head east toward 9th St" } ]
-    },
-    mill9th: { locationId:"mill9th", address:"Mill St & 9th St", area:null, room:null, shelter:"none",
-      desc:"Mill's east corner. Past 9th the pavement turns to crushed stone and the fence simply ends.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"mill7th", label:"Head west on Mill St" },
-        { to:"mid_mill_7_9", label:"Step into the block (west)" },
-        { to:"dock9th", label:"Head south on 9th St" },
-        { to:"mid_9th_d_mi", label:"Step into the block (south)" },
-        { to:"cedar9th", label:"Head north on 9th St" },
-        { to:"mid_9th_mi_c", label:"Step into the block (north)" } ]
-    }
-    };
-  }
-
-  function buildCedarSt(){
-    return {
-    cedar6th: { locationId:"cedar6th", address:"Cedar St & 6th St", area:null, room:null, shelter:"none",
-      desc:"Cedar and 6th, the town's southwest corner in every practical sense. Two streets, no buildings, and a field starting on the far side.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"cedar4th", label:"Head east on Cedar St" },
-        { to:"mid_cedar_4_6", label:"Step into the block (east)" },
-        { to:"mill6th", label:"Head south on 6th St" },
-        { to:"mid_6th_mi_c", label:"Step into the block (south)" },
-        { to:"elm6th", label:"Head north on 6th St" },
-        { to:"mid_6th_c_e", label:"Step into the block (north)" } ]
-    },
-    mid_cedar_4_6: { locationId:"mid_cedar_4_6", address:"Cedar St", area:null, room:"between 4th & 6th", shelter:"none",
-      desc:"Cedar between 4th and 6th. Three houses, then a field that used to be four more.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"cedar6th", label:"Head west toward 6th St" },
-        { to:"cedar4th", label:"Head east toward 4th St" } ]
-    },
-    cedar4th: { locationId:"cedar4th", address:"Cedar St & 4th St", area:null, room:null, shelter:"none",
-      desc:"Cedar and 4th. The pavement's cracked open where tree roots pushed up from underneath, and nobody came to grind it flat.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"cedar6th", label:"Head west on Cedar St" },
-        { to:"mid_cedar_4_6", label:"Step into the block (west)" },
-        { to:"cedar2nd", label:"Head east on Cedar St" },
-        { to:"mid_cedar_2_4", label:"Step into the block (east)" },
-        { to:"mill4th", label:"Head south on 4th St" },
-        { to:"mid_4th_mi_c", label:"Step into the block (south)" },
-        { to:"elm4th", label:"Head north on 4th St" },
-        { to:"mid_4th_c_e", label:"Step into the block (north)" } ]
-    },
-    mid_cedar_2_4: { locationId:"mid_cedar_2_4", address:"Cedar St", area:null, room:"between 2nd & 4th", shelter:"none",
-      desc:"Cedar St. The houses on the south side back onto open ground — no fences, just where the mowing stopped.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"cedar4th", label:"Head west toward 4th St" },
-        { to:"cedar2nd", label:"Head east toward 2nd St" } ]
-    },
-    cedar2nd: { locationId:"cedar2nd", address:"Cedar St & 2nd St", area:null, room:null, shelter:"none",
-      desc:"Cedar crosses 2nd at the last streetlight on the block. The bulb's gone, but the pole is still straight.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"cedar4th", label:"Head west on Cedar St" },
-        { to:"mid_cedar_2_4", label:"Step into the block (west)" },
-        { to:"cedar1st", label:"Head east on Cedar St" },
-        { to:"mid_cedar_1_2", label:"Step into the block (east)" },
-        { to:"mill2nd", label:"Head south on 2nd St" },
-        { to:"mid_2nd_mi_c", label:"Step into the block (south)" },
-        { to:"elm2nd", label:"Head north on 2nd St" },
-        { to:"mid_2nd_c_e", label:"Step into the block (north)" } ]
-    },
-    mid_cedar_1_2: { locationId:"mid_cedar_1_2", address:"Cedar St", area:null, room:"between 1st & 2nd", shelter:"partial",
-      desc:"A block of Cedar with a bus shelter in it. The route map inside has faded to a blank rectangle.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"cedar2nd", label:"Head west toward 2nd St" },
-        { to:"cedar1st", label:"Head east toward 1st St" } ]
-    },
-    cedar1st: { locationId:"cedar1st", address:"Cedar St & 1st St", area:null, room:null, shelter:"none",
-      desc:"Cedar and 1st. The sidewalk ends on the south side and a worn dirt path along the shoulder takes over.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"cedar2nd", label:"Head west on Cedar St" },
-        { to:"mid_cedar_1_2", label:"Step into the block (west)" },
-        { to:"cedar3rd", label:"Head east on Cedar St" },
-        { to:"mid_cedar_1_3", label:"Step into the block (east)" },
-        { to:"mill1st", label:"Head south on 1st St" },
-        { to:"mid_1st_mi_c", label:"Step into the block (south)" },
-        { to:"elm1st", label:"Head north on 1st St" },
-        { to:"mid_1st_c_e", label:"Step into the block (north)" } ]
-    },
-    mid_cedar_1_3: { locationId:"mid_cedar_1_3", address:"Cedar St", area:null, room:"between 1st & 3rd", shelter:"none",
-      desc:"Cedar mid-block, wide enough for two cars and never once needing to be.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"cedar1st", label:"Head west toward 1st St" },
-        { to:"cedar3rd", label:"Head east toward 3rd St" } ]
-    },
-    cedar3rd: { locationId:"cedar3rd", address:"Cedar St & 3rd St", area:null, room:null, shelter:"none",
-      desc:"A corner with a church noticeboard, its glass front cracked, last month's service still slotted in crooked.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"cedar1st", label:"Head west on Cedar St" },
-        { to:"mid_cedar_1_3", label:"Step into the block (west)" },
-        { to:"cedar5th", label:"Head east on Cedar St" },
-        { to:"mid_cedar_3_5", label:"Step into the block (east)" },
-        { to:"mill3rd", label:"Head south on 3rd St" },
-        { to:"mid_3rd_mi_c", label:"Step into the block (south)" },
-        { to:"elm3rd", label:"Head north on 3rd St" },
-        { to:"mid_3rd_c_e", label:"Step into the block (north)" } ]
-    },
-    mid_cedar_3_5: { locationId:"mid_cedar_3_5", address:"Cedar St", area:null, room:"between 3rd & 5th", shelter:"none",
-      desc:"Cedar St past the church. The parking lot is empty and the lines are freshly painted, which is somehow worse.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"cedar3rd", label:"Head west toward 3rd St" },
-        { to:"cedar5th", label:"Head east toward 5th St" } ]
-    },
-    cedar5th: { locationId:"cedar5th", address:"Cedar St & 5th St", area:null, room:null, shelter:"none",
-      desc:"Cedar and 5th. A horse trailer is parked on the grass, hitch resting on a cinderblock.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"cedar3rd", label:"Head west on Cedar St" },
-        { to:"mid_cedar_3_5", label:"Step into the block (west)" },
-        { to:"cedar7th", label:"Head east on Cedar St" },
-        { to:"mid_cedar_5_7", label:"Step into the block (east)" },
-        { to:"mill5th", label:"Head south on 5th St" },
-        { to:"mid_5th_mi_c", label:"Step into the block (south)" },
-        { to:"elm5th", label:"Head north on 5th St" },
-        { to:"mid_5th_c_e", label:"Step into the block (north)" } ]
-    },
-    mid_cedar_5_7: { locationId:"mid_cedar_5_7", address:"Cedar St", area:null, room:"between 5th & 7th", shelter:"none",
-      desc:"Out here Cedar is more shoulder than street. Somebody's been dumping yard waste at the edge of the lot.",
-      floorCap:20, floor:itemsFromRegistry([ { id:"firewood", qty:3 } ]), containers:[],
-      exits:[
-        { to:"cedar5th", label:"Head west toward 5th St" },
-        { to:"cedar7th", label:"Head east toward 7th St" } ]
-    },
-    cedar7th: { locationId:"cedar7th", address:"Cedar St & 7th St", area:null, room:null, shelter:"none",
-      desc:"Cedar's east end meets 7th beside a drainage culvert big enough to walk into.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"cedar5th", label:"Head west on Cedar St" },
-        { to:"mid_cedar_5_7", label:"Step into the block (west)" },
-        { to:"cedar9th", label:"Head east on Cedar St" },
-        { to:"mid_cedar_7_9", label:"Step into the block (east)" },
-        { to:"mill7th", label:"Head south on 7th St" },
-        { to:"mid_7th_mi_c", label:"Step into the block (south)" },
-        { to:"elm7th", label:"Head north on 7th St" },
-        { to:"mid_7th_c_e", label:"Step into the block (north)" } ]
-    },
-    mid_cedar_7_9: { locationId:"mid_cedar_7_9", address:"Cedar St", area:null, room:"between 7th & 9th", shelter:"none",
-      desc:"The last block of Cedar. A ditch runs alongside it, deep and dry.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"cedar7th", label:"Head west toward 7th St" },
-        { to:"cedar9th", label:"Head east toward 9th St" } ]
-    },
-    cedar9th: { locationId:"cedar9th", address:"Cedar St & 9th St", area:null, room:null, shelter:"none",
-      desc:"Cedar and 9th, where the grid gives up. The asphalt stops in a ragged line and gravel takes over.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"cedar7th", label:"Head west on Cedar St" },
-        { to:"mid_cedar_7_9", label:"Step into the block (west)" },
-        { to:"mill9th", label:"Head south on 9th St" },
-        { to:"mid_9th_mi_c", label:"Step into the block (south)" },
-        { to:"elm9th", label:"Head north on 9th St" },
-        { to:"mid_9th_c_e", label:"Step into the block (north)" } ]
-    }
-    };
-  }
-
-  function buildElmSt(){
-    return {
-    elm6th: { locationId:"elm6th", address:"Elm St & 6th St", area:null, room:null, shelter:"none",
-      desc:"Elm St meets 6th at a corner with no stop sign, just a faded triangle painted straight onto the asphalt.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"elm4th", label:"Head east on Elm St" },
-        { to:"mid_elm_4_6", label:"Step into the block (east)" },
-        { to:"cedar6th", label:"Head south on 6th St" },
-        { to:"mid_6th_c_e", label:"Step into the block (south)" },
-        { to:"maple6th", label:"Head north on 6th St" },
-        { to:"mid_6th_e_mp", label:"Step into the block (north)" } ]
-    },
-    mid_elm_4_6: { locationId:"mid_elm_4_6", address:"Elm St", area:null, room:"between 4th & 6th", shelter:"none",
-      desc:"Elm between 4th and 6th. Big yards out here, and the hedges have started meeting across the driveways.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"elm6th", label:"Head west toward 6th St" },
-        { to:"elm4th", label:"Head east toward 4th St" } ]
-    },
-    elm4th: { locationId:"elm4th", address:"Elm St & 4th St", area:null, room:null, shelter:"none",
-      desc:"A corner lot with a swing set in the side yard, one chain snapped and the seat hanging vertical.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"elm6th", label:"Head west on Elm St" },
-        { to:"mid_elm_4_6", label:"Step into the block (west)" },
-        { to:"elm2nd", label:"Head east on Elm St" },
-        { to:"mid_elm_2_4", label:"Step into the block (east)" },
-        { to:"cedar4th", label:"Head south on 4th St" },
-        { to:"mid_4th_c_e", label:"Step into the block (south)" },
-        { to:"maple4th", label:"Head north on 4th St" },
-        { to:"mid_4th_e_mp", label:"Step into the block (north)" } ]
-    },
-    mid_elm_2_4: { locationId:"mid_elm_2_4", address:"Elm St", area:null, room:"between 2nd & 4th", shelter:"none",
-      desc:"A block of Elm where every house has the same porch, built by the same crew in the same year. A stuffed rabbit lies in the gutter, rained on until it lost its shape.",
-      floorCap:20, floor:itemsFromRegistry([ { id:"stuffed_toy", qty:1 } ]), containers:[],
-      exits:[
-        { to:"elm4th", label:"Head west toward 4th St" },
-        { to:"elm2nd", label:"Head east toward 2nd St" } ]
-    },
-    elm2nd: { locationId:"elm2nd", address:"Elm St & 2nd St", area:null, room:null, shelter:"none",
-      desc:"Elm and 2nd. A hedge somebody kept square for years has gone soft and shapeless at the edges.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"elm4th", label:"Head west on Elm St" },
-        { to:"mid_elm_2_4", label:"Step into the block (west)" },
-        { to:"elm1st", label:"Head east on Elm St" },
-        { to:"mid_elm_1_2", label:"Step into the block (east)" },
-        { to:"cedar2nd", label:"Head south on 2nd St" },
-        { to:"mid_2nd_c_e", label:"Step into the block (south)" },
-        { to:"maple2nd", label:"Head north on 2nd St" },
-        { to:"mid_2nd_e_mp", label:"Step into the block (north)" } ]
-    },
-    mid_elm_1_2: { locationId:"mid_elm_1_2", address:"Elm St", area:null, room:"between 1st & 2nd", shelter:"none",
-      desc:"Elm mid-block. A garden hose is still stretched across the sidewalk, coiled where somebody set it down.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"elm2nd", label:"Head west toward 2nd St" },
-        { to:"elm1st", label:"Head east toward 1st St" } ]
-    },
-    elm1st: { locationId:"elm1st", address:"Elm St & 1st St", area:null, room:null, shelter:"none",
-      desc:"Elm crosses 1st here. A basketball hoop is bolted above a garage door, the net long gone.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"elm2nd", label:"Head west on Elm St" },
-        { to:"mid_elm_1_2", label:"Step into the block (west)" },
-        { to:"elm3rd", label:"Head east on Elm St" },
-        { to:"mid_elm_1_3", label:"Step into the block (east)" },
-        { to:"cedar1st", label:"Head south on 1st St" },
-        { to:"mid_1st_c_e", label:"Step into the block (south)" },
-        { to:"maple1st", label:"Head north on 1st St" },
-        { to:"mid_1st_e_mp", label:"Step into the block (north)" } ]
-    },
-    mid_elm_1_3: { locationId:"mid_elm_1_3", address:"Elm St", area:null, room:"between 1st & 3rd", shelter:"none",
-      desc:"Elm St, deep into the block. A big maple leans over the road — the street was named for the wrong tree.",
-      hasTree:true, floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"elm1st", label:"Head west toward 1st St" },
-        { to:"elm3rd", label:"Head east toward 3rd St" } ]
-    },
-    elm3rd: { locationId:"elm3rd", address:"Elm St & 3rd St", area:null, room:null, shelter:"none",
-      desc:"The corner of Elm and 3rd. A sprinkler head still stands up out of dead grass, aimed at nothing.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"elm1st", label:"Head west on Elm St" },
-        { to:"mid_elm_1_3", label:"Step into the block (west)" },
-        { to:"elm5th", label:"Head east on Elm St" },
-        { to:"mid_elm_3_5", label:"Step into the block (east)" },
-        { to:"cedar3rd", label:"Head south on 3rd St" },
-        { to:"mid_3rd_c_e", label:"Step into the block (south)" },
-        { to:"maple3rd", label:"Head north on 3rd St" },
-        { to:"mid_3rd_e_mp", label:"Step into the block (north)" } ]
-    },
-    mid_elm_3_5: { locationId:"mid_elm_3_5", address:"Elm St", area:null, room:"between 3rd & 5th", shelter:"none",
-      desc:"This stretch of Elm has the only speed bump in town, and somebody painted a face on it years ago.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"elm3rd", label:"Head west toward 3rd St" },
-        { to:"elm5th", label:"Head east toward 5th St" } ]
-    },
-    elm5th: { locationId:"elm5th", address:"Elm St & 5th St", area:null, room:null, shelter:"none",
-      desc:"Elm and 5th. A recycling bin is still out at the curb, and the rain has turned the paper inside to pulp.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"elm3rd", label:"Head west on Elm St" },
-        { to:"mid_elm_3_5", label:"Step into the block (west)" },
-        { to:"elm7th", label:"Head east on Elm St" },
-        { to:"mid_elm_5_7", label:"Step into the block (east)" },
-        { to:"cedar5th", label:"Head south on 5th St" },
-        { to:"mid_5th_c_e", label:"Step into the block (south)" },
-        { to:"maple5th", label:"Head north on 5th St" },
-        { to:"mid_5th_e_mp", label:"Step into the block (north)" } ]
-    },
-    mid_elm_5_7: { locationId:"mid_elm_5_7", address:"Elm St", area:null, room:"between 5th & 7th", shelter:"none",
-      desc:"Elm thins out here. Two houses, then a lot that was never built on.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"elm5th", label:"Head west toward 5th St" },
-        { to:"elm7th", label:"Head east toward 7th St" } ]
-    },
-    elm7th: { locationId:"elm7th", address:"Elm St & 7th St", area:null, room:null, shelter:"none",
-      desc:"Elm runs out of houses just short of 7th. The last two lots are foundations and framing that never got walls.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"elm5th", label:"Head west on Elm St" },
-        { to:"mid_elm_5_7", label:"Step into the block (west)" },
-        { to:"elm9th", label:"Head east on Elm St" },
-        { to:"mid_elm_7_9", label:"Step into the block (east)" },
-        { to:"cedar7th", label:"Head south on 7th St" },
-        { to:"mid_7th_c_e", label:"Step into the block (south)" },
-        { to:"maple7th", label:"Head north on 7th St" },
-        { to:"mid_7th_e_mp", label:"Step into the block (north)" } ]
-    },
-    mid_elm_7_9: { locationId:"mid_elm_7_9", address:"Elm St", area:null, room:"between 7th & 9th", shelter:"none",
-      desc:"The last block of Elm. Gravel shoulder, no sidewalk, and a mailbox with its flag still up.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"elm7th", label:"Head west toward 7th St" },
-        { to:"elm9th", label:"Head east toward 9th St" } ]
-    },
-    elm9th: { locationId:"elm9th", address:"Elm St & 9th St", area:null, room:null, shelter:"none",
-      desc:"Elm's east corner. Past 9th there's a drainage ditch, then a treeline, then nothing worth walking to.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"elm7th", label:"Head west on Elm St" },
-        { to:"mid_elm_7_9", label:"Step into the block (west)" },
-        { to:"cedar9th", label:"Head south on 9th St" },
-        { to:"mid_9th_c_e", label:"Step into the block (south)" },
-        { to:"maple9th", label:"Head north on 9th St" },
-        { to:"mid_9th_e_mp", label:"Step into the block (north)" } ]
-    }
-    };
-  }
-
-  function buildMapleSt(){
-    return {
-    maple4th: { locationId:"maple4th", address:"Maple St & 4th St", area:null, room:null, shelter:"none",
-      desc:"Maple St's western corner — the newest-looking pavement in this part of town, already cracking.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"maple6th", label:"Head west on Maple St" },
-        { to:"mid_maple_4_6", label:"Step into the block (west)" },
-        { to:"maple2nd", label:"Head east on Maple St" },
-        { to:"mid_maple_2_4", label:"Step into the block (east)" },
-        { to:"elm4th", label:"Head south on 4th St" },
-        { to:"mid_4th_e_mp", label:"Step into the block (south)" },
-        { to:"poplar4th", label:"Head north on 4th St" },
-        { to:"mid_4th_mp_p", label:"Step into the block (north)" } ]
-    },
-    mid_maple_2_4: { locationId:"mid_maple_2_4", address:"Maple St", area:null, room:"between 2nd & 4th", shelter:"none",
-      desc:{ reads:{ kind:"grid" },
-        variants:{ on:"Maple St, mostly gravel shoulder and one working streetlight.",
-          off:"Maple St, mostly gravel shoulder and one streetlight, out like the rest." } },
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple4th", label:"Head west toward 4th St" },
-        { to:"maple2nd", label:"Head east toward 2nd St" } ]
-    },
-    maple2nd: { locationId:"maple2nd", address:"Maple St & 2nd St", area:null, room:null, shelter:"none",
-      desc:"A wide gravel lot borders Maple here, chain-link fence sagging in one corner. INDUSTRIAL-something on a faded sign, the rest weathered off.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"maple4th", label:"Head west on Maple St" },
-        { to:"mid_maple_2_4", label:"Step into the block (west)" },
-        { to:"maple1st", label:"Head east on Maple St" },
-        { to:"mid_maple_1_2", label:"Step into the block (east)" },
-        { to:"elm2nd", label:"Head south on 2nd St" },
-        { to:"mid_2nd_e_mp", label:"Step into the block (south)" },
-        { to:"poplar2nd", label:"Head north on 2nd St" },
-        { to:"mid_2nd_mp_p", label:"Step into the block (north)" },
-        { to:"industrial_floor", label:"Enter Riverside Freight" } ]
-    },
-    mid_maple_1_2: { locationId:"mid_maple_1_2", address:"Maple St", area:null, room:"between 1st & 2nd", shelter:"none",
-      desc:"A short stretch of Maple, chain-link fencing along one side.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple2nd", label:"Head west toward 2nd St" },
-        { to:"maple1st", label:"Head east toward 1st St" } ]
-    },
-    maple1st: { locationId:"maple1st", address:"Maple St & 1st St", area:null, room:null, shelter:"none",
-      desc:"Maple St, dead center of the outer ring. A stop sign, bent but standing.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"maple2nd", label:"Head west on Maple St" },
-        { to:"mid_maple_1_2", label:"Step into the block (west)" },
-        { to:"maple3rd", label:"Head east on Maple St" },
-        { to:"mid_maple_1_3", label:"Step into the block (east)" },
-        { to:"elm1st", label:"Head south on 1st St" },
-        { to:"mid_1st_e_mp", label:"Step into the block (south)" },
-        { to:"outside", label:"Head north on 1st St" },
-        { to:"mid_1st_mp_p", label:"Step into the block (north)" } ]
-    },
-    mid_maple_1_3: { locationId:"mid_maple_1_3", address:"Maple St", area:null, room:"between 1st & 3rd", shelter:"none",
-      desc:"Maple St, quiet enough that the police station's old call box is still audible from here — not that it does anything now.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple1st", label:"Head west toward 1st St" },
-        { to:"maple3rd", label:"Head east toward 3rd St" } ]
-    },
-    maple3rd: { locationId:"maple3rd", address:"Maple St & 3rd St", area:null, room:null, shelter:"none",
-      desc:"A squat brick building with barred windows sits at this corner — old paint on the door still reads POLICE, mostly.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"maple1st", label:"Head west on Maple St" },
-        { to:"mid_maple_1_3", label:"Step into the block (west)" },
-        { to:"maple5th", label:"Head east on Maple St" },
-        { to:"mid_maple_3_5", label:"Step into the block (east)" },
-        { to:"elm3rd", label:"Head south on 3rd St" },
-        { to:"mid_3rd_e_mp", label:"Step into the block (south)" },
-        { to:"poplar3rd", label:"Head north on 3rd St" },
-        { to:"mid_3rd_mp_p", label:"Step into the block (north)" },
-        { to:"police_lobby", label:"Enter the police station" } ]
-    },
-    mid_maple_3_5: { locationId:"mid_maple_3_5", address:"Maple St", area:null, room:"between 3rd & 5th", shelter:"none",
-      desc:"The far end of Maple, where the streetlights stop.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple3rd", label:"Head west toward 3rd St" },
-        { to:"maple5th", label:"Head east toward 5th St" } ]
-    },
-    maple5th: { locationId:"maple5th", address:"Maple St & 5th St", area:null, room:null, shelter:"none",
-      desc:"Maple's eastern end. The street narrows here, more gravel shoulder than curb.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"maple3rd", label:"Head west on Maple St" },
-        { to:"mid_maple_3_5", label:"Step into the block (west)" },
-        { to:"maple7th", label:"Head east on Maple St" },
-        { to:"mid_maple_5_7", label:"Step into the block (east)" },
-        { to:"elm5th", label:"Head south on 5th St" },
-        { to:"mid_5th_e_mp", label:"Step into the block (south)" },
-        { to:"poplar5th", label:"Head north on 5th St" },
-        { to:"mid_5th_mp_p", label:"Step into the block (north)" } ]
-    },
-    maple6th: { locationId:"maple6th", address:"Maple St & 6th St", area:null, room:null, shelter:"none",
-      desc:"Maple St's west corner, at 6th. A fire hydrant sits at an angle somebody backed into and never reported.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"maple4th", label:"Head east on Maple St" },
-        { to:"mid_maple_4_6", label:"Step into the block (east)" },
-        { to:"elm6th", label:"Head south on 6th St" },
-        { to:"mid_6th_e_mp", label:"Step into the block (south)" },
-        { to:"poplar6th", label:"Head north on 6th St" },
-        { to:"mid_6th_mp_p", label:"Step into the block (north)" } ]
-    },
-    mid_maple_4_6: { locationId:"mid_maple_4_6", address:"Maple St", area:null, room:"between 4th & 6th", shelter:"none",
-      desc:"A stretch of Maple further out than most people bothered to walk, even before.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple6th", label:"Head west toward 6th St" },
-        { to:"maple4th", label:"Head east toward 4th St" } ]
-    },
-    mid_maple_5_7: { locationId:"mid_maple_5_7", address:"Maple St", area:null, room:"between 5th & 7th", shelter:"none",
-      desc:"Maple St past the last streetlight. The shoulder's soft where the rain has been running off it.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple5th", label:"Head west toward 5th St" },
-        { to:"maple7th", label:"Head east toward 7th St" } ]
-    },
-    maple7th: { locationId:"maple7th", address:"Maple St & 7th St", area:null, room:null, shelter:"none",
-      desc:"Maple and 7th. The road surface changes here, town asphalt giving over to the coarser county mix.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"maple5th", label:"Head west on Maple St" },
-        { to:"mid_maple_5_7", label:"Step into the block (west)" },
-        { to:"maple9th", label:"Head east on Maple St" },
-        { to:"mid_maple_7_9", label:"Step into the block (east)" },
-        { to:"elm7th", label:"Head south on 7th St" },
-        { to:"mid_7th_e_mp", label:"Step into the block (south)" },
-        { to:"poplar7th", label:"Head north on 7th St" },
-        { to:"mid_7th_mp_p", label:"Step into the block (north)" } ]
-    },
-    mid_maple_7_9: { locationId:"mid_maple_7_9", address:"Maple St", area:null, room:"between 7th & 9th", shelter:"none",
-      desc:"The final block of Maple. One house set well back, a walnut tree over the gravel drive, nobody picking it.",
-      hasTree:true, floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple7th", label:"Head west toward 7th St" },
-        { to:"maple9th", label:"Head east toward 9th St" } ]
-    },
-    maple9th: { locationId:"maple9th", address:"Maple St & 9th St", area:null, room:null, shelter:"none",
-      desc:"Maple St ends at 9th against a guardrail. Past it the ground drops away into brush.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"maple7th", label:"Head west on Maple St" },
-        { to:"mid_maple_7_9", label:"Step into the block (west)" },
-        { to:"elm9th", label:"Head south on 9th St" },
-        { to:"mid_9th_e_mp", label:"Step into the block (south)" },
-        { to:"poplar9th", label:"Head north on 9th St" },
-        { to:"mid_9th_mp_p", label:"Step into the block (north)" } ]
-    }
-    };
-  }
-
-  function buildPoplarSt(){
-    return {
-    // The Poplar St / 1st St intersection, under an id that predates the grid.
-    // Not renamed: a save restores its world wholesale rather than rebuilding
-    // it, so the id every existing save already holds has to keep resolving.
-    outside: { locationId:"outside", address:"Poplar St & 1st St", area:null, room:null, shelter:"none",
-      desc:"A quiet intersection. 1st St runs both ways here, and Poplar continues in both directions too. Your building's stoop is partway down the block to the west.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"poplar2nd", label:"Head west on Poplar St" },
-        { to:"mid_poplar_1_2", label:"Step into the block (west)" },
-        { to:"poplar3rd", label:"Head east on Poplar St" },
-        { to:"mid_poplar_1_3", label:"Step into the block (east)" },
-        { to:"main1st", label:"Head north on 1st St" },
-        { to:"mid_1st_o_m", label:"Step into the block (north)" },
-        { to:"maple1st", label:"Head south on 1st St" },
-        { to:"mid_1st_mp_p", label:"Step into the block (south)" } ]
-    },
-    alley: { locationId:"acorn_f0", address:"Poplar St", area:null, room:"Alley", shelter:"none",
-      desc:"Narrow, littered, and smelling of garbage. A rusted fire escape climbs the back of Acorn Apartments.",
-      floorCap:60, floor:[],
-      containers:[
-        { id:"dumpster", name:"Dumpster", capacityKg:40, spawnPools:["trash","fuel_fire"], spawnRolled:true, items:itemsFromRegistry([
-          { id:"scrap_metal", qty:3 },
-          { id:"metal_pipe", qty:1 },
-          { id:"firewood", qty:5 } ])}
-      ],
-      exits:[
-        { to:"mid_poplar_1_2", label:"Head out to the street" },
-        { to:"balcony", label:"Climb the fire escape" },
-        { to:"onea_patio", label:"Go through the gate", distanceM:6 } ]
-    },
-    poplar2nd: { locationId:"poplar2nd", address:"Poplar St & 2nd St", area:null, room:null, shelter:"none",
-      desc:"A quiet residential corner. A pickup truck is parked half on the curb.",
-      floorCap:100, floor:[], containers:[],
-      carLocked:true,
-      carContainers:[
-        { id:"trunk", name:"Truck Bed", capacityKg:25, items:itemsFromRegistry([
-          { id:"tow_chain", qty:1 },
-          { id:"work_gloves", qty:1 } ])},
-        { id:"glovebox", name:"Glovebox", capacityKg:3, items:itemsFromRegistry([
-          { id:"flashlight", qty:1 },
-          { id:"owners_manual", qty:1 } ])}
-      ],
-      exits:[
-        { to:"poplar4th", label:"Head west on Poplar St" },
-        { to:"mid_poplar_2_4", label:"Step into the block (west)" },
-        { to:"outside", label:"Head east on Poplar St" },
-        { to:"mid_poplar_1_2", label:"Step into the block (east)" },
-        { to:"maple2nd", label:"Head south on 2nd St" },
-        { to:"mid_2nd_mp_p", label:"Step into the block (south)" },
-        { to:"main2nd", label:"Head north on 2nd St" },
-        { to:"mid_2nd_p_m", label:"Step into the block (north)" } ]
-    },
-    poplar4th: { locationId:"poplar4th", address:"Poplar St & 4th St", area:null, room:null, shelter:"none",
-      desc:{ reads:{ kind:"grid" },
-        variants:{ on:"The last residential stretch before Poplar runs into 4th St. Fewer porch lights than a block ago.",
-          off:"The last residential stretch before Poplar runs into 4th St. Not a porch light on the block." } },
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"poplar6th", label:"Head west on Poplar St" },
-        { to:"mid_poplar_4_6", label:"Step into the block (west)" },
-        { to:"poplar2nd", label:"Head east on Poplar St" },
-        { to:"mid_poplar_2_4", label:"Step into the block (east)" },
-        { to:"maple4th", label:"Head south on 4th St" },
-        { to:"mid_4th_mp_p", label:"Step into the block (south)" },
-        { to:"main4th", label:"Head north on 4th St" },
-        { to:"mid_4th_p_m", label:"Step into the block (north)" } ]
-    },
-    mid_poplar_2_4: { locationId:"mid_poplar_2_4", address:"Poplar St", area:null, room:"between 2nd & 4th", shelter:"none",
-      desc:"More of the same quiet block, just further out.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"poplar4th", label:"Head west toward 4th St" },
-        { to:"poplar2nd", label:"Head east toward 2nd St" },
-        { to:"oak_hallway1", label:"Enter Oak Apartments" } ]
-    },
-    poplar3rd: { locationId:"poplar3rd", address:"Poplar St & 3rd St", area:null, room:null, shelter:"none",
-      desc:"The far end of Poplar, where the block gives way to 3rd St.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"outside", label:"Head west on Poplar St" },
-        { to:"mid_poplar_1_3", label:"Step into the block (west)" },
-        { to:"poplar5th", label:"Head east on Poplar St" },
-        { to:"mid_poplar_3_5", label:"Step into the block (east)" },
-        { to:"main3rd", label:"Head north on 3rd St" },
-        { to:"mid_3rd_p_m", label:"Step into the block (north)" },
-        { to:"maple3rd", label:"Head south on 3rd St" },
-        { to:"mid_3rd_mp_p", label:"Step into the block (south)" } ]
-    },
-    poplar5th: { locationId:"poplar5th", address:"Poplar St & 5th St", area:null, room:null, shelter:"none",
-      desc:"Poplar's easternmost corner. A chain-link fence marks where somebody's yard ends and the sidewalk starts.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"poplar3rd", label:"Head west on Poplar St" },
-        { to:"mid_poplar_3_5", label:"Step into the block (west)" },
-        { to:"poplar7th", label:"Head east on Poplar St" },
-        { to:"mid_poplar_5_7", label:"Step into the block (east)" },
-        { to:"maple5th", label:"Head south on 5th St" },
-        { to:"mid_5th_mp_p", label:"Step into the block (south)" },
-        { to:"main5th", label:"Head north on 5th St" },
-        { to:"mid_5th_p_m", label:"Step into the block (north)" } ]
-    },
-    mid_poplar_3_5: { locationId:"mid_poplar_3_5", address:"Poplar St", area:null, room:"between 3rd & 5th", shelter:"none",
-      desc:"The last stretch of Poplar. A kid's bike, abandoned mid-ride, still leans against a fence.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"poplar3rd", label:"Head west toward 3rd St" },
-        { to:"poplar5th", label:"Head east toward 5th St" } ]
-    },
-    mid_poplar_1_2: { locationId:"mid_poplar_1_2", address:"Poplar St", area:null, room:"between 1st & 2nd", shelter:"none",
-      desc:"Your building's front stoop is here, along with a sedan parked at the curb.",
-      floorCap:20, floor:[], containers:[],
-      carLocked:true,
-      carContainers:[
-        { id:"trunk", name:"Car Trunk", capacityKg:20, items:itemsFromRegistry([
-          { id:"tire_iron", qty:1 },
-          { id:"bandage", qty:2 } ])},
-        { id:"glovebox", name:"Glovebox", capacityKg:3, items:itemsFromRegistry([
-          { id:"registration_papers", qty:1 },
-          { id:"aspirin", qty:1 } ])}
-      ],
-      exits:[
-        { to:"poplar2nd", label:"Head west toward 2nd St" },
-        { to:"outside", label:"Head east toward 1st St" },
-        { to:"hallway1", label:"Enter Acorn Apartments" },
-        { to:"alley", label:"Duck into the alley" } ]
-    },
-    mid_poplar_1_3: { locationId:"mid_poplar_1_3", address:"Poplar St", area:null, room:"between 1st & 3rd", shelter:"none",
-      desc:"A quiet, ordinary stretch of Poplar St. A big sidewalk tree leans over the curb.",
-      hasTree:true, floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"outside", label:"Head west toward 1st St" },
-        { to:"poplar3rd", label:"Head east toward 3rd St" } ]
-    },
-    poplar6th: { locationId:"poplar6th", address:"Poplar St & 6th St", area:null, room:null, shelter:"none",
-      desc:"Poplar and 6th. A hand-painted sign on a post reads FIREWOOD, with a phone number under it.",
-      floorCap:100, floor:itemsFromRegistry([ { id:"hand_axe", qty:1 } ]), containers:[],
-      exits:[
-        { to:"poplar4th", label:"Head east on Poplar St" },
-        { to:"mid_poplar_4_6", label:"Step into the block (east)" },
-        { to:"maple6th", label:"Head south on 6th St" },
-        { to:"mid_6th_mp_p", label:"Step into the block (south)" },
-        { to:"main6th", label:"Head north on 6th St" },
-        { to:"mid_6th_p_m", label:"Step into the block (north)" } ]
-    },
-    mid_poplar_4_6: { locationId:"mid_poplar_4_6", address:"Poplar St", area:null, room:"between 4th & 6th", shelter:"none",
-      desc:"Poplar out past 4th. Same street, wider driveways, more dogs that aren't barking.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"poplar6th", label:"Head west toward 6th St" },
-        { to:"poplar4th", label:"Head east toward 4th St" } ]
-    },
-    mid_poplar_5_7: { locationId:"mid_poplar_5_7", address:"Poplar St", area:null, room:"between 5th & 7th", shelter:"none",
-      desc:"A block of Poplar with a ditch instead of a curb and a culvert pipe under every drive.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"poplar5th", label:"Head west toward 5th St" },
-        { to:"poplar7th", label:"Head east toward 7th St" } ]
-    },
-    poplar7th: { locationId:"poplar7th", address:"Poplar St & 7th St", area:null, room:null, shelter:"none",
-      desc:"Poplar St and 7th, out where the lots get big enough for sheds bigger than the houses.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"poplar5th", label:"Head west on Poplar St" },
-        { to:"mid_poplar_5_7", label:"Step into the block (west)" },
-        { to:"poplar9th", label:"Head east on Poplar St" },
-        { to:"mid_poplar_7_9", label:"Step into the block (east)" },
-        { to:"maple7th", label:"Head south on 7th St" },
-        { to:"mid_7th_mp_p", label:"Step into the block (south)" },
-        { to:"main7th", label:"Head north on 7th St" },
-        { to:"mid_7th_p_m", label:"Step into the block (north)" } ]
-    },
-    mid_poplar_7_9: { locationId:"mid_poplar_7_9", address:"Poplar St", area:null, room:"between 7th & 9th", shelter:"none",
-      desc:"The end of Poplar St. The pavement's been patched so many times it's more patch than road.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"poplar7th", label:"Head west toward 7th St" },
-        { to:"poplar9th", label:"Head east toward 9th St" } ]
-    },
-    poplar9th: { locationId:"poplar9th", address:"Poplar St & 9th St", area:null, room:null, shelter:"none",
-      desc:"Poplar's east corner. A cattle gate blocks what used to be the continuation, chained and posted.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"poplar7th", label:"Head west on Poplar St" },
-        { to:"mid_poplar_7_9", label:"Step into the block (west)" },
-        { to:"maple9th", label:"Head south on 9th St" },
-        { to:"mid_9th_mp_p", label:"Step into the block (south)" },
-        { to:"main9th", label:"Head north on 9th St" },
-        { to:"mid_9th_p_m", label:"Step into the block (north)" } ]
-    }
-    };
-  }
-
-  function buildMainSt(){
-    return {
-    main2nd: { locationId:"main2nd", address:"Main St & 2nd St", area:null, room:null, shelter:"none",
-      desc:"The corner store's windows are papered over from the inside. Wide, unusually wide, sidewalks run both ways down Main.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"cornerstore", label:"Enter the corner store" },
-        { to:"poplar2nd", label:"Head south on 2nd St" },
-        { to:"mid_2nd_p_m", label:"Step into the block (south)" },
-        { to:"main1st", label:"Head east on Main St" },
-        { to:"mid_main_1_2", label:"Step into the block (east)" },
-        { to:"water2nd", label:"Head north on 2nd St" },
-        { to:"mid_2nd_m_w", label:"Step into the block (north)" },
-        { to:"main4th", label:"Head west on Main St" },
-        { to:"mid_main_2_4", label:"Step into the block (west)" } ]
-    },
-    main4th: { locationId:"main4th", address:"Main St & 4th St", area:null, room:null, shelter:"none",
-      desc:"Main St keeps its width out this far, but the storefronts stop — this stretch is houses and a chain-link lot.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"main6th", label:"Head west on Main St" },
-        { to:"mid_main_4_6", label:"Step into the block (west)" },
-        { to:"main2nd", label:"Head east on Main St" },
-        { to:"mid_main_2_4", label:"Step into the block (east)" },
-        { to:"poplar4th", label:"Head south on 4th St" },
-        { to:"mid_4th_p_m", label:"Step into the block (south)" },
-        { to:"water4th", label:"Head north on 4th St" },
-        { to:"mid_4th_m_w", label:"Step into the block (north)" } ]
-    },
-    mid_main_2_4: { locationId:"mid_main_2_4", address:"Main St", area:null, room:"between 2nd & 4th", shelter:"none",
-      desc:"Main St, out past where the shops give way to houses.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"main4th", label:"Head west toward 4th St" },
-        { to:"main2nd", label:"Head east toward 2nd St" } ]
-    },
-    main1st: { locationId:"main1st", address:"Main St & 1st St", area:null, room:null, shelter:"none",
-      desc:"Main crosses 1st St here. A hand-painted PHARMACY sign is visible partway down the block to the east.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"main2nd", label:"Head west on Main St" },
-        { to:"mid_main_1_2", label:"Step into the block (west)" },
-        { to:"main3rd", label:"Head east on Main St" },
-        { to:"mid_main_1_3", label:"Step into the block (east)" },
-        { to:"outside", label:"Head south on 1st St" },
-        { to:"mid_1st_o_m", label:"Step into the block (south)" },
-        { to:"water1st", label:"Head north on 1st St" },
-        { to:"mid_1st_m_w", label:"Step into the block (north)" } ]
-    },
-    main3rd: { locationId:"main3rd", address:"Main St & 3rd St", area:null, room:null, shelter:"none",
-      desc:"Main crosses 3rd St here. A hardware store and a parked work truck sit partway down the block to the west.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"main1st", label:"Head west on Main St" },
-        { to:"mid_main_1_3", label:"Step into the block (west)" },
-        { to:"main5th", label:"Head east on Main St" },
-        { to:"mid_main_3_5", label:"Step into the block (east)" },
-        { to:"poplar3rd", label:"Head south on 3rd St" },
-        { to:"mid_3rd_p_m", label:"Step into the block (south)" },
-        { to:"water3rd", label:"Head north on 3rd St" },
-        { to:"mid_3rd_m_w", label:"Step into the block (north)" } ]
-    },
-    main5th: { locationId:"main5th", address:"Main St & 5th St", area:null, room:null, shelter:"none",
-      desc:"The east end of Main, where the auto shop's OPEN sign — dark now — still hangs in the window down the block.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"main3rd", label:"Head west on Main St" },
-        { to:"mid_main_3_5", label:"Step into the block (west)" },
-        { to:"main7th", label:"Head east on Main St" },
-        { to:"mid_main_5_7", label:"Step into the block (east)" },
-        { to:"poplar5th", label:"Head south on 5th St" },
-        { to:"mid_5th_p_m", label:"Step into the block (south)" },
-        { to:"water5th", label:"Head north on 5th St" },
-        { to:"mid_5th_m_w", label:"Step into the block (north)" } ]
-    },
-    mid_main_3_5: { locationId:"mid_main_3_5", address:"Main St", area:null, room:"between 3rd & 5th", shelter:"none",
-      desc:"A cinderblock garage sits here, roll-up door half open.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"main3rd", label:"Head west toward 3rd St" },
-        { to:"main5th", label:"Head east toward 5th St" },
-        { to:"auto_shop", label:"Enter the auto shop" } ]
-    },
-    mid_main_1_2: { locationId:"mid_main_1_2", address:"Main St", area:null, room:"between 1st & 2nd", shelter:"none",
-      desc:"A stretch of Main St between the corner store and the pharmacy.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"main2nd", label:"Head west toward 2nd St" },
-        { to:"main1st", label:"Head east toward 1st St" } ]
-    },
-    mid_main_1_3: { locationId:"mid_main_1_3", address:"Main St", area:null, room:"between 1st & 3rd", shelter:"none",
-      desc:"The pharmacy's sign hangs over one side of the street; the hardware store and a parked work truck sit across from it.",
-      floorCap:20, floor:[], containers:[],
-      carLocked:true,
-      carContainers:[
-        { id:"bed", name:"Truck Bed", capacityKg:25, items:itemsFromRegistry([
-          { id:"tow_chain", qty:1 } ])},
-        { id:"cab", name:"Truck Cab", capacityKg:5, items:itemsFromRegistry([
-          { id:"work_gloves", qty:1 },
-          { id:"thermos", qty:1 },
-          { id:"screwdriver", qty:1 } ])}
-      ],
-      exits:[
-        { to:"main1st", label:"Head west toward 1st St" },
-        { to:"main3rd", label:"Head east toward 3rd St" },
-        { to:"pharmacy", label:"Enter the pharmacy" },
-        { to:"hardware", label:"Enter the hardware store" } ]
-    },
-    main6th: { locationId:"main6th", address:"Main St & 6th St", area:null, room:null, shelter:"none",
-      desc:"Main St and 6th. The storefronts are long behind you — out here it's a laundromat with the windows soaped over.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"main4th", label:"Head east on Main St" },
-        { to:"mid_main_4_6", label:"Step into the block (east)" },
-        { to:"poplar6th", label:"Head south on 6th St" },
-        { to:"mid_6th_p_m", label:"Step into the block (south)" },
-        { to:"water6th", label:"Head north on 6th St" },
-        { to:"mid_6th_m_w", label:"Step into the block (north)" } ]
-    },
-    mid_main_4_6: { locationId:"mid_main_4_6", address:"Main St", area:null, room:"between 4th & 6th", shelter:"none",
-      desc:"Main St, four lanes narrowing to two without any sign saying so.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"main6th", label:"Head west toward 6th St" },
-        { to:"main4th", label:"Head east toward 4th St" } ]
-    },
-    mid_main_5_7: { locationId:"mid_main_5_7", address:"Main St", area:null, room:"between 5th & 7th", shelter:"none",
-      desc:"This block of Main has a used-car lot on it, the pennant line still strung between the light poles.",
-      floorCap:20, floor:itemsFromRegistry([ { id:"tire_iron", qty:1 } ]), containers:[],
-      exits:[
-        { to:"main5th", label:"Head west toward 5th St" },
-        { to:"main7th", label:"Head east toward 7th St" } ]
-    },
-    main7th: { locationId:"main7th", address:"Main St & 7th St", area:null, room:null, shelter:"none",
-      desc:{ reads:{ kind:"grid" },
-        variants:{ on:"Main and 7th, where a gas station's canopy lights still burn over empty pumps, price signs stuck at numbers that don't matter.",
-          off:"Main and 7th, where a gas station sits dark on the corner, price signs stuck at numbers that don't matter." } },
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"main5th", label:"Head west on Main St" },
-        { to:"mid_main_5_7", label:"Step into the block (west)" },
-        { to:"main9th", label:"Head east on Main St" },
-        { to:"mid_main_7_9", label:"Step into the block (east)" },
-        { to:"poplar7th", label:"Head south on 7th St" },
-        { to:"mid_7th_p_m", label:"Step into the block (south)" },
-        { to:"water7th", label:"Head north on 7th St" },
-        { to:"mid_7th_m_w", label:"Step into the block (north)" } ]
-    },
-    mid_main_7_9: { locationId:"mid_main_7_9", address:"Main St", area:null, room:"between 7th & 9th", shelter:"none",
-      desc:"The last of Main St. The centre line stops being painted about halfway along.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"main7th", label:"Head west toward 7th St" },
-        { to:"main9th", label:"Head east toward 9th St" } ]
-    },
-    main9th: { locationId:"main9th", address:"Main St & 9th St", area:null, room:null, shelter:"none",
-      desc:"Main St's east end. A green sign points on to a town whose name has been shot through twice.",
-      floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"main7th", label:"Head west on Main St" },
-        { to:"mid_main_7_9", label:"Step into the block (west)" },
-        { to:"poplar9th", label:"Head south on 9th St" },
-        { to:"mid_9th_p_m", label:"Step into the block (south)" },
-        { to:"water9th", label:"Head north on 9th St" },
-        { to:"mid_9th_m_w", label:"Step into the block (north)" } ]
-    }
-    };
-  }
-
-  function buildWaterSt(){
-    return {
-    water2nd: { locationId:"water2nd", address:"Water St & 2nd St", area:null, room:null, shelter:"none",
-      desc:"The riverfront edge of downtown. A low brick storage building sits between the street and the water.",
-      fishable:true, floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"storage", label:"Enter the storage facility" },
-        { to:"main2nd", label:"Head south on 2nd St" },
-        { to:"mid_2nd_m_w", label:"Step into the block (south)" },
-        { to:"water1st", label:"Head east on Water St" },
-        { to:"mid_water_1_2", label:"Step into the block (east)" },
-        { to:"water4th", label:"Head west on Water St" },
-        { to:"mid_water_2_4", label:"Step into the block (west)" } ]
-    },
-    water4th: { locationId:"water4th", address:"Water St & 4th St", area:null, room:null, shelter:"none",
-      desc:"The riverfront gets quieter still out here. No guardrail on this stretch, just a drop to the mud.",
-      fishable:true, floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"water6th", label:"Head west on Water St" },
-        { to:"mid_water_4_6", label:"Step into the block (west)" },
-        { to:"water2nd", label:"Head east on Water St" },
-        { to:"mid_water_2_4", label:"Step into the block (east)" },
-        { to:"main4th", label:"Head south on 4th St" },
-        { to:"mid_4th_m_w", label:"Step into the block (south)" } ]
-    },
-    mid_water_2_4: { locationId:"mid_water_2_4", address:"Water St", area:null, room:"between 2nd & 4th", shelter:"none",
-      desc:"The riverfront path gets rougher out here, more weeds than pavement.",
-      fishable:true, floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"water4th", label:"Head west toward 4th St" },
-        { to:"water2nd", label:"Head east toward 2nd St" } ]
-    },
-    water1st: { locationId:"water1st", address:"Water St & 1st St", area:null, room:null, shelter:"none",
-      desc:"The riverfront here is just a low guardrail and a view of the water. Quiet.",
-      fishable:true, floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"water2nd", label:"Head west on Water St" },
-        { to:"mid_water_1_2", label:"Step into the block (west)" },
-        { to:"water3rd", label:"Head east on Water St" },
-        { to:"mid_water_1_3", label:"Step into the block (east)" },
-        { to:"main1st", label:"Head south on 1st St" },
-        { to:"mid_1st_m_w", label:"Step into the block (south)" },
-        { to:"riverbank", label:"Climb down to the riverbank" } ]
-    },
-    water3rd: { locationId:"water3rd", address:"Water St & 3rd St", area:null, room:null, shelter:"none",
-      desc:"Water St keeps going east from here, though the buildings thin out fast past this point. A gravel turnaround still marks where the old road crew stopped bothering to repave.",
-      fishable:true, floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"water1st", label:"Head west on Water St" },
-        { to:"mid_water_1_3", label:"Step into the block (west)" },
-        { to:"water5th", label:"Head east on Water St" },
-        { to:"mid_water_3_5", label:"Step into the block (east)" },
-        { to:"main3rd", label:"Head south on 3rd St" },
-        { to:"mid_3rd_m_w", label:"Step into the block (south)" } ]
-    },
-    water5th: { locationId:"water5th", address:"Water St & 5th St", area:null, room:null, shelter:"none",
-      desc:"Water St's eastern corner. The current pulls harder along the outside bend of the river here.",
-      fishable:true, floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"water3rd", label:"Head west on Water St" },
-        { to:"mid_water_3_5", label:"Step into the block (west)" },
-        { to:"water7th", label:"Head east on Water St" },
-        { to:"mid_water_5_7", label:"Step into the block (east)" },
-        { to:"main5th", label:"Head south on 5th St" },
-        { to:"mid_5th_m_w", label:"Step into the block (south)" } ]
-    },
-    mid_water_3_5: { locationId:"mid_water_3_5", address:"Water St", area:null, room:"between 3rd & 5th", shelter:"none",
-      desc:"The last stretch of Water St before the road narrows to gravel.",
-      fishable:true, floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"water3rd", label:"Head west toward 3rd St" },
-        { to:"water5th", label:"Head east toward 5th St" } ]
-    },
-    mid_water_1_2: { locationId:"mid_water_1_2", address:"Water St", area:null, room:"between 1st & 2nd", shelter:"none",
-      desc:"The riverfront street, storage facility behind you, open water alongside.",
-      fishable:true, floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"water2nd", label:"Head west toward 2nd St" },
-        { to:"water1st", label:"Head east toward 1st St" } ]
-    },
-    mid_water_1_3: { locationId:"mid_water_1_3", address:"Water St", area:null, room:"between 1st & 3rd", shelter:"none",
-      desc:"More riverfront, more quiet. The current moves slow here.",
-      fishable:true, floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"water1st", label:"Head west toward 1st St" },
-        { to:"water3rd", label:"Head east toward 3rd St" } ]
-    },
-    water6th: { locationId:"water6th", address:"Water St & 6th St", area:null, room:null, shelter:"none",
-      desc:"Water St's west corner at 6th. The bank is riprap here, broken stone dumped to keep the river off the road.",
-      fishable:true, floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"water4th", label:"Head east on Water St" },
-        { to:"mid_water_4_6", label:"Step into the block (east)" },
-        { to:"main6th", label:"Head south on 6th St" },
-        { to:"mid_6th_m_w", label:"Step into the block (south)" } ]
-    },
-    mid_water_4_6: { locationId:"mid_water_4_6", address:"Water St", area:null, room:"between 4th & 6th", shelter:"none",
-      desc:"The riverfront path runs out here — just a berm of stone between the road and the water.",
-      fishable:true, floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"water6th", label:"Head west toward 6th St" },
-        { to:"water4th", label:"Head east toward 4th St" } ]
-    },
-    mid_water_5_7: { locationId:"mid_water_5_7", address:"Water St", area:null, room:"between 5th & 7th", shelter:"none",
-      desc:"Water St, well east of downtown. The reeds have grown thick enough to hide the bank entirely.",
-      fishable:true, floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"water5th", label:"Head west toward 5th St" },
-        { to:"water7th", label:"Head east toward 7th St" } ]
-    },
-    water7th: { locationId:"water7th", address:"Water St & 7th St", area:null, room:null, shelter:"none",
-      desc:"Water and 7th. The river runs wider on this side of the bend, and slower with it.",
-      fishable:true, floorCap:100, floor:[], containers:[],
-      exits:[
-        { to:"water5th", label:"Head west on Water St" },
-        { to:"mid_water_5_7", label:"Step into the block (west)" },
-        { to:"water9th", label:"Head east on Water St" },
-        { to:"mid_water_7_9", label:"Step into the block (east)" },
-        { to:"main7th", label:"Head south on 7th St" },
-        { to:"mid_7th_m_w", label:"Step into the block (south)" } ]
-    },
-    mid_water_7_9: { locationId:"mid_water_7_9", address:"Water St", area:null, room:"between 7th & 9th", shelter:"none",
-      desc:"The last stretch of Water St, where the river bends away and the road follows it as far as it can.",
-      fishable:true, floorCap:20, floor:itemsFromRegistry([ { id:"firewood", qty:2 }, { id:"fishing_rod", qty:1 } ]), containers:[],
-      exits:[
-        { to:"water7th", label:"Head west toward 7th St" },
-        { to:"water9th", label:"Head east toward 9th St" } ]
-    },
-    water9th: { locationId:"water9th", address:"Water St & 9th St", area:null, room:null, shelter:"none",
-      desc:"The east end of Water St, at 9th. A boat ramp goes down into the water, cracked right down its middle.",
-      fishable:true, floorCap:100, floor:itemsFromRegistry([ { id:"tackle_box", qty:1 } ]), containers:[],
-      exits:[
-        { to:"water7th", label:"Head west on Water St" },
-        { to:"mid_water_7_9", label:"Step into the block (west)" },
-        { to:"main9th", label:"Head south on 9th St" },
-        { to:"mid_9th_m_w", label:"Step into the block (south)" } ]
-    }
-    };
-  }
-
-  function buildSixthSt(){
-    return {
-    mid_6th_d_mi: { locationId:"mid_6th_d_mi", address:"6th St", area:null, room:"between Dock & Mill", shelter:"none",
-      desc:"6th St between the rail bed and the mill fence. Nothing either side but chain-link and thistle.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"dock6th", label:"Head south toward Dock St" },
-        { to:"mill6th", label:"Head north toward Mill St" } ]
-    },
-    mid_6th_mi_c: { locationId:"mid_6th_mi_c", address:"6th St", area:null, room:"between Mill & Cedar", shelter:"none",
-      desc:"6th St running out of the industrial belt. The fence ends and a bean field starts.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"mill6th", label:"Head south toward Mill St" },
-        { to:"cedar6th", label:"Head north toward Cedar St" } ]
-    },
-    mid_6th_c_e: { locationId:"mid_6th_c_e", address:"6th St", area:null, room:"between Cedar & Elm", shelter:"none",
-      desc:"A block of 6th with houses on one side and open ground on the other.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"cedar6th", label:"Head south toward Cedar St" },
-        { to:"elm6th", label:"Head north toward Elm St" } ]
-    },
-    mid_6th_e_mp: { locationId:"mid_6th_e_mp", address:"6th St", area:null, room:"between Elm & Maple", shelter:"none",
-      desc:"6th St, the last street west. The sidewalk only ever got built on one side.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"elm6th", label:"Head south toward Elm St" },
-        { to:"maple6th", label:"Head north toward Maple St" } ]
-    },
-    mid_6th_mp_p: { locationId:"mid_6th_mp_p", address:"6th St", area:null, room:"between Maple & Poplar", shelter:"none",
-      desc:"6th St, quiet the way a street is when half its houses were always empty.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple6th", label:"Head south toward Maple St" },
-        { to:"poplar6th", label:"Head north toward Poplar St" } ]
-    },
-    mid_6th_p_m: { locationId:"mid_6th_p_m", address:"6th St", area:null, room:"between Poplar & Main", shelter:"none",
-      desc:"6th St mid-block. A camper is parked alongside a house, plugged into an extension cord that isn't live.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"poplar6th", label:"Head south toward Poplar St" },
-        { to:"main6th", label:"Head north toward Main St" } ]
-    },
-    mid_6th_m_w: { locationId:"mid_6th_m_w", address:"6th St", area:null, room:"between Main & Water", shelter:"none",
-      desc:"6th St closing on the river. The road tilts down and the air gets cooler.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"main6th", label:"Head south toward Main St" },
-        { to:"water6th", label:"Head north toward Water St" } ]
-    }
-    };
-  }
-
-  function buildFourthSt(){
-    return {
-    mid_4th_mp_p: { locationId:"mid_4th_mp_p", address:"4th St", area:null, room:"between Maple & Poplar", shelter:"none",
-      desc:"4th St, brand new to the map but not to the town — just far enough out that nobody bothered keeping it up.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple4th", label:"Head south toward Maple St" },
-        { to:"poplar4th", label:"Head north toward Poplar St" } ]
-    },
-    mid_4th_p_m: { locationId:"mid_4th_p_m", address:"4th St", area:null, room:"between Poplar & Main", shelter:"none",
-      desc:"4th St, mid-block. Houses on both sides, most with the blinds drawn.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"poplar4th", label:"Head south toward Poplar St" },
-        { to:"main4th", label:"Head north toward Main St" } ]
-    },
-    mid_4th_m_w: { locationId:"mid_4th_m_w", address:"4th St", area:null, room:"between Main & Water", shelter:"none",
-      desc:"4th St closing in on the river.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"main4th", label:"Head south toward Main St" },
-        { to:"water4th", label:"Head north toward Water St" } ]
-    },
-    mid_4th_d_mi: { locationId:"mid_4th_d_mi", address:"4th St", area:null, room:"between Dock & Mill", shelter:"none",
-      desc:"4th St between Dock and Mill, running past the back of a loading bay.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"dock4th", label:"Head south toward Dock St" },
-        { to:"mill4th", label:"Head north toward Mill St" } ]
-    },
-    mid_4th_mi_c: { locationId:"mid_4th_mi_c", address:"4th St", area:null, room:"between Mill & Cedar", shelter:"none",
-      desc:"4th St leaving the mill yards behind. A weighbridge sign still points back the way you came.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"mill4th", label:"Head south toward Mill St" },
-        { to:"cedar4th", label:"Head north toward Cedar St" } ]
-    },
-    mid_4th_c_e: { locationId:"mid_4th_c_e", address:"4th St", area:null, room:"between Cedar & Elm", shelter:"none",
-      desc:"4th St mid-block, where the houses stop having garages and start having carports.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"cedar4th", label:"Head south toward Cedar St" },
-        { to:"elm4th", label:"Head north toward Elm St" } ]
-    },
-    mid_4th_e_mp: { locationId:"mid_4th_e_mp", address:"4th St", area:null, room:"between Elm & Maple", shelter:"none",
-      desc:"A block of 4th with a hedge down one side and a wire fence down the other.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"elm4th", label:"Head south toward Elm St" },
-        { to:"maple4th", label:"Head north toward Maple St" } ]
-    }
-    };
-  }
-
-  function buildSecondSt(){
-    return {
-    mid_2nd_p_m: { locationId:"mid_2nd_p_m", address:"2nd St", area:null, room:"between Poplar & Main", shelter:"none",
-      desc:"2nd St runs quiet here, residential on both sides.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"poplar2nd", label:"Head south toward Poplar St" },
-        { to:"main2nd", label:"Head north toward Main St" } ]
-    },
-    mid_2nd_m_w: { locationId:"mid_2nd_m_w", address:"2nd St", area:null, room:"between Main & Water", shelter:"none",
-      desc:"A short block of 2nd St, quiet this close to the water.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"main2nd", label:"Head south toward Main St" },
-        { to:"water2nd", label:"Head north toward Water St" } ]
-    },
-    mid_2nd_mp_p: { locationId:"mid_2nd_mp_p", address:"2nd St", area:null, room:"between Maple & Poplar", shelter:"none",
-      desc:"2nd St's southernmost stretch, quiet and residential.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple2nd", label:"Head south toward Maple St" },
-        { to:"poplar2nd", label:"Head north toward Poplar St" } ]
-    },
-    mid_2nd_d_mi: { locationId:"mid_2nd_d_mi", address:"2nd St", area:null, room:"between Dock & Mill", shelter:"none",
-      desc:"2nd St crossing the rail spur at a shallow angle, the bell housing still up there.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"dock2nd", label:"Head south toward Dock St" },
-        { to:"mill2nd", label:"Head north toward Mill St" } ]
-    },
-    mid_2nd_mi_c: { locationId:"mid_2nd_mi_c", address:"2nd St", area:null, room:"between Mill & Cedar", shelter:"none",
-      desc:"2nd St between the mill and the last of the houses, the grain dust on the road giving out block by block.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"mill2nd", label:"Head south toward Mill St" },
-        { to:"cedar2nd", label:"Head north toward Cedar St" } ]
-    },
-    mid_2nd_c_e: { locationId:"mid_2nd_c_e", address:"2nd St", area:null, room:"between Cedar & Elm", shelter:"none",
-      desc:"2nd St mid-block. A hand-lettered sign on a fence post says SLOW, KIDS.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"cedar2nd", label:"Head south toward Cedar St" },
-        { to:"elm2nd", label:"Head north toward Elm St" } ]
-    },
-    mid_2nd_e_mp: { locationId:"mid_2nd_e_mp", address:"2nd St", area:null, room:"between Elm & Maple", shelter:"none",
-      desc:"2nd St running past the freight yard's south fence.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"elm2nd", label:"Head south toward Elm St" },
-        { to:"maple2nd", label:"Head north toward Maple St" } ]
-    }
-    };
-  }
-
-  function buildFirstSt(){
-    return {
-    mid_1st_o_m: { locationId:"mid_1st_o_m", address:"1st St", area:null, room:"between Poplar & Main", shelter:"none",
-      desc:"A short stretch of 1st St, nothing much to it.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"outside", label:"Head south toward Poplar St" },
-        { to:"main1st", label:"Head north toward Main St" } ]
-    },
-    mid_1st_m_w: { locationId:"mid_1st_m_w", address:"1st St", area:null, room:"between Main & Water", shelter:"none",
-      desc:"1st St, closing in on the riverfront.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"main1st", label:"Head south toward Main St" },
-        { to:"water1st", label:"Head north toward Water St" } ]
-    },
-    mid_1st_mp_p: { locationId:"mid_1st_mp_p", address:"1st St", area:null, room:"between Maple & Poplar", shelter:"none",
-      desc:{ reads:{ kind:"grid" },
-        variants:{ on:"1st St running down toward Maple. Fewer houses with lights ever left on.",
-          off:"1st St running down toward Maple. None of the houses have a light on." } },
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple1st", label:"Head south toward Maple St" },
-        { to:"outside", label:"Head north toward Poplar St" } ]
-    },
-    mid_1st_d_mi: { locationId:"mid_1st_d_mi", address:"1st St", area:null, room:"between Dock & Mill", shelter:"none",
-      desc:"1st St at its southern end, all fence and dock doors and nowhere to turn around.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"dock1st", label:"Head south toward Dock St" },
-        { to:"mill1st", label:"Head north toward Mill St" } ]
-    },
-    mid_1st_mi_c: { locationId:"mid_1st_mi_c", address:"1st St", area:null, room:"between Mill & Cedar", shelter:"none",
-      desc:"1st St alongside the feed mill. Grain has spilled into the gutter and sprouted there.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"mill1st", label:"Head south toward Mill St" },
-        { to:"cedar1st", label:"Head north toward Cedar St" } ]
-    },
-    mid_1st_c_e: { locationId:"mid_1st_c_e", address:"1st St", area:null, room:"between Cedar & Elm", shelter:"none",
-      desc:"1st St mid-block, past the church parking lot's back entrance.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"cedar1st", label:"Head south toward Cedar St" },
-        { to:"elm1st", label:"Head north toward Elm St" } ]
-    },
-    mid_1st_e_mp: { locationId:"mid_1st_e_mp", address:"1st St", area:null, room:"between Elm & Maple", shelter:"none",
-      desc:"1st St running south out of town. The houses get further apart with every lot.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"elm1st", label:"Head south toward Elm St" },
-        { to:"maple1st", label:"Head north toward Maple St" } ]
-    }
-    };
-  }
-
-  function buildThirdSt(){
-    return {
-    mid_3rd_p_m: { locationId:"mid_3rd_p_m", address:"3rd St", area:null, room:"between Poplar & Main", shelter:"none",
-      desc:"3rd St, mid-block. A few darkened windows, and an overgrown sidewalk tree nobody's trimmed in months.",
-      hasTree:true, floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"poplar3rd", label:"Head south toward Poplar St" },
-        { to:"main3rd", label:"Head north toward Main St" } ]
-    },
-    mid_3rd_m_w: { locationId:"mid_3rd_m_w", address:"3rd St", area:null, room:"between Main & Water", shelter:"none",
-      desc:"3rd St runs down toward the river here.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"main3rd", label:"Head south toward Main St" },
-        { to:"water3rd", label:"Head north toward Water St" } ]
-    },
-    mid_3rd_mp_p: { locationId:"mid_3rd_mp_p", address:"3rd St", area:null, room:"between Maple & Poplar", shelter:"none",
-      desc:"3rd St's southern stretch, same overgrown quiet as the block further north.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple3rd", label:"Head south toward Maple St" },
-        { to:"poplar3rd", label:"Head north toward Poplar St" } ]
-    },
-    mid_3rd_d_mi: { locationId:"mid_3rd_d_mi", address:"3rd St", area:null, room:"between Dock & Mill", shelter:"none",
-      desc:"3rd St, squeezed between stacked containers on one side and a fence on the other.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"dock3rd", label:"Head south toward Dock St" },
-        { to:"mill3rd", label:"Head north toward Mill St" } ]
-    },
-    mid_3rd_mi_c: { locationId:"mid_3rd_mi_c", address:"3rd St", area:null, room:"between Mill & Cedar", shelter:"none",
-      desc:"3rd St leaving the industrial blocks. The sidewalk restarts here, mid-stride, for no clear reason.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"mill3rd", label:"Head south toward Mill St" },
-        { to:"cedar3rd", label:"Head north toward Cedar St" } ]
-    },
-    mid_3rd_c_e: { locationId:"mid_3rd_c_e", address:"3rd St", area:null, room:"between Cedar & Elm", shelter:"none",
-      desc:"3rd St mid-block past the church. The hedge along the lot line was cut square by somebody with a good eye.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"cedar3rd", label:"Head south toward Cedar St" },
-        { to:"elm3rd", label:"Head north toward Elm St" } ]
-    },
-    mid_3rd_e_mp: { locationId:"mid_3rd_e_mp", address:"3rd St", area:null, room:"between Elm & Maple", shelter:"none",
-      desc:"3rd St running south past the back of the police station lot.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"elm3rd", label:"Head south toward Elm St" },
-        { to:"maple3rd", label:"Head north toward Maple St" } ]
-    }
-    };
-  }
-
-  function buildFifthSt(){
-    return {
-    mid_5th_mp_p: { locationId:"mid_5th_mp_p", address:"5th St", area:null, room:"between Maple & Poplar", shelter:"none",
-      desc:"5th St's southern stretch — an auto shop's fence runs along one side.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple5th", label:"Head south toward Maple St" },
-        { to:"poplar5th", label:"Head north toward Poplar St" } ]
-    },
-    mid_5th_p_m: { locationId:"mid_5th_p_m", address:"5th St", area:null, room:"between Poplar & Main", shelter:"none",
-      desc:"5th St, mid-block, easternmost street in town.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"poplar5th", label:"Head south toward Poplar St" },
-        { to:"main5th", label:"Head north toward Main St" } ]
-    },
-    mid_5th_m_w: { locationId:"mid_5th_m_w", address:"5th St", area:null, room:"between Main & Water", shelter:"none",
-      desc:"5th St, closing in on the water. The current's visibly faster along this outside bend.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"main5th", label:"Head south toward Main St" },
-        { to:"water5th", label:"Head north toward Water St" } ]
-    },
-    mid_5th_d_mi: { locationId:"mid_5th_d_mi", address:"5th St", area:null, room:"between Dock & Mill", shelter:"none",
-      desc:"5th St between Dock and Mill, dock doors down one side the whole length of the block.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"dock5th", label:"Head south toward Dock St" },
-        { to:"mill5th", label:"Head north toward Mill St" } ]
-    },
-    mid_5th_mi_c: { locationId:"mid_5th_mi_c", address:"5th St", area:null, room:"between Mill & Cedar", shelter:"none",
-      desc:"5th St past the brick wall with the glass set into the top of it.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"mill5th", label:"Head south toward Mill St" },
-        { to:"cedar5th", label:"Head north toward Cedar St" } ]
-    },
-    mid_5th_c_e: { locationId:"mid_5th_c_e", address:"5th St", area:null, room:"between Cedar & Elm", shelter:"none",
-      desc:"5th St mid-block. Trailer tire tracks are pressed into the shoulder where something turned around.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"cedar5th", label:"Head south toward Cedar St" },
-        { to:"elm5th", label:"Head north toward Elm St" } ]
-    },
-    mid_5th_e_mp: { locationId:"mid_5th_e_mp", address:"5th St", area:null, room:"between Elm & Maple", shelter:"none",
-      desc:"5th St running south past a yard with a boat on a trailer under a tarp.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"elm5th", label:"Head south toward Elm St" },
-        { to:"maple5th", label:"Head north toward Maple St" } ]
-    }
-    };
-  }
-
-  function buildSeventhSt(){
-    return {
-    mid_7th_d_mi: { locationId:"mid_7th_d_mi", address:"7th St", area:null, room:"between Dock & Mill", shelter:"none",
-      desc:"7th St between the docks and the mill yards. Truck tires have chewed the edges off the pavement.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"dock7th", label:"Head south toward Dock St" },
-        { to:"mill7th", label:"Head north toward Mill St" } ]
-    },
-    mid_7th_mi_c: { locationId:"mid_7th_mi_c", address:"7th St", area:null, room:"between Mill & Cedar", shelter:"none",
-      desc:"7th St past the yards. A culvert runs under the road, and something's blocked it — the ditch is standing full.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"mill7th", label:"Head south toward Mill St" },
-        { to:"cedar7th", label:"Head north toward Cedar St" } ]
-    },
-    mid_7th_c_e: { locationId:"mid_7th_c_e", address:"7th St", area:null, room:"between Cedar & Elm", shelter:"none",
-      desc:"7th St, where the last of the grid meets the first of the fields.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"cedar7th", label:"Head south toward Cedar St" },
-        { to:"elm7th", label:"Head north toward Elm St" } ]
-    },
-    mid_7th_e_mp: { locationId:"mid_7th_e_mp", address:"7th St", area:null, room:"between Elm & Maple", shelter:"none",
-      desc:"A block of 7th with three driveways and four mailboxes.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"elm7th", label:"Head south toward Elm St" },
-        { to:"maple7th", label:"Head north toward Maple St" } ]
-    },
-    mid_7th_mp_p: { locationId:"mid_7th_mp_p", address:"7th St", area:null, room:"between Maple & Poplar", shelter:"none",
-      desc:"7th St mid-block. A trampoline in a side yard has collapsed onto one bent leg.",
-      floorCap:20, floor:itemsFromRegistry([ { id:"metal_pipe", qty:1 } ]), containers:[],
-      exits:[
-        { to:"maple7th", label:"Head south toward Maple St" },
-        { to:"poplar7th", label:"Head north toward Poplar St" } ]
-    },
-    mid_7th_p_m: { locationId:"mid_7th_p_m", address:"7th St", area:null, room:"between Poplar & Main", shelter:"none",
-      desc:"7th St runs north past a lot with a foundation poured and nothing on it.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"poplar7th", label:"Head south toward Poplar St" },
-        { to:"main7th", label:"Head north toward Main St" } ]
-    },
-    mid_7th_m_w: { locationId:"mid_7th_m_w", address:"7th St", area:null, room:"between Main & Water", shelter:"none",
-      desc:"7th St dropping toward the water. You hear the river before you see it.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"main7th", label:"Head south toward Main St" },
-        { to:"water7th", label:"Head north toward Water St" } ]
-    }
-    };
-  }
-
-  function buildNinthSt(){
-    return {
-    mid_9th_d_mi: { locationId:"mid_9th_d_mi", address:"9th St", area:null, room:"between Dock & Mill", shelter:"none",
-      desc:"9th St along the fence line, the rail bed on your right the whole way.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"dock9th", label:"Head south toward Dock St" },
-        { to:"mill9th", label:"Head north toward Mill St" } ]
-    },
-    mid_9th_mi_c: { locationId:"mid_9th_mi_c", address:"9th St", area:null, room:"between Mill & Cedar", shelter:"none",
-      desc:"9th St, where the pavement narrows to one lane with pull-offs.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"mill9th", label:"Head south toward Mill St" },
-        { to:"cedar9th", label:"Head north toward Cedar St" } ]
-    },
-    mid_9th_c_e: { locationId:"mid_9th_c_e", address:"9th St", area:null, room:"between Cedar & Elm", shelter:"none",
-      desc:"A block of 9th with a treeline on the east side and the town on the west.",
-      hasTree:true, floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"cedar9th", label:"Head south toward Cedar St" },
-        { to:"elm9th", label:"Head north toward Elm St" } ]
-    },
-    mid_9th_e_mp: { locationId:"mid_9th_e_mp", address:"9th St", area:null, room:"between Elm & Maple", shelter:"none",
-      desc:"9th St, the edge of the map as far as the town ever cared. A single streetlight, dark.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"elm9th", label:"Head south toward Elm St" },
-        { to:"maple9th", label:"Head north toward Maple St" } ]
-    },
-    mid_9th_mp_p: { locationId:"mid_9th_mp_p", address:"9th St", area:null, room:"between Maple & Poplar", shelter:"none",
-      desc:"9th St, gravel shoulder both sides, ditch water standing in the low spot.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"maple9th", label:"Head south toward Maple St" },
-        { to:"poplar9th", label:"Head north toward Poplar St" } ]
-    },
-    mid_9th_p_m: { locationId:"mid_9th_p_m", address:"9th St", area:null, room:"between Poplar & Main", shelter:"none",
-      desc:"9th St mid-block. A power pole leans, held up by its lines rather than the other way around.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"poplar9th", label:"Head south toward Poplar St" },
-        { to:"main9th", label:"Head north toward Main St" } ]
-    },
-    mid_9th_m_w: { locationId:"mid_9th_m_w", address:"9th St", area:null, room:"between Main & Water", shelter:"none",
-      desc:"9th St's last block before the river, running between two stands of scrub willow.",
-      floorCap:20, floor:[], containers:[],
-      exits:[
-        { to:"main9th", label:"Head south toward Main St" },
-        { to:"water9th", label:"Head north toward Water St" } ]
-    }
-    };
-  }
-
   function makeDefaultWorld(){
     const world = Object.assign({},
       buildAcornApartments(),
@@ -4857,22 +5113,7 @@
       buildHardwareStore(),
       buildStorageFacility(),
       buildRiverbank(),
-      buildDockSt(),
-      buildMillSt(),
-      buildCedarSt(),
-      buildElmSt(),
-      buildMapleSt(),
-      buildPoplarSt(),
-      buildMainSt(),
-      buildWaterSt(),
-      buildSixthSt(),
-      buildFourthSt(),
-      buildSecondSt(),
-      buildFirstSt(),
-      buildThirdSt(),
-      buildFifthSt(),
-      buildSeventhSt(),
-      buildNinthSt()
+      buildLimaStops()
     );
     // The buildings the types generate, and each one's street exit, hung on
     // its site stop.
@@ -4926,7 +5167,7 @@
       // close to undebuggable. Its only writer is rollFoodPoisoning(), called
       // only from click handlers.
       rollSeq: 0,
-      currentRoom:"living", gait:"walk",
+      currentRoom:HOME_STOP, gait:"walk",
       totalMinutes:0, collapseCount:0,
       // Every building the player has been inside, by `buildingId` (ROOM
       // SCHEMA), in the order first entered. Written by doMove(); Walk to…
@@ -9426,29 +9667,13 @@
   const MAP_SCALE_FROM_SPAN = 600 * MAP_UNITS_PER_M;
 
   // Street runs — each path a street takes, as a chain of stop ids, `name`
-  // null for a street with none, `rail` for the track.
-  const MAP_STREETS = [
-    { name:"DOCK ST",   chain:["dock6th","mid_dock_4_6","dock4th","mid_dock_2_4","dock2nd","mid_dock_1_2","dock1st","mid_dock_1_3","dock3rd","mid_dock_3_5","dock5th","mid_dock_5_7","dock7th","mid_dock_7_9","dock9th"] },
-    { name:"MILL ST",   chain:["mill6th","mid_mill_4_6","mill4th","mid_mill_2_4","mill2nd","mid_mill_1_2","mill1st","mid_mill_1_3","mill3rd","mid_mill_3_5","mill5th","mid_mill_5_7","mill7th","mid_mill_7_9","mill9th"] },
-    { name:"CEDAR ST",  chain:["cedar6th","mid_cedar_4_6","cedar4th","mid_cedar_2_4","cedar2nd","mid_cedar_1_2","cedar1st","mid_cedar_1_3","cedar3rd","mid_cedar_3_5","cedar5th","mid_cedar_5_7","cedar7th","mid_cedar_7_9","cedar9th"] },
-    { name:"ELM ST",    chain:["elm6th","mid_elm_4_6","elm4th","mid_elm_2_4","elm2nd","mid_elm_1_2","elm1st","mid_elm_1_3","elm3rd","mid_elm_3_5","elm5th","mid_elm_5_7","elm7th","mid_elm_7_9","elm9th"] },
-    { name:"MAPLE ST",  chain:["maple6th","mid_maple_4_6","maple4th","mid_maple_2_4","maple2nd","mid_maple_1_2","maple1st","mid_maple_1_3","maple3rd","mid_maple_3_5","maple5th","mid_maple_5_7","maple7th","mid_maple_7_9","maple9th"] },
-    { name:"POPLAR ST", chain:["poplar6th","mid_poplar_4_6","poplar4th","mid_poplar_2_4","poplar2nd","mid_poplar_1_2","outside","mid_poplar_1_3","poplar3rd","mid_poplar_3_5","poplar5th","mid_poplar_5_7","poplar7th","mid_poplar_7_9","poplar9th"] },
-    { name:"MAIN ST",   chain:["main6th","mid_main_4_6","main4th","mid_main_2_4","main2nd","mid_main_1_2","main1st","mid_main_1_3","main3rd","mid_main_3_5","main5th","mid_main_5_7","main7th","mid_main_7_9","main9th"] },
-    { name:"WATER ST",  chain:["water6th","mid_water_4_6","water4th","mid_water_2_4","water2nd","mid_water_1_2","water1st","mid_water_1_3","water3rd","mid_water_3_5","water5th","mid_water_5_7","water7th","mid_water_7_9","water9th"] },
-    { name:"6TH ST",    chain:["dock6th","mid_6th_d_mi","mill6th","mid_6th_mi_c","cedar6th","mid_6th_c_e","elm6th","mid_6th_e_mp","maple6th","mid_6th_mp_p","poplar6th","mid_6th_p_m","main6th","mid_6th_m_w","water6th"] },
-    { name:"4TH ST",    chain:["dock4th","mid_4th_d_mi","mill4th","mid_4th_mi_c","cedar4th","mid_4th_c_e","elm4th","mid_4th_e_mp","maple4th","mid_4th_mp_p","poplar4th","mid_4th_p_m","main4th","mid_4th_m_w","water4th"] },
-    { name:"2ND ST",    chain:["dock2nd","mid_2nd_d_mi","mill2nd","mid_2nd_mi_c","cedar2nd","mid_2nd_c_e","elm2nd","mid_2nd_e_mp","maple2nd","mid_2nd_mp_p","poplar2nd","mid_2nd_p_m","main2nd","mid_2nd_m_w","water2nd"] },
-    { name:"1ST ST",    chain:["dock1st","mid_1st_d_mi","mill1st","mid_1st_mi_c","cedar1st","mid_1st_c_e","elm1st","mid_1st_e_mp","maple1st","mid_1st_mp_p","outside","mid_1st_o_m","main1st","mid_1st_m_w","water1st"] },
-    { name:"3RD ST",    chain:["dock3rd","mid_3rd_d_mi","mill3rd","mid_3rd_mi_c","cedar3rd","mid_3rd_c_e","elm3rd","mid_3rd_e_mp","maple3rd","mid_3rd_mp_p","poplar3rd","mid_3rd_p_m","main3rd","mid_3rd_m_w","water3rd"] },
-    { name:"5TH ST",    chain:["dock5th","mid_5th_d_mi","mill5th","mid_5th_mi_c","cedar5th","mid_5th_c_e","elm5th","mid_5th_e_mp","maple5th","mid_5th_mp_p","poplar5th","mid_5th_p_m","main5th","mid_5th_m_w","water5th"] },
-    { name:"7TH ST",    chain:["dock7th","mid_7th_d_mi","mill7th","mid_7th_mi_c","cedar7th","mid_7th_c_e","elm7th","mid_7th_e_mp","maple7th","mid_7th_mp_p","poplar7th","mid_7th_p_m","main7th","mid_7th_m_w","water7th"] },
-    { name:"9TH ST",    chain:["dock9th","mid_9th_d_mi","mill9th","mid_9th_mi_c","cedar9th","mid_9th_c_e","elm9th","mid_9th_e_mp","maple9th","mid_9th_mp_p","poplar9th","mid_9th_p_m","main9th","mid_9th_m_w","water9th"] }
-  ];
+  // null for a street with none, `rail` for the track. Derived from the
+  // street links at startup (limaMapStreets()).
+  const MAP_STREETS = limaMapStreets();
   // Every street stop id, derived from MAP_STREETS above (every such id
   // appears in some chain) rather than hand-duplicated — used by
   // renderMapClose() to draw the node dots.
-  const MAP_STREET_NODE_IDS = Array.from(new Set(MAP_STREETS.filter(s=> !s.rail).flatMap(s => s.chain)));
+  const MAP_STREET_NODE_IDS = Array.from(new Set(MAP_STREETS.flatMap(s => s.chain)));
   // Building markers (Close view only) — the label's offset from its
   // building's anchor, in metres, keyed by BUILDINGS id. Membership is
   // the point as much as the numbers: a BUILDINGS entry with no offsets
@@ -9756,20 +9981,41 @@
   // placement is relative to the window, not to the street. `node` is the map
   // node the player is on, passed in rather than read from mapLastNode, which
   // renderMap() has not updated yet when the snap branch runs.
+  // Names of different streets can meet where runs cross at a slant, which
+  // the crossing clearance (a street's own crossings) doesn't see. So the
+  // names are placed longest run first, and one whose box would overlap a
+  // name already placed is dropped, as a name under the player is.
   function mapPositionStreetLabels(box, node){
     const player = mapNodeSvg(node);
     const k = mapScale(box.w);
-    mapStreetLabels.forEach(street=>{
+    const placed = [];
+    mapStreetLabels.slice().sort((a, b)=> b.run.len - a.run.len).forEach(street=>{
       const run = street.run, m = mapStreetMetrics(street, k);
       const seen = mapRunVisible(run, box, m.depth);
       const positions = (seen ? mapLabelPositions(seen[0], seen[1], m, run) : [])
-        .filter(t => !mapLabelHitsPlayer(run, t, m, player));
+        .filter(t => !mapLabelHitsPlayer(run, t, m, player))
+        .filter(t=>{
+          const r = { c: mapLabelCentre(run, t, m), u: run.u, n: run.n, hw: m.w / 2, hh: m.cap / 2 };
+          if(placed.some(o=> mapBoxesOverlap(r, o))) return false;
+          placed.push(r);
+          return true;
+        });
       street.els.forEach((el, i)=>{
         if(i >= positions.length){ el.style.display = "none"; return; }
         const p = mapLabelAnchor(run, positions[i]);
         el.setAttribute("transform", `translate(${p.x} ${p.y}) rotate(${run.angle}) scale(${k})`);
         el.style.display = "";
       });
+    });
+  }
+  // Whether two oriented boxes overlap: { c, u, n, hw, hh }, a centre, the
+  // unit vectors along and across, and the half extents along each. The
+  // separating-axis test, over the four axes the two boxes have.
+  function mapBoxesOverlap(a, b){
+    const dx = b.c.x - a.c.x, dy = b.c.y - a.c.y;
+    return [a.u, a.n, b.u, b.n].every(ax=>{
+      const reach = (r)=> r.hw * Math.abs(r.u.x * ax.x + r.u.y * ax.y) + r.hh * Math.abs(r.n.x * ax.x + r.n.y * ax.y);
+      return Math.abs(dx * ax.x + dy * ax.y) < reach(a) + reach(b);
     });
   }
   // The north arrow, pinned to the map's corner outside the panning SVG, so
@@ -10038,7 +10284,7 @@
   // viewBox rather than rebuilding — in both modes, Wide included, now that
   // its target follows the player.
   function renderMap(){
-    const node = (world[state.currentRoom] && world[state.currentRoom].locationId) || mapLastNode || "mid_poplar_1_2";
+    const node = (world[state.currentRoom] && world[state.currentRoom].locationId) || mapLastNode || HOME_STOP;
     const zoomChanged = mapRenderedZoom !== mapZoomMode;
     if(zoomChanged){
       document.getElementById("mapSvg").innerHTML = mapZoomMode === "close" ? renderMapClose() : renderMapWide();
@@ -10892,8 +11138,11 @@
     // item qualifies, and the log line is worded to match. Deliberately not
     // gated on `prying`, which is carried by the crowbar alone and would make
     // early vehicle access depend on a single item.
-    if(room.carContainers && room.carLocked && hasTool("blunt")){
-      hereBox.appendChild(actionButton("Force the vehicle open", doBreakCar, "locked"));
+    // A parked car's stop text doesn't mention it (a stop reads its type's
+    // text), so a locked one says it is there. Functional UI text, retunable.
+    if(room.carContainers && room.carLocked){
+      hereBox.appendChild(hereNote("A car is parked here. It's locked."));
+      if(hasTool("blunt")) hereBox.appendChild(actionButton("Force the vehicle open", doBreakCar, "locked"));
     }
     if(room.fishable && hasTool("fishing") && hasTool("tackle")){
       hereBox.appendChild(actionButton("Go fishing " + fmtDuration(FISH_DURATION_MIN), doFish));
