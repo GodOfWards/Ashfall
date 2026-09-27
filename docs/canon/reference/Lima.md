@@ -102,6 +102,45 @@ town since 2026-09-26 (#237), replacing Henderson, Kentucky.
   summary) against about 3,000 in a later figure (above). They wore "the
   company's uniform of grayish-brown trousers and a beige shirt".
 
+## Landmarks from listings (2026-09-27)
+
+Commercial buildings keep their real names and addresses. A shop with a home
+above it uses the shop's address; private homes get none (#237).
+
+- **Pharmacies: four in Lima**, per the Colegio de Farmacéuticos de Zárate's
+  list ([colfarmazarate.com](https://www.colfarmazarate.com/farmacias.html),
+  © 2024, read directly, **confirmed** as a list):
+  - **Farmacia Belazio**, Calle 20 Nº 564;
+  - **Farmacia Fabio**, Calle 7 Nº 324 (also found by Tom on Google Maps);
+  - **Farmacia Fernández**, Avenida 11 Nº 500;
+  - **Farmacia Ullmann**, Calle 13 Nº 345.
+
+  An older listing gives Fabio at "Calle 7 Nº 101"; the Colegio's list and
+  Tom agree on 324.
+- **Service stations** (APLA directory, argentina.gob.ar, 2022, search
+  summary; secondary):
+  - **D.A.P.S.A.**, Avenida 11 Nº 890: the "Estación de Servicio" at the
+    south end of Avenida 11 on Tom's Google Maps screenshot;
+  - an **unbranded station** on the Ruta 9 at km 103, on the southern
+    service road.
+
+  Shell also lists an "Estación Lima SA", location unconfirmed.
+- **Building materials:** **Casa Fierro Corralón**, Camino a Baradero 337,
+  between Calles 107 and 109
+  ([argentino.com.ar](https://www.argentino.com.ar/casa-fierro-corralon-F120EC10E18D344),
+  search summary; secondary).
+- **Not yet found in Lima:** a *ferretería*, a supermarket or *autoservicio*,
+  a *taller mecánico* or *gomería*. Listings for "Lima" mostly return Zárate
+  or Lima, Peru. Tom is checking on Street View.
+
+## Homes as seen from the street (Tom, Street View, 2026-09-27)
+
+- **Most homes have bars (*rejas*) on their windows.**
+- **Street doors open from outside only with a key**, and freely from
+  inside.
+- Status: Tom's observation from Street View, first-hand. How far it holds
+  street by street isn't surveyed.
+
 ## Streets and surfaces, from satellite imagery (2026-09-27)
 
 Judged from Esri World Imagery (about 0.5–1 m per pixel; imagery date
