@@ -100,9 +100,12 @@ never recalled or invented, and recorded in `docs/canon/reference/` (see "The
 canon is private" for what to do when a fact isn't there yet). A fact that
 can't be confirmed is marked unconfirmed, not filled with a plausible one.
 Adding something the real town lacks is a design decision (see below).
-**Product brands are the exception: no real brand appears in the game.** Items
-are generic ("a sachet of milk"). Fictional brands may be invented later. Project
-Guide, Part 1.
+**Brands and business names are the exception.** No real product brand
+appears ("a sachet of milk", not its maker), and a private business is named by
+what it is ("the pharmacy", "a bank", "the petrol station"), never by its
+trading name. State-owned institutions and government buildings keep their
+real names (Correo Argentino, the Comisaría, the municipal hospital). Fictional
+brands are lore, for later. Project Guide, Part 1.
 
 **Content vs. mechanics stay separated.** A change touches WORLD DATA (content)
 or ACTIONS/SIMULATION (mechanics), and normally not both. Rendering is its own

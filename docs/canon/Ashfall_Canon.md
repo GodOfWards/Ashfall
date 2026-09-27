@@ -68,6 +68,9 @@ adopts it.
 - **What happens to Atucha after the collapse** (#290, #285): Atucha II
   running and Atucha I mid-overhaul in February 2025, the staff gone, and the
   grid failing. It has to be established; the game never states it.
+- **Fictional brands and trading names** (Tom, 2026-09-27): no real brand or
+  private business name appears in the game (`CLAUDE.md`, "The world is
+  real"). Inventing fictional ones is lore, for later.
 - **Why the player is still in town** a few days after (#137).
 - **Why grid power fails when it does** (#220). Proposed, not decided: an
   accumulation of unrepaired faults, area by area, rather than one event.
