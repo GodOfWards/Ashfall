@@ -18,6 +18,109 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.10.4 — Home breakers on curve C, and the gas range's real rating
+
+Implements: handoffs/curve-c-and-stove-nameplate.md
+
+Implements #321 and #327 in full, per
+`handoffs/curve-c-and-stove-nameplate.md`. Two corrections to the figures
+v0.10.3 shipped: home breakers default to curve C, as Lima's mostly are, and
+the gas range takes an Argentine cooker's figures (0 W while idle, a 16 W
+nameplate) in place of a US standby draw and a placeholder. No Lima building
+is wired (`WIRING = {}`), so no player sees a difference. No new state field
+and no `SAVE_KEY` change (power definitions aren't saved), so this is
+**PATCH**.
+
+**Changed / Reworked**
+
+*Breaker curve*
+- `DEFAULT_BREAKER_CURVE` `"B"` → `"C"`. A breaker without its own `curve`
+  now trips instantly above 10 × its rating (a C16 at 160 A, was a B16's
+  80 A). `BREAKER_CURVES` and the heat curve are unchanged. No definition sets
+  its own `curve`, so every breaker takes the new default.
+
+*Gas range* (POWER SCHEMA → `APPLIANCES`; figures retunable)
+- `gas_range.watts` 4 → 0: a basic cooker has no clock or display, so nothing
+  draws while it is idle. It stays `switchless` and a powered load; it is
+  still powered and drawing, adding 0 A to its circuit, so #259's rule (it
+  lights itself when powered) is unchanged.
+- `gas_range.nameplate` `{ amps:0.1 }` → `{ watts:16 }` (Domec's manual,
+  Tabla 3: cooker with oven light and ignition). The Electrical view's stove
+  row reads "Nameplate: 16 W" (dev runs only, while nothing is wired).
+
+**New**
+- A third `nameplate` form, `{ watts }`: a rating printed in watts that is
+  not the load's draw. `nameplateWatts()` returns `n.watts` (null if it isn't
+  a finite number); `nameplateText()` prints "Nameplate: `<watts>` W".
+  `{ amps }` and `{ printsWatts:true }` keep their meaning.
+
+**Hardened**
+- `validateWiring()` also reports an appliance whose nameplate carries more
+  than one form ("nameplate carries more than one form (amps, watts)").
+
+**Documentation**
+- The `BREAKER_CURVES` comment: home breakers are curve C, as Lima's mostly
+  are (Tom, first-hand) and as the two-pole breakers sold in Argentina are;
+  AEA 770's worked example uses B.
+- POWER SCHEMA: `nameplate` lists its three forms; the `gas_range` draw and
+  nameplate notes cite Domec (Tabla 3) and Orbis's 25 W oven lamp, dropping
+  Engineer Fix, "placeholder" and "unconfirmed".
+- The `apartment` template comment no longer calls its circuits curve B:
+  AEA's example draws them on B, the template takes `DEFAULT_BREAKER_CURVE`.
+- The stove-timer comment: "whose standby draw is `gas_range`" → "whose
+  electrics are `gas_range`".
+- "Watts appear nowhere but a bulb's nameplate" (POWER SCHEMA and
+  `renderCircuitTab()`) → "but on a nameplate": already stale since the hood
+  printed watts, and the stove now does too.
+- Nothing was deferred; no new issues filed.
+
+**Explicitly out of scope**
+- Wiring any building and the diferencial (#305); the oven and its lamp
+  (#259); `STANDARD_BREAKER_RATINGS` (its disputed 8 A left alone); any other
+  appliance's figures; the heat curve and `BREAKER_CURVES`.
+
+**Validation performed**
+- `ashfallDev.validateWiring()`: no problems. A test appliance with
+  `nameplate:{ amps:1, watts:300 }` is reported.
+- `ashfallDev.simulatePower()` on a one-unit building using `apartment`
+  (board 63 A, feeder 40 A), in headless Chromium, no page errors:
+  1. Every expanded breaker's `curve` is `"C"` (board main, feeder, panel
+     main, `lights`, `sockets`).
+  2. Fridge start: 5.91 A momentary on `sockets` (1,300 W ÷ 220 V), under
+     160 A. No trip.
+  3. A test load starting at 36,000 W (169.5 A with the fridge's start) on
+     `sockets` tripped it `"instant"` on step 1; at 22,000 W (105.9 A, over
+     B's old 80 A, under C's 160 A) it did not.
+  4. 7,040 W (2 × In) on `sockets` with the fridge off: tripped `"heat"` on
+     step 5; with the fridge running (32.45 A), on step 4. Both identical on
+     `origin/main`, so the heat trip is unchanged.
+  5. The stove: powered and drawing; `sockets` running 0.4545 A, the
+     fridge's 100 W alone. `nameplateWatts(gas_range)` = 16;
+     `nameplateText(gas_range)` = "Nameplate: 16 W". The other nameplates
+     print as before ("220 V · 1 A", "10 W", "10 W", "200 W").
+- `git diff origin/main...HEAD -- ashfall.html` shows nothing else touched.
+
+**Sections touched**
+- CONFIG/CONSTANTS (`DEFAULT_BREAKER_CURVE`); WORLD DATA → POWER SCHEMA
+  (`APPLIANCES.gas_range`, the `nameplate` schema, `nameplateWatts()`, the
+  `apartment` comment; the mechanic's definition data); RENDERING
+  (`nameplateText()`, one comment); DEV (`validateWiring()`); ACTIONS
+  (the stove-timer comment only).
+
+**Open questions / decisions resolved**
+- The third form's shape: `{ watts }`, the handoff's recommendation.
+- The optional one-form guard in `validateWiring()`: added.
+
+**Notes / assumptions**
+- The handoff's validation step 4 expected the heat trip on step 5; that holds
+  for the 7,040 W load alone. With the fridge also running on `sockets` the
+  current is slightly over 2 × In and it trips on step 4, on `origin/main`
+  too.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.10.3"` → `"0.10.4"`
+
+---
+
 ## v0.10.3 — Power system re-based on Argentina
 
 Implements: handoffs/power-rebase-argentina.md
