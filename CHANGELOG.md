@@ -18,6 +18,109 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.10.2 — English names in game text
+
+Implements: handoffs/english-names.md
+
+Implements #310 in full, per `handoffs/english-names.md`. Four items and five
+places that carried Spanish names now carry English ones, the text that used
+them is rewritten to match, and the load path now resyncs an item's `name` from
+`ITEM_REGISTRY` so the item renames reach existing saves. Streets, districts,
+towns, FC Mitre and state institutions' proper names are untouched. No new
+state field and no `SAVE_KEY` change, so this is **PATCH**.
+
+**Changed / Reworked**
+- `ITEM_REGISTRY` names (ids unchanged): `galletitas` "Pack of galletitas" →
+  "Pack of biscuits"; `cedula_verde` "Cédula verde" → "Vehicle registration
+  card"; `dni_card` "DNI card" → "ID card"; `mate_bombilla` "Mate and
+  bombilla" → "Mate and metal straw".
+- Place names (ids unchanged): `almacen` → "Corner store" (Enter "Enter the
+  corner store"); `comisaria` → "Police station" (Enter "Enter the police
+  station", `layout.label` "police station"); `NAMED_SCENERY`'s `delegacion`
+  → "Municipal office", `school_ep9` → "Primary school", `estacion` → "Lima
+  station"; `stopAddress()` for kind `"s"` and the `goods_shed`'s `address`
+  → "Lima station".
+- Text: `LIMA_STOP_TEXT`'s `m_av11_c8_c6`, `m_c8_av11_c13`,
+  `m_c117_c88_c84`, `m_c12_c13_c15`, `x_c113_c50` and `estacion_lima`;
+  `STOP_TEXT.barrio.corner[0]`; the `row_house` garden's `desc`; the home
+  garden override; the `comisaria` `desk` `desc`; the `almacen` `shop`
+  `desc`. All as tabled in the handoff. "Barrio Atucha" stays wherever it
+  appears; only *barrio* as a generic noun became "neighbourhood".
+
+**Fixed**
+- An item's `name` never reached a save once written: `itemFromRegistry()`
+  deep-copies it onto every instance and `name` is not in
+  `REGISTRY_ONLY_FIELDS`, so a rename left old items under the old name, and
+  `sameStackState()` (which stacks by `itemId`) merged old and new under
+  whichever name the target row had. `backfillRegistryTags()` is now
+  `backfillRegistryFields()` and, in the same walk and under the same
+  conditions, sets every item's and equipped slot object's `name` to its
+  registry entry's. It skips a named dish (`NAMED_DISH_ITEMS`), whose name
+  `buildDish()` took from `dishName()`. General, not a migration: any later
+  rename in `ITEM_REGISTRY` reaches old saves the same way.
+
+**Documentation**
+- Comments that quoted the old player-facing names now use the new ones: the
+  spawn-probability note (biscuits, the mate and metal straw, the ID card),
+  the `row_house` fixtures list (the grill), the ROOM SCHEMA `address` note,
+  the building-instance schema, `LIMA_STOP_TEXT`'s and
+  `buildingInstances()`' notes on the corner store's designed site, and the
+  two landmark instance comments. The item-schema note on `tags` now says
+  `name` is resynced too.
+- Nothing was deferred.
+
+**Open questions / decisions resolved**
+- Design decision 1, where the name refresh lives: **(a)**, the handoff's
+  recommendation. It is folded into the existing `resync`, since both are the
+  same walk under the same conditions, and the function renamed
+  `backfillRegistryTags()` → `backfillRegistryFields()` so its name says
+  what it does. Older entries cite the old name.
+- Design decision 2, the named-dish test: `NAMED_DISH_ITEMS`, a `Set` of the
+  `item` ids of `DISH_TEMPLATES` entries with `named:true`, built once when the
+  script loads, beside the function (PERSISTENCE). An implementation choice.
+
+**Explicitly out of scope**
+- Every id: item ids, building ids, type ids (`galpon`, `shop_home`), stop
+  ids, `NAMED_SCENERY` keys, map label-offset keys.
+- Street, district and town names, and FC Mitre.
+- Making `name` registry-only (about 77 `.name` reads).
+- `docs/` and `CLAUDE.md`, already updated in #312.
+- #296 beyond these four names.
+
+**Notes / assumptions**
+- "Mate and metal straw" is retunable wording, per the handoff.
+
+**Validation performed**
+Headless Chromium, with a test hook exposing the script's closure injected
+into scratch copies of both builds (not committed):
+- A save written by the v0.10.1 build (`origin/main`) holding a Pack of
+  galletitas in the inventory, a Cédula verde in a `home_living` container, a
+  DNI card in an equipped worn backpack's `items`, a Mate and bombilla in an
+  unequipped duffel bag's `contents`, a "Bean and corn stew" built by
+  `buildDish()`, and a Boiled pasta, loaded in this build as Pack of
+  biscuits, Vehicle registration card, ID card and Mate and metal straw. The
+  stew kept "Bean and corn stew" and the pasta "Boiled pasta".
+- In that loaded save, `addToList()` of a new `galletitas` merged with the
+  old row into one "Pack of biscuits ×2".
+- The six `ashfallDev` validators return the same results on both builds;
+  no page errors on load.
+- A grep of `ashfall.html`'s string literals for galletitas, Cédula, DNI,
+  bombilla, almacén, comisaría, Delegación, Escuela, Estación, parrilla and
+  "barrio's" finds only the ids `galletitas` and `mate_bombilla`.
+- `git diff origin/main...HEAD -- ashfall.html` touches only the version, the
+  tabled lines, the named comments, and PERSISTENCE's refresh.
+
+**Sections touched**
+- WORLD DATA: `ITEM_REGISTRY`, `LIMA_STOP_TEXT`, `STOP_TEXT`,
+  `stopAddress()`, `NAMED_SCENERY`, `BUILDING_TYPES` (the row house's
+  garden), `landmarkInstances()`.
+- PERSISTENCE: `backfillRegistryFields()` (was `backfillRegistryTags()`),
+  `NAMED_DISH_ITEMS`, and the call in `applyLoadedData()`.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.10.1"` → `"0.10.2"`
+
+---
+
 ## v0.10.1 — Saves keep only the doors and windows that changed
 
 Implements: handoffs/save-only-changed-openings.md

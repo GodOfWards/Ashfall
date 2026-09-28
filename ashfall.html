@@ -464,7 +464,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.10.1" };
+  const GAME_CONFIG = { VERSION: "0.10.2" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -693,7 +693,7 @@
   //                 a corner and keeps its "Calle 7 & Calle 10" string
   //                 (stopAddress()). A room *inside* a building takes the
   //                 street that building fronts, even when the building sits
-  //                 on a corner: the almacén is entered from the corner of
+  //                 on a corner: the corner store is entered from the corner of
   //                 Calle 113 and Calle 50, but its address is "Calle 113".
   //                 Never a house number: a home is never tied to a real one.
   //   building      the NAME of the building this room is inside, e.g.
@@ -829,8 +829,10 @@
   //   that should be shared — those belong in the registry entry itself,
   //   so an item's definition is never duplicated across placements.
   //   An item's `tags` are definition data: `overrides` never sets them, and
-  //   the load path resyncs them from the registry (backfillRegistryTags()),
-  //   so a tag fix here reaches every save.
+  //   the load path resyncs them from the registry (backfillRegistryFields()),
+  //   so a tag fix here reaches every save. Its `name` is resynced the same
+  //   way, so a rename reaches every save too — all but a named dish's,
+  //   which buildDish() gives it.
   //   Basic item: { name, category, qty, unitWeight }
   //   Optional properties:
   //     tags          capability tags used by mechanics instead of name
@@ -1068,7 +1070,7 @@
     work_boots: { name:"Work boots", category:"Clothing", unitWeight:1.1 },
     tire_iron: { name:"Tire iron", category:"Tool", unitWeight:1.0, tags:["blunt"] },
     // A car's registration card, kept in its glovebox.
-    cedula_verde: { name:"Cédula verde", category:"Misc", unitWeight:0.02 },
+    cedula_verde: { name:"Vehicle registration card", category:"Misc", unitWeight:0.02 },
     thermos: { name:"Thermos", category:"Misc", unitWeight:0.4 },
     house_key: { name:"House key", category:"Key", unitWeight:0.03, doorId:"home-front" },
     bandage: { name:"Bandage", category:"Medical", unitWeight:0.05 },
@@ -1178,10 +1180,10 @@
     // and its food values where it has any. The weights are judgment calls,
     // retunable: a 500 g bag of yerba, a box of six alfajores.
     yerba_mate: { name:"Bag of yerba mate", category:"Food", unitWeight:0.5 },                 // coffee_grounds
-    mate_bombilla: { name:"Mate and bombilla", category:"Misc", unitWeight:0.3 },              // thermos
+    mate_bombilla: { name:"Mate and metal straw", category:"Misc", unitWeight:0.3 },              // thermos
     alfajores: { name:"Box of alfajores", category:"Food", unitWeight:0.3, restores:{hunger:5}, verb:"Eat" },   // candy_bar
-    galletitas: { name:"Pack of galletitas", category:"Food", unitWeight:0.2, restores:{hunger:8}, verb:"Eat" }, // crackers
-    dni_card: { name:"DNI card", category:"Misc", unitWeight:0.01 },
+    galletitas: { name:"Pack of biscuits", category:"Food", unitWeight:0.2, restores:{hunger:8}, verb:"Eat" }, // crackers
+    dni_card: { name:"ID card", category:"Misc", unitWeight:0.01 },
     // Money / valuables
     us_dollars: { name:"Envelope of US dollars", category:"Misc", unitWeight:0.05 },           // cash_bundle
     // Equippable bags — same shape as worn_backpack: a found item whose
@@ -1314,9 +1316,9 @@
   //   conversion. So are `kitchen_tools`' cooking pot (0.15) and roasting
   //   pan (0.10), which postdate it as well. Retunable.
   //   So are the Argentine items' (#296): yerba mate, alfajores and
-  //   galletitas in `kitchen_nonperishable` (0.35, 0.15, 0.25) and
-  //   `retail_stock_food` (0.30, 0.25, 0.25), the mate and bombilla in
-  //   `kitchen_tools` (0.30), the DNI card in `documents_lore` (0.25) and
+  //   biscuits in `kitchen_nonperishable` (0.35, 0.15, 0.25) and
+  //   `retail_stock_food` (0.30, 0.25, 0.25), the mate and metal straw in
+  //   `kitchen_tools` (0.30), the ID card in `documents_lore` (0.25) and
   //   `residential_personal` (0.15), the US dollars in `valuables` (0.15), and
   //   the whole `car_boot` and `car_glovebox` pools. Retunable.
   //   Replacing an item id keeps its entry's derived chance: the retired
@@ -3488,29 +3490,29 @@ x_sn_9 m_sn_sn_sn sn p
   // level crossings, the landmarks' and named scenery's blocks, the road
   // north, the railway and the station. Each was checked against its source
   // when written (OSM, imagery, directories, Tom first-hand); the game names
-  // none of them. The almacén's corner is a designed placement.
+  // none of them. The corner store's site is a designed placement.
   const LIMA_STOP_TEXT = {
     x_av11_c10: "The corner of the plaza, where Avenida 11 meets Calle 10. Paths cut diagonally across the square under the trees.",
     m_av11_c12_c10: "Avenida 11, along the side of the plaza. Benches under the trees, a shopping bag left on one of them.",
     m_av11_c10_c8: "Avenida 11 by the plaza. The parish church of San Isidro Labrador stands on this block, its doors shut.",
     m_c10_av11_c9: "Calle 10, along the plaza. On this side, shop fronts with their shutters down; across the street, the trees.",
     m_c10_c13_av11: "Calle 10, on the plaza's far side. A bicycle leans against a tree, unlocked.",
-    m_av11_c8_c6: "Avenida 11. The Banco Nación is on this block, its shutter down, and the Escuela Primaria Nº 9 a little further on.",
+    m_av11_c8_c6: "Avenida 11. The Banco Nación is on this block, its shutter down, and the primary school a little further on.",
     m_av11_c6_c4: "Avenida 11, outside the Correo Argentino office. A notice is taped to the inside of the glass, too faded to read from here.",
     m_c6_c13_av11: "Calle 6, outside the municipal hospital. The ambulance bay is empty, and a chain is looped through the doors' handles.",
-    m_c8_av11_c13: "Calle 8, by the Delegación Municipal. Through the window, a row of plastic chairs where people used to wait.",
+    m_c8_av11_c13: "Calle 8, by the municipal office. Through the window, a row of plastic chairs where people used to wait.",
     m_c7_acc_c20: "The volunteer fire station is on this block. One bay door is open, and the bay is empty.",
-    m_c117_c88_c84: "The barrio's club runs along here behind a wire fence: tennis courts, a hall, a pool with leaves floating in it.",
+    m_c117_c88_c84: "The neighbourhood's club runs along here behind a wire fence: tennis courts, a hall, a pool with leaves floating in it.",
     m_c90b_c117_c119: "The courtyard in front of your row, in the Barrio Atucha. Four houses under red-tile roofs face the paths and the parking spaces. The neighbours' blinds are down.",
     m_c7_c10_c8: "Calle 7. A pharmacy takes up the front of a house here, its window full of sun-faded posters.",
-    m_c12_c13_c15: "Calle 12, outside the Comisaría Zárate 2. A patrol car is parked across the entrance with its doors open.",
+    m_c12_c13_c15: "Calle 12, outside the police station. A patrol car is parked across the entrance with its doors open.",
     m_cbar_dg2_c107: "The Camino a Baradero. A building-materials yard stands behind a wire fence: sand, bricks, stacked pipes.",
     x_c16_c7: "The corner of Calle 16 and Calle 7. A repair shop's roller door is half up, tyres stacked beside it.",
     x_acc_av11_c20: "Where the Acceso a Lima meets Avenida 11. The petrol station's forecourt is empty, the nozzles hung up on the pumps.",
-    x_c113_c50: "A corner in the Nueve de Julio neighbourhood. The almacén's door opens onto the corner itself, under a faded awning.",
+    x_c113_c50: "A corner in the Nueve de Julio neighbourhood. The corner store's door opens right onto it, under a faded awning.",
     x_c15_dg4: "Calle 15 crosses the railway here. A bell on a post beside the tracks, and nothing else.",
     x_c107_c2_c7: "The level crossing on Calle 2. A bell on a post: no barrier, no lights.",
-    estacion_lima: "Estación Lima. The station buildings, the platform, and the goods shed beside them. The platform is empty.",
+    estacion_lima: "Lima station. Its buildings, the platform, and the goods shed beside them. The platform is empty.",
     fcm_crossing_6km: "The tracks cross a country road here. A bell on a post, nothing else.",
     fcm_crossing_11km: "Another road crossing on the line, with its bell.",
     atucha_halt: "The Atucha halt: a platform beside the tracks, and not much else.",
@@ -3557,7 +3559,7 @@ x_sn_9 m_sn_sn_sn sn p
         "A lane in the Barrio Atucha. Chalets with red-tile roofs sit back in wide gardens under tall trees.",
         "Big gardens and tall trees along the lane. The lawns are already overdue for mowing." ],
       corner: [
-        "A junction of the barrio's lanes. Red-tile roofs show between the trees." ] }
+        "A junction of the neighbourhood's lanes. Red-tile roofs show between the trees." ] }
   };
   // The stop the player's home hangs off, in the Barrio Atucha's courtyard
   // of row houses (canon). The map falls back to it.
@@ -3608,7 +3610,7 @@ x_sn_9 m_sn_sn_sn sn p
   function stopAddress(stop){
     if(stop.kind === "r") return streetName("c111");
     if(stop.kind === "t") return RAIL_ADDRESS;
-    if(stop.kind === "s") return "Estación Lima";
+    if(stop.kind === "s") return "Lima station";
     const names = stop.streets.map(streetName).filter(Boolean);
     return names.length ? names.join(" & ") : UNNAMED_STREET;
   }
@@ -3753,14 +3755,14 @@ x_sn_9 m_sn_sn_sn sn p
   const NAMED_SCENERY = {
     hospital:     { name:"Municipal hospital",    anchor:"m_c6_c13_av11" },
     banco_nacion: { name:"Banco Nación",          anchor:"m_av11_c8_c6" },
-    school_ep9:   { name:"Escuela Primaria Nº 9", anchor:"m_av11_c8_c6" },
+    school_ep9:   { name:"Primary school",        anchor:"m_av11_c8_c6" },
     correo:       { name:"Correo Argentino",      anchor:"m_av11_c6_c4" },
     parroquia:    { name:"San Isidro Labrador",   anchor:"m_av11_c10_c8" },
-    delegacion:   { name:"Delegación Municipal",  anchor:"m_c8_av11_c13" },
+    delegacion:   { name:"Municipal office",      anchor:"m_c8_av11_c13" },
     bomberos:     { name:"Fire station",          anchor:"m_c7_acc_c20" },
     club:         { name:"Club",                  anchor:"m_c117_c88_c84" },
     petrol:       { name:"Petrol station",        anchor:"x_acc_av11_c20" },
-    estacion:     { name:"Estación Lima",         anchor:"estacion_lima" }
+    estacion:     { name:"Lima station",          anchor:"estacion_lima" }
   };
 
   // BUILDING TYPES. A building is one line of data, an instance, and its
@@ -3801,7 +3803,7 @@ x_sn_9 m_sn_sn_sn sn p
   //   { id, type | layout, site, at?, name?, address, seed?, enter?, leave?,
   //     overrides? }
   //   type     a BUILDING_TYPES id; or `layout`, a type-shaped object of its
-  //            own, for a one-off building (the comisaría), as WIRING's
+  //            own, for a one-off building (the police station), as WIRING's
   //            panels take `template` or `layout`.
   //   site     the stop id the building hangs off; its street exit is there.
   //   at       [u, v], the building's own position, when it isn't the
@@ -3857,7 +3859,7 @@ x_sn_9 m_sn_sn_sn sn p
     // The Barrio Atucha's terraced row house (#284): one storey, about 11 ×
     // 10.5 m inside, entered from its courtyard. Nothing is wired; the
     // fixtures its text names (the garrafa cooker and heater, the fridge,
-    // the washing machine, the house pump, the tablero, the parrilla, the
+    // the washing machine, the house pump, the tablero, the grill, the
     // clothesline, the septic tank) are words only.
     row_house: { label:"row house", entry:"living", water:{ tankL:HOUSE_TANK_L },
       rooms: [
@@ -3887,7 +3889,7 @@ x_sn_9 m_sn_sn_sn sn p
           desc:"Shower, toilet, bidet and basin, tiled to the ceiling. The window is small and high up.",
           containers:BATHROOM_CONTAINERS },
         { role:"garden", room:"Back garden", shelter:"none", floorCap:40,
-          desc:"A patch of grass behind the house. A brick parrilla against the back wall, a clothesline, and the concrete lid of the septic tank.",
+          desc:"A patch of grass behind the house. A brick grill against the back wall, a clothesline, and the concrete lid of the septic tank.",
           containers:[ SHED_BOX ] }
       ],
       links: [
@@ -3996,7 +3998,7 @@ x_sn_9 m_sn_sn_sn sn p
   // the start's balance doesn't shift. `marker` puts one on the map
   // (BUILDINGS). Then one enterable house on every mid stop but the home
   // stop (generatedHomes()).
-  //   The almacén's site is designed: no grocery in Lima was verified, and
+  //   The corner store's site is designed: no grocery in Lima was verified, and
   //   this corner in the Nueve de Julio neighbourhood was chosen for play
   //   (#237). Every other site is real (LIMA_STOP_TEXT's sources).
   function buildingInstances(){
@@ -4044,7 +4046,7 @@ x_sn_9 m_sn_sn_sn sn p
                 { id:"flashlight", qty:1 }, { id:"spare_batteries", qty:2 }, { id:"wristwatch", qty:1 } ] },
               { id:"chest", name:"Chest of drawers", capacityKg:15, spawnPools:["clothing","residential_personal"], items:[
                 { id:"folded_clothes", qty:1 }, { id:"crumpled_cash", qty:1 }, { id:"cloth", qty:3 } ] } ] },
-          garden:{ desc:"Your back garden. The parrilla's grill is still greasy from the last asado.",
+          garden:{ desc:"Your back garden. The grill is still greasy from the last asado.",
             containers:[ { id:"shedbox", name:"Shed box", capacityKg:15, spawnPools:["fuel_fire","tools_general"], items:[
               { id:"duct_tape", qty:1 }, { id:"rope", qty:1 } ] } ] } } } },
       // The neighbours' row house on the same courtyard: pools only. A home,
@@ -4068,13 +4070,13 @@ x_sn_9 m_sn_sn_sn sn p
           home:{ desc:"The rooms behind the pharmacy. Someone lived here and left in a hurry.",
             containers:[ { id:"cabinet", name:"Cabinet", capacityKg:10, spawnPools:["kitchen_nonperishable"], items:[
               { id:"canned_soup", qty:2 } ] } ] } } } },
-      // The Comisaría Zárate 2, a one-off: its front desk and its cells.
-      { id:"comisaria", site:"m_c12_c13_c15", name:"Comisaría Zárate 2", address:"Calle 12", marker:true,
-        enter:"Enter the comisaría",
-        layout:{ label:"comisaría", entry:"desk",
+      // The police station, a one-off: its front desk and its cells.
+      { id:"comisaria", site:"m_c12_c13_c15", name:"Police station", address:"Calle 12", marker:true,
+        enter:"Enter the police station",
+        layout:{ label:"police station", entry:"desk",
           rooms:[
             { role:"desk", room:"Front desk", shelter:"full", cannotHaveFire:true, floorCap:60,
-              desc:"The front desk of the Comisaría Zárate 2. Papers on the floor, a chair on its side.",
+              desc:"The front desk of the police station. Papers on the floor, a chair on its side.",
               containers:[
                 { id:"frontdesk", name:"Front Desk", capacityKg:15, spawnPools:["office_supplies","police_gear","electronics"] },
                 { id:"lockerroom", name:"Locker Room", capacityKg:25, spawnPools:["police_gear","clothing"] } ] },
@@ -4102,11 +4104,11 @@ x_sn_9 m_sn_sn_sn sn p
           office:{ desc:"A cramped office with an order book open on the desk.",
             containers:[ { id:"shelf", name:"Shelf", capacityKg:10, spawnPools:["recreation","residential_personal"], items:[
               { id:"work_boots", qty:1 }, { id:"fanny_pack", qty:1 } ] } ] } } } },
-      // The almacén and the family's rooms behind it (a designed site).
-      { id:"almacen", type:"shop_home", site:"x_c113_c50", name:"Almacén", address:"Calle 113", marker:true,
-        enter:"Enter the almacén",
+      // The corner store and the family's rooms behind it (a designed site).
+      { id:"almacen", type:"shop_home", site:"x_c113_c50", name:"Corner store", address:"Calle 113", marker:true,
+        enter:"Enter the corner store",
         overrides:{ rooms:{
-          shop:{ desc:"A neighbourhood almacén: a counter, a fridge for drinks, shelves to the ceiling.",
+          shop:{ desc:"A small corner store: a counter, a fridge for drinks, shelves to the ceiling.",
             searchLabel:"Search the shop", searchMinutes:25,
             containers:[
               { id:"shelves", name:"Shelves", capacityKg:30, spawnPools:["retail_stock_food","retail_stock_general"], items:[
@@ -4133,7 +4135,7 @@ x_sn_9 m_sn_sn_sn sn p
               { id:"filingcabinet", name:"Filing Cabinet", capacityKg:20, spawnPools:["office_supplies","documents_lore","electronics"] } ] } } } },
       // The station's goods shed, where the storage units' crates went. The
       // third was never locked.
-      { id:"goods_shed", type:"galpon", site:"estacion_lima", name:"Goods shed", address:"Estación Lima", marker:true,
+      { id:"goods_shed", type:"galpon", site:"estacion_lima", name:"Goods shed", address:"Lima station", marker:true,
         enter:"Enter the goods shed",
         overrides:{ rooms:{
           floor:{ desc:"The railway's goods shed. Brick walls, a high roof, a loading door onto the tracks.",
@@ -8255,22 +8257,28 @@ x_sn_9 m_sn_sn_sn sn p
       if(slot && !slot.itemId && nameToId[slot.name]) slot.itemId = nameToId[slot.name];
     });
   }
-  // backfillRegistryTags(): companion to backfillItemIds(), run after it and
-  // backfillSlotItemIds() on every load, since it keys off the itemId they
-  // assign. itemFromRegistry() deep-copies `tags` onto every instance, so
-  // without this a tag fixed in ITEM_REGISTRY would never reach an item
-  // already in a save: the walkie-talkie would go on counting as a battery.
+  // backfillRegistryFields(): companion to backfillItemIds(), run after it
+  // and backfillSlotItemIds() on every load, since it keys off the itemId
+  // they assign. itemFromRegistry() deep-copies `tags` and `name` onto every
+  // instance, so without this a tag fixed in ITEM_REGISTRY would never reach
+  // an item already in a save (the walkie-talkie would go on counting as a
+  // battery), and nor would a rename (a Pack of galletitas would stay one,
+  // and stack under either name with a new Pack of biscuits).
   // Every item forEachItemList() reaches, and every equipped slot object,
   // takes a fresh copy of its registry entry's `tags`, or loses the field when
-  // the entry has none. An item with no itemId, or one the registry does not
-  // know, is left as it is. A new game needs none of this: its items come
-  // from the registry already.
-  function backfillRegistryTags(){
+  // the entry has none, and takes the entry's `name` — unless it is a named
+  // dish, whose name dishName() built from its ingredients (NAMED_DISH_ITEMS).
+  // An item with no itemId, or one the registry does not know, is left as it
+  // is. A new game needs none of this: its items come from the registry
+  // already.
+  const NAMED_DISH_ITEMS = new Set(DISH_TEMPLATES.filter(t=> t.named).map(t=> t.item));
+  function backfillRegistryFields(){
     const resync = (it)=>{
       if(!it || !it.itemId || !Object.prototype.hasOwnProperty.call(ITEM_REGISTRY, it.itemId)) return;
       const def = ITEM_REGISTRY[it.itemId];
       if(def.tags) it.tags = def.tags.slice();
       else delete it.tags;
+      if(!NAMED_DISH_ITEMS.has(it.itemId)) it.name = def.name;
     };
     forEachItemList(list=> list.forEach(resync));
     CONTAINER_SLOTS.forEach(slotKey=> resync(state[slotKey]));
@@ -8424,7 +8432,7 @@ x_sn_9 m_sn_sn_sn sn p
     resyncUidCounter();
     backfillItemIds();
     backfillSlotItemIds();
-    backfillRegistryTags();
+    backfillRegistryFields();
     backfillIllnessScale();
     backfillInventoryCap();
     migrateCookingRelease();
