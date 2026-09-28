@@ -301,10 +301,10 @@ has a modern installation, as above. One on a dirt street has an old board.
   ([Manili, UTN-FRSC, 2022-08-22](https://www.frsc.utn.edu.ar/web/wp-content/uploads/2022/10/Presentacion-FRSC.pdf)).
 - **No earth conductor** in very old houses: trade and retail guides say so.
   Secondary, general.
-- **Sockets are three-pin (2P+T, IRAM 2071) in most of Argentina, old homes
-  included** (Tom, first-hand, 2026-09-28). Round two-pin sockets (type C)
+- **Sockets take three flat pins (*tres patas planas*: 2P+T, IRAM 2071) in
+  most of Argentina, old homes included** (Tom, first-hand, 2026-09-28). Round two-pin sockets (type C)
   survive in some old buildings but are rare (El Destape, 2024, secondary).
-  Whether an old home's third pin is actually earthed is **unconfirmed**:
+  Whether an old home's earth pin is actually earthed is **unconfirmed**:
   the guides above suggest that often it isn't.
 - **The fuse ratings** of an old board, and whether the meter sits in a
   pillar or on the façade in old Lima homes, are **unconfirmed**.
