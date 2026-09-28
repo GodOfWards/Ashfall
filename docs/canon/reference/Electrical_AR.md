@@ -382,6 +382,23 @@ them.
   found either. Buenos Aires province relies on each partido's building code
   (search summary, secondary).
 
+**The Barrio Atucha row house's board (Tom, first-hand, 2026-09-28, #305):**
+- **The meters are in a shared bank** for the row, **by the parking spaces**
+  on the courtyard. Each house's main breaker is beside its own meter there.
+- **Inside, a modern board** (*termomagnéticas*, not fuses) **in the living
+  room.**
+- **A diferencial covers every circuit.**
+- **Three circuits:** lights; sockets; and the water heater with the pump.
+  (Tom first described lights and sockets together, then split them.)
+- **The water heater is in the laundry**, with the pump.
+- **Appliances:** the gas cooker, a fridge-freezer, a **small microwave**, a
+  **toaster**, an **electric kettle**, a **small washing machine** and a
+  **TV**. **No range hood.**
+
+The main's rating (32 A, OCEBA's Tarifa 1 maximum), the diferencial's
+(30 mA, 2 × 40 A, AEA's worked example) and the circuits' ratings are game
+choices built on the rules above, not Tom's first-hand figures.
+
 **Fridge-freezer:**
 - **Energy:** Patrick's cyclic fridge-freezers (models 135/136/141/151: 264,
   300, 359 and 389 L, class A, R134a, climate class T) use **310, 326, 356
@@ -515,6 +532,69 @@ water to a tank, all at 220 V; secondary, retail listings):
   for the TEC085RH (search summary, secondary). Señorial sells an 80 L,
   **1,500 W** model (TESZ-95, retail listing, secondary).
 
+**Electric water heater, standing loss** (#305):
+- "Los termotanques tienen consumos de mantenimiento que varían entre 1,5 a
+  9 kWh/día." A typical family of 3.3 uses about 180 L of hot water a day,
+  which takes 5.2 kWh/day to heat from 17 °C to 42 °C. **Primary** (Salvador
+  Gil, Fundación Bariloche, *Eficiencia energética en Argentina: Agua
+  Caliente Sanitaria*, EU cooperation project, GFA Consulting, 2020;
+  [PDF](https://www.eficienciaenergetica.net.ar/img_publicaciones/04271009_03.SectorResidencial-ACS.pdf);
+  read 2026-09-28). The range covers termotanques in general, gas and
+  electric; it isn't split by fuel.
+
+**Small appliances (#332, 2026-09-28).** The session's proxy blocked most
+makers' and retailers' pages, so most of these are search-engine summaries of
+Argentine retail listings: **secondary** unless marked otherwise.
+
+- **Electric kettle** (*pava eléctrica*), 1.7 L, 220 V: **1,850–2,200 W,
+  most commonly 2,200 W**, with automatic cut-off at the boil. Atma
+  PE1821NAP 2,200 W
+  ([Vea](https://www.vea.com.ar/pava-electrica-pe1821nap-1-7-corte-automatico-atma/p));
+  Philips HD9350/90 2,200 W; Daewoo WK5416 2,200 W
+  ([Tescuo](https://www.tescuo.com.ar/productos/pavas1/)); Electrolux EKA20
+  2,000 W; Vonne 1,850 W
+  ([Tecnohidro](https://www.tienda.tecnohidro.com.ar/pava-electrica-vonne-regulador-con-corte-automatico-17lts-c/p/MLA22753463)).
+- **Toaster** (*tostadora*), two slots, 220 V / 50 Hz: **700–850 W.** Atma
+  TO8020i and TO2180 700 W
+  ([Somos Rex](https://somosrex.com/tostadora-electrica-7-niveles-atma-to8020ip-funcion-descongelar.html));
+  Midea 770 W; Peabody PE-T8127R up to 850 W; a generic listing 750 W,
+  220 V, 50 Hz. Four-slot models reach 1,600 W.
+- **Small microwave,** 20 L. Its advertised "700 W" is the cooking output.
+  **Input: 1,050–1,150 W at 220 V / 50 Hz, on a 10 A plug.** BGH B120M16
+  (dial) 1,150 W input
+  ([Somos Rex](https://somosrex.com/microondas-20-lts-quick-chef-mecanico-bgh-b120m16.html));
+  BGH B120DS20 and B120DN20 (digital) 1,050 W
+  ([Megatone](https://www.megatone.net/producto/microondas-b120ds20-20l-700w-digital-pl-bgh_COC2020BGH/));
+  BGH B120M20 and Daewoo D120M 1,150 W maximum. CEZ's table gives 1,300 W
+  (below). **Standby draw: not found.**
+- **Washing machine,** small (5 kg) automatic top-loader:
+  - Drean Concept 5.05: 220 V - 50 Hz, **0.300 kWh per cotton programme**;
+    its manual gives no rated power and points to the plate on the back.
+    **Primary** for Drean
+    ([manual](https://drean.com.ar/medias/Manual-Concept-5.05.pdf), read
+    2026-09-28).
+  - Drean Concept 5.05 V1: **no water-heating element** (its label reads
+    "Potencia nominal de la resistencia de calentamiento de agua: No
+    aplica"); 0.62 kWh and 127 L per cycle
+    ([Frávega](https://www.fravega.com/p/lavarropas-carga-superior-drean-5kg-500-rpm-concept-5-05-v1-173713/)).
+  - The older Drean Concept (5 kg top-loader): **motor 187 W, 220 V**, read
+    directly on a spare-parts listing
+    ([Línea Blanca SRL](https://www.lineablancasrl.com.ar/productos/motor-lavarropas-drean-concept-mod-viejo/)).
+  - **The plate's total and the motor's start surge are unconfirmed.**
+- **TV, 32" LED: unconfirmed.** Only generic guidance was found, 30–50 W on
+  and 0.5–3 W on standby
+  ([Naldo](https://blog.naldo.com.ar/cuanto-consume-un-televisor/),
+  [Infobae](https://www.infobae.com/tecno/2024/07/31/cuanta-energia-consume-un-smart-tv-en-modo-espera-y-como-ahorrar-en-el-pago-mensual/)).
+  No Argentine model's own figure was read.
+- **What a rating plate prints:** IEC 60335-1 §7.1 requires "rated power
+  input in watts or rated current in amperes": **either form is allowed.**
+  **Primary** for the standard's wording, quoted verbatim in an IEC 60335-1
+  / 60335-2-30 test report whose example heater's plate reads "2000W"
+  ([ITC India, ITC/TEST/NN/1508/01](https://www.itcindia.org/wp-content/uploads/2016/12/Room-Heater-Test-report-60335-2-30.pdf),
+  read 2026-09-28). **Which form an Argentine kettle's, toaster's or water
+  heater's plate uses is unconfirmed.** Every listing quotes watts, and the
+  microwaves' input is given in watts.
+
 **Extension cords (for #244):**
 - **Cord cable is "tipo taller"** to IRAM NM 247-5 (it replaced IRAM 2158):
   extra-flexible class 5 copper, PVC sheathed, "no apto para aparatos de
@@ -570,8 +650,12 @@ water to a tank, all at 220 V; secondary, retail listings):
 
 ## Not yet researched
 
-- **The home's real board:** Tom's first-hand knowledge of the Barrio Atucha
-  row houses (#305).
+- **The small appliances' gaps (#332):** a 32" LED TV's draw on and on
+  standby; a small washing machine's plate total and motor start; a small
+  microwave's standby draw; whether an Argentine kettle's, toaster's and
+  water heater's plates print watts or amps; an electric termotanque's
+  standing loss on its own, apart from gas ones. A first-hand reading of a
+  real plate settles any of the first four.
 - **IEC 60898-1 §5.3.2's exact preferred ratings** (the 1, 2, 4 and 8 A
   dispute, under "Breakers").
 - **A maker's own statement of a peripheral pump's motor type**, and a 50 Hz
