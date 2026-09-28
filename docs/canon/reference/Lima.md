@@ -225,21 +225,29 @@ Status: secondary unless marked; read 2026-09-27.
     Now through **ENDEZA**, the municipal water entity.
   - **All from groundwater wells:** **65 electric pumping wells** serve
     Zárate and Lima, all running at their limit.
-  - **Lima's system is different from Zárate's: pumps lift the water into a
-    tank, and the town is fed from it** (La Voz de Zárate, 2024-10-08, "El
-    problema con el agua en Zárate"; refuses automated readers, read through
-    a search summary). **Where Lima's tank is, and its size, are
-    unconfirmed.** Searches on 2026-09-28 found no location: web searches
-    and OpenStreetMap lookups (Overpass timed out; Nominatim found nothing).
-    It is left to Tom's Street View (#288, #300).
+  - **No town tank (Tom, 2026-09-28).** An earlier note said Lima's system
+    differs from Zárate's, with pumps lifting the water into a tank that feeds
+    the town. Its only source was a search summary of La Voz de Zárate
+    (2024-10-08, "El problema con el agua en Zárate"); the article itself
+    refuses automated readers and was never read. No tank has been found:
+    - web searches and Nominatim found nothing;
+    - OpenStreetMap's data for the town (the API's `map` call, box
+      34.070–34.025 S, 59.225–59.170 W, 2026-09-28) has no water tower,
+      storage tank, water well, pumping station or water works;
+    - Tom hasn't seen one.
+
+    **The game treats Lima as having no town tank.** The summary's claim is
+    set aside as unsupported, not as disproved.
   - A new well for Lima was to give about 100,000 litres an hour into the
     distribution ring (Municipalidad de Zárate, search summary). Pressure is
     a chronic summer problem, with a "definitive solution" promised for 2027
     ([Municipalidad, 2025-10-09](https://zarate.gob.ar/programa-de-servicio-de-abastecimiento-de-agua/)).
   - **What it means for the game:** running water depends on electric well
-    pumps. When the grid fails, **the tank's contents are all there is**.
-    This is derived, not sourced, and it replaces the Henderson reasoning
-    about gravity storage.
+    pumps, with no town storage between them and the pipes. When the grid
+    fails, the network has nothing to hold it up, and a home has only what
+    is in its own tank. This is derived, not sourced, and it replaces the
+    Henderson reasoning about gravity storage. How long the pipes keep any
+    pressure is #300's to decide.
   - **In practice, many homes aren't on the network** (Tom, 2026-09-27,
     first-hand): "it's really common to not have network water, so each
     house would have its own tank and pump". A house's own pump fills its
