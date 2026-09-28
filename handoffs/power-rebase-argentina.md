@@ -182,6 +182,13 @@ at 60 min, 2.55 × In at 60 s**, the slowest the standard allows (In ≤ 32 A).
   requires.
 - The heat meter's behaviour is unchanged: it rises by dt ÷ `tripMinutes()`
   while f > 1, drains by dt ÷ `HEAT_COOL_MIN` otherwise, and trips at 1.
+- **Sub-minute trip times land on the first step.** Time moves in steps of at
+  most one minute (`runAwakeStep()`). Where `tripMinutes()` is a minute or
+  less (2.55 × In and above, for ≤ 32 A), one step's rise reaches 1: the meter
+  is capped at 1, and the breaker trips at the end of that step. That's
+  intended. No action is shorter than a minute, and the trip is reported at
+  the step's end either way. Nothing is added to resolve seconds. Say so in
+  the comment above `tripMinutes()`.
 - **These points are balance values, retunable.** The standard gives only
   bounds. Say so in the constants' comment, and cite ABB 2CDC400002D0201 and
   Enel E-BT-004 Table 12 (secondary for IEC 60898-1).
@@ -386,7 +393,8 @@ Then run `ashfallDev.simulatePower()` on a one-unit test building using
 3. **Instant trip:** a test appliance drawing more than 80 A momentary on
    `sockets` trips it `"instant"`.
 4. **Heat trip at 2×:** a test load of 7,040 W (2 × 16 A × 220 V) on
-   `sockets` trips it by heat in ≈ 4–5 simulated minutes.
+   `sockets` trips it by heat on the 5th one-minute step (t(2) ≈ 4.27 min).
+   A load at 3 × In trips on the 1st step.
 5. **No trip at 1.13×:** a load of 1.13 × 16 A × 220 V (≈ 3,978 W) doesn't
    trip within 60 minutes.
 
