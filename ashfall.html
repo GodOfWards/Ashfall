@@ -465,7 +465,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.10.5" };
+  const GAME_CONFIG = { VERSION: "0.10.6" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -535,11 +535,12 @@
   // The collapse clock. A run starts START_DAYS_AFTER_COLLAPSE days after the
   // collapse; the grid fails on POWER_FAILS_DAY after it. Nothing is stored:
   // minutesSinceCollapse() derives the clock from state.totalMinutes. Running
-  // water has no day of its own: the pumps run on the grid, so the water
-  // stops with it, except where a house's own tank keeps its taps running a
-  // while longer (waterRunningIn(), HOUSE_TANK_L). #149's separate water
-  // option is moot while that holds. Both are retunable; the Day N clock
-  // still counts from the start of the run.
+  // water has no day of its own: the town's pumps run on the grid, so the
+  // mains stop with it (mainsWaterUp()). A house's own tank keeps its taps
+  // running while it holds water, and its own pump refills it only while that
+  // pump has power (waterRunningIn(), refillTanks(), HOUSE_TANK_L). #149's
+  // separate water option is moot while that holds. Both are retunable; the
+  // Day N clock still counts from the start of the run.
   const START_DAYS_AFTER_COLLAPSE = 2;
   const POWER_FAILS_DAY = 21;
   // The power network's figures (see POWER in SURVIVAL / TIME SIMULATION).
@@ -772,7 +773,8 @@
   //   fireMinutesLeft remaining fuel minutes for an active fire
   //   campfireBuilt  a campfire structure has been assembled here
   //   sink           the room has a sink: while the water runs
-  //                  (waterRunningIn(): the grid, or the building's tank), a
+  //                  (waterRunningIn(): the building's tank while it holds
+  //                  water, or the mains where there is no tank), a
   //                  water-holding item can be filled at it (doFillAtSink())
   //
   // CONTAINER SCHEMA:
@@ -3809,9 +3811,12 @@ x_sn_9 m_sn_sn_sn sn p
   //   windows  { role, label, breakTag }: a window to the outside, starting
   //            closed (WINDOW SCHEMA).
   //   water    optional, { tankL }: the building has its own water tank of
-  //            that many litres, filled by a house pump, which keeps its sinks
-  //            running after the grid fails until it is drawn dry
-  //            (waterRunningIn()). Absent: its sinks run on the grid alone.
+  //            that many litres, and its sinks run while it holds water
+  //            (waterRunningIn()). It is refilled by the building's pump (a
+  //            load whose appliance has `flowLph`) while that pump has power
+  //            and its float calls, or, where the building is unwired, while
+  //            the mains run (refillTanks(), mainsWaterUp()). Absent: its
+  //            sinks run on the mains alone.
   //   wiring   optional, { board:{ name, role, rating, curve?, direct?,
   //            feeders? }, panels:[{ id, name, role, template | layout }] }:
   //            the building's own network, in WIRING's shape (POWER SCHEMA)
@@ -3881,6 +3886,16 @@ x_sn_9 m_sn_sn_sn sn p
   // per person per day (Río Negro's water authority, secondary). The
   // Barrio Atucha's own tanks are unconfirmed. Retunable.
   const HOUSE_TANK_L = 1000;
+  // A house pump's flow, in L/h (#317): a 0.5 hp peripheral pump for a roof
+  // tank moves 1,800–2,400 L/h (Czerweny's QB60-L1, 40 L/min, and Rowa's
+  // RW-PR60; secondary). 2,400 is Tom's pick, which refills a 1,000 L tank
+  // from empty in 25 minutes. The house_pump appliance's `flowLph`, and the
+  // rate an unwired building's tank refills at (refillTanks()). Retunable.
+  const HOUSE_PUMP_FLOW_LPH = 2400;
+  // The tank's float switch starts its pump when the tank holds less than
+  // this fraction of it, and the pump then fills it to full (powerSnapshot(),
+  // tankFloat()). Tom's figure (#317), not researched. Retunable.
+  const TANK_FLOAT_START = 0.8;
   const BUILDING_TYPES = {
     // The Barrio Atucha's terraced row house (#284): one storey, about 11 ×
     // 10.5 m inside, entered from its courtyard. Wired as Tom describes the
@@ -4465,7 +4480,7 @@ x_sn_9 m_sn_sn_sn sn p
   //
   // APPLIANCES, keyed by id: what a load is.
   //   { name, watts, volts, leftOnChance | switchless, nameplate, readout?,
-  //     startWatts?, dutyCycle?, cycleMinutes? }
+  //     startWatts?, dutyCycle?, cycleMinutes?, flowLph? }
   //   watts        running draw
   //   volts        220: single-phase, the only voltage a load uses
   //   leftOnChance 0–1: how likely its own switch is to be found on, rolled
@@ -4482,6 +4497,9 @@ x_sn_9 m_sn_sn_sn sn p
   //   startWatts   the total draw at a start; present on a motor load
   //   dutyCycle, cycleMinutes  present on a cycling load: it draws for
   //                dutyCycle × cycleMinutes of every cycleMinutes
+  //   flowLph      a pump's flow in L/h; present on a load that fills its
+  //                building's tank, drawing only while the tank's float calls
+  //                (powerSnapshot(), refillTanks())
   //   nameplate    what its rating label prints (#249), in one of three
   //                forms: { amps }, printed as "<volts> V · <amps> A" at the
   //                entry's own `volts`; { printsWatts:true }, printed as its
@@ -4542,11 +4560,17 @@ x_sn_9 m_sn_sn_sn sn p
   //                   heater nobody switches off is: 0.95 is a judgment call.
   //                   The 120-minute cycle is a judgment call too.
   //   house_pump      370 W: a 0.5 hp peripheral pump, Rowa's RW-PR60, 0.37
-  //                   kW (secondary). It draws while switched on and does
-  //                   nothing yet: filling the tank, and its start surge, are
-  //                   #317's, so no `startWatts`.
-  // The kettle, the toaster, the microwave and the pump are found switched
-  // off (leftOnChance 0), and once switched on, draw until switched off:
+  //                   kW (secondary). It fills its building's tank at
+  //                   HOUSE_PUMP_FLOW_LPH, on an automatic float switch (Tom,
+  //                   first-hand): it starts when the tank drops below
+  //                   TANK_FLOAT_START and fills it to full, drawing only
+  //                   while it fills. Starting 3,300 W: 2.7 A × about 5.5 ×
+  //                   220 V, inside the 1,900–3,600 W a start of 5–6× the
+  //                   running current gives for these pumps (derived from
+  //                   WEG's 60 Hz motors; secondary). Found switched on, as
+  //                   the fridge is: 0.99 is a judgment call.
+  // The kettle, the toaster and the microwave are found switched off
+  // (leftOnChance 0), and once switched on, draw until switched off:
   // switching themselves off, and being used, are #334's.
   // The hood is a motor, but its start surge is left unmodelled: it carries
   // no `startWatts`. Lima homes have no smoke alarm, and usually no bathroom
@@ -4591,8 +4615,8 @@ x_sn_9 m_sn_sn_sn sn p
     water_heater:   { name:"Water heater",   watts:WATER_HEATER_WATTS, volts:220, leftOnChance:0.95,
       dutyCycle:WATER_HEATER_LOSS_KWH_DAY * 1000 / (WATER_HEATER_WATTS * MINUTES_PER_DAY / 60), cycleMinutes:120,
       nameplate:{ printsWatts:true }, readout:{ on:"Running", off:"Stopped" } },
-    house_pump:     { name:"Water pump",     watts:370,  volts:220, leftOnChance:0, nameplate:{ amps:2.7 },
-      readout:{ on:"Running", off:"Stopped" } }
+    house_pump:     { name:"Water pump",     watts:370,  startWatts:3300, volts:220, flowLph:HOUSE_PUMP_FLOW_LPH, leftOnChance:0.99,
+      nameplate:{ amps:2.7 }, readout:{ on:"Running", off:"Stopped" } }
   };
   // What an appliance's nameplate is rated at, in watts, or null when it has
   // no usable one. The one reading of `nameplate`'s three forms besides the
@@ -4889,9 +4913,9 @@ x_sn_9 m_sn_sn_sn sn p
       // SCHEMA), in the order first entered. Written by doMove(); Walk to…
       // reads it.
       enteredBuildings:[],
-      // Litres drawn from each building's tank since the grid failed, by
-      // building id. Written only then (doFillAtSink()): while the grid is up
-      // its pump keeps every tank full. See tankLeft().
+      // Litres drawn from each building's tank, by building id: raised
+      // whenever a sink draws on it (doFillAtSink()), lowered as its pump
+      // refills it (refillTanks()). A full tank has no entry. See tankLeft().
       tankDrawn:{},
       // Running illnesses, keyed by ILLNESSES id: the minutes each has left.
       // A missing or 0 entry means not ill with it.
@@ -5737,18 +5761,19 @@ x_sn_9 m_sn_sn_sn sn p
   // everything it mixes with. Instant. After the water fails the sink gives
   // nothing, and whatever was left in the pipes is #47's.
   // A vessel fills too, while it holds no dish and no water.
-  // Off a tank, after the grid has failed, a fill draws the litres it adds
-  // (1 kg of water is 1 L) and takes only what the tank has left: a bottle
-  // fills part way on the last of it, and a vessel, whose water is all or
-  // nothing, needs its whole waterKg. The lines are functional, retunable.
+  // Off a tank, at any time, a fill draws the litres it adds (1 kg of water
+  // is 1 L) and takes only what the tank has left: a bottle fills part way on
+  // the last of it, and a vessel, whose water is all or nothing, needs its
+  // whole waterKg. A sink without a tank draws on the mains, and draws
+  // nothing down. The lines are functional, retunable.
   function canFillAtSink(it){
     const room = world[state.currentRoom];
     if(!room.sink || !waterRunningIn(state.currentRoom) || !canTakeWater(it)) return false;
-    return gridUp() || !vesselDefOf(it) || tankLeft(state.currentRoom) >= sinkLitresFor(it);
+    return !tankOf(state.currentRoom) || !vesselDefOf(it) || tankLeft(state.currentRoom) >= sinkLitresFor(it);
   }
   // Whether the room's sink is dry for an item that could take water: its
-  // tank drawn empty after the grid failed. What the pop-up says in the fill
-  // action's place.
+  // tank drawn too low for it, whether or not the grid is up. What the pop-up
+  // says in the fill action's place.
   function tapDryFor(it){
     const room = world[state.currentRoom];
     return !!room.sink && canTakeWater(it) && tankOf(state.currentRoom) > 0 && !canFillAtSink(it);
@@ -5788,7 +5813,7 @@ x_sn_9 m_sn_sn_sn sn p
     const it = getItemAt(src && src.items, index);
     if(!it || !canFillAtSink(it)) return;
     const need = sinkLitresFor(it);
-    const fromTank = !gridUp() && tankOf(state.currentRoom) > 0;
+    const fromTank = tankOf(state.currentRoom) > 0;
     // Rounded to the millilitre, so a tank's running total and a bottle's
     // part fill don't carry float noise.
     const litres = Math.round((fromTank ? Math.min(need, tankLeft(state.currentRoom)) : need) * 1000) / 1000;
@@ -6357,32 +6382,72 @@ x_sn_9 m_sn_sn_sn sn p
   function getVagueClockText(){ return "Day " + dayNumber() + ", " + timeOfDayBand(); }
   // How long ago the collapse was, in game minutes: the run's start offset
   // plus the time played. Derived, never stored. Everything that asks whether
-  // the grid or the water is still on reads this, through the two predicates
-  // below; `m` defaults to now so a caller integrating over time can ask
+  // the grid or the mains are still on reads this, through the two predicates
+  // below (gridUp(), mainsWaterUp()); `m` defaults to now so a caller integrating over time can ask
   // about any other minute.
   // gridUp() is the grid source's state, the one source the power network
-  // has (see POWER in SURVIVAL / TIME SIMULATION). The water follows the
-  // grid, not a building's power: nothing restores a building's power
-  // without the grid yet, and the rule still holds once generators do (#245).
+  // has (see POWER in SURVIVAL / TIME SIMULATION).
   function minutesSinceCollapse(){ return START_DAYS_AFTER_COLLAPSE * MINUTES_PER_DAY + state.totalMinutes; }
   function gridUp(m = minutesSinceCollapse()){ return m < POWER_FAILS_DAY * MINUTES_PER_DAY; }
-  // Water: a room's sink runs while the grid does, and a room in a building
-  // with its own tank (BUILDING_INFO's tankL) runs on after it fails, until the
-  // tank is drawn dry. The tank's pump is unwired, so it stops with the grid
-  // (#245, #289 can change that), and the tank is full at that moment, since
-  // nobody else draws on it. tankOf() is the room's building's tank in
-  // litres, or 0 for none; tankLeft() what it holds now.
+  // mainsWaterUp() is whether the town's water network runs: the mains a
+  // sink without a tank draws on, and what a house pump draws from to fill
+  // its tank (refillTanks()). The town's own pumps run on the grid, so today
+  // it is gridUp(). It is its own predicate so that #300's decision, whether
+  // the network outlives the grid, has one place to land before generators
+  // (#245) can power a house pump without the grid.
+  function mainsWaterUp(m = minutesSinceCollapse()){ return gridUp(m); }
+  // Water: a room in a building with its own tank (BUILDING_INFO's tankL)
+  // runs while the tank holds water, whatever the grid; a room without one
+  // runs on the mains. The tank is refilled by its pump while that pump has
+  // power, and an unwired building's while the mains run (refillTanks()).
+  // tankOf() is the room's building's tank in litres, or 0 for none;
+  // tankLeft() what it holds now.
   function tankOf(roomId){
     const room = world[roomId];
     return (room && room.buildingId && BUILDING_INFO[room.buildingId] && BUILDING_INFO[room.buildingId].tankL) || 0;
   }
-  function tankLeft(roomId, m = minutesSinceCollapse()){
+  function tankLeft(roomId){
     const size = tankOf(roomId);
-    if(!size || gridUp(m)) return size;
+    if(!size) return 0;
     return Math.max(0, size - (state.tankDrawn[world[roomId].buildingId] || 0));
   }
-  function waterRunningIn(roomId, m = minutesSinceCollapse()){
-    return gridUp(m) || tankLeft(roomId, m) > 0;
+  function waterRunningIn(roomId){
+    return tankOf(roomId) > 0 ? tankLeft(roomId) > 0 : mainsWaterUp();
+  }
+  // A tank's float switch, from its size and the litres drawn from it: `low`
+  // below TANK_FLOAT_START, `full` with nothing drawn. powerSnapshot() turns
+  // these and the pump's last step into whether it draws. Pure.
+  function tankFloat(tankL, drawn){
+    return { low: tankL - drawn < TANK_FLOAT_START * tankL, full: !(drawn > 0) };
+  }
+  // The litres still drawn after `dt` minutes of refilling at `flowLph`,
+  // floored at 0 and rounded to the millilitre, as doFillAtSink() rounds.
+  // Pure.
+  function refilledDrawn(drawn, flowLph, dt){
+    return Math.max(0, Math.round((drawn - flowLph / 60 * dt) * 1000) / 1000);
+  }
+  // Refilling, after each step's power (applyWorldTicking()), and only while
+  // the mains run: a tank whose pump drew this step (powerNow) gains the
+  // pump's flow for the step. A tank in a building with no pump load
+  // (TANK_PUMPS; today casa and shop_home) is the unwired fallback: it has
+  // no float and no latch, and refills at HOUSE_PUMP_FLOW_LPH whenever it is
+  // below full, until #306 and #307 wire those types (#258). Only a tank
+  // below full has an entry, and one refilled to full loses it.
+  function refillTanks(dt){
+    if(!mainsWaterUp()) return;
+    Object.keys(state.tankDrawn).forEach(b=>{
+      const info = BUILDING_INFO[b];
+      if(!info || !(info.tankL > 0)) return;
+      const pump = TANK_PUMPS[b];
+      let flow = HOUSE_PUMP_FLOW_LPH;
+      if(pump !== undefined){
+        if(!(powerNow && powerNow.drawing[pump])) return;
+        flow = APPLIANCES[POWER_NET.loads[pump].appliance].flowLph;
+      }
+      const left = refilledDrawn(state.tankDrawn[b], flow, dt);
+      if(left > 0) state.tankDrawn[b] = left;
+      else delete state.tankDrawn[b];
+    });
   }
   function getWindowsInRoom(roomId){
     return Object.keys(windows).filter(id=>windows[id].rooms.includes(roomId)).map(id=>Object.assign({id}, windows[id]));
@@ -7056,7 +7121,9 @@ x_sn_9 m_sn_sn_sn sn p
   // anywhere else shuts off silently, the way a fire elsewhere goes out.
   function applyWorldTicking(min){
     // The network first: what spoilage reads this step is this step's power.
+    // Then the tanks, from what this step's pumps drew.
     stepPower(min);
+    refillTanks(min);
     ageFood(min);
     forEachItemList((list, roomId)=>{
       list.forEach(it=>{
@@ -7275,6 +7342,37 @@ x_sn_9 m_sn_sn_sn sn p
   // The game's network, expanded once. A building GAME_WIRING does not name
   // has no nodes here, and its rooms fall back to the grid (containerPowered()).
   const POWER_NET = expandWiring(GAME_WIRING, WIRING_TEMPLATES);
+  // The loads that fill a tank, by the building their room is in: every
+  // load whose appliance has `flowLph` (POWER SCHEMA), as { buildingId:
+  // [loadId] }. Pure, so validateWiring() reads a test network through it.
+  function tankPumpsOf(net, appliances, rooms){
+    const out = {};
+    Object.values(net.loads).forEach(l=>{
+      const a = appliances[l.appliance], room = rooms[l.room];
+      if(!a || a.flowLph === undefined || !room || !room.buildingId) return;
+      (out[room.buildingId] = out[room.buildingId] || []).push(l.id);
+    });
+    return out;
+  }
+  // The game's tank pumps, found once: { buildingId: loadId } for every
+  // building with a tank and a pump. A building with two keeps its first,
+  // which validateWiring() reports. A tank with no pump here is unwired, and
+  // refills by the fallback (refillTanks()).
+  const TANK_PUMPS = (function(){
+    const out = {};
+    const found = tankPumpsOf(POWER_NET, APPLIANCES, world);
+    Object.keys(found).forEach(b=>{ if(BUILDING_INFO[b] && BUILDING_INFO[b].tankL > 0) out[b] = found[b][0]; });
+    return out;
+  })();
+  // The game's floats as they stand, for powerSnapshot(): each pump's tank,
+  // from state.tankDrawn.
+  function tankFloatsNow(){
+    const out = {};
+    Object.keys(TANK_PUMPS).forEach(b=>{
+      out[TANK_PUMPS[b]] = tankFloat(BUILDING_INFO[b].tankL, state.tankDrawn[b] || 0);
+    });
+    return out;
+  }
   // state.power's readers and writers, over any power object so the dev
   // seam's simulation shares them. A default is never written: a writer
   // that returns an entry to its default deletes it.
@@ -7339,8 +7437,10 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // One look at the network at `minute`, changing nothing. Pure: a function
   // of the expanded network, the appliances, a power state, the rules,
-  // whether the grid is live, the minute, the previous step's `drawing` and
-  // the seed.
+  // whether the grid is live, the minute, the previous step's `drawing`, the
+  // seed, and `floats`, { loadId: { low, full } }, the float switch of each
+  // tank a pump fills, as the step starts (tankFloat()). A pump (`flowLph`)
+  // with no entry in `floats` has no tank to fill, and never draws.
   //   live      board, panel and circuit ids: whether power reaches past
   //             their breaker. A board is live when the grid is and its
   //             main is closed; a panel when its board is, and its feeder
@@ -7353,14 +7453,21 @@ x_sn_9 m_sn_sn_sn sn p
   //   drawing   load ids: powered, and a cycling load in the on part of its
   //             cycle, ((minute + phase) mod cycleMinutes) < dutyCycle ×
   //             cycleMinutes, its phase fixed per load by a keyed roll so
-  //             the kitchens don't all cycle together.
+  //             the kitchens don't all cycle together; and a pump only
+  //             while its float calls: its tank is below TANK_FLOAT_START,
+  //             or the pump was drawing in `prevDrawing` and the tank is not
+  //             yet full. It never calls on a full tank. With no
+  //             `prevDrawing` only the first test applies, so a tank between
+  //             the start level and full waits after a load or a return of
+  //             power (#317's accepted gap: the latch is never saved).
   //   starting  load ids: a motor load (startWatts) drawing now that was not
-  //             in `prevDrawing`: switched on, its cycle turned on, or its
-  //             circuit came back. No `prevDrawing` means no starts.
+  //             in `prevDrawing`: switched on, its cycle turned on, its
+  //             float called, or its circuit came back. No `prevDrawing`
+  //             means no starts.
   //   running, momentary  breaker ids: the current through it in amps, from
   //             the watts of the loads it feeds that are drawing; momentary
   //             counts a starting load at its startWatts.
-  function powerSnapshot(net, appliances, power, rules, gridLive, minute, prevDrawing, seed){
+  function powerSnapshot(net, appliances, power, rules, gridLive, minute, prevDrawing, seed, floats){
     const simple = rules === "simplified";
     const closed = (id)=> breakerClosedIn(power, id);
     const live = {}, supplied = {};
@@ -7375,6 +7482,10 @@ x_sn_9 m_sn_sn_sn sn p
       const a = appliances[l.appliance];
       powered[l.id] = !!(simple ? live[l.panel] : live[l.circuit]) && switchOnIn(power, seed, l.id, a);
       if(!powered[l.id] || !a) return;
+      if(a.flowLph !== undefined){
+        const f = floats && floats[l.id];
+        if(!f || f.full || !(f.low || (prevDrawing && prevDrawing[l.id]))) return;
+      }
       if(a.dutyCycle !== undefined && a.cycleMinutes > 0){
         const phase = rollValueFor(seed, ["power", "cycle", l.id]) * a.cycleMinutes;
         if(!((minute + phase) % a.cycleMinutes < a.dutyCycle * a.cycleMinutes)) return;
@@ -7414,11 +7525,11 @@ x_sn_9 m_sn_sn_sn sn p
   // A breaker the rules don't consult is left exactly as it is, and so is an
   // RCD (`rcd`), which neither check touches under either rules: it never
   // trips on overcurrent and holds no heat.
-  function resolvePowerStep(net, appliances, power, rules, gridLive, minute, dt, prevDrawing, seed){
+  function resolvePowerStep(net, appliances, power, rules, gridLive, minute, dt, prevDrawing, seed, floats){
     const p = { switches:Object.assign({}, power.switches), heat:Object.assign({}, power.heat), breakers:{} };
     Object.keys(power.breakers).forEach(id=>{ p.breakers[id] = Object.assign({}, power.breakers[id]); });
     const trips = [];
-    const look = ()=> powerSnapshot(net, appliances, p, rules, gridLive, minute, prevDrawing, seed);
+    const look = ()=> powerSnapshot(net, appliances, p, rules, gridLive, minute, prevDrawing, seed, floats);
     const trip = (id, cause, snap)=>{
       setBreakerIn(p, id, breakerStateIn(p, id).on, true);
       trips.push({ id, cause, running: net.breakers[id].loads.filter(l=> snap.drawing[l]) });
@@ -7454,13 +7565,14 @@ x_sn_9 m_sn_sn_sn sn p
   let powerNow = null;
   function refreshPower(){
     powerNow = powerSnapshot(POWER_NET, APPLIANCES, state.power, state.electricalRules, gridUp(),
-      minutesSinceCollapse(), null, state.seed);
+      minutesSinceCollapse(), null, state.seed, tankFloatsNow());
   }
   // Resolved every step, from applyWorldTicking(), before anything reads it:
-  // the networks are tens of rooms, so there is no cache to keep honest.
+  // the networks are tens of rooms, so there is no cache to keep honest. The
+  // floats are read as the step starts, before this step's refill.
   function stepPower(dt){
     const r = resolvePowerStep(POWER_NET, APPLIANCES, state.power, state.electricalRules, gridUp(),
-      minutesSinceCollapse(), dt, powerNow ? powerNow.drawing : null, state.seed);
+      minutesSinceCollapse(), dt, powerNow ? powerNow.drawing : null, state.seed, tankFloatsNow());
     state.power = r.power;
     powerNow = r;
     logTrips(r.trips);
@@ -7490,7 +7602,7 @@ x_sn_9 m_sn_sn_sn sn p
   // nothing, so it is render-safe.
   function loadPoweredNow(loadId){
     return !!powerSnapshot(POWER_NET, APPLIANCES, state.power, state.electricalRules, gridUp(),
-      minutesSinceCollapse(), null, state.seed).powered[loadId];
+      minutesSinceCollapse(), null, state.seed, tankFloatsNow()).powered[loadId];
   }
   // What a meter reads, from the last step (powerNow). They add no rule to
   // the resolver: each is a look at what it already worked out (#249).
@@ -8742,7 +8854,10 @@ x_sn_9 m_sn_sn_sn sn p
   //     does not trip at BREAKER_F_NO_TRIP × its rating within
   //     BREAKER_NO_TRIP_MIN (tripMinutes()), a guard for a later retune. An
   //     RCD has no curve and never trips on overcurrent, so only its rating
-  //     is checked.
+  //     is checked;
+  //   every tank has one pump (tankPumpsOf()): a wired building with a tank
+  //     (BUILDING_INFO's tankL) and no `flowLph` load, or with two, and a
+  //     `flowLph` load in a building with no tank, which never draws.
   // It also lists every room with shelter "full" that no panel's rooms
   // include. That list is a warning while buildings are being wired (#250),
   // and becomes an error in #258. Returns { problems, unwired }. Call it as
@@ -8793,6 +8908,19 @@ x_sn_9 m_sn_sn_sn sn p
       l.containers.forEach(cid=>{
         if(room && !room.containers.some(c=> c.id === cid)) problems.push(`${l.id}: container "${cid}" is not in room "${l.room}"`);
       });
+    });
+    const tankOfBuilding = (b)=> (BUILDING_INFO[b] && BUILDING_INFO[b].tankL) || 0;
+    const pumps = tankPumpsOf(net, APPLIANCES, rooms);
+    Object.values(net.loads).forEach(l=>{
+      const a = APPLIANCES[l.appliance], room = rooms[l.room];
+      if(a && a.flowLph !== undefined && !(room && tankOfBuilding(room.buildingId) > 0))
+        problems.push(`${l.id}: a pump in a building with no tank`);
+    });
+    Object.keys(wiring || {}).forEach(b=>{
+      if(!(tankOfBuilding(b) > 0)) return;
+      const found = pumps[b] || [];
+      if(!found.length) problems.push(`building ${b}: a tank, but no pump load (flowLph) in its wiring`);
+      else if(found.length > 1) problems.push(`building ${b}: ${found.length} pump loads for one tank (${found.join(", ")})`);
     });
     const wired = new Set();
     Object.values(net.panels).forEach(p=> p.rooms.forEach(id=> wired.add(id)));
@@ -9135,10 +9263,20 @@ x_sn_9 m_sn_sn_sn sn p
   //                     { reset: id }. A switch goes through setSwitchIn(),
   //                     as the game's does, so one for a switchless or an
   //                     unknown load is ignored.
-  // Returns { problems, steps, power }: the expansion's problems, then one row
-  // per step, { minute, running, momentary, heat, trips:[{ id, cause }],
-  // powered, drawing:[loadId] }, `minute` counting from 1, and the final power
-  // state. Call it as `ashfallDev.simulatePower({ wiring:{ … } }, 120)`.
+  //            tanks    { loadId: { tankL, drawn? } }: the tank each pump
+  //                     (`flowLph`) fills, its size and the litres drawn
+  //                     from it at the start (default 0, full). Its float is
+  //                     read each step (tankFloat()), and it refills at the
+  //                     pump's flow while the pump draws and the mains run
+  //                     (refilledDrawn()), as the game's does. Default none:
+  //                     no float calls, so no pump draws.
+  //            mains    true / false, or a function of the minute (default
+  //                     mainsWaterUp())
+  // Returns { problems, steps, power, tanks }: the expansion's problems, then
+  // one row per step, { minute, running, momentary, heat, trips:[{ id,
+  // cause }], powered, drawing:[loadId], starting:[loadId], tanks:{ loadId:
+  // litres held } }, `minute` counting from 1, and the final power state and
+  // litres drawn. Call it as `ashfallDev.simulatePower({ wiring:{ … } }, 120)`.
   function simulatePower(network, minutes = 60, options = {}){
     const nw = network || {};
     const net = expandWiring(nw.wiring, nw.templates || WIRING_TEMPLATES);
@@ -9147,8 +9285,17 @@ x_sn_9 m_sn_sn_sn sn p
     const seed = options.seed === undefined ? state.seed : options.seed >>> 0;
     const start = options.start || 0;
     const grid = typeof options.grid === "boolean" ? ()=> options.grid : (options.grid || ((m)=> gridUp(m)));
+    const mains = typeof options.mains === "boolean" ? ()=> options.mains : (options.mains || ((m)=> mainsWaterUp(m)));
     let power = JSON.parse(JSON.stringify(options.power || { switches:{}, breakers:{}, heat:{} }));
-    let prev = options.running ? powerSnapshot(net, appliances, power, rules, grid(start), start, null, seed).drawing : {};
+    const tankDefs = options.tanks || {};
+    const drawn = {};
+    Object.keys(tankDefs).forEach(id=>{ drawn[id] = tankDefs[id].drawn || 0; });
+    const floats = ()=>{
+      const out = {};
+      Object.keys(tankDefs).forEach(id=>{ out[id] = tankFloat(tankDefs[id].tankL, drawn[id]); });
+      return out;
+    };
+    let prev = options.running ? powerSnapshot(net, appliances, power, rules, grid(start), start, null, seed, floats()).drawing : {};
     const script = options.script || {};
     const steps = [];
     for(let t = 0; t < minutes; t++){
@@ -9161,13 +9308,20 @@ x_sn_9 m_sn_sn_sn sn p
         else if("reset" in c) resetBreakerIn(power, c.reset);
       });
       const m = start + t + 1;
-      const r = resolvePowerStep(net, appliances, power, rules, grid(m), m, 1, prev, seed);
+      const r = resolvePowerStep(net, appliances, power, rules, grid(m), m, 1, prev, seed, floats());
       power = r.power;
       prev = r.drawing;
+      Object.keys(tankDefs).forEach(id=>{
+        const a = net.loads[id] && appliances[net.loads[id].appliance];
+        if(r.drawing[id] && mains(m) && a) drawn[id] = refilledDrawn(drawn[id], a.flowLph, 1);
+      });
+      const held = {};
+      Object.keys(tankDefs).forEach(id=>{ held[id] = tankDefs[id].tankL - drawn[id]; });
       steps.push({ minute:t + 1, running:r.running, momentary:r.momentary, heat:Object.assign({}, power.heat),
-        trips:r.trips.map(x=> ({ id:x.id, cause:x.cause })), powered:r.powered, drawing:Object.keys(r.drawing) });
+        trips:r.trips.map(x=> ({ id:x.id, cause:x.cause })), powered:r.powered, drawing:Object.keys(r.drawing),
+        starting:Object.keys(r.starting), tanks:held });
     }
-    return { problems:net.problems, steps, power };
+    return { problems:net.problems, steps, power, tanks:drawn };
   }
   // `seed` is optional: undefined starts a fresh world, a uint32 replays that
   // one (see seedFromInput()). Callers wired straight to a click must wrap

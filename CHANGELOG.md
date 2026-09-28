@@ -18,6 +18,162 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.10.6 — The house pump fills the roof tank
+
+Implements: handoffs/house-pump-tank.md
+
+Implements #317 in full, per `handoffs/house-pump-tank.md`. A house's roof
+tank is now refilled by its electric pump, and only while that pump has power:
+the pump is a load with a float switch, starting when the tank drops below
+80 % and filling it to full, drawing only while it fills. A tripped WATER
+circuit, a pump switched off or an opened main stops the refill, and the taps
+run only while the tank holds water, whatever the grid. No new state field
+(`state.tankDrawn` keeps its shape) and no `SAVE_KEY` change, so this is
+**PATCH**.
+
+**New**
+- `HOUSE_PUMP_FLOW_LPH = 2400` and `TANK_FLOAT_START = 0.8` (BUILDING TYPES,
+  beside `HOUSE_TANK_L`).
+- `flowLph`, a new optional `APPLIANCES` field: a pump's flow in L/h, on a
+  load that fills its building's tank. The mechanic finds a tank's pump by
+  this field, never by the id `house_pump`.
+- *The float* (`powerSnapshot()`): a new last argument, `floats`,
+  `{ loadId: { low, full } }`, from the new pure `tankFloat(tankL, drawn)`
+  (`low`: holds less than `TANK_FLOAT_START` × `tankL`; `full`: nothing
+  drawn). A `flowLph` load that is powered is `drawing` only while its float
+  calls: `!full && (low || prevDrawing[load])`. A pump with no `floats`
+  entry never draws. A start from not-drawing is a start, at `startWatts`,
+  through the existing `starting` rule. `resolvePowerStep()` passes `floats`
+  through; `refreshPower()`, `stepPower()` and `loadPoweredNow()` pass
+  `tankFloatsNow()`, read from `state.tankDrawn` as the step starts.
+- *The latch is `prevDrawing`* and is never saved: where it is null (boot,
+  load, restart, `loadPoweredNow()`) only the 80 % test applies, so a tank
+  between 80 % and full waits after a load, or when power returns mid-fill,
+  until it drops below 80 %. Accepted by Tom to keep this PATCH.
+- *Refilling*: `refillTanks(dt)`, called from `applyWorldTicking()` right
+  after `stepPower()`. Only while `mainsWaterUp()`. A tank whose pump is
+  drawing in `powerNow` has `state.tankDrawn[b]` lowered by `flowLph` ÷ 60 ×
+  `dt` (`refilledDrawn()`: floored at 0, rounded to the millilitre); an entry
+  that reaches 0 is deleted, so a full tank stores nothing.
+- *The unwired fallback*: a building with a tank and no pump load in
+  `TANK_PUMPS` (today `casa` and `shop_home`) refills at
+  `HOUSE_PUMP_FLOW_LPH` whenever it is below full and the mains run, with no
+  float and no latch, until #306 and #307 wire those types (#258).
+- `mainsWaterUp(m)`: whether the town's water network runs. It returns
+  `gridUp(m)` today; it is where #300's decision lands before generators
+  (#245).
+- `tankPumpsOf(net, appliances, rooms)` (pure: `{ buildingId: [loadId] }`,
+  every `flowLph` load by its room's building) and `TANK_PUMPS` (built once
+  from `POWER_NET`: `{ buildingId: loadId }` for each building with a tank,
+  its first pump).
+
+**Changed / Reworked**
+- *The pump* (`APPLIANCES.house_pump`): `startWatts: 3300` (2.7 A × about
+  5.5 × 220 V, inside the derived 1,900–3,600 W), `flowLph:
+  HOUSE_PUMP_FLOW_LPH`, `leftOnChance: 0.99` (was 0). `watts`, `nameplate`
+  and `readout` unchanged.
+- *The tank is drawn at any time*: `tankLeft(roomId)` is `tankOf` minus
+  `state.tankDrawn[b]`, floored at 0, whatever the grid. `waterRunningIn(roomId)`
+  is `tankLeft > 0` for a room whose building has a tank, else
+  `mainsWaterUp()`. `canFillAtSink()` drops its `gridUp() ||` shortcut, so a
+  tank fill always follows the tank rules (a bottle may part-fill, a vessel
+  needs its whole `waterKg`); `doFillAtSink()`'s `fromTank` is `tankOf > 0`,
+  so every tank fill is recorded in `state.tankDrawn`. "The tap coughs,
+  spits, and runs dry." and "The tap is dry." can now come before the grid
+  fails, for example with the pump switched off.
+- `simulatePower()`: new `options.tanks`, `{ loadId: { tankL, drawn? } }`,
+  and `options.mains` (boolean or function, default `mainsWaterUp()`). Each
+  step reads the tanks' floats and refills them as the game does. Each step
+  row adds `starting` and `tanks` (litres held); the result adds `tanks`
+  (litres drawn). No tanks means no float calls, so no pump draws.
+- `validateWiring()` reports a wired building with a tank and no `flowLph`
+  load, one with two, and a `flowLph` load in a building with no tank.
+
+**Documentation**
+- Comments updated: the collapse clock (CONFIG / CONSTANTS), ROOM SCHEMA
+  `sink`, BUILDING TYPES `water`, PLAYER STATE `tankDrawn`, the sink block
+  above `canFillAtSink()` and `tapDryFor()`, the water block above `tankOf()`
+  and the `gridUp()` comment (its line "The water follows the grid, not a
+  building's power" is gone), `APPLIANCES`' schema (`flowLph`) and pump
+  figure comment (surge derivation, float switch), the pump moved out of the
+  list of loads found switched off, `powerSnapshot()` (the float and the
+  accepted gap), `simulatePower()`, `validateWiring()`.
+- Nothing was deferred; no new issues filed.
+
+**Open questions / decisions resolved**
+- *How the float reaches the resolver*: option (a), a map of each pump's
+  `{ low, full }` facts, so the latch rule lives in `powerSnapshot()` alone.
+  Appended as the last argument of `powerSnapshot()` and
+  `resolvePowerStep()`.
+- *How a tank finds its pump*: a table built once at startup, `TANK_PUMPS`,
+  through `tankPumpsOf()`, which `validateWiring()` shares.
+- *What the validators report*: both recommended cases, plus a pump in a
+  building with no tank (it would never draw). All three sit in
+  `validateWiring()`, which already owns wiring references;
+  `validateBuildings()` is unchanged.
+- *`m` on `tankLeft()` / `waterRunningIn()`*: dropped. No caller passed one,
+  and the tank is stored state, not a function of time.
+- *A sink with no tank* (none exists today): `canFillAtSink()` skips the
+  tank rules for it (`!tankOf(...) ||`), since dropping the `gridUp()`
+  shortcut alone would have left a vessel unable to fill from the mains.
+- *`simulatePower()`'s float input*: tanks rather than raw float facts, so
+  the float and the refill are simulated with the game's own helpers
+  (`tankFloat()`, `refilledDrawn()`).
+
+**Notes / assumptions**
+- Retunable: `TANK_FLOAT_START` 0.8 (Tom's figure, not researched),
+  `startWatts` 3,300 (derived, secondary), `leftOnChance` 0.99,
+  `HOUSE_PUMP_FLOW_LPH` 2,400.
+- A step's refill is a whole step's flow even when the tank needed less: the
+  last minute of a fill draws power for the full minute and is capped at
+  full.
+- Existing saves need no migration: one made before the grid failed has
+  `tankDrawn` `{}` (full tanks); one made after keeps its drawn litres. An
+  untouched pump now rolls on (0.99) instead of off; a pump the player
+  switched on stays on, and one the player switched off stays off.
+- Checked with `simulatePower()` on the row house's wiring, the heater held
+  on and the pump on, with the tank at 700 L: the pump starts once at step 1
+  (WATER momentary 24.09 A = 5,300 W ÷ 220 V; RCD momentary 30.14 A with the
+  fridge's start), then runs at 10.77 A on WATER, refilling 40 L a minute to
+  1,000 L at step 8, and stops at step 9. No trips and no breaker heat. From
+  799 L it latches through 80 % to full. At 850 L it never starts. With the
+  pump switched off, or WATER switched off, the tank stays at 700 L with the
+  grid up; with the mains off the pump draws and adds nothing. In the game:
+  the home's tank refills from 700 L in 8 minutes; a `casa` and the pharmacy
+  (`shop_home`) refill by the fallback; after the grid fails nothing refills
+  and the taps run until the tank is dry; with the home's tank empty and the
+  grid up, the kitchen sink is dry. `validateWiring()`, `validateBuildings()`
+  and `validateRoomSchema()` report no problems.
+
+**Explicitly out of scope**
+- The pump's readout saying "Running" while it stands idle (#337); whether
+  the town network outlives the grid (#300; only the predicate is added);
+  generators (#245) and changeover switches (#246); showers and toilets
+  drawing water, and the town tank (#300); wells; wiring `casa` and
+  `shop_home` (#306, #307) and removing the fallback (#258); any tank gauge,
+  new UI or room text about the pump; saving the float's latch; the TV and
+  the washing machine (#333); appliances in use (#334).
+
+**Sections touched**
+- WORLD DATA: POWER SCHEMA (`APPLIANCES`: `flowLph` in the schema, the
+  `house_pump` entry and comments), BUILDING TYPES (`HOUSE_PUMP_FLOW_LPH`,
+  `TANK_FLOAT_START`, the `water` comment), ROOM SCHEMA `sink` comment.
+  Definition data for the new rule; no instance data.
+- CONFIG / CONSTANTS: the collapse-clock comment.
+- PLAYER STATE: the `tankDrawn` comment.
+- SURVIVAL / TIME SIMULATION: `mainsWaterUp()`, `tankLeft()`,
+  `waterRunningIn()`, `tankFloat()`, `refilledDrawn()`, `refillTanks()`,
+  `applyWorldTicking()`; → POWER: `tankPumpsOf()`, `TANK_PUMPS`,
+  `tankFloatsNow()`, `powerSnapshot()`, `resolvePowerStep()`,
+  `refreshPower()`, `stepPower()`, `loadPoweredNow()`.
+- ACTIONS: `canFillAtSink()`, `tapDryFor()` (comment), `doFillAtSink()`.
+- Dev helpers: `simulatePower()`, `validateWiring()`.
+- UI/RENDERING: none.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.10.5"` → `"0.10.6"`
+
+---
+
 ## v0.10.5 — The row house wired, and a building type carrying its wiring
 
 Implements: handoffs/row-house-wiring.md
