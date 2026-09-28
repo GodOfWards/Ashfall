@@ -18,6 +18,173 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.10.5 — The row house wired, and a building type carrying its wiring
+
+Implements: handoffs/row-house-wiring.md
+
+Implements #305 in full, per `handoffs/row-house-wiring.md`. A building type
+can now carry its own wiring, which the builder expands for every instance;
+the `row_house` is the first type wired, so the player's home and the
+neighbours' house each get a meter box on the courtyard and a breaker panel in
+the living room, headed by a diferencial (RCD). Five appliances are new. Every
+other type still falls back to the grid. No new state field and no `SAVE_KEY`
+change (wiring is a definition, and new switch and breaker ids join
+`state.power` under their existing shapes), so this is **PATCH**.
+
+**New**
+- *A type carries its wiring* (BUILDING TYPES): an optional `wiring` field,
+  `{ board:{ name, role, rating, curve?, direct?, feeders? }, panels:[{ id,
+  name, role, template | layout }] }`, in `WIRING`'s shape with each device's
+  room given by role (`"street"` is the site stop). A one-off instance's
+  `layout` may carry one too. `buildBuilding()` expands it through the new
+  `buildWiring()` into a `WIRING` entry keyed by the instance id, each panel's
+  `rooms` mapping every role the building has to `<id>_<role>`.
+  `expandBuildings()` collects them as `wiring`.
+- `GAME_WIRING` (POWER SCHEMA): the authored `WIRING` merged with the
+  building types' entries. `POWER_NET`, `expandOpenings()`'s callers
+  (`makeDefaultDoors()`, `makeDefaultWindows()`, `stampTemplateDoorIds()`)
+  and `validateWiring()`'s default read it. An instance whose id `WIRING`
+  already names keeps the authored entry and is reported by
+  `validateBuildings()`.
+- *Direct boards*: a board with `direct: true` holds only its main, with no
+  feeder breakers. `expandWiring()` claims no feeder id for its panels
+  (`panel.feeder` is null) and reports no missing feeder; a direct board that
+  lists feeders is reported instead. `powerSnapshot()` treats an absent
+  feeder as closed, and a board's pop-up lists none. Boards with feeders (the
+  dev seam's apartment) behave exactly as before.
+- *The RCD*: a template main with `rcd: true` expands to a panel-layer node
+  labelled `"RCD"`, with `rcd: true` and no curve, at the same id a main
+  takes (`<b>.<panel>.main`). Power passes it only while it is closed, and it
+  switches by hand like a breaker (state in `state.power.breakers`,
+  `tripped` never set). `resolvePowerStep()` filters it out of both the
+  instant and the heat pass under either rules, so it never trips on
+  overcurrent and holds no heat. Under simplified rules the meter box's 32 A
+  main is the only overcurrent protection left, as intended.
+- *Appliances* (POWER SCHEMA → `APPLIANCES`, all 220 V, every readout
+  `{ on:"Running", off:"Stopped" }`):
+  - `kettle`, "Electric kettle": 2,200 W, `leftOnChance` 0.
+  - `toaster`, "Toaster": 700 W, `leftOnChance` 0.
+  - `microwave`, "Microwave": 1,150 W input, `leftOnChance` 0.
+  - `water_heater`, "Water heater": `WATER_HEATER_WATTS` (2,000 W),
+    `leftOnChance` 0.95, `cycleMinutes` 120, `dutyCycle` =
+    `WATER_HEATER_LOSS_KWH_DAY` × 1000 ÷ (`WATER_HEATER_WATTS` ×
+    `MINUTES_PER_DAY` ÷ 60) = 0.05, so it heats about 6 minutes in every 2
+    hours.
+  - `house_pump`, "Water pump": 370 W, `leftOnChance` 0, nameplate
+    `{ amps:2.7 }`, no `startWatts`.
+  The kettle, toaster, microwave and heater print their own watts
+  (`{ printsWatts:true }`). New constants `WATER_HEATER_WATTS` and
+  `WATER_HEATER_LOSS_KWH_DAY`, beside `LED_BULB_WATTS`.
+
+**New content**
+- `row_house.wiring`: board "Meter box" at `street` (the courtyard stop),
+  32 A, `direct`; panel `house`, "Breaker panel", in `living`, template
+  `row_house`.
+- `WIRING_TEMPLATES.row_house`: head device RCD 40 A; circuits `lights`
+  LIGHTS 10 A (living, kitchen, laundry, hallway, bedroom, bedroom2,
+  bathroom), `sockets` SOCKETS 16 A (kitchen), `water` WATER 16 A (laundry),
+  all curve C by default; fixtures a `led_light` in each of the seven rooms
+  (`light_living`, `light_kitchen`, `light_laundry`, `light_hallway`,
+  `light_bedroom`, `light_bedroom2`, `light_bath`), the kitchen's `fridge`
+  (`fridge_freezer`, containers `fridge`, `freezer`), `stove` (`gas_range`,
+  container `stove`), `kettle`, `toaster` and `microwave` on SOCKETS, and
+  `water_heater` and `pump` on WATER. No garden light, no range hood.
+- The ids, for `home` (the same under `row_neighbour`): `home.board`,
+  `home.board.main`, `home.house`, `home.house.main` (the RCD),
+  `home.house.lights|sockets|water`, `home.house.<fixture key>`. Saves key on
+  them; they must never change.
+- Text (Tom approved, 2026-09-28): the type's `hallway` now reads "…A
+  calendar still hangs on the wall by the bathroom door."; the type's
+  `living` adds "The breaker panel hangs on the wall by the front door."; the
+  home's `living` override adds "The breaker panel is on the wall by the
+  door."; the courtyard stop (`m_c90b_c117_c119`) adds "The row's electricity
+  meters stand together in a box by the parking spaces."
+
+**UI**
+- Two devices with one name in one room are each followed by their
+  building's name, as doors are: the courtyard shows "Meter box (Home)" and
+  "Meter box (Row house)", in their Here tabs (both views) and their pop-up
+  headings (`deviceNamesFor()`, reading `BUILDING_INFO`).
+- The RCD's pop-up row reads `RCD · 40 A · On|Off`, with Switch off / Switch
+  on and never Reset. The Here strip under detailed rules reads "RCD on" /
+  "RCD off" for a panel headed by one (`deviceStripText()`). Its log lines are
+  "You switch the RCD on." / "You switch the RCD off." (`doSwitchBreaker()`).
+- The home's kitchen Fridge and Freezer now answer a wired load, so they get
+  the switchable-load strip and pop-up the dev seam already had.
+
+**Documentation**
+- BUILDING TYPES: the schema documents `wiring`; "Nothing a type builds is
+  wired" is replaced by the id scheme and "a type without `wiring` falls back
+  to the grid"; the `row_house` comment no longer says nothing is wired.
+- POWER SCHEMA: `WIRING_TEMPLATES` documents `rcd` and the `row_house`
+  template's sources; `WIRING` documents `direct`, and its "Empty" note now
+  points at the types. `APPLIANCES` gives each new appliance's figure and
+  source, and the nameplates' unconfirmed form. The POWER node-table comment,
+  `powerSnapshot()`, `resolvePowerStep()` and `validateWiring()` document the
+  absent feeder and the RCD. The ARCHITECTURE comment names `GAME_WIRING`
+  and the types' `wiring` among POWER's definitions.
+- Nothing was deferred; no new issues filed.
+
+**Open questions / decisions resolved**
+- *Where the type's wiring lives*: a `wiring` field on the type naming a
+  `WIRING_TEMPLATES` entry for its panel's layout, so every layout sits in
+  one table and a type only places the devices.
+- *The panel's id*: `house` (`home.house.*`).
+- *No feeder*: `direct: true` on the board, explicit rather than inferred
+  from a missing `feeders`, so a test network that forgets a feeder is still
+  reported.
+- *The RCD*: a breaker flagged `rcd`, not a separate device kind: it keeps
+  the main's id, layer and every reader (the meters, simplified rules' one
+  control, the pop-up rows) and is filtered out of the trip passes.
+  `validateWiring()` checks only its rating (40 A passes), skipping the curve
+  and non-tripping checks, since it has no curve.
+- *The heater's loss constant*: `WATER_HEATER_LOSS_KWH_DAY`, beside
+  `LED_BULB_WATTS`, with `WATER_HEATER_WATTS` so the heater's own watts are
+  defined once.
+
+**Notes / assumptions**
+- Retunable judgment calls: the heater's 2.4 kWh/day standing loss (inside
+  Gil 2020's 1.5–9), its `leftOnChance` 0.95 and `cycleMinutes` 120; WATER's
+  16 A; the toaster's 700 W and the microwave's 1,150 W picks; the kettle's,
+  toaster's and heater's plates printing watts (form unconfirmed, #332); the
+  names "Meter box", "Breaker panel", "RCD" and the "(Home)" suffix.
+- Checked with `simulatePower()` on the row house's wiring: everything on
+  SOCKETS switched on trips it after 1,778 minutes (about 30 h, as the handoff
+  predicted), the RCD and the 32 A main never trip; the heater draws 72
+  minutes a day; the RCD carries 54.5 A under simplified rules without
+  tripping or heating. `validateWiring()`, `validateBuildings()` and
+  `validateRoomSchema()` report no problems.
+- The home's fridge-freezer now rolls its switch at `leftOnChance` 0.99, as
+  every wired one does, so in about 1 run in 100 the home fridge starts
+  switched off and its food has aged at room rate since the collapse.
+- Seven LED lights at `leftOnChance` 0.3 now draw while on; they add at most
+  0.3 A.
+
+**Explicitly out of scope**
+- The pump filling the tank and its start surge (#317); appliances switching
+  themselves off and being used (#334); the TV and the washing machine
+  (#333); the RCD's leakage trip and shock (#247); a range hood or a garden
+  light in the row house; the other building types (#306–#309, #299);
+  removing the unwired-room fallback (#258); the dev seam's `apartment`
+  template; any mention of the water heater in room text.
+
+**Sections touched**
+- WORLD DATA: BUILDING TYPES (`row_house.wiring`, text, `buildBuilding()`,
+  `buildWiring()`, `expandBuildings()`), `LIMA_STOP_TEXT`, POWER SCHEMA
+  (`APPLIANCES`, `WIRING_TEMPLATES`, `WIRING`, `GAME_WIRING`), DOOR/WINDOW
+  SCHEMA callers of `expandOpenings()`.
+- SURVIVAL / TIME SIMULATION → POWER: `expandWiring()`, `powerSnapshot()`,
+  `resolvePowerStep()`, `POWER_NET`.
+- ACTIONS: `doSwitchBreaker()`.
+- UI/RENDERING: `deviceBreakers()`, `deviceNamesFor()`, `deviceStripText()`,
+  `renderPowerDevicePop()`, `renderWorldItemsPanel()`,
+  `renderElectricalHere()`.
+- Dev helpers: `validateWiring()`, `validateBuildings()` (comment).
+
+**Version**: `GAME_CONFIG.VERSION` `"0.10.4"` → `"0.10.5"`
+
+---
+
 ## v0.10.4 — Home breakers on curve C, and the gas range's real rating
 
 Implements: handoffs/curve-c-and-stove-nameplate.md
