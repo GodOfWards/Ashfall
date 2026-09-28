@@ -208,6 +208,43 @@ area (a covered gallery, for example).
 - The ENRE requires a ≤ 30 mA RCD in the main board for its area (§3.8).
 - An AFDD (arc-fault detector) is recommended, not required (§770.16.5.4).
 
+## What a shock does, and what the RCD changes (#247, 2026-09-28)
+
+- **Effects by current and time (IEC TS 60479-1, as quoted by the EMF-Portal
+  of RWTH Aachen; secondary).** For a.c. at 15–100 Hz, current path from the
+  left hand to both feet:
+  - **AC-1**, up to 0.5 mA: perception possible, usually no startle.
+  - **AC-2**: perception and involuntary contractions, mostly no harm. Its
+    upper curve is the **let-go threshold**: about **5 mA** for currents
+    flowing more than 6 s, rising to about **200 mA** for 10 ms. Above it, a
+    gripping hand may not be able to let go.
+  - **AC-3**: strong contractions, reversible disturbances of the heart,
+    mostly no organ damage.
+  - **AC-4**: cardiac or breathing arrest possible. Ventricular fibrillation
+    probability rises to about 5 % (curve c2), then 50 % (c3), then above.
+  - "Already small currents of about **40 mA** may lead to ventricular
+    fibrillation and therefore to the death of an individual if the current
+    flow through the human body is longer than **2 seconds**."
+  [EMF-Portal](https://www.emf-portal.org/en/cms/page/home/more/electrical-injuries/background-information-for-limit-values).
+- **How fast a 30 mA RCD cuts it (IEC 61008-1, general type; secondary):**
+  within **300 ms** at 1 × IΔn (30 mA), **150 ms** at 2 × (60 mA), and
+  **40 ms** at 5 × (150 mA). It must not trip at 0.5 × IΔn. Hager (a maker)
+  confirms 40 ms at 5 × IΔn under BS EN 61008-1 A2017, and 300 ms at
+  1 × IΔn as the accepted figure.
+  [Hager](https://hager.com/uk/support/regulations-18th-edition/updated-rccb-testing),
+  [Stoklink summary](https://stoklink.com/blogs/technical/rcd-trip-time-iec-61008-testing).
+- **What it doesn't cover (AEA 770 §770.14.2.3, primary):** the RCD is
+  complementary protection only. It "no evita los accidentes provocados por
+  contacto simultáneo de dos partes conductoras activas de potenciales
+  diferentes": a body across phase and neutral carries current that returns
+  on the neutral, so there's no residual current for the RCD to see.
+- **So, in short:** a phase-to-earth shock on a circuit behind a working
+  30 mA RCD is cut in tens to hundreds of milliseconds, before the ~2 s that
+  small currents need to cause fibrillation. With no RCD, or across phase
+  and neutral, or upstream of the RCD, it lasts until the player lets go or
+  the breaker trips, and a breaker trips on overcurrent, not on the tens of
+  milliamps that kill.
+
 ## Sockets, plugs and wire colours
 
 - **Sockets: 2P+T, 10 A or 20 A, IRAM 2071** (AEA 770 §770.6.6). The
