@@ -257,13 +257,61 @@ area (a covered gallery, for example).
   earth is green-and-yellow (AEA practice; not read here). **Confirmed**
   except the earth.
 
-## Not yet researched (still open on #286)
+## Old installations (#311, 2026-09-28)
 
-- **Old installations.** The rules above are for new work (this edition of AEA
-  770 is from 2017; the dates of earlier rules weren't researched). A house built decades ago may still
-  have porcelain fuses (*tapones*), no RCD, or two-pin sockets. Whether a
-  Lima home in February 2025 has a modern board is a **design question for
-  Tom**, and a research one for what's typical (#288).
+**Which homes have them in the game** is a game rule, not a sourced fact
+(Tom, 2026-09-28). A building whose site stop is on a paved or gravel street
+has a modern installation, as above. One on a dirt street has an old board.
+
+**What an old board is, from what could be found:**
+
+- **Porcelain plug fuses (*tapones*) and a bipolar cut-off switch**, in a
+  small box. Argentine electricians' forums describe "un tablero principal
+  antiguo de fusibles (tapones) y llave de corte bipolar", in a box of
+  about **16 × 22 cm** with short wires inside. The advice when replacing
+  one is to have the distributor pull the fuse ahead of the meter, because
+  working it live is dangerous. **Secondary** (YoReparo threads, read
+  through search summaries; the pages block automated readers).
+- **Fuses still turn up in Zárate.** When a customer claims damages, the
+  CEZ inspects the installation's protections, "por ejemplo llave de corte,
+  llave térmica, **fusible**, disyuntor diferencial, guarda motor". A claim
+  is refused when the installation lacks protections or has irregularities.
+  **Primary**, the CEZ's own page:
+  [Reclamos por artefactos dañados](https://cezarate.com/reclamos-por-artefactos-danados/),
+  read 2026-09-28.
+- **Circuits doubled up on fuses.** A 2024 forum thread describes an old
+  three-phase board where each fuse base had three different circuits' wires
+  hanging from it, "none properly protected". Secondary, one case
+  ([Foro Electricidad](https://www.foroelectricidad.net/threads/reenplazar-tapones-ceramicos-y-consulta-calor-en-cables.5282/)).
+- **No residual-current device.** The AEA's 1987 regulation is said to have
+  required the *interruptor diferencial* (secondary, search summary). A
+  maker's trade article says RCDs were adopted selectively in Argentina from
+  about **1970** (Steck, *Ingeniería Eléctrica* 327, December 2017,
+  [link](https://www.editores-srl.com.ar/revistas/ie/327/steck_disyuntor_diferencial);
+  secondary). Neither date is confirmed from the AEA itself.
+- **No retrofit law in Buenos Aires province found.** A 2022 talk by the
+  AEA's second vice-president lists the laws that make the AEA rules
+  compulsory: Decreto 351/79 (workplaces), Res. ENRE 207/95 (replaced by
+  269/12), SICyM 92/98, and provincial laws in **Salta (7469/07), Santa Cruz
+  (3247/12), Córdoba (10281/15), Catamarca (5551/18)** and the CABA building
+  code (Ley 6100/2019). Buenos Aires province isn't among them. So an old
+  house in Lima faces no rule that forces an upgrade, except the OCEBA's
+  rules when a **new** supply is connected. Secondary for the absence (it
+  isn't proof there's none)
+  ([Manili, UTN-FRSC, 2022-08-22](https://www.frsc.utn.edu.ar/web/wp-content/uploads/2022/10/Presentacion-FRSC.pdf)).
+- **No earth conductor** in very old houses: trade and retail guides say so.
+  Secondary, general.
+- **Sockets are three-pin (2P+T, IRAM 2071) in most of Argentina, old homes
+  included** (Tom, first-hand, 2026-09-28). Round two-pin sockets (type C)
+  survive in some old buildings but are rare (El Destape, 2024, secondary).
+  Whether an old home's third pin is actually earthed is **unconfirmed**:
+  the guides above suggest that often it isn't.
+- **The fuse ratings** of an old board, and whether the meter sits in a
+  pillar or on the façade in old Lima homes, are **unconfirmed**.
+
+## Not yet researched (open on #311)
+
+- **Old installations:** moved to "Old installations" above (#311).
 - **Appliances as sold in Argentina:** nameplates at 220 V for a fridge, LED
   bulbs, an extractor hood, a gas cooker's electric ignition, and an electric
   water heater (*termotanque*) where one is used. The game's current
