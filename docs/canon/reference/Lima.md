@@ -109,8 +109,32 @@ town since 2026-09-26 (#237), replacing Henderson, Kentucky.
   - each under a pyramid (hipped) red-tile roof, about 12 × 12 m over the
     eaves.
 
-  Whether they're one storey or two is unconfirmed. **The player's home is
-  one of them** (canon). Property listings found for "Atucha" are quintas and
+  **The player's home is one of them** (canon).
+- **The row houses from the street** (Tom, Google Street View captures of
+  March 2026, 2026-09-28; first-hand for what the photos show). Calle 90 Bis,
+  between Calles 117 and 119, is almost exactly the player's home (#341):
+  - **two storeys**, in mirror-image pairs, under red-tile roofs with steep
+    gables facing the street. The satellite reading above (hipped roofs,
+    three or four to a row, around shared courtyards) doesn't hold for this
+    block;
+  - a **single-storey garage** beside each house;
+  - **bars on the ground-floor windows**; the upper windows have roller
+    shutters and no bars;
+  - an **open front lawn** with no wall or fence, tiled paths, and a raised
+    rubbish basket on a post at the kerb;
+  - **no water tank visible on the roofs**, unlike the rest of town (Tom);
+  - split air-conditioning units on some houses, and a satellite dish;
+  - **at the front edge of each plot, the utilities:** a white pillar
+    holding the **electricity meter** (two windows at the top) and a grey
+    box marked with an electrical warning ("RIESGO"), and beside it a low
+    box, fed by a **yellow pipe**, that is the **natural gas connection**
+    (Tom). Yellow is the usual colour for gas pipe in Argentina.
+- **A maintenance depot for the barrio,** on Calle 119 facing the row houses:
+  a fenced, single-storey building of concrete panels, signed "Depósito de
+  Mantenimiento – Barrio Atucha II – UG CNA II - IV CN". NA-SA's Atucha II
+  unit keeps it. **The barrio is looked after by the plant's operator.**
+  A provincial police post (Google Maps: "Puesto Policía Prov. Bs As") stands
+  a little to the south-west. Tom, Street View, March 2026. Property listings found for "Atucha" are quintas and
   newer houses, not these chalets.
 - NA-SA had about 1,400 workers at some point (El Destape, 2023, search
   summary) against about 3,000 in a later figure (above). They wore "the
@@ -262,7 +286,10 @@ Status: secondary unless marked; read 2026-09-27.
     ([Río Negro, ARSA](https://salud.rionegro.gov.ar/articulo/51906/arsa-remarca-la-importancia-de-contar-con-tanque-de-reserva-domiciliario),
     [Río Negro, tanques de reserva](https://salud.rionegro.gov.ar/articulo/48105/tanques-de-reserva-elemento-clave-en-el-hogar-para-asegurar-el-servicio)).
     Not a Buenos Aires province rule, and not measured in Lima. **The
-    Barrio Atucha's own tanks are unconfirmed.** The game uses 1,000 L per
+    Barrio Atucha's own tanks are unconfirmed**, and none is visible on the
+    row houses' roofs (Tom, Street View, 2026-09-28). A tank inside the roof
+    space isn't ruled out. Where the barrio's water comes from (the town's
+    network or the plant) is unconfirmed. The game uses 1,000 L per
     home, as a retunable figure (`handoffs/lima-release.md`, phase 7).
   - **House pumps:** a typical tank-filling pump sold in Argentina is
     **½ HP (about 370 W)**, moving on the order of **33 L a minute**
@@ -276,6 +303,17 @@ Status: secondary unless marked; read 2026-09-27.
     ([Litoral Gas](https://www.litoral-gas.com.ar/site/sobre-nosotros/empresa/sobre-nosotros/)).
   - **Lima has no gas network: it's all garrafas** (Tom, 2026-09-27,
     first-hand). Bottled LPG for cooking and heating.
+  - **Except the Barrio Atucha, which has natural gas** (Tom, Street View,
+    2026-09-28: a gas meter box on each row house, above). A natural gas
+    line does reach Lima: "las localidades de Zárate y Lima, que tienen gas
+    natural", **"sobre todo porque en la segunda hace falta abastecer a la
+    central nuclear Atucha"** (Perfil, 2013-05-26, read directly; secondary
+    for the gas network,
+    [Perfil](https://www.perfil.com/noticias/politica/el-gas-llega-al-country-de-de-vido-pero-pasa-de-largo-por-un-barrio-humilde-20130524-0050.phtml)).
+    So the line came for the plant, and the plant's barrio is on it. How far
+    it reaches the rest of the town is unconfirmed; Tom's first-hand
+    knowledge is that the town uses garrafas. OSM maps no gas pipeline in
+    the area (2026-09-28).
 - **Fuel:**
   - **Zárate:** Shell (Justa Lima & Castelli), Axion (19 de Marzo &
     Ituzaingó) and YPF (Gallesio & Hipólito Yrigoyen), per La Voz de Zárate
