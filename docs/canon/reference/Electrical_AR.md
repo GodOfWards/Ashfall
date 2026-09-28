@@ -180,13 +180,19 @@ area (a covered gallery, for example).
   ABB adds that above 30 °C the thermal currents fall by about 6 % per 10 K.
 - **Ratings on the Argentine market:** Schneider's Easy9 2P curve C line in
   Argentina lists 6, 10, 16, 20, 25, 32 and 40 A (secondary: search results).
-  IEC 60898-1's preferred values are said to be 6, 8, 10, 13, 16, 20, 25,
-  32, 40, 50, 63, 80, 100 and 125 A (secondary; the standard wasn't read).
-  **Unconfirmed as a complete list**. AEA 770's examples use 10, 16 and 40 A,
+  **IEC 60898-1's preferred values: the sources disagree** (#320, 2026-09-28).
+  One gives 6, 8, 10, 13, 16, 20, 25, 32, 40, 50, 63, 80, 100 and 125 A.
+  Another gives 1, 2, 4, 6, 10, 13, 16… with no 8 A. A Spanish-language guide
+  lists 6, 8, 10, 13 ("raro"), 16, 20, 25, 32, 40, 50 and 63 A for household
+  breakers. All are secondary: the standard itself (and IRAM 2169) couldn't
+  be read, since ANSI's preview pages and the copies found returned 403 or 503.
+  **Firm across every source:** 6, 10, 13, 16, 20, 25, 32, 40, 50, 63 A.
+  **Unconfirmed:** 1, 2, 4 and 8 A. AEA 770's examples use 10, 16 and 40 A,
   and the circuit maxima are 16, 20 and 32 A.
-- **Curve in homes:** the AEA's example uses curve **B** for IUG and TUG. The
-  retail 2P lines seen are curve **C**. Which is more common in Lima's homes
-  is unconfirmed.
+- **Curve in homes: mostly C** (Tom, first-hand, 2026-09-28). The retail 2P
+  lines seen are curve C too. The AEA's worked example uses curve **B** for
+  IUG and TUG; that's the standard's illustration, not what's installed. The
+  letter is printed on each breaker's front, before its rating ("C16").
 
 ## Residual-current devices (*interruptor diferencial*, colloquially *disyuntor*)
 
@@ -304,8 +310,9 @@ has a modern installation, as above. One on a dirt street has an old board.
 - **Sockets take three flat pins (*tres patas planas*: 2P+T, IRAM 2071) in
   most of Argentina, old homes included** (Tom, first-hand, 2026-09-28). Round two-pin sockets (type C)
   survive in some old buildings but are rare (El Destape, 2024, secondary).
-  Whether an old home's earth pin is actually earthed is **unconfirmed**:
-  the guides above suggest that often it isn't.
+- **Boards often aren't properly earthed** (Tom, first-hand, 2026-09-28): it's
+  a common occurrence, so there's a noticeable chance an old board isn't. That
+  agrees with the guides above. How often isn't a sourced figure.
 - **The fuse ratings** of an old board, and whether the meter sits in a
   pillar or on the façade in old Lima homes, are **unconfirmed**.
 
@@ -339,7 +346,20 @@ them.
   EMI30CNP 3.70, EMI40CNP 4.50, EMU40CLP 7.33, EGAS80CLP 7.90, EMYE70CLP
   8.20. **Primary** for Embraco (Asia-Pacific catalogue,
   [PDF](https://www.embraco.com/download/product/embraco-catalog-apa_compressed.pdf)).
-  Which compressors Argentine fridges carry is **unconfirmed**.
+- **Which compressors Argentine fridges carry** (#320, 2026-09-28):
+  - Argentine household refrigeration's low-power hermetic compressors come
+    mainly from **Embraco (Whirlpool) and Tecumseh, both from Brazil**.
+    Secondary: Argentina's competition authority (CNDC), merger file C-1349,
+    read only through search summaries. The scanned PDF
+    ([link](https://cndc.produccion.gob.ar/sites/default/files/cndcfiles/C-1349.pdf))
+    returns 403. **Its date is unconfirmed.**
+  - **Embraco's EMYE70CLP, 8.20 A locked-rotor above, is sold in Argentina**
+    as a replacement compressor "en 220 V. 1/5 HP para heladeras con frezzer
+    con Gas R600". Secondary
+    ([Del Sur Repuestos](https://delsur-repuestos.com.ar/producto/motor-compresor-heladera-embraco-1-5-hp-r600-emye70-clp/)).
+    Dealers also list the EGYS80CLP and EGAS100CLP (1/4–1/3 hp, R600a).
+  - So the 3.7–8.2 A range covers a compressor actually sold for Argentine
+    fridge-freezers.
 - **From the manuals (primary, Patrick and Drean):**
   - the fridge wants **220 V / 50 Hz, 198–242 V**, and a voltage stabiliser of
     at least 1,000 W where the supply strays outside that;
@@ -351,10 +371,15 @@ them.
 
 **Lighting:**
 - **Incandescent lamps for general household use have been banned from
-  import and sale since 2010-12-31** (Ley 26.473), and halogen lamps since
-  2019-12-31 (Ley 27.492). Secondary
-  ([Argentina Ambiental](https://argentinambiental.com/legislacion/nacional/ley-27492-prohibicion-importacion-comercializacion-lamparas-incandescentes-halogenas/)).
-  The Boletín Oficial page returned 503.
+  import and sale since 2010-12-31** (Ley 26.473, art. 1: "Prohíbese, a
+  partir del 31 de diciembre de 2010, la importación y comercialización de
+  lámparas incandescentes de uso residencial general…"). **Halogen lamps**
+  followed from 2019-12-31 (Ley 27.492, sanctioned 2018-12-12, published
+  2019-01-08). Decreto 996/2020 exempts halogen lamps for listed uses for
+  three years, and Resolution 2165/2023 extended that three more years from
+  2023-12-15. **Primary**
+  ([InfoLEG](https://servicios.infoleg.gob.ar/infolegInternet/anexos/345000-349999/345175/norma.htm),
+  read 2026-09-28; #320).
 - **An E27 LED bulb of 12 W gives about 840 lm, standing in for a 60 W
   incandescent.** 9 W and 12 W, 220 V bulbs are common on the market.
   Secondary (retailers:
@@ -373,7 +398,28 @@ Especificaciones de Productos*, undated, a trade catalogue;
   ([longvie.com](https://www.longvie.com/Front/showProduct/171), primary).
   AEA 770 lists "cocinas… a gas que requieran alimentación eléctrica" among
   the fixed kitchen appliances (above).
-- **The ignition's own draw is unconfirmed.** No nameplate for it was found.
+- **A cooker's electrical rating** (#316, 2026-09-28). Domec's manual,
+  Tabla 3, "Consumo eléctrico máximo", 220 V CA, 50 Hz. **Primary** for the
+  maker, an Argentine one
+  ([PDF](https://domec.com.ar/wp-content/uploads/2018/08/manual-de-instrucciones-cocinas-hornos-anafes.pdf)):
+
+  | Appliance | Max electrical power |
+  |---|---|
+  | Cocina con luz (oven light only) | 15 W |
+  | Cocina/Horno con luz y encendido (light and ignition) | **16 W** |
+  | Anafe (hob, ignition only) | 1 W |
+  | With rotisserie motor and top element | 2,037 W |
+
+  So the **spark ignition draws about 1 W, only while the button is held**,
+  and a cooker's electrical rating is its lamp plus ignition. **A basic cooker
+  lists no standby draw:** no clock or display.
+
+  The same manual asks for a residual-current device on the installation, and
+  an earthed three-pin plug. Orbis's C9500 lists "Potencia eléctrica
+  (lámpara) 25 W" at 220 V, 50 Hz (primary,
+  [PDF](https://www.orbis.com.ar/wp-content/uploads/2024/02/Manual-cocinas-958.pdf)).
+  Florencia's manual gives the lamp as 15/25 W (secondary). So a cooker is
+  **16–26 W**.
 - **Extractor hoods: 130–250 W maximum** across Longvie's range (for example
   200 W for a 90 cm island hood with two motors and three speeds, and 130 W
   for a 60–90 cm hood with halogen lights).
@@ -383,7 +429,31 @@ water to a tank, all at 220 V; secondary, retail listings):
 - Rowa RW-PR60: **0.37 kW, 2.7 A**, 33 m head
   ([CER América](https://www.cer.com.ar/shop/0019-0033-bomba-periferica-rowa-modelo-rw-pr60-05-hp-eleva-33-mts-220v-15127));
 - Motorarg QB60: **1.7 A**; Czerweny QB60-L1: 0.37 kW (search summaries).
-- **Starting current: unconfirmed.**
+- Pedrollo's PKm 60, the same class: **0.37 kW at 230 V 50 Hz, 2.3 A**, with a
+  thermal protector in the winding. **Primary** for Pedrollo
+  ([datasheet](https://www.pedrollo.com/wp-content/uploads/schede-tecniche/EN/PKm-60_EN-datasheet_50Hz.pdf)).
+  Rowa's own page gives the RW-PR60 a "motor monofásico cerrado", class B
+  winding, and a built-in thermal protector (primary,
+  [Rowa](https://app.rowa.com.ar/produtos/rw-pr60)).
+- **Motor type: permanent-capacitor, most likely.** Argentine shops sell a
+  10 µF, 450 V run capacitor ("capacitor marcha") naming "bomba periférica"
+  among its uses (secondary,
+  [Casa Dani](https://www.casadani.com.ar/productos/capacitor-marcha-condensador-10uf-motor-bomba/)).
+  No maker read states the type outright.
+- **Starting current: about 5–6× running** (#317, 2026-09-28):
+  - **WEG's 0.5 hp, 2-pole pump motor** (capacitor start, 60 Hz) is 3.33 A at
+    220 V, **code letter K**. Primary for WEG
+    ([catalogue](https://static.weg.net/medias/downloadcenter/h86/h18/WEG-motores-monofasicos-mercado-mexicano-catalogo-espanol.pdf)).
+  - **NEMA code K is 8.0–8.99 kVA per hp** with the rotor locked (NEMA MG 1,
+    via [Engineering Toolbox](https://www.engineeringtoolbox.com/locked-rotor-code-d_917.html);
+    secondary). That gives 18–20.5 A at start, **5.5–6.1×** running.
+  - A WEG 0.5 cv general-purpose motor is **Ip/In 5.2×**. Secondary
+    ([retailer](https://www.agrobombas.com.br/motores/motores-eletricos-monofasico/motor-weg-12-cv-2-polos-monofasico-127220-v-ip21-)).
+  - A permanent-capacitor WEG 0.5 cv at **4.9×** was seen only in a search
+    summary, so it's unverified.
+  - **Applied to the pumps above:** about 8.5–16.5 A at start, or
+    **1,900–3,600 W**. Derived and secondary: WEG's motors are 60 Hz. A
+    maker's 50 Hz permanent-capacitor figure is unconfirmed.
 
 **Electric water heater:**
 - Rheem's 85 L wall heater TEC085RH has a **2,000 W element**. **Primary**
@@ -412,11 +482,47 @@ water to a tank, all at 220 V; secondary, retail listings):
   cord is rated 10 A working, 14 A maximum. Secondary (retail listings,
   through search summaries).
 
+## CEZ: its connection rules and appliance table (#320, 2026-09-28)
+
+- **CEZ publishes no technical connection rules of its own.** For a
+  residential connection its "Trámites" page links straight to **OCEBA's
+  Reglamento de Acometidas (Res. 92/2008 annex)**, above. Its "Reglamento de
+  Suministro y Conexión" is OCEBA's standard **Subanexo E**. **Primary**
+  ([cezarate.com/tramite](https://cezarate.com/tramite/);
+  [PDF](https://www.cezarate.com/wp-content/uploads/2019/09/REGLAMENTO-DE-SUMINISTRO-Y-CONEXION.pdf)).
+  Subanexo E says:
+  - the connection point goes "sobre la fachada del edificio o en un pilar que
+    deberá construir a su cargo sobre la línea municipal del terreno";
+  - the customer fits and maintains "a la salida de la medición y en el
+    tablero principal los dispositivos de protección y maniobra adecuados";
+  - a licensed electrician signs the load declaration for three-phase or
+    over-10 kW supplies.
+
+  A single-phase residential connection needs the deed or a certified lease,
+  and a DNI copy (ARS 32,819.46 + VAT when read).
+- **CEZ's own appliance table**, *Consumo de Artefactos* (uploaded 2013-06),
+  in kW. **Primary** for Lima's distributor, from the incandescent era
+  ([PDF](https://www.cezarate.com/wp-content/uploads/downloads/2013/06/CONSUMO-DE-ARTEFACTOS-CEZ.pdf)):
+  - fridge-freezer ¼ hp 0.184, ½ hp 0.368;
+  - fridge 13 ft³ 0.265; freezer 0.150;
+  - extractor 0.120;
+  - **electric water heater ("calefón termo") 1.500**;
+  - lamps of 60 / 75 / 100 W;
+  - small ceiling fan 0.100; automatic washing machine 2.200; microwave
+    1.300.
+
+  Per month: a 10 ft³ fridge **80 kWh**, a 10 ft³ freezer 120 kWh. These are
+  older and higher than today's class-A figures above, and fit an older
+  house's fridge.
+
 ## Not yet researched
 
-- **CEZ's own connection rules**, if it publishes any beyond the OCEBA's.
 - **The home's real board:** Tom's first-hand knowledge of the Barrio Atucha
   row houses (#305).
-- **Starting currents** of the pump, and of the compressors Argentine fridges
-  actually carry.
-- **A gas cooker's ignition draw.**
+- **IEC 60898-1 §5.3.2's exact preferred ratings** (the 1, 2, 4 and 8 A
+  dispute, under "Breakers").
+- **A maker's own statement of a peripheral pump's motor type**, and a 50 Hz
+  permanent-capacitor starting figure.
+- **The date of CNDC file C-1349.**
+- **An old board's fuse ratings**, and whether old homes' meters sit in a
+  pillar or on the façade.
