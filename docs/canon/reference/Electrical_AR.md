@@ -251,6 +251,59 @@ area (a covered gallery, for example).
   the breaker trips, and a breaker trips on overcurrent, not on the tens of
   milliamps that kill.
 
+## Feeding a building from a generator (#323, 2026-09-28)
+
+The generators themselves (about 2 kVA at 220 V for a household portable)
+are in `Fuel_AR.md`.
+
+- **The AEA rule exists but wasn't read.** AEA 90364-7-771 (2006) has a
+  regulatory annex on standby supply, **Anexo 771-D, "Alimentación de
+  reserva"**. Its sections include:
+  - 771-D.4, excitation and switching;
+  - **771-D.10**, extra requirements where generators are "una alimentación
+    alternativa a la red de distribución pública (sistemas en espera o
+    stand-by)";
+  - **771-D.11**, where the generator "puede funcionar en paralelo con la
+    red".
+
+  **Primary** for the table of contents
+  ([AEA](https://aea.org.ar/wp-content/uploads/2017/10/90364-7-771-2.pdf)).
+  The annex's own text couldn't be read, so **the interlock type and poles it
+  requires are unconfirmed**.
+- **A distributor's rule: EPE (Santa Fe)**, procedure PRO-103-101 (revised
+  2013-08-28), annex 1, for generators "en isla". **Primary** for EPE
+  ([PDF](https://www.epe.santafe.gov.ar/fileadmin/archivos/Comercial/ConexionGeneradores/ProcedimientoTecnico.pdf)):
+  - "Previo a la conexión de los GG se deberá desvincular de la red de EPESF
+    la carga perteneciente al Cliente que será abastecida por dichos grupos";
+  - "El Cliente deberá poseer un equipo o sistema de maniobra bajo carga, con
+    enclavamiento electromecánico con cada interruptor de cada GG, evitando
+    de esta manera cualquier posibilidad de conexión accidental entre ambos
+    sistemas."
+
+  Santa Fe isn't Lima's province, and OCEBA and CEZ publish nothing of their
+  own on this. Parallel operation needs synchronising equipment and the
+  distributor's approval: not a household case.
+- **The hardware: a manual "1-0-2" changeover switch** (*llave conmutadora*:
+  grid, off, generator). The off position between them makes it
+  break-before-make. A 2-pole switch switches phase and neutral together.
+  Elibet, an Argentine maker, sells (secondary, retail listings):
+  - a 2-pole 20 A switch, outdoor (model 408);
+  - a 2-pole 40 A, 380 V panel switch (40102/0), DIN-rail with an adapter;
+  - a 4-pole 63 A switch for three-phase (L63/0).
+
+  Motorised changeover switches and automatic transfer panels are also sold
+  (secondary). **The generator inlet used is unconfirmed.**
+- **What households actually do (Tom, first-hand, 2026-09-28):** not everyone
+  has a generator. **Those who do mostly feed a socket through a double-plug
+  cord** (*ficha macho-macho*), though it isn't proper practice. A fitted
+  changeover switch is the exception. Such a cord leaves live pins on the
+  loose plug, and backfeeds the grid unless the main is open. Secondary:
+  general safety guides; no Argentine regulator's warning was found.
+- **Game assumption, not a fact (Tom, 2026-09-28):** the double-plug practice
+  is residential. **Commercial and other buildings are assumed to connect
+  generator power properly**, through a changeover switch with the grid cut
+  off.
+
 ## Sockets, plugs and wire colours
 
 - **Sockets: 2P+T, 10 A or 20 A, IRAM 2071** (AEA 770 §770.6.6). The
@@ -524,5 +577,7 @@ water to a tank, all at 220 V; secondary, retail listings):
 - **A maker's own statement of a peripheral pump's motor type**, and a 50 Hz
   permanent-capacitor starting figure.
 - **The date of CNDC file C-1349.**
+- **AEA 771-D.10's text** (a generator's changeover: interlock type and poles
+  switched), and the generator inlet used in Argentina.
 - **An old board's fuse ratings**, and whether old homes' meters sit in a
   pillar or on the façade.
