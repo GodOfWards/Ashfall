@@ -67,15 +67,22 @@ game needs something Lima doesn't have, adding it is a design decision
 appears in the game: an item is "a sachet of milk" or "a bag of yerba", never
 its maker's name. A private business is named by what it is ("the pharmacy",
 "a bank", "the petrol station", "the hardware store"), never by its trading
-name, though it still stands at its real site. State-owned institutions and
-government buildings keep their real names: Correo Argentino, Banco Nación,
-the Comisaría, the municipal hospital, the Delegación Municipal. Streets, neighbourhoods and
-public places keep theirs too. Fictional brands and trading names are lore,
-to be invented later.
+name, though it still stands at its real site. An institution with a proper
+name keeps it: Correo Argentino, Banco Nación, the church of San Isidro
+Labrador. A government building is named by what it is: "the police station",
+"the municipal hospital", "the municipal office", "the primary school".
+Fictional brands and trading names are lore, to be invented later.
 
-The game is written in English, and real places keep their original Spanish
-names: the local spelling, accents included, never translated or
-anglicised. A street is "Calle 15", not "15th Street".
+The game is written in English. **Only streets, districts and towns keep their
+Spanish names** (Tom, 2026-09-28), in the local spelling, accents included,
+never translated or anglicised: a street is "Calle 15", not "15th Street", and
+the Barrio Atucha and Zárate stay as they are. Everything else is named in
+English. A place is named by what it is, even where its real name is Spanish:
+the Estación Lima is "Lima station", the Balcón al río "the riverside walk".
+An item is named in English too ("a pack of biscuits", not *galletitas*),
+unless the word has no English equivalent: *yerba mate*, *mate*, *dulce de
+leche* and *alfajores* keep theirs. The reference files record every real
+name; the game text uses the English one.
 
 This sits under the tone rules, not above them. A real name doesn't
 license exposition: a real power plant is still described through what

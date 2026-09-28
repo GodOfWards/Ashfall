@@ -397,6 +397,65 @@ through the OSM API (`api/0.6/map`, the box 34.070–34.025 S, 59.225–59.170 W
 - **The Atucha rail halt is not at the plant.** It is on the FC Mitre about
   11 km west-north-west of Lima, and about 7.7 km from the reactors (OSM).
 
+## The riverside walk: Balcón al río (#304, 2026-09-28)
+
+The costanera de Lima, named "Balcón al río". In game text it is "the
+riverside walk", and the Club de Pesca is "the fishing club" (Tom,
+2026-09-28, #310).
+
+- **Position (OSM, secondary, 2026-09-28):** node 4431826470, `tourism=
+  viewpoint`, "Balcón al río (costanera de Lima)", at **33.97475 S,
+  59.17571 W**, which is grid frame **(−46, 7960)**. Nominatim gives its
+  street as "111", in Villa del Pilar, Lima. It is on the Paraná de las
+  Palmas, on the first `LIMA_RIVER` polyline (between the points (136, 7902)
+  and (−139, 8014)).
+- **The Club de Pesca (OSM, secondary):** node 4431823211, `tourism=
+  camp_site`, "Club de Pesca", at 33.97320 S, 59.17829 W, grid **(−319,
+  8069)**, about 290 m west of the viewpoint. Esri imagery (undated) shows a
+  pool, rows of pitches and trees on the bank. It is a private club, so it's
+  named by what it is.
+- **How it's reached (OSM ways, secondary):** a road with no name or surface
+  tag in OSM, `highway=residential`, runs **north from the paper mill's
+  junction on Calle 111**. That junction is the game's `r111_papermill` stop
+  at (−284, 5846). The way sections, in order:
+  - 445837472 (559 m), then 445837471 (1,436 m), to (−358, 7826);
+  - 445837470 (240 m) on to the Club de Pesca's gate at (−316, 8066);
+  - from the bend at (−367, 8022), 445837557 (260 m) runs east to
+    (−120, 7942), about 75 m short of the viewpoint.
+
+  About **2.5 km** in all from `r111_papermill` to the viewpoint. It has no
+  `access` tag, so it's public by OSM's default.
+  - At (−348, 7633), 445837687/688 branch east to the shipyard **Astillero
+    Río Paraná Sur** (a private business: "the shipyard"), about 1 km, at
+    (649, 7601). OSM gives the shipyard's street as "Camino Florencio
+    Atucha", which is unconfirmed as a name for any of these ways.
+- **What was built (Astillero Río Paraná Sur's own page, primary for the
+  donor's claims, read 2026-09-28):** 150 m of riverfront donated by the
+  shipyard, which paid for the works. A promenade on sheet piling
+  (*tablestacado*), public toilets, seating, pavements and street furniture,
+  a paved vehicle entrance with parking, and lighting. It gives "free public
+  access to the Paraná" for the first time.
+  [astilleroparanasur.com](https://astilleroparanasur.com/sustentabilidad/balcon-al-rio/).
+  The search summaries also name barbecue grills. Opened in **2015** under
+  mayor Osvaldo Cáffaro (the [La Voz de Zárate headline, 2015-10-05](https://www.diariolavozdezarate.com/2015/10/05/se-inauguro-la-costanera-de-lima-denominada-balcon-al-rio/);
+  the page itself returned 403, so this is secondary).
+- **Its state in the era (Impacto Local, 2024-10-30, secondary, read through
+  the Wayback Machine's 2025-06-13 copy):** "en un grave estado de abandono"
+  after months without maintenance. The inclusive playground ("plaza
+  inclusiva") is covered by tall grass, and there is rubbish across the
+  grounds. Residents say it "no tiene iluminación", and the access path is
+  "cubierto por pastos y árboles". Stagnant water breeds mosquitoes. The
+  article says nobody can enjoy the place any more. So by February 2025 it
+  is overgrown, unlit and littered.
+  [Impacto Local](https://impactolocal.com.ar/2024/10/30/la-costanera-de-lima-se-encuentra-en-estado-de-abandono/)
+  (the live page now 404s;
+  [archived copy](https://web.archive.org/web/20250613134844/https://impactolocal.com.ar/2024/10/30/la-costanera-de-lima-se-encuentra-en-estado-de-abandono/)).
+- **Fishing:** that people fish from the bank there is **unconfirmed**. The
+  Club de Pesca beside it is a fishing club, and the river is the Paraná.
+- **Inside the game's frame?** Its v (7960) lies within the frame's northern
+  reach (the plant's gate is at v 7845). It's off the road to the plant,
+  2.5 km up the side road, which is Tom's call for #298.
+
 ## The game's frame (Tom, 2026-09-26)
 
 **The whole built-up town, the road north to the Atucha plant (about 8 km),

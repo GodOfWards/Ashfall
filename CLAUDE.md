@@ -103,10 +103,10 @@ Adding something the real town lacks is a design decision (see below).
 **Brands and business names are the exception.** No real product brand
 appears ("a sachet of milk", not its maker), and a private business is named by
 what it is ("the pharmacy", "a bank", "the petrol station"), never by its
-trading name. State-owned institutions and government buildings keep their
-real names (Correo Argentino, Banco Nación, the Comisaría, the municipal
-hospital). Fictional
-brands are lore, for later. Project Guide, Part 1.
+trading name. An institution with a proper name keeps it (Correo Argentino,
+Banco Nación, San Isidro Labrador); a government building is named by what it
+is ("the police station", "the municipal hospital"). Fictional brands are lore,
+for later. Project Guide, Part 1.
 
 **Content vs. mechanics stay separated.** A change touches WORLD DATA (content)
 or ACTIONS/SIMULATION (mechanics), and normally not both. Rendering is its own
@@ -270,9 +270,13 @@ horror is in the mundane detail. Tell the story through what people left behind,
 never through exposition, and never explain the collapse itself. One to three
 sentences. Functional UI text is held to clarity instead, not to this tone.
 
-The game is written in English. Real places keep their original Spanish names,
-spelled as they are locally, accents included ("Calle 15", "Estación Lima").
-They are never translated or anglicised.
+The game is written in English. Streets, districts and towns keep their
+Spanish names, spelled as they are locally, accents included ("Calle 15",
+"Barrio Atucha", "Zárate"), never translated or anglicised. Everything else is
+named in English: a place by what it is ("the police station", "Lima station",
+"the riverside walk"), and an item too ("a pack of biscuits"), unless it has
+no English equivalent ("yerba mate", "dulce de leche"). Institutions with a
+proper name keep it (Correo Argentino, Banco Nación).
 
 The Project Guide, Part 1 has the full checklist and examples. Match the
 existing descriptions; don't invent a new voice.
