@@ -18,6 +18,97 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.10.1 — Saves keep only the doors and windows that changed
+
+Implements: handoffs/save-only-changed-openings.md
+
+Implements #302 in full, per `handoffs/save-only-changed-openings.md`. A save's
+`doors` and `windows` now hold only the ids whose state differs from a new
+game's, the way `rooms` has since v0.10.0. A new game's save drops from
+243,210 characters to 2,179. No new state field and no `SAVE_KEY` change, and
+saves stay readable in both directions, so this is **PATCH**.
+
+**Changed / Reworked**
+- `savedDoorState()` writes a door only when any of `locked`, `open` or
+  `broken` differs from the baseline's, and then writes the whole
+  `{ locked, open, broken }` triple, the entry shape `buildDoors()` already
+  reads. `savedWindowState()` writes `{ state }` only when `state` differs.
+- The baseline is new: `openingBaseline()` returns `{ doors, windows }`, id to
+  `{ locked, open, broken }` and id to `state`, taken from `buildDoors(null)`
+  and `buildWindows(null)`, the loader's own fallback, so an id left out loads
+  back as exactly that. `doorSaveFields()` is the one place the saved triple
+  is picked off a door.
+- Load is unchanged: `buildDoors()`, `buildWindows()`, `applyLoadedData()` and
+  `validateLoadedWorld()` are not edited. An id the save lacks keeps its
+  definition's state, as it always did.
+
+**Documentation**
+- The PERSISTENCE comment, DOOR SCHEMA and WINDOW SCHEMA now say a save holds
+  only the doors and windows whose state differs from a new game's. DOOR
+  SCHEMA's line also gains the `broken` field it had been missing since
+  v0.10.0 (it read `{ locked, open }`).
+- Nothing was deferred. The two follow-ups the handoff named conditionally
+  were not filed: `savedRoomState()`'s per-save `makeDefaultWorld()` (a save
+  now takes about 55 ms in all, measured below, not worth a pass yet), and
+  saving only the changed parts of `state.power`, which the handoff leaves
+  for when the wiring passes grow it.
+
+**Open questions / decisions resolved**
+- Design decision 1, where the baseline comes from: **(a)**, the handoff's
+  recommendation. It is computed once, lazily, on the first save, and kept for
+  the session in `openingBaselineCache`, as plain maps rather than door
+  objects. Safe because the definitions never read `state`: a generated home's
+  locked front door comes from `stableHash(id)`, not `state.seed`, so the
+  baseline is the same in every run, and a restart or a load needs no reset.
+- Design decision 2, the helpers: `openingBaseline()` returning
+  `{ doors, windows }`, plus `doorSaveFields(d)`. Implementation choices.
+
+**Explicitly out of scope**
+- `buildDoors()`, `buildWindows()`, `applyLoadedData()`, `validateLoadedWorld()`.
+- The JSON's indentation, which stays (a new game's save is now about 2 KB).
+- The cost of `savedRoomState()`'s own `makeDefaultWorld()` per save.
+- `state.power` (#306's note on switches and breakers saving only what
+  differs).
+
+**Notes / assumptions**
+- Accepted consequence, per the handoff: a door or window the player never
+  touched isn't in the save, so if a later version changes its default (a
+  retuned `HOME_LOCKED_PCT`, say), an old save picks up the new default for
+  it. Rooms have worked this way since v0.10.0.
+
+**Validation performed**
+Headless Chromium, with a test hook exposing the script's closure injected
+into scratch copies of this build and of `origin/main` (v0.10.0):
+- A new game's save is 2,179 characters (v0.10.0: 243,210), with `doors` and
+  `windows` both `{}`.
+- Round trip: unlocked the home's front door by hand, opened the bedroom door,
+  drew the back door's bolt, forced the locked `row_neighbour-front` with a
+  crowbar, opened the living-room window and broke the kitchen's. The save
+  (3,377 characters) held exactly those 4 doors and 2 windows, the same ids
+  that differ from `buildDoors(null)` / `buildWindows(null)`. After a restart
+  and `applyLoadedData()`, all 1,732 doors' `{ locked, open, broken }` and
+  all 866 windows' `state` equalled their values before saving.
+- A v0.10.0 save of the same play (all 1,732 doors) loads in this build with
+  identical door and window states.
+- This build's save loads in v0.10.0 with identical door and window states.
+- Save time (`serializeGame()`, median of 29 after a warm-up): v0.10.0 53 ms,
+  this build 55 ms. The first save of a session in this build takes about
+  150 ms, since it builds the baseline; v0.10.0's first took 66 ms. The
+  doors' and windows' share of the time was small; `savedRoomState()` is the
+  rest.
+- `git diff origin/main...HEAD -- ashfall.html` touches only the version,
+  PERSISTENCE (`doorSaveFields()`, `openingBaseline()`, `savedDoorState()`,
+  `savedWindowState()`, the section comment) and the DOOR SCHEMA and WINDOW
+  SCHEMA comments. No page errors on load.
+
+**Sections touched**
+- PERSISTENCE; the DOOR SCHEMA and WINDOW SCHEMA comments in WORLD DATA.
+  Mechanics-neutral: no player-facing change.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.10.0"` → `"0.10.1"`
+
+---
+
 ## v0.10.0 — The Lima release: the real town, building types, Walk to…
 
 Implements: handoffs/lima-release.md

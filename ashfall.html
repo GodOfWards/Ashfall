@@ -464,7 +464,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.10.0" };
+  const GAME_CONFIG = { VERSION: "0.10.1" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -4276,9 +4276,11 @@ x_sn_9 m_sn_sn_sn sn p
   //   panel's WIRING_TEMPLATES entry carries by role (`doors`, expanded by
   //   expandOpenings(); see POWER SCHEMA). An exit through a template door
   //   gets its doorId when the world is built (stampTemplateDoorIds()), so no
-  //   room definition names one. Definitions are never saved: a save carries only what changes in play, `{ locked, open }` per
-  //   door id (see savedDoorState() in PERSISTENCE). The runtime `doors`
-  //   object is the two merged (buildDoors()), so every reader sees one shape.
+  //   room definition names one. Definitions are never saved: a save carries
+  //   only what changes in play, `{ locked, open, broken }` per door id, for
+  //   the doors whose state differs from a new game's (see savedDoorState()
+  //   in PERSISTENCE). The runtime `doors` object is the two merged
+  //   (buildDoors()), so every reader sees one shape.
   //   Definition fields:
   //     sides     the two rooms the door physically separates
   //     building  a building instance's id ("pharmacy"): which master key
@@ -4336,8 +4338,9 @@ x_sn_9 m_sn_sn_sn sn p
   // returns): definitions and saved state split as the doors' do, and come
   // from the same two places: the building's own windows (authoredWindows())
   // and a wired unit's, by role, from its template (`windows`). A save
-  // carries `{ state }` per window id; the runtime `windows` object is the
-  // two merged (buildWindows()).
+  // carries `{ state }` per window id, for the windows whose state differs
+  // from a new game's; the runtime `windows` object is the two merged
+  // (buildWindows()).
   //   Definition fields:
   //     rooms      one room id, a window to the outside, or two, a window
   //                between two rooms
@@ -7999,20 +8002,44 @@ x_sn_9 m_sn_sn_sn sn p
   // changed on top of them. `rooms` holds, per room id, the fields of
   // ROOM_STATE_FIELDS and CONTAINER_STATE_FIELDS that differ from a freshly
   // built world (savedRoomState(), applied back by buildWorld()); `doors` and
-  // `windows` carry `{ locked, open, broken }` per door and `{ state }` per
-  // window (buildDoors(), buildWindows()). _uid is not persisted specially —
-  // resyncUidCounter() scans every item location after a load so
-  // newly-created items during the next session keep getting unique ids, and
-  // ensureUid() lazily assigns one to any loaded item that predates the uid
-  // system.
+  // `windows` hold only the ids whose state differs from a new game's,
+  // `{ locked, open, broken }` per door and `{ state }` per window
+  // (savedDoorState(), savedWindowState(); applied back by buildDoors(),
+  // buildWindows(), where an id the save lacks keeps its default). _uid is
+  // not persisted specially — resyncUidCounter() scans every item location
+  // after a load so newly-created items during the next session keep getting
+  // unique ids, and ensureUid() lazily assigns one to any loaded item that
+  // predates the uid system.
+  function doorSaveFields(d){ return { locked: d.locked, open: d.open, broken: d.broken }; }
+  // What a new game's doors and windows save as, per id: the baseline
+  // savedDoorState() and savedWindowState() compare against. Taken from
+  // buildDoors(null) and buildWindows(null), the loader's own fallback, so an
+  // id left out of a save loads back as exactly this. Built once, on the
+  // first save, and kept for the session: the definitions never read
+  // `state`, so a new game's openings are the same in every run.
+  let openingBaselineCache = null;
+  function openingBaseline(){
+    if(!openingBaselineCache){
+      const d = buildDoors(null), w = buildWindows(null);
+      openingBaselineCache = { doors:{}, windows:{} };
+      Object.keys(d).forEach(id=>{ openingBaselineCache.doors[id] = doorSaveFields(d[id]); });
+      Object.keys(w).forEach(id=>{ openingBaselineCache.windows[id] = w[id].state; });
+    }
+    return openingBaselineCache;
+  }
+  // Only the doors whose `{ locked, open, broken }` differ from the baseline,
+  // each written whole; only the windows whose `state` does.
   function savedDoorState(){
-    const out = {};
-    Object.keys(doors).forEach(id=>{ out[id] = { locked: doors[id].locked, open: doors[id].open, broken: doors[id].broken }; });
+    const base = openingBaseline().doors, out = {};
+    Object.keys(doors).forEach(id=>{
+      const s = doorSaveFields(doors[id]), b = base[id];
+      if(!b || s.locked !== b.locked || s.open !== b.open || s.broken !== b.broken) out[id] = s;
+    });
     return out;
   }
   function savedWindowState(){
-    const out = {};
-    Object.keys(windows).forEach(id=>{ out[id] = { state: windows[id].state }; });
+    const base = openingBaseline().windows, out = {};
+    Object.keys(windows).forEach(id=>{ if(windows[id].state !== base[id]) out[id] = { state: windows[id].state }; });
     return out;
   }
   // What a room's saved state is made of: the fields play writes on a room
