@@ -469,6 +469,10 @@ https://claude.ai/artifact/6kfxFmhKY4ZJzwk2FWxwMu (private to Tom).
 
 ## Electricity in Argentina (to be researched properly)
 
+**Superseded by `Electrical_AR.md` (#286, 2026-09-28),** which confirms the
+supply, the RCD and the sockets from the AEA 90364-7-770 and the OCEBA's
+rules. The notes below are kept as the first record.
+
 All **secondary, 2026-09-26**, read through search summaries. Confirming
 them, and the figures the power system needs, is #286. Fuel and cooking
 gas are #287; the town block by block is #288.

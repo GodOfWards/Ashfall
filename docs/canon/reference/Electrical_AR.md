@@ -1,0 +1,236 @@
+# Electricity in Argentina: dwellings, boards and breakers (#286)
+
+Researched 2026-09-28 for #286, which blocks #289 (re-basing the power system
+on Argentina). This replaces `Electrical.md` (the US record: NEC, UL 489,
+GFCI) as the target for the game. Lima's distributor, the Cooperativa de
+Electricidad de Zárate (CEZ), is in `Lima.md`, "Utilities in Lima and the
+region".
+
+**Who regulates what.** Lima is in Buenos Aires province, outside the ENRE's
+area (EDENOR, EDESUR, EDELAP). CEZ is regulated by the **OCEBA** (Organismo de
+Control de Energía Eléctrica de la Provincia de Buenos Aires). Inside the
+house, the rules are the AEA's *Reglamentación para la ejecución de
+instalaciones eléctricas en inmuebles* (AEA 90364), which the OCEBA's rules
+and the ENRE's both point to.
+
+## Sources
+
+- **AEA 90364-7-770, Edición 2017** (first edition 2017, ISBN
+  978-987-1975-38-9): *viviendas unifamiliares hasta 63 A*. **Primary**: the
+  standard itself, in the courtesy copy the AEA gave Córdoba's regulator
+  (ERSeP), read through the Wayback Machine's copy of 2025-10-16 (the live
+  URL returned 403):
+  [ersep.cba.gov.ar](https://ersep.cba.gov.ar/wp-content/uploads/2021/05/AEA-90364-7-770_ERSep.pdf),
+  [archived](https://web.archive.org/web/20251016162122/https://ersep.cba.gov.ar/wp-content/uploads/2021/05/AEA-90364-7-770_ERSep.pdf).
+- **OCEBA, Reglamento de Acometidas, Tarifa 1 (Pequeñas Demandas)**, the
+  annex to OCEBA Resolución 92: **primary**, from the OCEBA's own site
+  ([page](https://oceba.gba.gov.ar/nueva_web/s.php?i=12),
+  [PDF](https://oceba.gba.gov.ar/nueva_web/PDFS/acometidas/Resolucion0092Anexo.pdf)).
+  Its year, 2008, is from the normas.gba.gob.ar listing (secondary).
+- **OCEBA, Subanexo D, Normas de calidad del servicio público y sanciones**
+  (the concession contracts' quality annex): **primary**,
+  [PDF](https://oceba.gba.gov.ar/nueva_web/PDFS/concesiones/SUBANEXO_D.pdf).
+- **ENRE, Reglamento para la conexión de nuevos suministros domiciliarios**
+  (2022 edition; Res. ENRE 225/2011 per the ENRE's own file name for the
+  earlier annex, secondary): **primary**, but for the ENRE's area,
+  not Lima's. It's cited where it agrees with the AEA.
+  [PDF](https://www.argentina.gob.ar/sites/default/files/2018/03/reglamentoconexionnuevossuministros_edicion2022.pdf.pdf).
+- **ABB, *Comparison of tripping characteristics for miniature
+  circuit-breakers*** (2CDC400002D0201): the maker's table of IEC/EN 60898-1
+  characteristics. **Secondary** for the standard (IEC 60898-1 itself is
+  paywalled), primary for ABB.
+  [PDF](https://library.e.abb.com/public/114371fcc8e0456096db42d614bead67/2CDC400002D0201_view.pdf).
+- **Enel, Especificación LATAM E-BT-004 Rev. 02** (2014-08-28),
+  *Interruptores termomagnéticos*, Table 12, quoting IEC 60898-1 §9.10:
+  **secondary** for the standard. Enel owns Edesur (Buenos Aires).
+  [PDF](https://www.eneldistribuicao.com.br/rj/documentos/E-BT-004_R-02.pdf).
+- **Schneider Electric Argentina** product pages (Easy9 2P, 4.5 kA, curve C):
+  primary for what one maker sells in Argentina.
+  [6 A](https://www.se.com/ar/es/product/EZ9F34206/interruptor-termomagn%C3%A9tico-easy9-2p-6a-45ka-curva-c/),
+  [10 A](https://www.se.com/ar/es/product/EZ9F34210/interruptor-termomagn%C3%A9tico-easy9-2p-10a-45ka-curva-c/),
+  [16 A](https://www.se.com/ar/es/product/EZ9F34216/interruptor-termomagn%C3%A9tico-easy9-2p-16a-45ka-curva-c/),
+  [32 A](https://www.se.com/ar/es/product/EZ9F34232/interruptor-termomagn%C3%A9tico-easy9-2p-32a-45ka-curva-c/).
+  Listed through search results, 2026-09-28; the pages weren't opened.
+
+## Supply
+
+- **220/380 V a.c., 50 Hz ± 1 Hz.** AEA 770 §770.4.2 gives "220/380 Vca
+  (230/400 Vca)": 220 V between a phase and neutral, 380 V between phases.
+  The OCEBA's service-connection rules scope themselves to "380/220 V".
+  **Confirmed.**
+- **Tolerance at the supply point (OCEBA Subanexo D):** ±7.0 % high voltage,
+  ±8.0 % medium, ±8.0 % low voltage; up to 12.0 % in rural areas. These are
+  the limits beyond which the distributor is sanctioned, for the stage the
+  annex defines. **Confirmed.**
+- **Single-phase or three-phase:** a house is normally single-phase. AEA 770
+  §770.8.3.3 recommends asking for a three-phase supply when the total load
+  exceeds **7 kVA or 32 A**. The OCEBA's Tarifa 1 covers demands under
+  **10 kW**. **Confirmed.**
+- **The dwelling rule's scope:** AEA 770 covers houses whose main breaker is
+  at most **63 A**, with a prospective short-circuit current of at most 10 kA
+  at the origin (§770.1). Above that is AEA 90364-7-771.
+
+## The meter and the boards
+
+- **The meter is on the property line** (OCEBA Acometidas T1, §§1–5): on the
+  *línea municipal*, reachable from the street 24 hours a day. When the house
+  is set back from the line, the meter goes in a **brick pillar**
+  (*pilar de mampostería*) or a precast concrete pillar at the front. When
+  the façade is on the line, it goes on the façade. The meter box is
+  insulating, IP 43, with a clear polycarbonate lid, mounted between 0.80 m
+  and 1.80 m high. **Confirmed.**
+- **The main board (*tablero principal*) is next to it:**
+  - no more than **1 m** from the meter box (OCEBA); AEA 770 §770.16.3.1
+    allows up to 2 m, "dentro de la propiedad";
+  - IP 54, insulating (class II, double insulation);
+  - it carries a **bipolar thermal-magnetic breaker** switching the neutral
+    with the phase, **at most 32 A** for a Tarifa 1 supply (OCEBA).
+  **Confirmed.** So in a house with a front pillar, the main switch is
+  outdoors at the gate, in its own box beside the meter.
+- **Inside, a distribution board (*tablero seccional*):** fed from the main
+  board, "en lugares de fácil localización dentro de la vivienda"
+  (§770.16.3.2). One per inhabited floor is suggested. It is never in a
+  bathroom, inside furniture, under a counter or in a hard-to-reach recess.
+  It has 0.9 m of clear space in front and at least 200 lx of light
+  (§770.16.2). Levers sit between 0.40 m and 2 m high. It keeps 20 % spare
+  space in 18 mm modules (§770.16.4). **Confirmed.**
+- **Every board carries the "riesgo eléctrico" symbol** (IRAM 10005-1), at
+  least 40 mm high, on its front (§770.16.2.1). **Confirmed.**
+
+## Circuits (AEA 770 §770.6.6, Table 770.6.I)
+
+All confirmed. Every circuit is single-phase and at least two-wire.
+
+| Code | Name | Max protection | Max outlets | What it feeds |
+|---|---|---|---|---|
+| **IUG** | *Iluminación de uso general* | **16 A** | 15 | Lights, fans and extractors, or other loads ≤ 10 A, fixed or on 10 A 2P+T sockets (IRAM 2071) |
+| **TUG** | *Tomacorrientes de uso general* | **20 A** | 15 | 10 A 2P+T sockets (IRAM 2071), loads ≤ 10 A each |
+| **TUE** | *Tomacorrientes de uso especial* | **32 A** | 15 | Loads over 10 A: 20 A 2P+T sockets (IRAM 2071), or 16 A IEC 60309 |
+| *specific* | MBTF, APM, ATE, MBTS, ACU, IUE, ITE, OCE… | per AEA 90364-7-771 | — | Dedicated loads (ACU is a dedicated single load, such as an air conditioner) |
+
+- **Fixed appliances in kitchens and laundries** (§770.7.1 i) include
+  fridges, freezers, extractor hoods, dishwashers, electric cookers, and
+  "cocinas, anafes y hornos a gas que requieran alimentación eléctrica"
+  (a gas cooker with electric ignition). They get dedicated socket modules
+  (Table 770.7.III).
+- Ceiling fans and extractors can go on a lighting circuit (§770.7.1 c).
+- A *toilette* (a bathroom without a bath or shower) can have its socket on
+  the lighting circuit (§770.7.1 k).
+
+## Grado de electrificación: how many circuits (AEA 770 §770.7.3–770.7.4)
+
+All confirmed. The area counts the covered area plus half the semi-covered
+area (a covered gallery, for example).
+
+| Grado | Area | Minimum circuits | Variants |
+|---|---|---|---|
+| **Mínimo** | up to 60 m² | 2 | 1 IUG + 1 TUG |
+| **Medio** | over 60 up to 130 m² | 3 | 2 IUG + 1 TUG, or 1 IUG + 2 TUG |
+| **Elevado** | over 130 up to 200 m² | 5 | 2 IUG + 3 TUG, or 3 IUG + 2 TUG |
+| **Superior** | over 200 m² | 6 | as Elevado, plus one of free choice |
+
+- **Demand (Table 770.8.I):**
+  - an IUG circuit counts 2/3 of 60 VA per outlet;
+  - an IUG with derived sockets counts 2,200 VA;
+  - a TUG counts **2,200 VA**;
+  - a TUE counts **3,300 VA**.
+- **Simultaneity (Table 770.8.II):** 1 for 2 circuits, 0.8 for 3, 0.7 for 5,
+  0.6 for 6.
+- **Minimum outlets per room (Table 770.7.III):** for example, a living or
+  dining room at *Medio* has one lighting outlet per 18 m² (at least one) and
+  one socket per 6 m² (at least two). A kitchen has lighting plus socket
+  modules for its fixed appliances. The table didn't extract cleanly from the
+  PDF: re-read it before a pass depends on a specific room's count.
+- **The standard's own worked example** (Annex 770-B, a *Mínimo* home's
+  distribution board): a **30 mA, 2 × 40 A** residual-current device at its
+  head, then **B 2 × 10 A (IUG)** and **B 2 × 16 A (TUG)**. The *Medio*,
+  three-phase example has three 16 A circuits. **Confirmed**, as an example
+  only.
+
+## Breakers (*interruptores termomagnéticos*)
+
+- **Only IEC 60898-1 breakers are allowed** for circuit protection
+  (§770.16.5.2). They must be lockable open and switch **both poles**: in a
+  single-phase house every circuit breaker is **bipolar**, and single-pole
+  breakers are not allowed. Fuses are forbidden in the main board (ENRE
+  §3.9, for its area). **Confirmed.**
+- **The main board's head device is a breaker of at most 63 A**
+  (§770.16.5.3), and at most **32 A** on a Tarifa 1 supply in Buenos Aires
+  province (OCEBA). **Confirmed.**
+- **Trip characteristics, IEC 60898-1** (ABB's table, and Enel E-BT-004
+  Table 12 quoting §9.10; **secondary**), at a 30 °C reference, the same for
+  curves B, C and D:
+
+  | Current | Time | Result |
+  |---|---|---|
+  | 1.13 × In | ≥ 1 h (In ≤ 63 A) | no trip (conventional non-tripping current) |
+  | 1.45 × In | < 1 h (In ≤ 63 A), just after the 1.13 × In test | trip (conventional tripping current) |
+  | 2.55 × In | 1 s < t < 60 s (In ≤ 32 A); 1 s < t < 120 s (In > 32 A) | trip |
+
+  The instantaneous (magnetic) band, as a multiple of In: at its low end the
+  breaker may still take the thermal time; at its high end it trips in under
+  0.1 s.
+
+  | Curve | Band | At the low end | At the high end |
+  |---|---|---|---|
+  | **B** | 3–5 × In | 0.1–45 s (In ≤ 32 A), 0.1–90 s (> 32 A) | < 0.1 s |
+  | **C** | 5–10 × In | 0.1–15 s (≤ 32 A), 0.1–30 s (> 32 A) | < 0.1 s |
+  | **D** | 10–20 × In | 0.1–4 s (≤ 32 A), 0.1–8 s (> 32 A) | < 0.1 s |
+
+  ABB adds that above 30 °C the thermal currents fall by about 6 % per 10 K.
+- **Ratings on the Argentine market:** Schneider's Easy9 2P curve C line in
+  Argentina lists 6, 10, 16, 20, 25, 32 and 40 A (secondary: search results).
+  IEC 60898-1's preferred values are said to be 6, 8, 10, 13, 16, 20, 25,
+  32, 40, 50, 63, 80, 100 and 125 A (secondary; the standard wasn't read).
+  **Unconfirmed as a complete list**. AEA 770's examples use 10, 16 and 40 A,
+  and the circuit maxima are 16, 20 and 32 A.
+- **Curve in homes:** the AEA's example uses curve **B** for IUG and TUG. The
+  retail 2P lines seen are curve **C**. Which is more common in Lima's homes
+  is unconfirmed.
+
+## Residual-current devices (*interruptor diferencial*, colloquially *disyuntor*)
+
+- **Every terminal circuit is protected by a residual-current device of
+  In ≤ 30 mA, non-delayed** ("instantánea"), as complementary protection
+  against direct contact (§770.14.2.3). It is not a replacement for the
+  other protections. **Confirmed.**
+- IEC 61008 (without overcurrent protection) or IEC 61009 (with it). The
+  usual type in dwellings is **type AC**. **Confirmed.**
+- Between boards, where needed, up to **300 mA**, preferably selective
+  (marked "S") (§770.14.3). **Confirmed.**
+- **One RCD may cover several circuits** (§770.16.5.4, note 1), or each
+  circuit may have its own. At a distribution board, the RCD can be the head
+  device itself. **Confirmed.**
+- With 30 mA RCDs, an earth resistance of **≤ 40 Ω** counts as protection
+  against indirect contact, keeping the touch voltage under **24 V**
+  (§770.14.3; ENRE's "tensión de seguridad" is also 24 V a.c.). The earthing
+  system is **TT**. **Confirmed.**
+- The ENRE requires a ≤ 30 mA RCD in the main board for its area (§3.8).
+- An AFDD (arc-fault detector) is recommended, not required (§770.16.5.4).
+
+## Sockets, plugs and wire colours
+
+- **Sockets: 2P+T, 10 A or 20 A, IRAM 2071** (AEA 770 §770.6.6). The
+  matching plugs are IRAM 2073 (two-pole with earth, 10 A and 20 A), as
+  `Lima.md` already notes (secondary). A socket outlet box holds
+  two sockets (50 × 100 mm box) or four (100 × 100 mm).
+- **Wire colours** (OCEBA Acometidas T1, quoting the AEA): **neutral light
+  blue** (*celeste*), phase R **brown**, S **black**, T **red**. A
+  single-phase installation's phase is preferably brown. The protective
+  earth is green-and-yellow (AEA practice; not read here). **Confirmed**
+  except the earth.
+
+## Not yet researched (still open on #286)
+
+- **Old installations.** The rules above are for new work (this edition of AEA
+  770 is from 2017; the dates of earlier rules weren't researched). A house built decades ago may still
+  have porcelain fuses (*tapones*), no RCD, or two-pin sockets. Whether a
+  Lima home in February 2025 has a modern board is a **design question for
+  Tom**, and a research one for what's typical (#288).
+- **Appliances as sold in Argentina:** nameplates at 220 V for a fridge, LED
+  bulbs, an extractor hood, a gas cooker's electric ignition, and an electric
+  water heater (*termotanque*) where one is used. The game's current
+  `APPLIANCES` figures are US 120 V nameplates.
+- **CEZ's own connection rules**, if it publishes any beyond the OCEBA's.
+- **The home's real board:** Tom's first-hand knowledge of the Barrio Atucha
+  row houses (#305).
