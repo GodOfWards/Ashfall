@@ -62,6 +62,60 @@ status labels.
     Gasoil's biodiesel **turns gummy after about 3 months** and attracts
     bacteria.
 
+## Over the years (2026-09-28)
+
+What each fuel does as storage runs past months into years.
+
+- **Nafta goes off; how fast depends on how it's kept.**
+  - **In an open or vented tank** (a car's, a generator's or a mower's), the
+    light fractions evaporate. NREL's study for the Renewable Fuels
+    Association found "significant gasoline weathering… over one month of
+    storage", with "total mass losses as high as 30-70%" under hot, humid
+    conditions. It also found "significant loss of volatility, loss of mass,
+    reduced octane rating, increased concentration of sulfur and gum", for E0
+    and ethanol blends alike, before water uptake mattered. Water uptake took
+    three months or more to cause phase separation. Secondary: the RFA's
+    summary of the NREL study, 2016-09-21
+    ([RFA](https://ethanolrfa.org/media-and-news/category/news-releases/article/2016/09/new-doe-study-gas-becomes-stale-long-before-water-uptake-becomes-a-concern)).
+  - **In a sealed can:** 3–6 months (above). **In a station's buried tank:**
+    about a year (above).
+  - **Past that:** olefins react with oxygen to form **gums and varnish**,
+    **octane falls**, and **vapour pressure drops until an engine is hard or
+    impossible to start**. Research literature (review and aging studies,
+    secondary through search summaries). No source was found giving a figure
+    for sealed nafta after several years. So on the order of years, nafta is
+    **unfit for an engine**, and in a vented tank much sooner. Derived.
+- **Gasoil keeps longer, then grows things.** Clean, dry and sealed, it stays
+  in specification for **12–18 months** without treatment, and 2 years or
+  more with a stabiliser and water removal. Modern low-sulfur gasoil with
+  biodiesel oxidises more easily and takes up more water. It darkens and
+  forms sediment, and **bacteria and fungi grow in the water at the tank's
+  bottom**. They make acids and slime that clog filters and corrode the tank.
+  In biodiesel blends, colonies changed after **60 days** and slime appeared
+  after **90 days** (Heliyon, 2022). Secondary (trade guide and search
+  summaries; the Heliyon paper is peer-reviewed, and was read only through a
+  summary).
+- **Bottled gas doesn't go off, but the bottle expires.** The gas is
+  "imperecedero" (above). The container isn't:
+  - **A garrafa or cylinder is licensed for 10 years from manufacture.** After
+    that the filling company must send it to an authorised workshop to be
+    reconditioned: valve removed, cleaned, thickness-tested, pressure-tested,
+    repainted, the test year marked. It's then **re-licensed for another 10
+    years**. A container past its date **can't be refilled**, and one that
+    fails is destroyed. Resolution SE 2013/2012 (2012-11-12). **Primary**
+    ([InfoLEG](https://servicios.infoleg.gob.ar/infolegInternet/anexos/200000-204999/204948/norma.htm)).
+    The test pressure is 34 kg/cm² (secondary).
+  - **The date is on the bottle.** "Revisá la fecha de vencimiento, ubicada
+    en el aro protector o en el envolvente." The hose, clamps and regulator
+    are checked for condition, with no set interval: replaced "según sea
+    necesario". Leaks are found with soapy water. Secretaría de Energía,
+    Programa Hogar's safety page. **Primary**
+    ([Argentina.gob.ar](https://www.argentina.gob.ar/economia/energia/programa-hogar/uso-responsable-de-las-garrafas)).
+  - **So with no one to recondition them,** the gas inside stays good
+    indefinitely, and the bottles slowly pass their dates. A full, sealed
+    garrafa is usable years on, as long as its valve, hose and regulator hold.
+    Derived.
+
 ## Stations and cans
 
 - **Station pumps need power.** In the July 2025 AMBA blackout, one of the few
