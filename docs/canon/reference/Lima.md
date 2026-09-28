@@ -15,13 +15,19 @@ town since 2026-09-26 (#237), replacing Henderson, Kentucky.
   [es.wikipedia](https://es.wikipedia.org/wiki/Lima_(Buenos_Aires)), OSM
   Nominatim.
 - **Population. The sources conflict:**
-  - **17,368 (INDEC, 2022)** and 12,375 (INDEC, 2010), per es.wikipedia.
-    This is the likeliest figure for the town proper.
+  - **17,368 (INDEC, 2022)**, 12,375 (INDEC, 2010) and **8,375 (INDEC,
+    2001)**, per es.wikipedia. **This is the figure to use for the town
+    proper.** The article's own "22 % increase" doesn't match its figures
+    (17,368 over 12,375 is +40 %). Re-read 2026-09-28 (#288).
   - **32,996 (2022)**, per La Voz de Zárate on 15 June 2022, from the local
     census coordination: "Lima and its surroundings", before INDEC's final
     results. The paper also gave the Partido de Zárate as 138,022.
     [La Voz de Zárate](https://www.diariolavozdezarate.com/2022/06/15/el-censo-2022-revelo-que-lima-cuenta-con-32-996-habitantes/)
-    (refuses automated readers; read through a search summary).
+    (refuses automated readers; read through a search summary). It most
+    likely counts a wider census area than the town. The same paper ran
+    "Los datos del Censo dejan dudas sobre los habitantes de Lima" on
+    2023-02-04; that page also returned 403 and wasn't read (#288,
+    2026-09-28).
   - **10,219 (2010)**, per Wikidata Q6548772, disagreeing with the 12,375
     above.
   - All secondary. What would confirm it: INDEC's final 2022 tables by
@@ -152,8 +158,12 @@ above it uses the shop's address; private homes get none (#237).
   29 × 26 m, beside the two station buildings.
 - **Not found in Lima:** a *ferretería* (the corralón is the nearest thing),
   a supermarket, *almacén* or *autoservicio*. Neither Street View (Tom) nor
-  the listings turned one up. The game places one *almacén* as a design
-  addition (#237).
+  the listings turned one up, and web searches on 2026-09-28 found nothing
+  either: directories are dominated by Zárate city and by Lima, Peru. The
+  game placed one *almacén* as a design addition (#237). **Tom has since
+  settled it by design (2026-09-28):** no real one needs finding, because
+  almacenes stand on corners every few blocks, Argentine towns not zoning
+  shops out of residential streets (#325).
 
 ## Homes as seen from the street (Tom, Street View, 2026-09-27)
 
@@ -195,9 +205,12 @@ Status: secondary unless marked; read 2026-09-27.
     five 13.2 kV outlets, and **829 transformer substations** at 13.2 kV.
   - **Public lighting: 2,377 fixtures in Lima** and 13,974 in Zárate, which
     had changed since La Nación's "scarce".
+  - **CEZ's Lima office:** Avenida 11 at the corner of Calle 16.
   - Source: [CEZ, "La Red Cooperativa"](https://cezarate.com/la-red-cooperativa/)
     (read directly: **confirmed** for the network figures; no date on the
-    page).
+    page; re-read 2026-09-28, #288).
+  - **Which of the three stations feeds Lima is unconfirmed.** The ET Las
+    Palmas (below) is the nearest candidate.
   - **Transmission:** Transba's 132 kV **Atucha–Zárate line** was sectioned
     into the **ET Las Palmas**, "between Zárate and Lima" (ENRE Resolución
     2/2018, search summary). Transba also operates the **500 kV ET Campana**.
@@ -216,7 +229,9 @@ Status: secondary unless marked; read 2026-09-27.
     tank, and the town is fed from it** (La Voz de Zárate, 2024-10-08, "El
     problema con el agua en Zárate"; refuses automated readers, read through
     a search summary). **Where Lima's tank is, and its size, are
-    unconfirmed.**
+    unconfirmed.** Searches on 2026-09-28 found no location: web searches
+    and OpenStreetMap lookups (Overpass timed out; Nominatim found nothing).
+    It is left to Tom's Street View (#288, #300).
   - A new well for Lima was to give about 100,000 litres an hour into the
     distribution ring (Municipalidad de Zárate, search summary). Pressure is
     a chronic summer problem, with a "definitive solution" promised for 2027
@@ -349,6 +364,9 @@ through the OSM API (`api/0.6/map`, the box 34.070–34.025 S, 59.225–59.170 W
   in the era is unconfirmed.
 
 ## The Atucha nuclear complex
+
+What happens to the plants once nobody runs them (cooling, spent fuel, decay
+heat, and whether neglect makes them a hazard) is in `Atucha.md` (#290).
 
 - On the right bank of the **Paraná de las Palmas**, in the locality of Lima,
   Partido de Zárate, about 100 km from the city of Buenos Aires. OSM places

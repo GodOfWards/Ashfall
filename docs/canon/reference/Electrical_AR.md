@@ -318,9 +318,20 @@ are in `Fuel_AR.md`.
 
 ## Old installations (#311, 2026-09-28)
 
-**Which homes have them in the game** is a game rule, not a sourced fact
-(Tom, 2026-09-28). A building whose site stop is on a paved or gravel street
-has a modern installation, as above. One on a dirt street has an old board.
+**Which homes have them in the game** is a game rule, not a sourced fact.
+**At least 50 % of Lima's homes have an old fuse board**, since many of the
+houses are old (Tom, 2026-09-28, #306). The figure is a retunable judgment
+call; "at least half" leaves room to go higher. It replaces the earlier rule
+recorded here (#311), which gave old boards only to homes on dirt streets:
+49 of 427, about 11 %.
+
+**A blown *tapón* needs a spare fuse** (Tom, #306). It isn't reset like a
+breaker: it is replaced with a spare fuse item.
+
+Still open, on #306: which homes (every dirt-street home plus a stable share
+of the rest, or a flat share), whether the player's home and the landmarks
+stay modern as the earlier rule had them, and the chance that an old board
+isn't earthed.
 
 **What an old board is, from what could be found:**
 
