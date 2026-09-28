@@ -56,7 +56,7 @@ rule. A coding session reads neither.
 |---|---|
 | `Lima.md` | **The game's town:** Lima, Partido de Zárate, Buenos Aires. Its grid, rail, the Atucha complex, nearby towns, and the riverside walk |
 | `Henderson.md` | **Retired, 2026-09-26.** The former town: its electricity, water, gas, crossings and plants; downtown's street grid, rail and buildings |
-| `Electrical_AR.md` | **Argentine electricity, the game's target (#286):** supply, the meter and boards (AEA 90364-7-770, OCEBA), IUG/TUG/TUE circuits and the grado de electrificación, IEC 60898-1 breakers, 30 mA RCDs, sockets and wire colours; old installations; appliances at 220 V and extension cords (#311) |
+| `Electrical_AR.md` | **Argentine electricity, the game's target (#286):** supply, the meter and boards (AEA 90364-7-770, OCEBA), IUG/TUG/TUE circuits and the grado de electrificación, IEC 60898-1 breakers, 30 mA RCDs, sockets and wire colours; old installations; appliances at 220 V and extension cords (#311); cooker ratings, pump starts, compressors, lamp laws, CEZ's rules and appliance table (#316, #317, #320) |
 | `Electrical.md` | **The US record, no longer the target:** US wiring code (NEC) and Kentucky's adoption, breakers (UL 489), panels and service, appliances and nameplates, lighting, GFCI, cords, meters, rail-crossing standby power |
 | `Fuel_and_Generators.md` | Gasoline (grades, shelf life, stations, cars, cans) and portable generators |
 | `Carbon_Monoxide.md` | Exposure effects, the body's level, CO alarms, generator placement |
