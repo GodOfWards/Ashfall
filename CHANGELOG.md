@@ -18,6 +18,145 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.10.3 — Power system re-based on Argentina
+
+Implements: handoffs/power-rebase-argentina.md
+
+Implements #289 in full, per `handoffs/power-rebase-argentina.md`. The power
+network's American figures (120 V loads, UL 489 trip points, NEC ratings and
+circuits) are replaced by their Argentine counterparts: 220 V single-phase,
+IEC 60898-1 breaker curves and ratings, AEA 90364-7-770's example board, and
+appliance nameplates as sold in Argentina. The trip model keeps its shape;
+only its anchor points and the instant trip change. No Lima building is wired
+(`WIRING = {}`), so no player sees a difference. No new state field and no
+`SAVE_KEY` change (power definitions aren't saved), so this is **PATCH**.
+
+**Changed / Reworked**
+
+*Heat trip*
+- `BREAKER_T135_MIN` / `BREAKER_T200_MIN` → `BREAKER_F_LOW = 1.45`,
+  `BREAKER_F_HIGH = 2.55`, `BREAKER_T_LOW_MIN = [ { upTo:Infinity, min:60 } ]`
+  and `BREAKER_T_HIGH_MIN = [ { upTo:32, min:1 }, { upTo:Infinity, min:2 } ]`:
+  IEC 60898-1's 1 h and 60 s / 120 s points, at the slowest the standard
+  allows. New `BREAKER_F_NO_TRIP = 1.13` and `BREAKER_NO_TRIP_MIN = 60`, the
+  conventional non-tripping point.
+- `tripMinutes(rating, f)` = tHigh × ((F_HIGH − 1) ÷ (f − 1))ⁿ, with
+  n = ln(tLow ÷ tHigh) ÷ ln((F_HIGH − 1) ÷ (F_LOW − 1)), derived rather than
+  the old literal `0.35`. n ≈ 3.311 up to 32 A, ≈ 2.750 above. Its comment
+  says a trip time of a minute or less lands on the first one-minute step.
+
+*Instant trip*
+- `INSTANT_TRIP_MULTIPLE = 7.5` → `BREAKER_CURVES = { B:{ instant:5 },
+  C:{ instant:10 }, D:{ instant:20 } }` and `DEFAULT_BREAKER_CURVE = "B"`: the
+  high end of each IEC curve's magnetic band.
+- Every expanded breaker carries `curve`, from an optional `curve` on its
+  definition (template circuit, template `main`, board, feeder) or the
+  default, via the new `breakerCurve()` in POWER. `resolvePowerStep()` trips a
+  closed breaker instantly when `momentary > BREAKER_CURVES[curve].instant ×
+  rating` (still strict).
+
+*Volts and ratings*
+- `PANEL_DEFAULT_VOLTS` 240 → 220 (AEA 770 §770.4.2, single-phase).
+- `STANDARD_BREAKER_RATINGS` → IEC 60898-1's preferred values, `[6, 8, 10,
+  13, 16, 20, 25, 32, 40, 50, 63, 80, 100, 125]` (secondary, unconfirmed as
+  complete).
+
+*Appliances* (POWER SCHEMA → `APPLIANCES`; every figure retunable)
+- Every entry `volts:220`.
+- `fridge_freezer`: `watts` 150 → 100, `startWatts` 525 → 1300, nameplate
+  6 A → 1.0 A.
+- `range_hood`: nameplate `{ amps:2.0 }` → `{ printsWatts:true }`.
+- `gas_range`: nameplate 12 A → 0.1 A, a placeholder awaiting #316.
+- Sources in the comment replaced: Patrick, Embraco, Vondom, Longvie; the
+  gas range's 4 W standby keeps its US source (Engineer Fix), marked so.
+  `LED_BULB_WATTS` stays 10, now citing the 9–12 W E27 bulbs sold at 220 V.
+
+*Dev test template*
+- `WIRING_TEMPLATES.apartment` keeps its name and roles; its layout is AEA
+  770 Annex 770-B's example: main 32 A; `lights` B 10 A (every role, plus the
+  hood, per §770.7.1 c) and `sockets` B 16 A (kitchen: fridge, gas range).
+  Old circuits `kitchen1`, `kitchen2`, `bath`, `bedroom` are gone.
+
+**Removed**
+- `APPLIANCES.bath_fan` and `APPLIANCES.smoke_alarm`, and their fixtures:
+  Lima homes usually have no bathroom extractor and have no smoke alarm.
+- `BREAKER_T135_MIN`, `BREAKER_T200_MIN`, `INSTANT_TRIP_MULTIPLE` (replaced
+  as above).
+
+**Hardened**
+- `validateWiring()` now reports a breaker whose `curve` isn't a key of
+  `BREAKER_CURVES`, and a breaker for which `tripMinutes(rating,
+  BREAKER_F_NO_TRIP)` falls below `BREAKER_NO_TRIP_MIN`. Circuit volts must be
+  220 (was 120 or 240); the rating message reads "not an IEC 60898-1
+  preferred rating".
+- `resolvePowerStep()` skips the instant check for a breaker whose curve isn't
+  in `BREAKER_CURVES`, rather than throwing; `validateWiring()` reports it.
+
+**Documentation**
+- Schema comments: `APPLIANCES.volts` is "220: single-phase, the only voltage
+  a load uses"; `curve` is documented on the template, board and feeder
+  schemas and on the expanded breaker; the `expandWiring()` and
+  `breakerCurrent()` notes about a panel's "two legs" now say a panel is
+  single-phase. The `apartment` comment cites AEA 770; the NEC text and the
+  "until #289 re-bases it" line at `WIRING` are dropped.
+- Nothing new was deferred. The deferrals the handoff names are already
+  filed: #316 (the cooker's nameplate), #317 (the pump fills the tank).
+
+**Explicitly out of scope**
+- The diferencial (RCD) and its leakage trip (#305, #247); the water heater
+  and house pump as loads (#305, #317); wiring any Lima building, the meter
+  pillar and board placement (#305–#309, #250); old installations (#305,
+  #306); plugs and inlets (#244, #246); shock (#247); the garrafa (#287,
+  #239); bipolar breakers. No rendering change.
+
+**Validation performed**
+- `tripMinutes()` evaluated from the file's own source: t(16, 1.13) ≈ 3,659
+  min; t(16, 1.45) = 60; t(16, 2) ≈ 4.27; t(16, 2.55) = 1; t(16, 3) ≈ 0.43;
+  t(40, 1.13) ≈ 1,825; t(40, 1.45) = 60; t(40, 2.55) = 2. Every
+  `STANDARD_BREAKER_RATINGS` value gives t(r, 1.13) > 60 (minimum ≈ 1,825).
+- `ashfallDev.simulatePower()` on a one-unit building using `apartment` (board
+  and feeder 32 A), in headless Chromium, no page errors:
+  1. Idle, every switch on, 180 min: no trips; the fridge drew 63 of 180
+     minutes, toggling 6 times.
+  2. Fridge start: 5.93 A momentary on `sockets` (1,300 W + the range's 4 W
+     ÷ 220 V), under the 80 A instant limit. No trip.
+  3. A test load starting at 17,820 W (81 A) on `sockets` tripped it
+     `"instant"` on step 1; at exactly 80 A it did not. The same 81 A with the
+     circuit's `curve:"C"` did not trip.
+  4. 7,040 W (2 × In): heat 0.234 a step, `sockets` tripped `"heat"` on step
+     5. 10,560 W (3 × In) tripped on step 1.
+  5. 3,977.6 W (1.13 × In): no trip in 60 min, heat 0.016 at the end.
+- `ashfallDev.validateWiring()`: no problems (1,736 unwired rooms, expected
+  while `WIRING` is empty). A board with `curve:"Z"` is reported.
+- `git diff origin/main...HEAD -- ashfall.html` is the record of everything
+  else left untouched.
+
+**Sections touched**
+- CONFIG/CONSTANTS (breaker constants); WORLD DATA → POWER SCHEMA
+  (`APPLIANCES`, `WIRING_TEMPLATES`, comments; the mechanic's definition
+  data); SURVIVAL / TIME SIMULATION → POWER (`breakerCurve()`,
+  `expandWiring()`, `tripMinutes()`, `resolvePowerStep()`, comments); DEV
+  (`validateWiring()`).
+
+**Open questions / decisions resolved**
+- Constant names: the handoff's recommended ones, unchanged.
+- The no-trip check lives in `validateWiring()`, per breaker, as the handoff
+  recommended.
+- `curve` reaches a breaker through a one-line helper, `breakerCurve(def)` =
+  `def.curve || DEFAULT_BREAKER_CURVE`, defined beside `expandWiring()`.
+
+**Notes / assumptions**
+- The unknown-curve guard in `resolvePowerStep()` is an implementation choice
+  beyond the handoff, so a mistyped curve in a dev network is reported
+  rather than crashing the step.
+- The `breakerCurrent()` "two legs" comment was outside the handoff's list but
+  carried the same US split-phase wording, so it was updated with the
+  `expandWiring()` one.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.10.2"` → `"0.10.3"`
+
+---
+
 ## v0.10.2 — English names in game text
 
 Implements: handoffs/english-names.md

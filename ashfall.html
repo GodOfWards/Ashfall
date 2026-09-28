@@ -464,7 +464,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.10.2" };
+  const GAME_CONFIG = { VERSION: "0.10.3" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -542,34 +542,45 @@
   const START_DAYS_AFTER_COLLAPSE = 2;
   const POWER_FAILS_DAY = 21;
   // The power network's figures (see POWER in SURVIVAL / TIME SIMULATION).
-  // Breakers, per UL 489 (ABB's white paper on UL 489 breakers; Castor,
-  // "Molded Case Circuit Breaker Basics", EasyPower): at 100% of its rating
-  // a breaker never trips; at 135% it trips within BREAKER_T135_MIN; at 200%
-  // within BREAKER_T200_MIN. Each is a list of rating bands, `upTo` amps
-  // inclusive. Above 225 A the 200% table was not read, so its last band
-  // reuses 10 min: a flagged figure, not a sourced one.
-  const BREAKER_T135_MIN = [ { upTo:50, min:60 }, { upTo:Infinity, min:120 } ];
-  const BREAKER_T200_MIN = [ { upTo:30, min:2 }, { upTo:50, min:4 }, { upTo:100, min:6 },
-    { upTo:150, min:8 }, { upTo:225, min:10 }, { upTo:Infinity, min:10 } ];
-  // The instant (magnetic) trip, as a multiple of the rating: the typical
-  // calibration of a C-curve breaker, whose band is 5–10× (ABB). Applying it
-  // to US plug-in panel breakers is an approximation, flagged.
-  const INSTANT_TRIP_MULTIPLE = 7.5;
+  // Breakers, per IEC 60898-1 (ABB 2CDC400002D0201; Enel E-BT-004 Table 12;
+  // both secondary for the standard). Its thermal points are the same for
+  // curves B, C and D: at BREAKER_F_NO_TRIP × In a breaker does not trip
+  // within BREAKER_NO_TRIP_MIN; at BREAKER_F_LOW × In it trips within 1 h;
+  // at BREAKER_F_HIGH × In within 1–60 s (In ≤ 32 A) or 1–120 s (above).
+  // tripMinutes() passes through the two anchor points at the slowest times
+  // the standard allows. The standard gives only bounds, so the points are
+  // balance values, retunable. Each time is a list of rating bands, `upTo`
+  // amps inclusive. The 1 h at BREAKER_F_LOW covers In ≤ 63 A, which is every
+  // home (AEA 90364-7-770's own scope); ratings above 63 A reuse it, unsourced.
+  const BREAKER_F_LOW = 1.45;
+  const BREAKER_F_HIGH = 2.55;
+  const BREAKER_T_LOW_MIN = [ { upTo:Infinity, min:60 } ];
+  const BREAKER_T_HIGH_MIN = [ { upTo:32, min:1 }, { upTo:Infinity, min:2 } ];
+  // The conventional non-tripping point, which the curve must respect:
+  // validateWiring() checks every breaker against it.
+  const BREAKER_F_NO_TRIP = 1.13;
+  const BREAKER_NO_TRIP_MIN = 60;
+  // The instant (magnetic) trip, as a multiple of the rating, per IEC 60898-1
+  // curve: the high end of each curve's band (B 3–5 × In, C 5–10, D 10–20),
+  // where the standard guarantees a trip in under 0.1 s. Below it the heat
+  // curve handles the current, as the band's low end may take up to 45 s
+  // (B), 15 s (C) or 4 s (D). Home breakers are curve B: a breaker without
+  // its own `curve` is DEFAULT_BREAKER_CURVE.
+  const BREAKER_CURVES = { B:{ instant:5 }, C:{ instant:10 }, D:{ instant:20 } };
+  const DEFAULT_BREAKER_CURVE = "B";
   // Judgment calls, retunable: a breaker's heat meter drains fully in
-  // HEAT_COOL_MIN below its rating; a panel or board without its own `volts`
-  // is 240 V. Real apartment buildings are often 120/208 V (#241), which is
-  // why `volts` is a per-panel field for a building pass to set; the default
-  // is flagged. How likely an appliance's switch is to be found on is each
-  // appliance's own `leftOnChance` (APPLIANCES, POWER SCHEMA).
+  // HEAT_COOL_MIN below its rating. A home is single-phase at 220 V (AEA
+  // 90364-7-770 §770.4.2, from a 220/380 V, 50 Hz supply), which a panel or
+  // board without its own `volts` is. How likely an appliance's switch is to
+  // be found on is each appliance's own `leftOnChance` (APPLIANCES, POWER
+  // SCHEMA).
   const HEAT_COOL_MIN = 30;
-  const PANEL_DEFAULT_VOLTS = 240;
-  // The standard ampere ratings for fuses and inverse-time circuit breakers,
-  // NEC 2023 Table 240.6(A), which made 10 A a standard breaker size (it had
-  // been fuse-only). validateWiring() checks every breaker against it; the
-  // fuse-only ratings (1, 3, 6, 601 A) are left out, since every protective
-  // device here is a breaker.
-  const STANDARD_BREAKER_RATINGS = [10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100, 110, 125, 150, 175,
-    200, 225, 250, 300, 350, 400, 450, 500, 600, 700, 800, 1000, 1200, 1600, 2000, 2500, 3000, 4000, 5000, 6000];
+  const PANEL_DEFAULT_VOLTS = 220;
+  // The breaker ratings, in A: IEC 60898-1's preferred values as reported
+  // (secondary: the standard wasn't read, and the list is unconfirmed as
+  // complete). The Argentine market shows 6–40 A. validateWiring() checks
+  // every breaker against it.
+  const STANDARD_BREAKER_RATINGS = [6, 8, 10, 13, 16, 20, 25, 32, 40, 50, 63, 80, 100, 125];
   // The spoilage rate in a powered fridge, as a multiple of the rate food
   // ages at room temperature (see spoilageRate()). A powered freezer stops
   // ageing; anything unpowered ages at 1 at once. Balance value, retunable.
@@ -4411,7 +4422,7 @@ x_sn_9 m_sn_sn_sn sn p
   //   { name, watts, volts, leftOnChance | switchless, nameplate, readout?,
   //     startWatts?, dutyCycle?, cycleMinutes? }
   //   watts        running draw
-  //   volts        120 or 240
+  //   volts        220: single-phase, the only voltage a load uses
   //   leftOnChance 0–1: how likely its own switch is to be found on, rolled
   //                per load (switchOnIn()). Every figure is a judgment call,
   //                retunable.
@@ -4439,61 +4450,56 @@ x_sn_9 m_sn_sn_sn sn p
   //   No watts are shown anywhere, but a bulb's nameplate (#242, #249).
   // Every figure is a pick inside a sourced range, and retunable.
   //   fridge_freezer  the appliance behind every kitchen's Fridge and Freezer
-  //                   pair. Running 150 W, within the measured 100–250 W
-  //                   (Champion's chart gives 150–400 W); starting 3.5×
-  //                   running, the rule of thumb being 3–4×; duty cycle 0.35,
-  //                   within the measured 33–40% in a room at about 70 °F.
-  //                   The 60-minute cycle is a judgment call, not sourced.
+  //                   pair. Running 100 W: at the 0.35 duty cycle that is
+  //                   about 307 kWh a year, matching the 310 kWh of a 264 L
+  //                   class-A model (Patrick's manual, primary; its range is
+  //                   310–419 kWh across 264–389 L). Starting 1,300 W: 6 A at
+  //                   220 V, the middle of the 3.7–8.2 A locked-rotor current
+  //                   of household R600a compressors at 200–220 V, 50 Hz
+  //                   (Embraco's catalogue, primary for Embraco; which
+  //                   compressor Argentine fridges carry is unconfirmed). The
+  //                   duty cycle and the 60-minute cycle are judgment calls,
+  //                   not sourced.
   //   led_light       LED_BULB_WATTS.
   //   hall_light      a common-area light, with led_light's bulb. Switchless
   //                   as a design choice, not a sourced fact: a hall or stair
   //                   light in a shared building is treated as always on, so
   //                   it is lit whenever power reaches it. Retunable.
-  //   bath_fan        36 W: a bathroom exhaust fan draws 10–50 W, about 36 W
-  //                   on average (Engineer Fix, HomeAlliance).
-  //   range_hood      200 W: 150–300 W on high (Engineer Fix, Storables).
-  //   smoke_alarm     1 W: a hardwired alarm draws 1–2 W on standby (Kidde).
-  //                   Switchless: hardwired, with no user switch.
-  //   gas_range       4 W: in standby a gas range powers only its control
-  //                   board, clock and display, "generally less than 5
-  //                   watts" (Engineer Fix). Switchless: it is plugged in and
-  //                   has no power switch. The spark module's burst while
-  //                   igniting is left unmodelled, so no `startWatts`; the
-  //                   384–432 W glow bar (a flat one; a round one draws
-  //                   300–360 W) is the oven's igniter, and the oven isn't
-  //                   modelled (#259).
-  // The fan and the hood are motors, but their start surge is left
-  // unmodelled: neither carries `startWatts`.
+  //   range_hood      200 W: an extractor hood draws 130–250 W at most
+  //                   (Longvie, primary: "Potencia máxima 200 Watt").
+  //   gas_range       4 W: a gas range's standby draw, "generally less
+  //                   than 5 watts" (Engineer Fix, a US source and the only
+  //                   figure there is); unconfirmed for Argentina (#316). One
+  //                   sold here needs power for its electronic spark ignition
+  //                   and a 220 V oven lamp of at most 15 W (Longvie,
+  //                   primary). Switchless: it is plugged in and has no power
+  //                   switch. The spark's burst while igniting is left
+  //                   unmodelled, so no `startWatts`; the oven and its lamp
+  //                   aren't modelled (#259).
+  // The hood is a motor, but its start surge is left unmodelled: it carries
+  // no `startWatts`. Lima homes have no smoke alarm, and usually no bathroom
+  // extractor fan (Tom, first-hand), so neither is an appliance.
   // Nameplates, one real model each:
-  //   fridge_freezer  6 A: Frigidaire FFTR1821QW, "Amps @ 120 Volts: 6", with
-  //                   a 0.72 kW connected load and a 15 A minimum circuit.
-  //                   Several retailer spec listings agree; Frigidaire's own
-  //                   page was not read, so the figure is secondary, not
-  //                   confirmed.
+  //   fridge_freezer  1.0 A: Vondom's freezer at 220–240 V (primary for
+  //                   Vondom; its fridge prints 0.75 A).
   //   led_light, hall_light  its own `watts`, printed on the base.
-  //   bath_fan        0.9 A: Broan 688, "120 VAC, 0.9 A".
-  //   range_hood      2.0 A: Broan 413004, "120V ~ 60 Hz, drawing 2.0 amps".
-  //   smoke_alarm     0.04 A: BRK 9120 data sheet, "Operating Current: .04
-  //                   amps (standby/alarm)".
-  //   gas_range       12 A: Frigidaire FCFG3062AS, "Amps @ 120 Volts: 12
-  //                   Amps". The rating covers its oven igniter and oven,
-  //                   which aren't modelled; that is why it sits far above
-  //                   the 4 W standby.
-  // One LED bulb's draw, for every appliance that is one: an LED bulb draws
-  // 8–15 W (Champion).
+  //   range_hood      its own `watts`: Longvie prints its hoods in watts.
+  //   gas_range       0.1 A, a placeholder: 22 W at 220 V, which covers the
+  //                   4 W standby and sits above it. Unconfirmed; it awaits
+  //                   the cooker's real nameplate (#316).
+  // One LED bulb's draw, for every appliance that is one: an E27 LED bulb
+  // sold for 220 V draws 9–12 W (12 W gives about 840 lm, a 60 W
+  // incandescent's light; secondary).
   const LED_BULB_WATTS = 10;
   const APPLIANCES = {
-    fridge_freezer: { name:"Fridge-freezer", watts:150, startWatts:525, volts:120, dutyCycle:0.35, cycleMinutes:60, leftOnChance:0.99,
-      nameplate:{ amps:6 }, readout:{ on:"Light on", off:"Dark" } },
-    led_light:      { name:"Light",          watts:LED_BULB_WATTS, volts:120, leftOnChance:0.3, nameplate:{ printsWatts:true },
+    fridge_freezer: { name:"Fridge-freezer", watts:100, startWatts:1300, volts:220, dutyCycle:0.35, cycleMinutes:60, leftOnChance:0.99,
+      nameplate:{ amps:1.0 }, readout:{ on:"Light on", off:"Dark" } },
+    led_light:      { name:"Light",          watts:LED_BULB_WATTS, volts:220, leftOnChance:0.3, nameplate:{ printsWatts:true },
       readout:{ on:"Lit", off:"Dark" } },
-    hall_light:     { name:"Light",          watts:LED_BULB_WATTS, volts:120, switchless:true, nameplate:{ printsWatts:true } },
-    bath_fan:       { name:"Exhaust fan",    watts:36,  volts:120, leftOnChance:0.05, nameplate:{ amps:0.9 },
+    hall_light:     { name:"Light",          watts:LED_BULB_WATTS, volts:220, switchless:true, nameplate:{ printsWatts:true } },
+    range_hood:     { name:"Range hood",     watts:200, volts:220, leftOnChance:0.05, nameplate:{ printsWatts:true },
       readout:{ on:"Running", off:"Silent" } },
-    range_hood:     { name:"Range hood",     watts:200, volts:120, leftOnChance:0.05, nameplate:{ amps:2.0 },
-      readout:{ on:"Running", off:"Silent" } },
-    smoke_alarm:    { name:"Smoke alarm",    watts:1,   volts:120, switchless:true, nameplate:{ amps:0.04 } },
-    gas_range:      { name:"Gas range",      watts:4,   volts:120, switchless:true, nameplate:{ amps:12 } }
+    gas_range:      { name:"Gas range",      watts:4,   volts:220, switchless:true, nameplate:{ amps:0.1 } }
   };
   // What an appliance's nameplate is rated at, in watts, or null when it has
   // no usable one. The one reading of `nameplate`'s two forms besides the
@@ -4506,13 +4512,15 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // WIRING_TEMPLATES, keyed by id: one unit's layout by room role, so every
   // unit wired the same way shares it.
-  //   { main:{ rating, volts? }, circuits:[…], fixtures:[…], doors?:[…],
-  //     windows?:[…] }
+  //   { main:{ rating, volts?, curve? }, circuits:[…], fixtures:[…],
+  //     doors?:[…], windows?:[…] }
   //   main      the unit panel's main breaker: rating in A, and `volts`
   //             (PANEL_DEFAULT_VOLTS when absent)
-  //   circuits  in panel order: { key, label, rating, volts, roles:[role] }.
-  //             `label` is the hand-written one on the panel door
-  //             ("KITCHEN"); `roles` are the rooms, by role, it serves.
+  //   circuits  in panel order: { key, label, rating, volts, curve?,
+  //             roles:[role] }. `label` is the hand-written one on the panel
+  //             door ("KITCHEN"); `roles` are the rooms, by role, it serves.
+  //   curve     on a main or a circuit, optional: its IEC 60898-1 curve, a
+  //             BREAKER_CURVES key (DEFAULT_BREAKER_CURVE when absent)
   //   fixtures  { key, appliance, circuit, role, containers?:[id] }: an
   //             APPLIANCES id on the circuit `circuit`, in the room playing
   //             `role`. `containers` are the ids of the room containers the
@@ -4535,44 +4543,41 @@ x_sn_9 m_sn_sn_sn sn p
   //
   // `apartment`: one flat, by the roles living, kitchen, bathroom, bedroom
   // and balcony (a balcony or a patio). A one-room unit maps every role onto
-  // its one room. Ratings follow the NEC: two 20 A kitchen countertop
-  // circuits (210.11(C)(1)), a 20 A bathroom circuit (210.11(C)(3)), 15 A for
-  // lighting and room outlets, and a 100 A main, the modern minimum for a
-  // unit. KITCHEN 2 is the second countertop circuit, and the gas range
-  // plugs into it: NEC 210.52(B)(2) Exception No. 2 allows "receptacles
-  // installed to provide power for supplemental equipment and lighting on
-  // gas-fired ranges" on a small-appliance branch circuit. There is no
-  // laundry circuit and no water heater, the heater taken to be gas like the
-  // stove; that is unconfirmed. The panel-door labels are a naming choice,
+  // its one room. It is for the dev seam (simulatePower() defaults to it).
+  // Its layout is AEA 90364-7-770's own example board (Annex 770-B, a
+  // Mínimo home): B 10 A for lighting (IUG, at most 16 A) and B 16 A for
+  // general sockets (TUG, at most 20 A), both curve B by default. The fridge
+  // and the gas range plug into the sockets; the hood is on the lighting
+  // circuit, which §770.7.1 c allows for extractors. The 32 A main is the
+  // largest OCEBA allows a Tarifa 1 supply: a test figure, and a real
+  // house's board is #305's. There is no water heater and no pump (#305).
+  // The labels are English, as hand-written on the board: a naming choice,
   // retunable.
   const WIRING_TEMPLATES = {
     apartment: {
-      main: { rating:100 },
+      main: { rating:32 },
       circuits: [
-        { key:"kitchen1", label:"KITCHEN 1", rating:20, volts:120, roles:["kitchen"] },
-        { key:"kitchen2", label:"KITCHEN 2", rating:20, volts:120, roles:["kitchen"] },
-        { key:"bath",     label:"BATH",      rating:20, volts:120, roles:["bathroom"] },
-        { key:"lights",   label:"LIGHTS",    rating:15, volts:120, roles:["living", "kitchen", "balcony"] },
-        { key:"bedroom",  label:"BEDROOM",   rating:15, volts:120, roles:["bedroom"] }
+        { key:"lights",  label:"LIGHTS",  rating:10, volts:220, roles:["living", "kitchen", "bathroom", "bedroom", "balcony"] },
+        { key:"sockets", label:"SOCKETS", rating:16, volts:220, roles:["kitchen"] }
       ],
       fixtures: [
-        { key:"fridge",        appliance:"fridge_freezer", circuit:"kitchen1", role:"kitchen", containers:["fridge", "freezer"] },
-        { key:"stove",         appliance:"gas_range",      circuit:"kitchen2", role:"kitchen", containers:["stove"] },
-        { key:"hood",          appliance:"range_hood",     circuit:"lights",   role:"kitchen" },
-        { key:"light_kitchen", appliance:"led_light",      circuit:"lights",   role:"kitchen" },
-        { key:"light_living",  appliance:"led_light",      circuit:"lights",   role:"living" },
-        { key:"light_balcony", appliance:"led_light",      circuit:"lights",   role:"balcony" },
-        { key:"light_bath",    appliance:"led_light",      circuit:"bath",     role:"bathroom" },
-        { key:"bath_fan",      appliance:"bath_fan",       circuit:"bath",     role:"bathroom" },
-        { key:"light_bedroom", appliance:"led_light",      circuit:"bedroom",  role:"bedroom" },
-        { key:"smoke_alarm",   appliance:"smoke_alarm",    circuit:"bedroom",  role:"bedroom" }
+        { key:"fridge",        appliance:"fridge_freezer", circuit:"sockets", role:"kitchen", containers:["fridge", "freezer"] },
+        { key:"stove",         appliance:"gas_range",      circuit:"sockets", role:"kitchen", containers:["stove"] },
+        { key:"hood",          appliance:"range_hood",     circuit:"lights",  role:"kitchen" },
+        { key:"light_kitchen", appliance:"led_light",      circuit:"lights",  role:"kitchen" },
+        { key:"light_living",  appliance:"led_light",      circuit:"lights",  role:"living" },
+        { key:"light_balcony", appliance:"led_light",      circuit:"lights",  role:"balcony" },
+        { key:"light_bath",    appliance:"led_light",      circuit:"lights",  role:"bathroom" },
+        { key:"light_bedroom", appliance:"led_light",      circuit:"lights",  role:"bedroom" }
       ]
     }
   };
   // WIRING, keyed by building id: one building's network.
-  //   board    { name, room, rating, volts?, feeders:[{ panel, label, rating }] }
+  //   board    { name, room, rating, volts?, curve?, feeders:[{ panel, label,
+  //            rating, curve? }] }
   //            the complex's main board: the room it hangs in, its main
   //            breaker's rating, and one feeder breaker per panel it feeds.
+  //            `curve` is each breaker's IEC 60898-1 curve, as on a template.
   //   panels   [{ id, name, room, template?, layout?, rooms:{ role: roomId },
   //              overrides? }]
   //            each unit's panel: the room it hangs in, and either a
@@ -4600,10 +4605,8 @@ x_sn_9 m_sn_sn_sn sn p
   // not be called `board` or `main`; validateWiring() reports a clash.
   // A room nothing wires falls back to the grid directly (containerPowered()).
   //
-  // Empty: no Lima building is wired yet (#289, #250), and wiring one is a
-  // PATCH, since power definitions aren't saved. Every room falls back to the
-  // grid. The `apartment` template stays for the dev seam (simulatePower()
-  // defaults to it) until #289 re-bases it.
+  // Empty: no Lima building is wired yet (#250), and wiring one is a PATCH,
+  // since power definitions aren't saved. Every room falls back to the grid.
   const WIRING = {};
 
   // Straight-line distance between two Locations, rounded to the nearest
@@ -6967,17 +6970,21 @@ x_sn_9 m_sn_sn_sn sn p
   //   panels    { id: { id, building, board, name, room, volts, main, feeder,
   //              circuits:[breakerId], loads:[loadId], roles:{ role: roomId },
   //              rooms:[roomId] } }
-  //   breakers  { id: { id, layer, label, rating, volts, device, room, loads } }
+  //   breakers  { id: { id, layer, label, rating, curve, volts, device, room,
+  //             loads } }
   //             `device` is the panel or board it sits in and `room` the
-  //             room that hangs in; `loads` is every load it feeds. `volts`
-  //             divides its watts into amps: a circuit's own, a panel
-  //             main's and its feeder's the panel's, the board main's the
-  //             board's. A panel or board treats its loads as balanced
-  //             across its two legs, so its current is total watts ÷ volts.
+  //             room that hangs in; `loads` is every load it feeds. `curve`
+  //             is its definition's own, or DEFAULT_BREAKER_CURVE
+  //             (breakerCurve()). `volts` divides its watts into amps: a
+  //             circuit's own, a panel main's and its feeder's the panel's,
+  //             the board main's the board's. A panel or board is
+  //             single-phase, so its current is its loads' total watts ÷
+  //             its volts.
   //   loads     { id: { id, appliance, panel, circuit, room, containers } }
   //   containerLoad  { roomId + KEY_SEP + containerId: loadId }
   //   devices   { roomId: [{ kind:"board"|"panel", id }] } — what hangs there
   //   byLayer   { layer: [breakerId] }
+  function breakerCurve(def){ return (def && def.curve) || DEFAULT_BREAKER_CURVE; }
   function expandWiring(wiring, templates){
     const net = { boards:{}, panels:{}, breakers:{}, loads:{}, containerLoad:{}, devices:{}, byLayer:{}, problems:[] };
     const seen = new Set();
@@ -6996,8 +7003,8 @@ x_sn_9 m_sn_sn_sn sn p
       const board = { id:boardId, building:b, name:bd.name || boardId, room:bd.room,
         volts:bd.volts || PANEL_DEFAULT_VOLTS, main:boardMain, panels:[] };
       net.boards[boardId] = board;
-      net.breakers[boardMain] = { id:boardMain, layer:"board", label:"MAIN", rating:bd.rating, volts:board.volts,
-        device:boardId, room:bd.room, loads:[] };
+      net.breakers[boardMain] = { id:boardMain, layer:"board", label:"MAIN", rating:bd.rating, curve:breakerCurve(bd),
+        volts:board.volts, device:boardId, room:bd.room, loads:[] };
       hang(bd.room, "board", boardId);
       const feeders = bd.feeders || [];
       (w.panels || []).concat(w.common ? [w.common] : []).forEach(pd=>{
@@ -7016,14 +7023,14 @@ x_sn_9 m_sn_sn_sn sn p
           roles:Object.assign({}, rooms), rooms:Array.from(new Set(Object.values(rooms))) };
         net.panels[panelId] = panel;
         board.panels.push(panelId);
-        net.breakers[panelMain] = { id:panelMain, layer:"panel", label:"MAIN", rating:main.rating, volts:panel.volts,
-          device:panelId, room:pd.room, loads:[] };
+        net.breakers[panelMain] = { id:panelMain, layer:"panel", label:"MAIN", rating:main.rating, curve:breakerCurve(main),
+          volts:panel.volts, device:panelId, room:pd.room, loads:[] };
         net.breakers[feederId] = { id:feederId, layer:"feeder", label:feeder ? feeder.label : pd.id,
-          rating:feeder ? feeder.rating : undefined, volts:panel.volts, device:boardId, room:bd.room, loads:[] };
+          rating:feeder ? feeder.rating : undefined, curve:breakerCurve(feeder), volts:panel.volts, device:boardId, room:bd.room, loads:[] };
         hang(pd.room, "panel", panelId);
         (layout.circuits || []).forEach(c=>{
           const circuitId = claim(`${panelId}.${c.key}`);
-          net.breakers[circuitId] = { id:circuitId, layer:"circuit", label:c.label, rating:c.rating, volts:c.volts,
+          net.breakers[circuitId] = { id:circuitId, layer:"circuit", label:c.label, rating:c.rating, curve:breakerCurve(c), volts:c.volts,
             roles:c.roles || [], device:panelId, room:pd.room, loads:[] };
           panel.circuits.push(circuitId);
         });
@@ -7158,15 +7165,21 @@ x_sn_9 m_sn_sn_sn sn p
   // circuits, and each panel and the board is one breaker, its main (#243).
   function consultedLayers(rules){ return rules === "simplified" ? ["panel", "board"] : BREAKER_LAYERS; }
   // How long a breaker takes to trip at `f` times its rating (f > 1), in
-  // minutes: t(f) = T200 ÷ (f − 1)^n, with n = ln(T200 ÷ T135) ÷ ln(0.35),
-  // which passes exactly through the 135% and 200% points (see
-  // BREAKER_T135_MIN). A breaker with no usable rating never trips.
+  // minutes, through the two IEC anchor points (see BREAKER_F_LOW):
+  //   t(f) = tHigh × ((F_HIGH − 1) ÷ (f − 1))^n,
+  //   n = ln(tLow ÷ tHigh) ÷ ln((F_HIGH − 1) ÷ (F_LOW − 1)),
+  // which passes exactly through (F_LOW, tLow) and (F_HIGH, tHigh). A breaker
+  // with no usable rating never trips. Where the result is a minute or less
+  // (F_HIGH and above, up to 32 A), one step's rise fills the heat meter:
+  // time moves in steps of at most a minute (runAwakeStep()), so the breaker
+  // trips at the end of the first step. That is intended: no action is
+  // shorter, and nothing resolves seconds.
   function bandMinutes(bands, rating){ return bands.find(b=> rating <= b.upTo).min; }
   function tripMinutes(rating, f){
     if(!(rating > 0)) return Infinity;
-    const t135 = bandMinutes(BREAKER_T135_MIN, rating), t200 = bandMinutes(BREAKER_T200_MIN, rating);
-    const n = Math.log(t200 / t135) / Math.log(0.35);
-    return t200 / Math.pow(f - 1, n);
+    const tLow = bandMinutes(BREAKER_T_LOW_MIN, rating), tHigh = bandMinutes(BREAKER_T_HIGH_MIN, rating);
+    const n = Math.log(tLow / tHigh) / Math.log((BREAKER_F_HIGH - 1) / (BREAKER_F_LOW - 1));
+    return tHigh * Math.pow((BREAKER_F_HIGH - 1) / (f - 1), n);
   }
   // One look at the network at `minute`, changing nothing. Pure: a function
   // of the expanded network, the appliances, a power state, the rules,
@@ -7233,8 +7246,10 @@ x_sn_9 m_sn_sn_sn sn p
   // happened, `running` being the loads the breaker fed that were drawing
   // when it went. Pure, like powerSnapshot(). Each check runs lowest layer
   // first and looks again after every layer, so a trip below is seen above.
-  //   Instant: a closed breaker whose momentary current exceeds
-  //     INSTANT_TRIP_MULTIPLE × its rating trips at once.
+  //   Instant: a closed breaker whose momentary current exceeds its curve's
+  //     `instant` multiple (BREAKER_CURVES) × its rating trips at once. One
+  //     whose curve is not in BREAKER_CURVES never does (validateWiring()
+  //     reports it).
   //   Heat, the delayed trip: at f = running current ÷ rating, heat rises by
   //     dt ÷ tripMinutes() while f > 1 and drains by dt ÷ HEAT_COOL_MIN
   //     otherwise, never below 0. At 1 the breaker trips. Tripped means off
@@ -7254,7 +7269,8 @@ x_sn_9 m_sn_sn_sn sn p
     layers.forEach(layer=>{
       const snap = look();
       net.byLayer[layer].forEach(id=>{
-        if(breakerClosedIn(p, id) && snap.momentary[id] > INSTANT_TRIP_MULTIPLE * net.breakers[id].rating) trip(id, "instant", snap);
+        const br = net.breakers[id], curve = BREAKER_CURVES[br.curve];
+        if(curve && breakerClosedIn(p, id) && snap.momentary[id] > curve.instant * br.rating) trip(id, "instant", snap);
       });
     });
     layers.forEach(layer=>{
@@ -7340,9 +7356,8 @@ x_sn_9 m_sn_sn_sn sn p
     return live ? br.volts : 0;
   }
   //   The current through a breaker, in amps: one conductor clamped at the
-  //   panel. A main or a feeder reads its total, since a panel's two legs are
-  //   taken as balanced; unbalanced legs are not modelled. A cycling load
-  //   reads whatever it is doing this minute.
+  //   panel. A main or a feeder reads its total, since a panel is
+  //   single-phase. A cycling load reads whatever it is doing this minute.
   function breakerCurrent(id){
     if(!powerNow) refreshPower();
     return powerNow.running[id] || 0;
@@ -8559,9 +8574,11 @@ x_sn_9 m_sn_sn_sn sn p
   //     exactly one of leftOnChance and switchless, a readout with non-empty
   //     on and off words unless it is switchless, and a nameplate rated at
   //     no less than its own watts (nameplateWatts()), every circuit's volts is
-  //     120 or 240, and every circuit's roles are in its panel's rooms;
-  //   every breaker's rating is an NEC 240.6(A) standard size
-  //     (STANDARD_BREAKER_RATINGS).
+  //     220, and every circuit's roles are in its panel's rooms;
+  //   every breaker's rating is an IEC 60898-1 preferred rating
+  //     (STANDARD_BREAKER_RATINGS), its curve is in BREAKER_CURVES, and it
+  //     does not trip at BREAKER_F_NO_TRIP × its rating within
+  //     BREAKER_NO_TRIP_MIN (tripMinutes()), a guard for a later retune.
   // It also lists every room with shelter "full" that no panel's rooms
   // include. That list is a warning while buildings are being wired (#250),
   // and becomes an error in #258. Returns { problems, unwired }. Call it as
@@ -8593,9 +8610,13 @@ x_sn_9 m_sn_sn_sn sn p
     });
     Object.values(net.breakers).forEach(br=>{
       if(!STANDARD_BREAKER_RATINGS.includes(br.rating))
-        problems.push(`${br.id}: rating ${br.rating} A is not an NEC 240.6(A) standard size`);
+        problems.push(`${br.id}: rating ${br.rating} A is not an IEC 60898-1 preferred rating`);
+      if(!Object.prototype.hasOwnProperty.call(BREAKER_CURVES, br.curve))
+        problems.push(`${br.id}: curve "${br.curve}" is not in BREAKER_CURVES`);
+      if(tripMinutes(br.rating, BREAKER_F_NO_TRIP) < BREAKER_NO_TRIP_MIN)
+        problems.push(`${br.id}: trips at ${BREAKER_F_NO_TRIP} × ${br.rating} A within ${BREAKER_NO_TRIP_MIN} min`);
       if(br.layer !== "circuit") return;
-      if(br.volts !== 120 && br.volts !== 240) problems.push(`${br.id}: volts ${br.volts} is not 120 or 240`);
+      if(br.volts !== 220) problems.push(`${br.id}: volts ${br.volts} is not 220`);
       const roles = net.panels[br.device].roles;
       br.roles.forEach(r=>{ if(!roles[r]) problems.push(`${br.id}: role "${r}" has no room in ${br.device}'s rooms`); });
     });
