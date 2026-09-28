@@ -464,7 +464,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.10.3" };
+  const GAME_CONFIG = { VERSION: "0.10.4" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -564,10 +564,12 @@
   // curve: the high end of each curve's band (B 3–5 × In, C 5–10, D 10–20),
   // where the standard guarantees a trip in under 0.1 s. Below it the heat
   // curve handles the current, as the band's low end may take up to 45 s
-  // (B), 15 s (C) or 4 s (D). Home breakers are curve B: a breaker without
-  // its own `curve` is DEFAULT_BREAKER_CURVE.
+  // (B), 15 s (C) or 4 s (D). Home breakers are curve C, as Lima's mostly
+  // are (Tom, first-hand) and as the two-pole breakers sold in Argentina are;
+  // AEA 770's worked example uses B. A breaker without its own `curve` is
+  // DEFAULT_BREAKER_CURVE.
   const BREAKER_CURVES = { B:{ instant:5 }, C:{ instant:10 }, D:{ instant:20 } };
-  const DEFAULT_BREAKER_CURVE = "B";
+  const DEFAULT_BREAKER_CURVE = "C";
   // Judgment calls, retunable: a breaker's heat meter drains fully in
   // HEAT_COOL_MIN below its rating. A home is single-phase at 220 V (AEA
   // 90364-7-770 §770.4.2, from a 220/380 V, 50 Hz supply), which a panel or
@@ -4437,17 +4439,20 @@ x_sn_9 m_sn_sn_sn sn p
   //   startWatts   the total draw at a start; present on a motor load
   //   dutyCycle, cycleMinutes  present on a cycling load: it draws for
   //                dutyCycle × cycleMinutes of every cycleMinutes
-  //   nameplate    what its rating label prints (#249): { amps }, printed as
-  //                "<volts> V · <amps> A" at the entry's own `volts`, or
-  //                { printsWatts:true }, printed as its own `watts` ("10 W"),
-  //                as a bulb's base is; never a second copy of either. A
+  //   nameplate    what its rating label prints (#249), in one of three
+  //                forms: { amps }, printed as "<volts> V · <amps> A" at the
+  //                entry's own `volts`; { printsWatts:true }, printed as its
+  //                own `watts` ("10 W"), as a bulb's base is; or { watts },
+  //                a rating printed in watts that isn't the draw ("16 W"),
+  //                as a cooker's plate is. Never a second copy of either
+  //                figure: `{ watts }` is a different one from the draw. A
   //                nameplate reads above the running draw, as a real one
   //                does. Every entry carries one, rated at no less than its
   //                `watts` (validateWiring()). Shown only in the Electrical
   //                view's circuit tabs (nameplateText()). Picking one real
   //                model per appliance is a judgment call, retunable; each
   //                figure's source is given below.
-  //   No watts are shown anywhere, but a bulb's nameplate (#242, #249).
+  //   No watts are shown anywhere, but on a nameplate (#242, #249).
   // Every figure is a pick inside a sourced range, and retunable.
   //   fridge_freezer  the appliance behind every kitchen's Fridge and Freezer
   //                   pair. Running 100 W: at the 0.35 duty cycle that is
@@ -4467,15 +4472,17 @@ x_sn_9 m_sn_sn_sn sn p
   //                   it is lit whenever power reaches it. Retunable.
   //   range_hood      200 W: an extractor hood draws 130–250 W at most
   //                   (Longvie, primary: "Potencia máxima 200 Watt").
-  //   gas_range       4 W: a gas range's standby draw, "generally less
-  //                   than 5 watts" (Engineer Fix, a US source and the only
-  //                   figure there is); unconfirmed for Argentina (#316). One
-  //                   sold here needs power for its electronic spark ignition
-  //                   and a 220 V oven lamp of at most 15 W (Longvie,
-  //                   primary). Switchless: it is plugged in and has no power
-  //                   switch. The spark's burst while igniting is left
-  //                   unmodelled, so no `startWatts`; the oven and its lamp
-  //                   aren't modelled (#259).
+  //   gas_range       0 W: a basic cooker has no clock or display, so
+  //                   nothing draws while it is idle (#327). Its maximum
+  //                   electrical power at 220 V, 50 Hz is 15 W with an oven
+  //                   light, 16 W with light and ignition, 1 W for a hob
+  //                   with ignition only (Domec's manual, Tabla 3, primary
+  //                   for Domec), so the spark draws about 1 W, only while
+  //                   the button is held: too brief to model, and not a
+  //                   motor's start, so no `startWatts`. Switchless: it is
+  //                   plugged in and has no power switch. The oven and its
+  //                   lamp (15–25 W while lit; Orbis's C9500 lists 25 W,
+  //                   primary) aren't modelled (#259).
   // The hood is a motor, but its start surge is left unmodelled: it carries
   // no `startWatts`. Lima homes have no smoke alarm, and usually no bathroom
   // extractor fan (Tom, first-hand), so neither is an appliance.
@@ -4484,9 +4491,8 @@ x_sn_9 m_sn_sn_sn sn p
   //                   Vondom; its fridge prints 0.75 A).
   //   led_light, hall_light  its own `watts`, printed on the base.
   //   range_hood      its own `watts`: Longvie prints its hoods in watts.
-  //   gas_range       0.1 A, a placeholder: 22 W at 220 V, which covers the
-  //                   4 W standby and sits above it. Unconfirmed; it awaits
-  //                   the cooker's real nameplate (#316).
+  //   gas_range       16 W, printed in watts: Domec's cooker with oven light
+  //                   and ignition (Tabla 3, "Consumo eléctrico máximo").
   // One LED bulb's draw, for every appliance that is one: an E27 LED bulb
   // sold for 220 V draws 9–12 W (12 W gives about 840 lm, a 60 W
   // incandescent's light; secondary).
@@ -4499,15 +4505,16 @@ x_sn_9 m_sn_sn_sn sn p
     hall_light:     { name:"Light",          watts:LED_BULB_WATTS, volts:220, switchless:true, nameplate:{ printsWatts:true } },
     range_hood:     { name:"Range hood",     watts:200, volts:220, leftOnChance:0.05, nameplate:{ printsWatts:true },
       readout:{ on:"Running", off:"Silent" } },
-    gas_range:      { name:"Gas range",      watts:4,   volts:220, switchless:true, nameplate:{ amps:0.1 } }
+    gas_range:      { name:"Gas range",      watts:0,   volts:220, switchless:true, nameplate:{ watts:16 } }
   };
   // What an appliance's nameplate is rated at, in watts, or null when it has
-  // no usable one. The one reading of `nameplate`'s two forms besides the
+  // no usable one. The one reading of `nameplate`'s three forms besides the
   // printed line (nameplateText()).
   function nameplateWatts(a){
     const n = a && a.nameplate;
     if(!n) return null;
     if(n.printsWatts) return a.watts;
+    if(n.watts !== undefined) return Number.isFinite(n.watts) ? n.watts : null;
     return Number.isFinite(n.amps) ? a.volts * n.amps : null;
   }
   // WIRING_TEMPLATES, keyed by id: one unit's layout by room role, so every
@@ -4545,8 +4552,9 @@ x_sn_9 m_sn_sn_sn sn p
   // and balcony (a balcony or a patio). A one-room unit maps every role onto
   // its one room. It is for the dev seam (simulatePower() defaults to it).
   // Its layout is AEA 90364-7-770's own example board (Annex 770-B, a
-  // Mínimo home): B 10 A for lighting (IUG, at most 16 A) and B 16 A for
-  // general sockets (TUG, at most 20 A), both curve B by default. The fridge
+  // Mínimo home): 10 A for lighting (IUG, at most 16 A) and 16 A for
+  // general sockets (TUG, at most 20 A). The example draws both on curve B;
+  // here they take the default curve, DEFAULT_BREAKER_CURVE. The fridge
   // and the gas range plug into the sockets; the hood is on the lighting
   // circuit, which §770.7.1 c allows for extractors. The 32 A main is the
   // largest OCEBA allows a Tarifa 1 supply: a test figure, and a real
@@ -7964,7 +7972,7 @@ x_sn_9 m_sn_sn_sn sn p
   // STOVE_TIMER_STEPS minutes a press, with no clear, no subtract and no cap.
   // It is clockwork, with no battery, so it needs neither the stove on nor
   // power, and turns nothing off. It is not the range's own electronics,
-  // whose standby draw is `gas_range` in APPLIANCES (#270). When it
+  // whose electrics are `gas_range` in APPLIANCES (#270). When it
   // runs down it rings, heard anywhere in the stove's building: the player's
   // room must have a `building`, and the same one. Otherwise it rings unheard.
   // The ring's wording is Tom's.
@@ -8572,9 +8580,10 @@ x_sn_9 m_sn_sn_sn sn p
   //     fixture names is in its room;
   //   every appliance id is in APPLIANCES, every APPLIANCES entry carries
   //     exactly one of leftOnChance and switchless, a readout with non-empty
-  //     on and off words unless it is switchless, and a nameplate rated at
-  //     no less than its own watts (nameplateWatts()), every circuit's volts is
-  //     220, and every circuit's roles are in its panel's rooms;
+  //     on and off words unless it is switchless, and a nameplate in exactly
+  //     one of its forms, rated at no less than its own watts
+  //     (nameplateWatts()), every circuit's volts is 220, and every
+  //     circuit's roles are in its panel's rooms;
   //   every breaker's rating is an IEC 60898-1 preferred rating
   //     (STANDARD_BREAKER_RATINGS), its curve is in BREAKER_CURVES, and it
   //     does not trip at BREAKER_F_NO_TRIP × its rating within
@@ -8602,6 +8611,8 @@ x_sn_9 m_sn_sn_sn sn p
       const rated = nameplateWatts(a);
       if(rated === null) problems.push(`appliance ${id}: no nameplate`);
       else if(rated < a.watts) problems.push(`appliance ${id}: nameplate rated ${rated} W, below its own ${a.watts} W`);
+      const forms = ["amps", "printsWatts", "watts"].filter(k=> a.nameplate && k in a.nameplate);
+      if(forms.length > 1) problems.push(`appliance ${id}: nameplate carries more than one form (${forms.join(", ")})`);
     });
     Object.values(net.boards).forEach(b=> roomExists(b.room, b.id));
     Object.values(net.panels).forEach(p=>{
@@ -10630,7 +10641,10 @@ x_sn_9 m_sn_sn_sn sn p
   // An appliance's nameplate as the Electrical view prints it (POWER
   // SCHEMA). Functional UI text, retunable.
   function nameplateText(a){
-    return "Nameplate: " + (a.nameplate.printsWatts ? `${a.watts} W` : `${a.volts} V · ${a.nameplate.amps} A`);
+    const n = a.nameplate;
+    if(n.printsWatts) return `Nameplate: ${a.watts} W`;
+    if(n.watts !== undefined) return `Nameplate: ${n.watts} W`;
+    return `Nameplate: ${a.volts} V · ${n.amps} A`;
   }
   // The meter buttons the Electrical view offers, each only while its tool
   // is carried: Test on a load row and a breaker row, Clamp on a breaker row
@@ -11331,7 +11345,7 @@ x_sn_9 m_sn_sn_sn sn p
   // Switch off (doSwitchLoad()). A switchless one (the smoke alarm, the gas
   // range) shows neither. Every row here shows its nameplate
   // (nameplateText()) and, while a meter is carried, Test (meterButtons()).
-  // Watts appear nowhere but a bulb's nameplate. Functional UI text,
+  // Watts appear nowhere but on a nameplate. Functional UI text,
   // retunable.
   function renderCircuitTab(list, circuitId, roomId){
     const loads = POWER_NET.breakers[circuitId].loads.map(id=> POWER_NET.loads[id]);
