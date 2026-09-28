@@ -1,8 +1,9 @@
 # Fuel and generators
 
 > **US figures; the game is now set in Argentina (2026-09-26, #237).** Kept as
-> the record of what was researched. Argentine fuel (grades, stations, cans,
-> bottled gas) is to be researched before #239 and #245 are planned.
+> the record of what was researched. Argentine fuel, bottled gas and
+> generators are in `Fuel_AR.md` (#287), which is the target. Carbon monoxide
+> facts are in `Carbon_Monoxide.md`.
 
 Real-world facts for gasoline (#239) and generators (#245). See `README.md`
 for the status labels.
