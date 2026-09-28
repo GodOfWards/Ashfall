@@ -309,13 +309,114 @@ has a modern installation, as above. One on a dirt street has an old board.
 - **The fuse ratings** of an old board, and whether the meter sits in a
   pillar or on the façade in old Lima homes, are **unconfirmed**.
 
-## Not yet researched (open on #311)
+## Appliances as sold in Argentina (#311, 2026-09-28)
 
-- **Old installations:** moved to "Old installations" above (#311).
-- **Appliances as sold in Argentina:** nameplates at 220 V for a fridge, LED
-  bulbs, an extractor hood, a gas cooker's electric ignition, and an electric
-  water heater (*termotanque*) where one is used. The game's current
-  `APPLIANCES` figures are US 120 V nameplates.
+All read 2026-09-28. Makers are named here as sources; game text never names
+them.
+
+**What a Lima home has (Tom, first-hand, 2026-09-28):**
+- **Water is heated by an electric tank heater** (*termotanque eléctrico*).
+- **An electric pump lifts water to the roof tank.** It's common.
+- **No bathroom extractor fan**, usually: a window instead.
+- **No smoke alarm**: rare in homes. No provincial requirement for homes was
+  found either. Buenos Aires province relies on each partido's building code
+  (search summary, secondary).
+
+**Fridge-freezer:**
+- **Energy:** Patrick's cyclic fridge-freezers (models 135/136/141/151: 264,
+  300, 359 and 389 L, class A, R134a, climate class T) use **310, 326, 356
+  and 419 kWh a year**. **Primary** (the maker's manual,
+  [PDF](https://www.canigo.com.ar/wp-content/uploads/manual-de-uso-heladera-Patrick-HPK136.pdf)).
+  That averages **35–48 W** over the year (derived: kWh ÷ 8,760 h).
+  Edesur's list of no-frost models gives 260–420 kWh a year (secondary,
+  [Edesur](https://www.edesur.com.ar/novedades/4224/)).
+- **Nameplate current:** a Vondom fridge (388 L) is **0.75 A** and its
+  freezer (304 L) **1.0 A**, at 220–240 V, 50 Hz. The freezer's defrost heater
+  is **160 W**. **Primary** for Vondom (the maker's store,
+  [page](https://vondom.com.ar/products/heladera-freezer-inverter-no-frost-acero-inoxidable-695-l)).
+- **Starting current:** Embraco's R600a household compressors for
+  200–220 V, 50 Hz (LBP) have a **locked-rotor current of 3.7–8.2 A**:
+  EMI30CNP 3.70, EMI40CNP 4.50, EMU40CLP 7.33, EGAS80CLP 7.90, EMYE70CLP
+  8.20. **Primary** for Embraco (Asia-Pacific catalogue,
+  [PDF](https://www.embraco.com/download/product/embraco-catalog-apa_compressed.pdf)).
+  Which compressors Argentine fridges carry is **unconfirmed**.
+- **From the manuals (primary, Patrick and Drean):**
+  - the fridge wants **220 V / 50 Hz, 198–242 V**, and a voltage stabiliser of
+    at least 1,000 W where the supply strays outside that;
+  - it gets **its own socket**, with **no extension cords, multi-plugs or
+    adapters**, and an earthed three-flat-pin plug;
+  - after unplugging, **wait at least 10 minutes** before plugging it back in.
+
+  [Drean PDF](https://blog.drean.com.ar/wp-content/uploads/2022/05/Manual-Heladera-No-frost-Drean.pdf).
+
+**Lighting:**
+- **Incandescent lamps for general household use have been banned from
+  import and sale since 2010-12-31** (Ley 26.473), and halogen lamps since
+  2019-12-31 (Ley 27.492). Secondary
+  ([Argentina Ambiental](https://argentinambiental.com/legislacion/nacional/ley-27492-prohibicion-importacion-comercializacion-lamparas-incandescentes-halogenas/)).
+  The Boletín Oficial page returned 503.
+- **An E27 LED bulb of 12 W gives about 840 lm, standing in for a 60 W
+  incandescent.** 9 W and 12 W, 220 V bulbs are common on the market.
+  Secondary (retailers:
+  [Kaiser LED](https://www.kaiserled.com.ar/producto/tabla-de-equivalencias-led/)).
+- **A fridge or oven lamp is at most 15 W**, E14 or screw-fit, 220 V (Drean
+  and Longvie manuals, primary).
+
+**Gas cooker and extractor hood** (Longvie, *Manual de Características y
+Especificaciones de Productos*, undated, a trade catalogue;
+**primary** for Longvie,
+[PDF](https://d26lpennugtm8s.cloudfront.net/stores/089/303/rte/MANUAL%20Y%20ESPECIFICACIONES%20LONGVIE.pdf)):
+- **Cookers have electronic spark ignition:** "encendido instantáneo
+  electrónico 'a una mano' en hornallas y horno", with ceramic spark plugs,
+  and an oven lamp at 220 V. Longvie's standard-line 12331B has "encendido
+  electrónico independiente" and is multigas (natural or bottled)
+  ([longvie.com](https://www.longvie.com/Front/showProduct/171), primary).
+  AEA 770 lists "cocinas… a gas que requieran alimentación eléctrica" among
+  the fixed kitchen appliances (above).
+- **The ignition's own draw is unconfirmed.** No nameplate for it was found.
+- **Extractor hoods: 130–250 W maximum** across Longvie's range (for example
+  200 W for a 90 cm island hood with two motors and three speeds, and 130 W
+  for a 60–90 cm hood with halogen lights).
+
+**Water pump (to the roof tank)** (0.5 hp peripheral pumps, sold for lifting
+water to a tank, all at 220 V; secondary, retail listings):
+- Rowa RW-PR60: **0.37 kW, 2.7 A**, 33 m head
+  ([CER América](https://www.cer.com.ar/shop/0019-0033-bomba-periferica-rowa-modelo-rw-pr60-05-hp-eleva-33-mts-220v-15127));
+- Motorarg QB60: **1.7 A**; Czerweny QB60-L1: 0.37 kW (search summaries).
+- **Starting current: unconfirmed.**
+
+**Electric water heater:**
+- Rheem's 85 L wall heater TEC085RH has a **2,000 W element**. **Primary**
+  ([Rheem](https://www.rheem.com.ar/Termotanques/Residenciales/Electricos/Performance/TEC085RH)).
+- Rheem's electric range runs **1,500–3,000 W**, with about 85 L/h recovery
+  for the TEC085RH (search summary, secondary). Señorial sells an 80 L,
+  **1,500 W** model (TESZ-95, retail listing, secondary).
+
+**Extension cords (for #244):**
+- **Cord cable is "tipo taller"** to IRAM NM 247-5 (it replaced IRAM 2158):
+  extra-flexible class 5 copper, PVC sheathed, "no apto para aparatos de
+  calefacción". **Current for a single cable in air** (Argenplas CAT-TT2,
+  2021; **primary** for the maker,
+  [PDF](http://www.argenplas.net/wp-content/uploads/2021/11/Tipo-Taller-IRAM-NM-247-5_web.pdf)):
+
+  | Cable | Current |
+  |---|---|
+  | 3 × 0.75 mm² | 7 A |
+  | 3 × 1 mm² | 10 A |
+  | 3 × 1.5 mm² | 17 A |
+  | 3 × 2.5 mm² | 22 A |
+  | 3 × 4 mm² | 30 A |
+
+- **Cords as sold:** 3 × 1 mm² or 3 × 1.5 mm², **10, 15, 20 or 30 m**, with
+  a 10 A plug and socket (2P+T, IRAM 2073 / IRAM 2063). One 15 m, 3 × 1.5 mm²
+  cord is rated 10 A working, 14 A maximum. Secondary (retail listings,
+  through search summaries).
+
+## Not yet researched
+
 - **CEZ's own connection rules**, if it publishes any beyond the OCEBA's.
 - **The home's real board:** Tom's first-hand knowledge of the Barrio Atucha
   row houses (#305).
+- **Starting currents** of the pump, and of the compressors Argentine fridges
+  actually carry.
+- **A gas cooker's ignition draw.**
