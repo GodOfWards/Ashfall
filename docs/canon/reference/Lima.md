@@ -199,6 +199,11 @@ above it uses the shop's address; private homes get none (#237).
 
 ## Streets and surfaces, from satellite imagery (2026-09-27)
 
+**South of the railway, superseded by Tom (Street View, March 2026;
+2026-09-29):** from **Calle 15 eastwards, every street is paved**; from
+**Calle 17 westwards, every street is unpaved** ("dirt roads", Tom). North of
+the railway, the estimate below still stands.
+
 Judged from Esri World Imagery (about 0.5–1 m per pixel; imagery date
 unknown), not from a survey. Status: estimate.
 
@@ -317,8 +322,9 @@ Status: secondary unless marked; read 2026-09-27.
       is what a sewer's inspection chambers look like; a water main needs
       only small valve covers. **Sewer is the reading; the service isn't
       stated on the cover.**
-    - Whether the Barrio Atucha is on the same sewers, and where they
-      discharge, is unconfirmed.
+    - **The Barrio Atucha has sewers too**: their lids are all over its
+      streets (Tom, Street View, 2026-09-29). Where they discharge is
+      unconfirmed.
 - **Gas:**
   - **Naturgy BAN** is the distributor for the Partido de Zárate, and Campana
     ([Naturgy BAN](https://www.naturgyban.com.ar/)).
