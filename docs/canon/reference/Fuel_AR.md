@@ -9,8 +9,10 @@ region"); connecting a generator to a house is #323. See `README.md` for the
 status labels.
 
 **Decided (Tom):**
-- Lima has no gas network: it's all garrafas (2026-09-27, first-hand;
-  `Lima.md`).
+- **Network gas is Lima's main supply**, with meter boxes on houses all over
+  town and in the Barrio Atucha; **garrafas are likely on the outskirts**
+  (2026-09-29, Street View; `Lima.md`). This replaces "no gas network, all
+  garrafas" (2026-09-27).
 - **Generators and vehicles in the game are designed for nafta Súper**
   (2026-09-28). Premium isn't needed for anything.
 

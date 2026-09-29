@@ -263,6 +263,13 @@ Status: secondary unless marked; read 2026-09-27.
     running it technically from 2013, extended to Lima six months after
     Zárate ([Enlace Crítico, 2013-04-16](https://www.enlacecritico.com/zarate/aysa-comenzara-a-operar-tecnicamente-en-aguas-de-zarate-sapem/)).
     Now through **ENDEZA**, the municipal water entity.
+  - **A source not yet read:** ENDEZA's *Servicio Red de Abastecimiento de
+    Agua Potable, Partido de Zárate* (7 October 2025), its summer 2025–2026
+    projection, which may cover Lima's wells and network
+    ([endeza.gob.ar](https://endeza.gob.ar/wp-content/uploads/2025/10/PROYECCION-VERANO-2025-2026-7-octubre.pdf);
+    the Wayback Machine has a copy of 2025-12-04). On 2026-09-29 the live
+    site served a bot check and the archive refused the download. A person
+    opening it in a browser should get it.
   - **All from groundwater wells:** **65 electric pumping wells** serve
     Zárate and Lima, all running at their limit.
   - **No town tank (Tom, 2026-09-28).** An earlier note said Lima's system
@@ -430,8 +437,7 @@ through the OSM API (`api/0.6/map`, the box 34.070–34.025 S, 59.225–59.170 W
   **Atucha** (about 11 km north-west) and **Las Palmas** (about 5 km
   south-east).
 - **Two level crossings inside the town** (OSM `railway=level_crossing`), and
-  more along the line outside it. Whether they have lights, barriers or
-  bells is unconfirmed (#288).
+  more along the line outside it. They have a bell only (Tom, below).
 - **Automatic barriers on the Zárate–Rosario Mitre, as of April 2025:**
   - The state bought and installed barriers, luminous signals and traffic
     lights at crossings in Zárate, Alsina, Baradero, Río Tala, San Pedro and
