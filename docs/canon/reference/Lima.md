@@ -199,13 +199,16 @@ above it uses the shop's address; private homes get none (#237).
 
 ## Streets and surfaces, from satellite imagery (2026-09-27)
 
-**Superseded by Tom (Street View, March 2026; 2026-09-29):**
-- **South of the railway:** from **Calle 15 eastwards, every street is
-  paved**; from **Calle 17 westwards, every street is unpaved** ("dirt
-  roads", Tom).
-- **North of the railway:** **Calle 111 is paved all along, and every street
-  west of it is paved**, the Barrio Atucha's row houses included; **east of
-  it, the streets are dirt and gravel**.
+**Superseded by Tom (Street View, March 2026; 2026-09-29).** The town is
+four quarters, split north and south by the railway, and east and west by
+Calle 111 in the north and by Calle 15 / Calle 17 in the south:
+- **North-west: all paved, Calle 111 included.** The Barrio Atucha's row
+  houses are here.
+- **North-east: mostly dirt.** The **two streets closest to the railway and
+  parallel to it are gravel**: the Camino Provincial Secundario 038-01 and
+  the Camino a Baradero, going by the OSM names.
+- **South-west (Calle 17 and west): mostly dirt**, with little gravel found.
+- **South-east (Calle 15 and east): all paved.**
 
 The estimate below is kept as the first record.
 
