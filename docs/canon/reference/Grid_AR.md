@@ -162,11 +162,98 @@ how it stops. Lima's own distributor (CEZ) and its feeds are in `Lima.md`,
   **Unconfirmed**: a North American estimate by an anonymous columnist, not
   a study; it is the only one found.
 
+## Who operates each layer (#346, 2026-09-29)
+
+- **CAMMESA's operations centre (COC) is at Pérez, Santa Fe**, near
+  Rosario: "the highest operating authority of the SADI", coordinating the
+  system and dispatch in real time. A **backup emergency operations centre
+  at the Polo Tecnológico de Rosario** holds **up to 15 operators**
+  (CAMMESA staff and outside agents), for events that "could affect
+  operation from the Control Centre at Pérez". Shift pattern and operators
+  per shift at the COC: unconfirmed. Secondary, 2026-09-29:
+  [Argentina.gob.ar](https://www.argentina.gob.ar/noticias/el-subsecretario-de-energia-electrica-inauguro-el-nuevo-centro-de-operaciones-de-emergencia)
+  (undated), [ETDEWEB, "CAMMESA control center controllers qualification"](https://www.osti.gov/etdeweb/biblio/20930150)
+  (search summary).
+- **Transener runs its whole high-voltage network remotely from a single
+  control centre at the ET Rosario Oeste, also in Pérez**, "with a reduced
+  staff of highly qualified personnel". Its substations are **unattended**:
+  technicians assigned permanently to each station do the maintenance and
+  keep **passive on-call rotas (*guardias pasivas*)**, going to the station
+  at once in an emergency. Secondary (search summary of Transener's
+  "Operaciones de líneas y estaciones transformadoras"; the page itself
+  wouldn't load), 2026-09-29:
+  [Transener](https://www.transener.com.ar/en/operacionesdelineas/).
+- **Transba (Lima's 132 kV supplier) is telecontrolled** over SCADA from its
+  **COTDT at the Ezeiza substation**, which controls **75 high-to-medium
+  voltage transformer stations** across the province, with regional centres
+  at Bragado, San Nicolás, Olavarría and Bahía Blanca. Remote command from
+  the operations centre is "the usual operating mode"; local operation is
+  inhibited while it holds. About 5,500 km of 500/220/132/66 kV lines.
+  Secondary, 2026-09-29:
+  ["Sistema de telecontrol de Transener y Transba"](http://www.luisosens.com.ar/archivos/Telecontrol_Transener.pdf),
+  [silo.tips copy](https://silo.tips/download/sistema-de-telecontrol-de-transba-sa-tema-01-centros-de-control)
+  (search summaries; the paper's date unconfirmed).
+- **Yacyretá** (20 Kaplan turbines, about 14 % of the SADI's energy in
+  2019): a main control room with a **shift chief and operators** for
+  dispatch and load control, plus an extra control room per five turbines;
+  **about 420 workers** in all, over 300 of them in maintenance (140
+  Argentine and 170 Paraguayan in the main plant area). Secondary,
+  2026-09-29:
+  [La Nación, 2019-07-25 (updated 2024-01-10)](https://www.lanacion.com.ar/economia/negocios/yacyreta-dentro-como-es-central-produce-14-nid2270742/).
+  How long it would keep generating unattended: only the informal estimate
+  above (hydro: days to weeks).
+- **CEZ, Lima's distributor:** about **38,961 users** by another count (the
+  41,000 in `Lima.md` is CEZ's own). Its staff, crews and on-call rotas were
+  **not found**. Secondary, 2026-09-29:
+  [Unión Industrial de Zárate](http://www.uizarate.com.ar/asociadas/cez/)
+  (search summary).
+
+## Backup fuel at thermal plants (#346)
+
+- **Central Termoeléctrica Guillermo Brown** (General Daniel Cerri, near
+  Bahía Blanca): **two 290 MW turbines** (580 MW) that burn gas, gasoil or
+  biodiesel. **Three 10,000 m³ gasoil tanks and one 5,000 m³ biodiesel
+  tank**; consumption about **1,800 m³ a day per 300 MW turbine**. Secondary,
+  2026-09-29:
+  [Casa Rosada, inauguration](https://www.casarosada.gob.ar/pdf/Inauguraci_n_Central_Termoel_ctrica_Guillermo_Brow.pdf),
+  [Cooperativa CALF](https://www.cooperativacalf.com.ar/la-central-guillermo-brown-ya-aporta-580-megavatios-al-sistema-interconectado-nacional/)
+  (search summaries).
+  - **Derived, not stated by the source:** 35,000 m³ at 3,600 m³ a day is
+    **about 10 days with both turbines at full load**, about 19 with one.
+- **Central Térmica Ensenada Barragán:** two Siemens gas turbines, up to
+  567 MW, gas or diesel, **two tanks totalling 45,000 m³**. Its consumption
+  wasn't given. Secondary, 2026-09-29:
+  [0221, 2023-01-30](https://www.0221.com.ar/nota/2023-1-30-18-27-0-como-es-la-obra-que-inauguro-alberto-fernandez-en-ensenada)
+  (search summary).
+- So a dual-fuel plant's own tanks hold **days to a couple of weeks** of
+  full-load running, if someone is there to switch it to liquid fuel and
+  run it. Two plants only; not a figure for the fleet.
+
+## What the industry says about losing its staff (#346)
+
+- **No study was found that says how long a grid stays up as its operators
+  are lost.** What was found:
+  - NERC (the North American reliability body) called **the loss of
+    critical staff "the most fundamental threat"** to the bulk power system
+    in its *Pandemic Preparedness and Operational Assessment*, spring 2020,
+    and warned that control centres or plants could be **temporarily shut
+    down** if enough of their operators fell ill, despite sequestration.
+  - **Real-time operation "is not fully automated and requires continuous
+    human intervention"**, in normal running and in faults alike (an IEEE
+    Access paper, 2020).
+  - The US utilities' association (EEI) planned for **up to 40 % of the
+    workforce out sick**.
+  - Secondary (search summaries), 2026-09-29:
+    [APPA on NERC's report](https://www.publicpower.org/periodical/article/nerc-highlights-potential-summer-power-grid-issues-tied-pandemic),
+    [Utility Dive](https://www.utilitydive.com/news/grid-operators-cancel-travel-shift-to-remote-meetings-as-industry-preps-f/573988/),
+    [IEEE Access, doi:10.1109/ACCESS.2020.3041247](https://doi.org/10.1109/ACCESS.2020.3041247),
+    [Utility Products](https://www.utilityproducts.com/covid-19/article/14175992/workforce-supply-chain-disruptions-key-elements-in-ongoing-pandemic-preparations).
+
 ## Not yet known
 
-- How CAMMESA's operations centre, Transener and CEZ are staffed, and
-  whether any of them sequestered staff in 2020.
-- How long a thermal plant runs on stored backup fuel.
+- How many operators per shift CAMMESA's COC and Transener's and Transba's
+  control centres run, and whether any of them sequestered staff in 2020.
+- CEZ's staff, network control and repair crews.
 - The under-frequency relief thresholds and shares.
 - Any study (rather than an informal estimate) of how long an unattended
   grid stays up.
