@@ -204,9 +204,11 @@ four quarters, split north and south by the railway, and east and west by
 Calle 111 in the north and by Calle 15 / Calle 17 in the south:
 - **North-west: all paved, Calle 111 included.** The Barrio Atucha's row
   houses are here.
-- **North-east: mostly dirt.** The **two streets closest to the railway and
-  parallel to it are gravel**: the Camino Provincial Secundario 038-01 and
-  the Camino a Baradero, going by the OSM names.
+- **North-east: mostly dirt**, with these exceptions (Tom, 2026-09-29):
+  - **paved:** the Camino a Baradero and the Camino Provincial Secundario
+    038-01, the roads alongside the railway, and **Calle 50**;
+  - **gravel:** **Calle 109**, and the two streets closest to the railway and
+    parallel to it (which two isn't yet pinned down).
 - **South-west (Calle 17 and west): mostly dirt**, with little gravel found.
 - **South-east (Calle 15 and east): all paved.**
 
