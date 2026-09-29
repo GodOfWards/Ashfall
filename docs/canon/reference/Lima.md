@@ -199,10 +199,15 @@ above it uses the shop's address; private homes get none (#237).
 
 ## Streets and surfaces, from satellite imagery (2026-09-27)
 
-**South of the railway, superseded by Tom (Street View, March 2026;
-2026-09-29):** from **Calle 15 eastwards, every street is paved**; from
-**Calle 17 westwards, every street is unpaved** ("dirt roads", Tom). North of
-the railway, the estimate below still stands.
+**Superseded by Tom (Street View, March 2026; 2026-09-29):**
+- **South of the railway:** from **Calle 15 eastwards, every street is
+  paved**; from **Calle 17 westwards, every street is unpaved** ("dirt
+  roads", Tom).
+- **North of the railway:** **Calle 111 is paved all along, and every street
+  west of it is paved**, the Barrio Atucha's row houses included; **east of
+  it, the streets are dirt and gravel**.
+
+The estimate below is kept as the first record.
 
 Judged from Esri World Imagery (about 0.5–1 m per pixel; imagery date
 unknown), not from a survey. Status: estimate.
