@@ -61,4 +61,5 @@ rule. A coding session reads neither.
 | `Electrical.md` | **The US record, no longer the target:** US wiring code (NEC) and Kentucky's adoption, breakers (UL 489), panels and service, appliances and nameplates, lighting, GFCI, cords, meters, rail-crossing standby power |
 | `Fuel_AR.md` | **Argentine fuel, the game's target (#287):** nafta and gasoil grades, blends and shelf life, stations and cans, garrafas (butane, propane, duration, Programa Hogar), portable generators |
 | `Fuel_and_Generators.md` | **The US record, no longer the target:** gasoline (grades, shelf life, stations, cars, cans) and portable generators |
+| `Calendar_AR.md` | **Around February 2025 (#329):** summer holidays by quincena, the labour law's leave, Buenos Aires province's school calendar, Carnival |
 | `Carbon_Monoxide.md` | Exposure effects, the body's level, CO alarms, generator placement |
