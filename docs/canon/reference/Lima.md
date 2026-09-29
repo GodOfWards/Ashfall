@@ -207,10 +207,11 @@ Calle 111 in the north and by Calle 15 / Calle 17 in the south:
 - **North-east: mostly dirt**, with these exceptions (Tom, 2026-09-29):
   - **paved:** the Camino a Baradero and the Camino Provincial Secundario
     038-01, the roads alongside the railway, and **Calle 50**;
-  - **gravel:** **Calle 109**, and the two streets closest to the railway and
-    parallel to it (which two isn't yet pinned down).
+  - **gravel:** **Calles 42, 44, 46 and 109**. OSM names Calles 44 and 46
+    but not Calle 42.
 - **South-west (Calle 17 and west): mostly dirt**, with little gravel found.
-- **South-east (Calle 15 and east): all paved.**
+- **South-east (Calle 15 and east): all paved**, and so is the strip on
+  Calle 16 between Calles 15 and 17.
 
 The estimate below is kept as the first record.
 
