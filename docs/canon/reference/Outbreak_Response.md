@@ -29,6 +29,22 @@ outbreak would do.
   and [Argentina.gob.ar (DNU 260/2020)](https://www.argentina.gob.ar/coronavirus/dnu),
   listed but not read.
 
+## What stayed open under the lockdown
+
+- **DNU 297/2020, art. 6, exempted essential activities** from the ASPO,
+  among them: wholesale and retail supermarkets and **neighbourhood shops
+  (*comercios minoristas de proximidad*)**, **pharmacies**, hardware
+  stores, vets, **garrafa supply**; the food, hygiene and medicine
+  industries and their supply chains; maintenance of basic services
+  (water, electricity, gas, communications) and emergency care; public
+  transport, goods transport, oil, fuels and LPG. Everything else closed.
+  Secondary, 2026-09-29:
+  [Ministerio Público Fiscal, guide to the ASPO's exceptions](https://www.mpf.gob.ar/covid/files/2020/04/Actualizaci%C3%B3n-de-la-Gu%C3%ADa-de-Deberes-y-Excepciones-del-cumplimiento-del-ASPO-y-de-la-prohibici%C3%B3n-de-circular.pdf),
+  [El Tribuno, 2020-03-20](https://www.eltribuno.com/nota/2020-3-20-10-30-0-informate-sobre-las-excepciones-para-asegurar-el-abastecimiento-de-alimentos-medicamentos-y-combustibles)
+  (search summaries). The decree itself is on the
+  [Boletín Oficial](https://www.boletinoficial.gob.ar/detalleAviso/primera/227042/20200320),
+  not read.
+
 ## Panic buying
 
 - From the WHO's declaration, supermarkets and wholesalers saw "panic and
