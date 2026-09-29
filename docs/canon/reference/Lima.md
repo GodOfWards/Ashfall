@@ -109,8 +109,32 @@ town since 2026-09-26 (#237), replacing Henderson, Kentucky.
   - each under a pyramid (hipped) red-tile roof, about 12 × 12 m over the
     eaves.
 
-  Whether they're one storey or two is unconfirmed. **The player's home is
-  one of them** (canon). Property listings found for "Atucha" are quintas and
+  **The player's home is one of them** (canon).
+- **The row houses from the street** (Tom, Google Street View captures of
+  March 2026, 2026-09-28; first-hand for what the photos show). Calle 90 Bis,
+  between Calles 117 and 119, is almost exactly the player's home (#341):
+  - **two storeys**, in mirror-image pairs, under red-tile roofs with steep
+    gables facing the street. The satellite reading above (hipped roofs,
+    three or four to a row, around shared courtyards) doesn't hold for this
+    block;
+  - a **single-storey garage** beside each house;
+  - **bars on the ground-floor windows**; the upper windows have roller
+    shutters and no bars;
+  - an **open front lawn** with no wall or fence, tiled paths, and a raised
+    rubbish basket on a post at the kerb;
+  - **no water tank visible on the roofs**, unlike the rest of town (Tom);
+  - split air-conditioning units on some houses, and a satellite dish;
+  - **at the front edge of each plot, the utilities:** a white pillar
+    holding the **electricity meter** (two windows at the top) and a grey
+    box marked with an electrical warning ("RIESGO"), and beside it a low
+    box, fed by a **yellow pipe**, that is the **natural gas connection**
+    (Tom). Yellow is the usual colour for gas pipe in Argentina.
+- **A maintenance depot for the barrio,** on Calle 119 facing the row houses:
+  a fenced, single-storey building of concrete panels, signed "Depósito de
+  Mantenimiento – Barrio Atucha II – UG CNA II - IV CN". NA-SA's Atucha II
+  unit keeps it. **The barrio is looked after by the plant's operator.**
+  A provincial police post (Google Maps: "Puesto Policía Prov. Bs As") stands
+  a little to the south-west. Tom, Street View, March 2026. Property listings found for "Atucha" are quintas and
   newer houses, not these chalets.
 - NA-SA had about 1,400 workers at some point (El Destape, 2023, search
   summary) against about 3,000 in a later figure (above). They wore "the
@@ -175,6 +199,23 @@ above it uses the shop's address; private homes get none (#237).
 
 ## Streets and surfaces, from satellite imagery (2026-09-27)
 
+**Superseded by Tom (Street View, March 2026; 2026-09-29).** The town is
+four quarters, split north and south by the railway, and east and west by
+Calle 111 in the north and by Calle 15 / Calle 17 in the south:
+- **North-west: all paved, Calle 111 included.** The Barrio Atucha's row
+  houses are here.
+- **North-east: mostly dirt**, with these exceptions (Tom, 2026-09-29):
+  - **paved:** the Camino a Baradero and the Camino Provincial Secundario
+    038-01, the roads alongside the railway, and **Calle 50**;
+  - **gravel:** **Calles 42, 44, 46 and 109**. OSM names Calles 44 and 46
+    but not Calle 42.
+- **South-west (Calle 17 and west): mostly dirt**, with little gravel found.
+  **Calle 14 is paved all along**, through this quarter too.
+- **South-east (Calle 15 and east): all paved**, and so is the strip on
+  Calle 16 between Calles 15 and 17.
+
+The estimate below is kept as the first record.
+
 Judged from Esri World Imagery (about 0.5–1 m per pixel; imagery date
 unknown), not from a survey. Status: estimate.
 
@@ -223,23 +264,49 @@ Status: secondary unless marked; read 2026-09-27.
     running it technically from 2013, extended to Lima six months after
     Zárate ([Enlace Crítico, 2013-04-16](https://www.enlacecritico.com/zarate/aysa-comenzara-a-operar-tecnicamente-en-aguas-de-zarate-sapem/)).
     Now through **ENDEZA**, the municipal water entity.
+  - **A source not yet read:** ENDEZA's *Servicio Red de Abastecimiento de
+    Agua Potable, Partido de Zárate* (7 October 2025), its summer 2025–2026
+    projection, which may cover Lima's wells and network
+    ([endeza.gob.ar](https://endeza.gob.ar/wp-content/uploads/2025/10/PROYECCION-VERANO-2025-2026-7-octubre.pdf);
+    the Wayback Machine has a copy of 2025-12-04). On 2026-09-29 the live
+    site served a bot check and the archive refused the download. A person
+    opening it in a browser should get it.
   - **All from groundwater wells:** **65 electric pumping wells** serve
     Zárate and Lima, all running at their limit.
-  - **Lima's system is different from Zárate's: pumps lift the water into a
-    tank, and the town is fed from it** (La Voz de Zárate, 2024-10-08, "El
-    problema con el agua en Zárate"; refuses automated readers, read through
-    a search summary). **Where Lima's tank is, and its size, are
-    unconfirmed.** Searches on 2026-09-28 found no location: web searches
-    and OpenStreetMap lookups (Overpass timed out; Nominatim found nothing).
-    It is left to Tom's Street View (#288, #300).
+  - **No town tank (Tom, 2026-09-28).** An earlier note said Lima's system
+    differs from Zárate's, with pumps lifting the water into a tank that feeds
+    the town. Its only source was a search summary of La Voz de Zárate
+    (2024-10-08, "El problema con el agua en Zárate"); the article itself
+    refuses automated readers and was never read. No tank has been found:
+    - web searches and Nominatim found nothing;
+    - OpenStreetMap's data for the town (the API's `map` call, box
+      34.070–34.025 S, 59.225–59.170 W, 2026-09-28) has no water tower,
+      storage tank, water well, pumping station or water works;
+    - Tom hasn't seen one.
+
+    **The game treats Lima as having no town tank.** The summary's claim is
+    set aside as unsupported, not as disproved.
   - A new well for Lima was to give about 100,000 litres an hour into the
     distribution ring (Municipalidad de Zárate, search summary). Pressure is
     a chronic summer problem, with a "definitive solution" promised for 2027
     ([Municipalidad, 2025-10-09](https://zarate.gob.ar/programa-de-servicio-de-abastecimiento-de-agua/)).
   - **What it means for the game:** running water depends on electric well
-    pumps. When the grid fails, **the tank's contents are all there is**.
-    This is derived, not sourced, and it replaces the Henderson reasoning
-    about gravity storage.
+    pumps, with no town storage between them and the pipes. When the grid
+    fails, the network has nothing to hold it up, and a home has only what
+    is in its own tank. This is derived, not sourced, and it replaces the
+    Henderson reasoning about gravity storage. How long the pipes keep any
+    pressure is #300's to decide.
+  - **The water network runs under the paved streets only** (Tom, Street
+    View, March 2026; 2026-09-29, first-hand). A home's connection shows as a
+    small cover set in the pavement in front of it. Homes on dirt and gravel
+    streets have none. So:
+    - **On a paved street,** the roof tank is filled from the network.
+    - **On an unpaved street,** there is no network, and the house's own pump
+      fills its tank. Where it draws from (a private well, *perforación*) is
+      the only source left, but it isn't observed.
+  - **Roof tanks on every house outside the Barrio Atucha** (Tom, Street
+    View, March 2026). None is visible in the barrio, whose streets are
+    paved and on the network.
   - **In practice, many homes aren't on the network** (Tom, 2026-09-27,
     first-hand): "it's really common to not have network water, so each
     house would have its own tank and pump". A house's own pump fills its
@@ -254,20 +321,53 @@ Status: secondary unless marked; read 2026-09-27.
     ([Río Negro, ARSA](https://salud.rionegro.gov.ar/articulo/51906/arsa-remarca-la-importancia-de-contar-con-tanque-de-reserva-domiciliario),
     [Río Negro, tanques de reserva](https://salud.rionegro.gov.ar/articulo/48105/tanques-de-reserva-elemento-clave-en-el-hogar-para-asegurar-el-servicio)).
     Not a Buenos Aires province rule, and not measured in Lima. **The
-    Barrio Atucha's own tanks are unconfirmed.** The game uses 1,000 L per
+    Barrio Atucha's own tanks are unconfirmed**, and none is visible on the
+    row houses' roofs (Tom, Street View, 2026-09-28). A tank inside the roof
+    space isn't ruled out. Where the barrio's water comes from (the town's
+    network or the plant) is unconfirmed. The game uses 1,000 L per
     home, as a retunable figure (`handoffs/lima-release.md`, phase 7).
   - **House pumps:** a typical tank-filling pump sold in Argentina is
     **½ HP (about 370 W)**, moving on the order of **33 L a minute**
     (retail listings, secondary, 2026-09-27; figures vary by model).
-  - **Sewers: none. Lima is all septic tanks** (Tom, 2026-09-27,
-    first-hand).
+  - **Sewers: on the paved streets only** (Tom, Street View captures of
+    March 2026, 2026-09-29). Round cast-iron manhole covers lettered
+    **"OSN"** sit in the roadway of every paved street; one is at Calle 52
+    and Calle 117, on the Barrio Atucha's southern edge. **Gravel and dirt
+    streets have none**, so homes there have septic tanks. This replaces
+    Tom's earlier "no sewers, all septic tanks" (2026-09-27).
+    - OSN is Obras Sanitarias de la Nación, the national water and sewer
+      utility from 1912 until its services went to concession in 1993
+      ([es.wikipedia](https://es.wikipedia.org/wiki/Obras_Sanitarias_de_la_Naci%C3%B3n),
+      read 2026-09-29; secondary). The network is therefore older than 1993,
+      most likely.
+    - OSN ran water and sewers alike, so the lettering alone doesn't say
+      which. A full-size cover in the roadway, repeated along the streets,
+      is what a sewer's inspection chambers look like; a water main needs
+      only small valve covers. **Sewer is the reading; the service isn't
+      stated on the cover.**
+    - **The Barrio Atucha has sewers too**: their lids are all over its
+      streets (Tom, Street View, 2026-09-29). Where they discharge is
+      unconfirmed.
 - **Gas:**
   - **Naturgy BAN** is the distributor for the Partido de Zárate, and Campana
     ([Naturgy BAN](https://www.naturgyban.com.ar/)).
   - **Litoral Gas** covers Baradero, San Pedro, Ramallo and San Nicolás
     ([Litoral Gas](https://www.litoral-gas.com.ar/site/sobre-nosotros/empresa/sobre-nosotros/)).
-  - **Lima has no gas network: it's all garrafas** (Tom, 2026-09-27,
-    first-hand). Bottled LPG for cooking and heating.
+  - **Network gas is the main supply; garrafas are likely on the outskirts**
+    (Tom, 2026-09-29, revising his "no gas network, all garrafas" of
+    2026-09-27). **Gas meter boxes are on houses all over the town**, set in
+    a niche in the front wall on the street side, with a vented metal door
+    (Tom, Street View, March 2026; one on Calle 7 between Calles 18 and 20).
+    Which streets the network doesn't reach is unconfirmed.
+  - **The Barrio Atucha has natural gas** (Tom, Street View,
+    2026-09-28: a gas meter box on each row house, above). A natural gas
+    line does reach Lima: "las localidades de Zárate y Lima, que tienen gas
+    natural", **"sobre todo porque en la segunda hace falta abastecer a la
+    central nuclear Atucha"** (Perfil, 2013-05-26, read directly; secondary
+    for the gas network,
+    [Perfil](https://www.perfil.com/noticias/politica/el-gas-llega-al-country-de-de-vido-pero-pasa-de-largo-por-un-barrio-humilde-20130524-0050.phtml)).
+    So the line came for the plant, and the plant's barrio is on it. OSM maps
+    no gas pipeline in the area (2026-09-28).
 - **Fuel:**
   - **Zárate:** Shell (Justa Lima & Castelli), Axion (19 de Marzo &
     Ituzaingó) and YPF (Gallesio & Hipólito Yrigoyen), per La Voz de Zárate
@@ -342,8 +442,7 @@ through the OSM API (`api/0.6/map`, the box 34.070–34.025 S, 59.225–59.170 W
   **Atucha** (about 11 km north-west) and **Las Palmas** (about 5 km
   south-east).
 - **Two level crossings inside the town** (OSM `railway=level_crossing`), and
-  more along the line outside it. Whether they have lights, barriers or
-  bells is unconfirmed (#288).
+  more along the line outside it. They have a bell only (Tom, below).
 - **Automatic barriers on the Zárate–Rosario Mitre, as of April 2025:**
   - The state bought and installed barriers, luminous signals and traffic
     lights at crossings in Zárate, Alsina, Baradero, Río Tala, San Pedro and
