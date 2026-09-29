@@ -110,10 +110,63 @@ how it stops. Lima's own distributor (CEZ) and its feeds are in `Lima.md`,
   [Infobae, 2025-02-10](https://www.infobae.com/economia/2025/02/10/ola-de-calor-la-argentina-alcanzo-un-nuevo-record-de-consumo-de-electricidad-y-hay-cortes-de-luz-en-el-interior/),
   [La Nación](https://www.lanacion.com.ar/economia/ola-de-calor-se-registro-un-nuevo-record-de-consumo-electrico-nid10022025/).
 
+## Staffing, and running without people
+
+- **Power stations are staffed around the clock.** Combined-cycle plants
+  commonly run a **five-shift rotation of 12-hour shifts**; a 300–600 MW
+  combined-cycle plant has about **25–40 staff** in all, not all on shift.
+  Secondary (an O&M consultancy's benchmark, US-oriented), 2026-09-29:
+  [USPE Global](https://uspeglobal.com/articles/power-plant-om-staffing-levels/)
+  (search summary). Argentine plants' own figures are unconfirmed.
+- **Gas pipeline compressor stations are built to run unattended**,
+  started, stopped and set remotely over SCADA from a control centre, with
+  small maintenance crews on site. The transmission system is robust: if a
+  compressor station drops out, gas bypasses it and pressure falls
+  gradually; gas plants keep running while their inlet pressure holds.
+  Secondary, 2026-09-29:
+  [ASME IPC 2002, "Remote Operation of Unattended Pipeline Compressor Stations"](https://asmedigitalcollection.asme.org/IPC/proceedings/IPC2002/36207/1049/293609),
+  [NETL, "Natural Gas Compressors and Processors"](https://www.netl.doe.gov/projects/files/NGCompressorsandProcessors%E2%80%93OverviewandPotentialImpactonPowerSystemReliability_071817.pdf)
+  (search summaries). Argentina's pipelines (TGS, TGN) not checked.
+- **Argentine distributors under the 2020 lockdown split their control
+  rooms so one crew could be isolated without losing the network.** Edesur
+  added two backup centres, making **four** (two for low voltage, two for
+  medium and high), each with its own team of operators; Edenor already had
+  **two identical control centres in separate buildings**, each able to run
+  100 % of the network. The aim: "to be ready if one of the work groups had
+  to be isolated". Secondary, 2026-09-29:
+  [La Nación, 2020-03-15](https://www.lanacion.com.ar/economia/coronavirus-edesur-edenor-se-preparan-seguir-prestando-nid2343596/).
+- **In the US, grid operators were sequestered on site in 2020.** NYISO
+  kept 37 people living in trailers at its control centre and a backup site
+  15 miles away (14 operators each), on 12-hour shifts, with a cook and
+  cleaners sequestered too; PJM and National Grid (about 200 people) did the
+  same from April 2020. Secondary, 2026-09-29:
+  [Smart Energy International](https://www.smart-energy.com/industry-sectors/energy-grid-management/new-york-grid-operators-self-isolate-over-covid-19-fears/),
+  [NBC News](https://www.nbcnews.com/tech/security/prepared-worst-electrical-grid-workers-isolate-coronavirus-spreads-n1173171),
+  [APPA](https://www.publicpower.org/blog/power-industrys-mission-essential-workers-ensure-flow-power-during-pandemic).
+  Whether CAMMESA or Transener did the same in 2020 wasn't found.
+- **CEZ runs a 24-hour telephone line for Lima's complaints**, with
+  operators "exclusive" to Lima (2015). Primary:
+  [CEZ, "Call Center Lima"](https://cezarate.com/2015/01/call-center-lima/).
+  How CEZ's network control and repair crews are staffed is unconfirmed.
+- **How long a grid lasts with no one at all: an informal estimate only.**
+  A Straight Dope column (Science Advisory Board, undated), citing unnamed
+  plant operators and pipeline engineers and the 2003 North American
+  blackout report, puts it at: scattered blackouts within **4–6 hours**, much
+  of the system unstable by **12 hours**, most of the continent dark within
+  **24 hours**, a few isolated sites by a week. By plant: coal needs an
+  operator response to a critical alarm every 1–3 hours and trips within
+  12–18 hours; nuclear might run a few days to a week; hydro days or weeks;
+  gas pipelines hold pressure 1–3 days unattended. The weak link is the
+  interconnected grid, not any one plant's fuel.
+  [Straight Dope](https://www.straightdope.com/21343298/when-the-zombies-take-over-how-long-till-the-electricity-fails).
+  **Unconfirmed**: a North American estimate by an anonymous columnist, not
+  a study; it is the only one found.
+
 ## Not yet known
 
-- How the COC, the power stations and CEZ are staffed: shifts, crews on
-  call, and how few people each needs to keep running.
-- How long a thermal plant runs without its gas supply, or on stored
-  backup fuel.
+- How CAMMESA's operations centre, Transener and CEZ are staffed, and
+  whether any of them sequestered staff in 2020.
+- How long a thermal plant runs on stored backup fuel.
 - The under-frequency relief thresholds and shares.
+- Any study (rather than an informal estimate) of how long an unattended
+  grid stays up.
