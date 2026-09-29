@@ -272,6 +272,13 @@ Status: secondary unless marked; read 2026-09-27.
     is in its own tank. This is derived, not sourced, and it replaces the
     Henderson reasoning about gravity storage. How long the pipes keep any
     pressure is #300's to decide.
+  - **Roof tanks on every house outside the Barrio Atucha** (Tom, Street
+    View, March 2026; 2026-09-29). None is visible in the barrio. Tom reads
+    them as homes pumping from the ground. The tanks alone don't show that:
+    a raised reserve tank is also what a home on a low-pressure network
+    keeps, as the regulation below requires of every connected home, and
+    Lima's pressure is a chronic summer problem (above). **Whether they're
+    fed from a private well or from the network is unconfirmed.**
   - **In practice, many homes aren't on the network** (Tom, 2026-09-27,
     first-hand): "it's really common to not have network water, so each
     house would have its own tank and pump". A house's own pump fills its
@@ -294,8 +301,24 @@ Status: secondary unless marked; read 2026-09-27.
   - **House pumps:** a typical tank-filling pump sold in Argentina is
     **½ HP (about 370 W)**, moving on the order of **33 L a minute**
     (retail listings, secondary, 2026-09-27; figures vary by model).
-  - **Sewers: none. Lima is all septic tanks** (Tom, 2026-09-27,
-    first-hand).
+  - **Sewers: on the paved streets, at least** (Tom, Street View captures of
+    March 2026, 2026-09-29). Round cast-iron manhole covers lettered
+    **"OSN"** sit in the roadway all over Lima, at least on every paved
+    street; one is at Calle 52 and Calle 117, on the Barrio Atucha's southern
+    edge. This replaces Tom's earlier "no sewers, all septic tanks"
+    (2026-09-27), which may still hold for the unpaved outskirts.
+    - OSN is Obras Sanitarias de la Nación, the national water and sewer
+      utility from 1912 until its services went to concession in 1993
+      ([es.wikipedia](https://es.wikipedia.org/wiki/Obras_Sanitarias_de_la_Naci%C3%B3n),
+      read 2026-09-29; secondary). The network is therefore older than 1993,
+      most likely.
+    - OSN ran water and sewers alike, so the lettering alone doesn't say
+      which. A full-size cover in the roadway, repeated along the streets,
+      is what a sewer's inspection chambers look like; a water main needs
+      only small valve covers. **Sewer is the reading; the service isn't
+      stated on the cover.**
+    - Whether the Barrio Atucha is on the same sewers, and where they
+      discharge, is unconfirmed.
 - **Gas:**
   - **Naturgy BAN** is the distributor for the Partido de Zárate, and Campana
     ([Naturgy BAN](https://www.naturgyban.com.ar/)).
@@ -303,10 +326,10 @@ Status: secondary unless marked; read 2026-09-27.
     ([Litoral Gas](https://www.litoral-gas.com.ar/site/sobre-nosotros/empresa/sobre-nosotros/)).
   - **Network gas is the main supply; garrafas are likely on the outskirts**
     (Tom, 2026-09-29, revising his "no gas network, all garrafas" of
-    2026-09-27). His evidence is Street View: no empty bottles seen from the
-    street. That is weak on its own, since garrafas are kept indoors or in a
-    cabinet. Gas meter boxes on the town's houses would settle it. **How far
-    the network reaches is unconfirmed.**
+    2026-09-27). **Gas meter boxes are on houses all over the town**, set in
+    a niche in the front wall on the street side, with a vented metal door
+    (Tom, Street View, March 2026; one on Calle 7 between Calles 18 and 20).
+    Which streets the network doesn't reach is unconfirmed.
   - **The Barrio Atucha has natural gas** (Tom, Street View,
     2026-09-28: a gas meter box on each row house, above). A natural gas
     line does reach Lima: "las localidades de Zárate y Lima, que tienen gas
