@@ -249,6 +249,74 @@ how it stops. Lima's own distributor (CEZ) and its feeds are in `Lima.md`,
     [IEEE Access, doi:10.1109/ACCESS.2020.3041247](https://doi.org/10.1109/ACCESS.2020.3041247),
     [Utility Products](https://www.utilityproducts.com/covid-19/article/14175992/workforce-supply-chain-disruptions-key-elements-in-ongoing-pandemic-preparations).
 
+## Anchors for the estimates below (2026-09-29)
+
+- **Buenos Aires province's electricity cooperatives:** FEDECOBA's
+  member cooperatives serve about **500,000 electricity users** with **more
+  than 2,100 employees**, about **240 users per employee**. (All the
+  province's cooperatives together: about 1,057,711 users, some 200
+  cooperatives.) Secondary, 2026-09-29:
+  [FEDECOBA via ESSApp](https://www.essapp.coop/cooperativas/fedecoba-federacion-de-cooperativas-de-electricidad-y-servicios-publicos-de-la),
+  [Provincia de Buenos Aires](https://gba.gob.ar/comunicacion_publica/gacetillas/las_200_cooperativas_el%C3%A9ctricas_de_la_provincia_recibir%C3%A1n_un)
+  (search summaries).
+- **Edenor, for scale:** 4,682 direct employees plus about 6,000
+  contractors (2023). Secondary:
+  [Edenor, company profile](https://www.edenor.com/inversores/es/compania/perfil-de-la-compania)
+  (search summary).
+- **The 2020 lockdown cut demand.** National consumption in April 2020 fell
+  **11.5 %** year on year, the steepest fall in 20 years; the last week of
+  April averaged **12,166 MW** against 14,377 MW a year before (−15.4 %).
+  **Large industrial users drew about 60 % less** in the first stage of the
+  lockdown; commercial and industrial demand together fell 21 % in April.
+  Secondary, 2026-09-29:
+  [Infobae, 2020-05-21](https://www.infobae.com/economia/2020/05/21/coronavirus-en-la-argentina-en-abril-la-demanda-electrica-en-las-industrias-fue-la-mas-baja-de-los-ultimos-20-anos/),
+  [La Arena, 2020-05-25](https://www.laarena.com.ar/la-pampa/2020-5-25-0-47-32-la-peor-caida-del-consumo-electrico-de-la-historia),
+  [IDB blog](https://blogs.iadb.org/energia/es/demanda-y-precio-de-la-energia-electrica-en-argentina-impacto-de-la-pandemia-y-tendencias/).
+
+## Estimates — not facts (#346, Tom asked, 2026-09-29)
+
+**Status: unconfirmed.** Reasoned from the facts in this file, for design
+use until something better is found. Replace them the moment a source
+turns up.
+
+- **CEZ's staff: about 150–200 people.** At the cooperatives' average of
+  about 240 users per employee, CEZ's roughly 39,000–41,000 users give
+  about 165; its large industrial load and extra services (fibre, TV)
+  suggest the upper end.
+  - **Who keeps the network running at night: a handful.** Most likely one
+    or two people at a network desk in Zárate and two or three on-call
+    crews of two for Zárate and Lima together, perhaps one based at the
+    Lima office. The pattern of passive on-call rotas is Transener's
+    (above); CEZ's own is unknown.
+  - **The local network is passive.** Its feeders and 829 transformer
+    substations need no one while nothing breaks; fuses and reclosers cut
+    a fault off on their own. **Without crews, each fault leaves its part of
+    the network dark for good**: a transformer failing in the heat, a
+    branch on a line. So Lima would lose power **street by street, at
+    random**, for as long as the supply above it holds.
+- **How long the national grid lasts: probably days, not weeks.**
+  - **With no one at all:** hours to about a day (the informal estimate
+    above; nothing better found).
+  - **As staff are lost:** the airborne strain kills over about a week, so
+    control rooms, plants and crews thin out with everyone else rather than
+    all at once. Lockdown sequestration (2020 practice) doesn't save them:
+    the strain is silent for 5–10 days, so teams would be sequestered
+    already infected. The resistant would remain, a few in each room.
+  - **What holds it up meanwhile:** demand falls, as in 2020 (industry
+    first, 60 % less in the first lockdown stage), which eases the load.
+    Automatic protections ride out single faults by shedding load, but
+    **nobody restores what is shed**, so the grid shrinks with each fault.
+  - **What brings it down:** the daily swing between the afternoon peak
+    and the night with no one re-dispatching; thermal plants tripping as
+    their crews die, with no one to restart or switch them to stored fuel;
+    and the pipelines' pressure falling after 1–3 days without their
+    control rooms.
+  - **Estimate:** most of the grid fails **within a few days to about ten
+    days of the wave breaking**, in pieces rather than one event. Islands
+    around hydro plants or a determined resistant crew could last longer,
+    perhaps two weeks. **Three weeks (the game's `POWER_FAILS_DAY = 21`) is
+    at the far end** and needs a reason: a crew that held on.
+
 ## Not yet known
 
 - How many operators per shift CAMMESA's COC and Transener's and Transba's
