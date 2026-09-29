@@ -210,6 +210,7 @@ Calle 111 in the north and by Calle 15 / Calle 17 in the south:
   - **gravel:** **Calles 42, 44, 46 and 109**. OSM names Calles 44 and 46
     but not Calle 42.
 - **South-west (Calle 17 and west): mostly dirt**, with little gravel found.
+  **Calle 14 is paved all along**, through this quarter too.
 - **South-east (Calle 15 and east): all paved**, and so is the strip on
   Calle 16 between Calles 15 and 17.
 
@@ -295,13 +296,17 @@ Status: secondary unless marked; read 2026-09-27.
     is in its own tank. This is derived, not sourced, and it replaces the
     Henderson reasoning about gravity storage. How long the pipes keep any
     pressure is #300's to decide.
+  - **The water network runs under the paved streets only** (Tom, Street
+    View, March 2026; 2026-09-29, first-hand). A home's connection shows as a
+    small cover set in the pavement in front of it. Homes on dirt and gravel
+    streets have none. So:
+    - **On a paved street,** the roof tank is filled from the network.
+    - **On an unpaved street,** there is no network, and the house's own pump
+      fills its tank. Where it draws from (a private well, *perforación*) is
+      the only source left, but it isn't observed.
   - **Roof tanks on every house outside the Barrio Atucha** (Tom, Street
-    View, March 2026; 2026-09-29). None is visible in the barrio. Tom reads
-    them as homes pumping from the ground. The tanks alone don't show that:
-    a raised reserve tank is also what a home on a low-pressure network
-    keeps, as the regulation below requires of every connected home, and
-    Lima's pressure is a chronic summer problem (above). **Whether they're
-    fed from a private well or from the network is unconfirmed.**
+    View, March 2026). None is visible in the barrio, whose streets are
+    paved and on the network.
   - **In practice, many homes aren't on the network** (Tom, 2026-09-27,
     first-hand): "it's really common to not have network water, so each
     house would have its own tank and pump". A house's own pump fills its
@@ -324,12 +329,12 @@ Status: secondary unless marked; read 2026-09-27.
   - **House pumps:** a typical tank-filling pump sold in Argentina is
     **½ HP (about 370 W)**, moving on the order of **33 L a minute**
     (retail listings, secondary, 2026-09-27; figures vary by model).
-  - **Sewers: on the paved streets, at least** (Tom, Street View captures of
+  - **Sewers: on the paved streets only** (Tom, Street View captures of
     March 2026, 2026-09-29). Round cast-iron manhole covers lettered
-    **"OSN"** sit in the roadway all over Lima, at least on every paved
-    street; one is at Calle 52 and Calle 117, on the Barrio Atucha's southern
-    edge. This replaces Tom's earlier "no sewers, all septic tanks"
-    (2026-09-27), which may still hold for the unpaved outskirts.
+    **"OSN"** sit in the roadway of every paved street; one is at Calle 52
+    and Calle 117, on the Barrio Atucha's southern edge. **Gravel and dirt
+    streets have none**, so homes there have septic tanks. This replaces
+    Tom's earlier "no sewers, all septic tanks" (2026-09-27).
     - OSN is Obras Sanitarias de la Nación, the national water and sewer
       utility from 1912 until its services went to concession in 1993
       ([es.wikipedia](https://es.wikipedia.org/wiki/Obras_Sanitarias_de_la_Naci%C3%B3n),
