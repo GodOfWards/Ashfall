@@ -142,9 +142,10 @@ makes tritium, and it is most of what the plants release:
 | Atucha I | 2021 | 610 | 610 |
 | Atucha II | 2019 | 940 | 400 |
 | Atucha II | 2020 | 1,000 | 850 |
-| Atucha II | 2021 | 610 | n/a |
+| Atucha II | 2021 | 610 | 610 |
 
-- For Atucha I, a little over **98 %** of all discharges are tritium.
+- Tritium is a little over **98 %** of Atucha I's discharges, and about
+  **94 %** of Atucha II's.
 - **Tritium is detected** in downwind moisture samples, in the Paraná
   downstream, and in local vegetables and milk. The report calls the values
   "not relevant from a public exposure viewpoint".
