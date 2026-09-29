@@ -49,6 +49,18 @@ does make radioactive material a hazard**. This file answers that: it can
   dry store is **passively ventilated**, "without needing electrical supply".
   Secondary, press.
 
+## What the road shows (Tom, Street View, March 2026; 2026-09-29)
+
+The road from Lima ends at the plant's entrance:
+- **A guard post** stands on an island between the lanes, marked out with
+  yellow hatching and traffic cones.
+- **Beyond it, the domes and most of the buildings are in plain view**: a
+  large grey dome beside red-brick blocks, a car park, and a tower crane.
+- A switchyard of poles and transformers stands to the right of the
+  entrance, with small white buildings beside it.
+
+Which unit's dome is which isn't identified from the image.
+
 ## Emergency power, and what was added after Fukushima
 
 **Primary** throughout this section: the ARN's national reports to the
@@ -248,8 +260,6 @@ game only shows what the road shows.
   (above).
 - The pools' **water volumes and depths**, and their current heat loads.
 - **How much heavy water** each unit holds.
-- **What is visible from outside the fence.** Street View along the road's
-  end would show it (Tom).
 
 Sources to try: NA-SA's technical pages, IAEA PRIS, and the ARN's
 stress-test report itself (it isn't published online; the national reports
