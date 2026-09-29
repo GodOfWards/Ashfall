@@ -46,7 +46,7 @@ adopts it.
   and public landmarks as a local does, but not what's inside or what's left.
   **Their home is a row house in the Barrio Complejo Nuclear Atucha** (Tom,
   2026-09-27; #284), the terraced strip on the barrio's western side, north
-  of the railway. How this fits the opening (#137) is open.
+  of the railway. How this fits the opening (#137, deferred) is open.
 - **The game is in English; places keep their Spanish names** (`CLAUDE.md`,
   "Writing game text").
 - **The wider setting is a string of towns with a city nearby:** Lima first,
@@ -63,15 +63,14 @@ adopts it.
 
 - **What day zero is.** The day it began everywhere, or the day this town
   emptied, and its exact day in February 2025.
-- **The player's home in Lima** (#284). The Henderson choice (The Imperial)
-  lapsed with the move.
 - **What happens to Atucha after the collapse** (#290, #285): Atucha II
   running and Atucha I mid-overhaul in February 2025, the staff gone, and the
   grid failing. It has to be established; the game never states it.
 - **Fictional brands and trading names** (Tom, 2026-09-27): no real brand or
   private business name appears in the game (`CLAUDE.md`, "The world is
   real"). Inventing fictional ones is lore, for later.
-- **Why the player is still in town** a few days after (#137).
+- **Why the player is still in town** a few days after. The hospital-bed
+  opening (#137) was one answer; it is deferred (Tom, 2026-09-29).
 - **Why grid power fails when it does** (#220). Proposed, not decided: an
   accumulation of unrepaired faults, area by area, rather than one event.
 - **How the player notices the grid failing** (#220).
