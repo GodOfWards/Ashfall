@@ -385,6 +385,19 @@ Named points in the town, with the address OSM gives. Status as of February
 - **Hospital Intermedio Municipal "Aurelio Aleotti"**, Calle 6 560. This is
   at odds with La Nación's "no hospital" (2015); it may have opened or been
   upgraded since.
+  - **It was a health unit being converted into a hospital.** La Opinión
+    reported that works had begun to "transform the Aurelio Aleotti health
+    unit (*unidad sanitaria*) of Lima into a municipal intermediate
+    hospital", for $3,300 million in three phases, paid from the
+    municipality's taxes on nuclear activity. No bed count or completion
+    date given.
+    [La Opinión](https://laopinionline.ar/articulo/zarate-comenzo-la-obra-del-hospital-intermedio-municipal-aurelio-aleotti-en-lima),
+    read 2026-09-29; the page gave its date as 2026-09-03, which isn't
+    verified. Secondary. **If that date holds, in February 2025 Lima had a
+    health unit, not a hospital**, and the nearest hospitals were in Zárate
+    (the Hospital Provincial Virgen del Carmen, named by the Municipalidad de
+    Zárate). What would confirm it: the article's date on the page itself,
+    or the municipality's announcement.
 - **Banco Nación**, Avenida 11 245. **Correo Argentino**, Avenida 11 171.
 - **Parroquia San Isidro Labrador** (the parish church), on Avenida 11.
 - **Delegación Municipal de Lima**, on Calle 8.
