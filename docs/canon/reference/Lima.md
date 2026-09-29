@@ -301,19 +301,21 @@ Status: secondary unless marked; read 2026-09-27.
     ([Naturgy BAN](https://www.naturgyban.com.ar/)).
   - **Litoral Gas** covers Baradero, San Pedro, Ramallo and San Nicolás
     ([Litoral Gas](https://www.litoral-gas.com.ar/site/sobre-nosotros/empresa/sobre-nosotros/)).
-  - **Lima has no gas network: it's all garrafas** (Tom, 2026-09-27,
-    first-hand). Bottled LPG for cooking and heating.
-  - **Except the Barrio Atucha, which has natural gas** (Tom, Street View,
+  - **Network gas is the main supply; garrafas are likely on the outskirts**
+    (Tom, 2026-09-29, revising his "no gas network, all garrafas" of
+    2026-09-27). His evidence is Street View: no empty bottles seen from the
+    street. That is weak on its own, since garrafas are kept indoors or in a
+    cabinet. Gas meter boxes on the town's houses would settle it. **How far
+    the network reaches is unconfirmed.**
+  - **The Barrio Atucha has natural gas** (Tom, Street View,
     2026-09-28: a gas meter box on each row house, above). A natural gas
     line does reach Lima: "las localidades de Zárate y Lima, que tienen gas
     natural", **"sobre todo porque en la segunda hace falta abastecer a la
     central nuclear Atucha"** (Perfil, 2013-05-26, read directly; secondary
     for the gas network,
     [Perfil](https://www.perfil.com/noticias/politica/el-gas-llega-al-country-de-de-vido-pero-pasa-de-largo-por-un-barrio-humilde-20130524-0050.phtml)).
-    So the line came for the plant, and the plant's barrio is on it. How far
-    it reaches the rest of the town is unconfirmed; Tom's first-hand
-    knowledge is that the town uses garrafas. OSM maps no gas pipeline in
-    the area (2026-09-28).
+    So the line came for the plant, and the plant's barrio is on it. OSM maps
+    no gas pipeline in the area (2026-09-28).
 - **Fuel:**
   - **Zárate:** Shell (Justa Lima & Castelli), Axion (19 de Marzo &
     Ituzaingó) and YPF (Gallesio & Hipólito Yrigoyen), per La Voz de Zárate
