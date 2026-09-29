@@ -42,9 +42,24 @@ town, and who was away, in the weeks around the collapse.
   (below) is the likely reason for the change; no source says so. What
   would confirm it: the province's own calendar (abc.gob.ar, "Calendario
   Escolar 2025", which returned 503 when tried).
-- **So children were out of school for all of February 2025.** When the 2024
-  school year ended in the province is **unconfirmed** (the sources read
-  don't say).
+- **The school year normally ends between November and December** (Tom,
+  from living there, 2026-09-29). The exact end of the province's 2024 year
+  is unconfirmed (the sources read don't say).
+- **Some schools open in February** for students who still owe subjects
+  from the year before: traditionally exam sittings (*mesas de examen*) for
+  *materias previas* (Tom, first-hand, 2026-09-29).
+  - **In February 2025 this took a new form in Buenos Aires province.** The
+    2025 secondary reform replaced the exam sittings with "intensification"
+    periods, and repeating a whole year with repeating by subject. The
+    **FORTE modules** (*Módulos para el Fortalecimiento de las Trayectorias
+    Educativas*) ran **14–27 February 2025** and 10–21 March 2025.
+    Secondary (search summaries, 2026-09-29):
+    [ABC, Comunicado 3/2025, 2025-02-12](https://abc.gob.ar/sad/sites/default/files/2025-02/COMUNICADO%20N%C2%B03%20MODULOS%20FORTE-RESOC-2024-5507-GDEBA-DGCYE.pdf),
+    [0221](https://www.0221.com.ar/provincia/la-intensificacion-materias-las-escuelas-secundarias-la-provincia-se-pondra-marcha-febrero-n103575),
+    [Infobae, 2024-06-06](https://www.infobae.com/educacion/2024/06/06/en-2025-cambiara-la-secundaria-en-la-provincia-de-buenos-aires-ya-no-se-repetira-un-ano-completo-sino-por-materia/).
+- **So most children were out of school in February 2025**, but secondary
+  schools weren't empty in its second half: teachers, staff and the
+  students who owed subjects were in.
 
 ## Holidays
 
