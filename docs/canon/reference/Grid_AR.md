@@ -249,6 +249,66 @@ how it stops. Lima's own distributor (CEZ) and its feeds are in `Lima.md`,
     [IEEE Access, doi:10.1109/ACCESS.2020.3041247](https://doi.org/10.1109/ACCESS.2020.3041247),
     [Utility Products](https://www.utilityproducts.com/covid-19/article/14175992/workforce-supply-chain-disruptions-key-elements-in-ongoing-pandemic-preparations).
 
+## Keeping crews uninfected, and what a shrunken grid runs on (2026-09-29)
+
+For the question Tom asked: how most of the grid could hold on, given that
+the airborne strain can be protected against.
+
+- **Nuclear control rooms are built to keep airborne contamination out.**
+  "Habitability systems" isolate the control room, **pressurize it** (at
+  least 0.125 inches of water above its surroundings, so unfiltered air
+  can't leak in) and pass outside air through **redundant HEPA and charcoal
+  filter trains**, with the sustenance and sanitation for operators to stay
+  inside through an accident. Designed for radioactive particles and
+  iodine, not microbes; HEPA filters also stop particles of virus size, but
+  no source read tests them against a virus. Secondary (US NRC plant
+  safety reports), 2026-09-29:
+  [NRC, Susquehanna FSAR 6.4](https://www.nrc.gov/docs/ML2329/ML23291A398.pdf),
+  [NRC, Engineered Safety Features 6.4](https://www.nrc.gov/docs/ML0916/ML091671494.pdf),
+  [NRC Regulatory Guide 1.197](https://www.nrc.gov/docs/ML0314/ML031490664.pdf)
+  (search summaries). **Whether Atucha's control rooms have the same is
+  unconfirmed** (`Atucha.md` doesn't say).
+- **Respirators help, if fitted.** Reviews find N95/FFP2 respirators prevent
+  more respiratory infections among health workers than surgical masks
+  (about 73 fewer clinical infections per 1,000 workers, low-quality
+  evidence), and that **fit-testing decides whether they work at all**;
+  there's no high-quality evidence specific to SARS-CoV-2. Secondary,
+  2026-09-29:
+  [PMC7269249 (GRADE rapid review)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7269249/),
+  [PMC4868605 (meta-analysis)](https://pmc.ncbi.nlm.nih.gov/articles/PMC4868605/),
+  [J Infect Dis (fit-tested N95 + HEPA)](https://academic.oup.com/jid/article/226/2/199/6582941).
+- **Sequestration worked in 2020, with supplies coming in.** NYISO's team of
+  37 (31 operators, 2 managers, 2 facilities staff, 2 café workers) was
+  **tested before going in** and sequestered from **23 March 2020**, about
+  three weeks after New York's first case, for what was expected to be
+  weeks to months; by early May it was winding down, with no infections
+  reported. Food and supplies came from outside. Secondary, 2026-09-29:
+  [POWER](https://www.powermag.com/nyiso-workers-now-living-at-grid-control-centers/),
+  [Daily Energy Insider](https://dailyenergyinsider.com/infrastructure/24894-in-isolation-nyiso-volunteers-work-to-keep-power-running-for-nearly-20-million-new-yorkers/),
+  [S&P Global](https://www.spglobal.com/marketintelligence/en/news-insights/latest-news-headlines/falling-covid-19-cases-may-signal-beginning-of-the-end-for-nyiso-sequestration-58409473)
+  (search summaries; the last refused a direct read).
+- **Atucha had COVID-19 cases.** The ARN reported positive cases at the
+  Atucha complex and at Embalse in December 2020; the page refused a direct
+  read, so the numbers and measures are unconfirmed. Secondary:
+  [ARN](https://www.argentina.gob.ar/arn/sucesos-notificados/informacion-sobre-casos-positivos-de-covid-19-en-las-centrales-nucleares-23122020).
+- **What the grid could shrink to without gas.** Hydro and nuclear need no
+  fuel chain. In 2019 the SADI had **10,812 MW of hydro and 1,755 MW of
+  nuclear** installed (above), against a February 2025 peak of 30,240 MW.
+  Hydro depends on river flow: in **April 2020 hydro generation fell 38.8 %**
+  year on year, mostly from low flows at Yacyretá and Salto Grande.
+  Secondary, 2026-09-29:
+  [Extra long Argentinian lockdown (PMC9007721)](https://pmc.ncbi.nlm.nih.gov/articles/PMC9007721/).
+- **Atucha II refuels on line, about one fuel element a day at full
+  power**, so its core is kept going by a working crew. What happens to its
+  output if refuelling stops is unconfirmed. Secondary, 2026-09-29:
+  [Petrotecnia, "Atucha II"](https://www.petrotecnia.com.ar/petro_08/AtuchaII_SP.pdf)
+  (search summary).
+- **The gas pipelines' own reserve (line pack)** in hours: not found. TGS
+  runs about 9,248 km of pipeline, TGN about 40 % of the gas injected into
+  the trunk lines. Secondary:
+  [TGS](https://en.wikipedia.org/wiki/Transportadora_de_Gas_del_Sur),
+  [TGN](https://www.tgn.com.ar/en/operations-and-services/tgn-system/).
+
 ## Anchors for the estimates below (2026-09-29)
 
 - **Buenos Aires province's electricity cooperatives:** FEDECOBA's
@@ -316,6 +376,29 @@ turns up.
     around hydro plants or a determined resistant crew could last longer,
     perhaps two weeks. **Three weeks (the game's `POWER_FAILS_DAY = 21`) is
     at the far end** and needs a reason: a crew that held on.
+- **If crews sealed themselves in before they were exposed** (Tom: the
+  airborne strain can be protected against):
+  - **Who has to hold:** CAMMESA's and Transener's control rooms at Pérez
+    (the backup centre takes 15 operators), the main plants' shift crews,
+    and — for the thermal half of the grid — the gas chain's control rooms.
+    Substations and pipeline compressors run unattended.
+  - **When they would have to seal:** before the airborne strain reached
+    them, so **during the news from abroad**, not at the lockdown. In 2020
+    it took NYISO about three weeks from New York's first case; with the
+    2020 playbook in hand, a quicker start is plausible.
+  - **What they can't seal:** field crews. Every fault out on the lines is
+    permanent, so the grid **shrinks by pieces** even while its centre holds.
+  - **What it runs on if the gas chain fails:** hydro and nuclear, about
+    12.5 GW installed in 2019, which could plausibly carry a demand that has
+    collapsed (industry shut, most households gone), river flows
+    permitting.
+  - **What ends it:** the sealed crews' food and water, with nothing coming
+    in (2020's sequestrations were supplied from outside); faults piling up;
+    a breach by the dead; the operators' own endurance.
+  - **Estimate:** a shrinking national grid held by sealed crews could last
+    **weeks, perhaps two to six**, while individual towns and streets drop
+    out of it one fault at a time. On this reading **three weeks is
+    plausible for the grid as a whole**, but not for every street in Lima.
 
 ## Not yet known
 
