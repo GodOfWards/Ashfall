@@ -728,9 +728,8 @@
   //   building      the NAME of the building this room is inside, e.g.
   //                 "Pharmacy". Absent when the room is not inside a building
   //                 (every stop). It holds a building's name and nothing
-  //                 else, ever: not a street, not an address. Note that
-  //                 doors[].building and a master key's `building` are a DIFFERENT
-  //                 field holding a building *id* ("pharmacy"), unrelated to this.
+  //                 else, ever: not a street, not an address. The id is
+  //                 `buildingId`.
   //   buildingId    the id of the building instance the room is in (see
   //                 BUILDING TYPES), absent outside one. Definition data:
   //                 doMove() records it in state.enteredBuildings.
@@ -956,8 +955,9 @@
   //                   (REGISTRY_ONLY_FIELDS). Saves before 0.8 carry an
   //                   instance copy named `illnessChance`, which
   //                   migrateCookingRelease() deletes on load.
-  //     masterKey     key unlocks every door in `building`
-  //     building      building association for a masterKey
+  //     masterKey     key unlocks every door in `buildingId`
+  //     buildingId    building association for a masterKey: a building
+  //                   instance's id, matched against a door's `buildingId`
   //     doorId        specific door a (non-master) key unlocks
   //     isWatch       grants access to the clock display
   //     cooks         { minutes, restores, foodPoisoningChance? } — the item
@@ -4279,7 +4279,7 @@ x_sn_9 m_sn_sn_sn sn p
     Object.keys(doorSpecs).forEach(k=>{
       const d = doorSpecs[k];
       const sides = d.between.map(roomId);
-      const def = { locked:!!d.locked, sides, building:inst.id };
+      const def = { locked:!!d.locked, sides, buildingId:inst.id };
       if(d.lockable === false) def.lockable = false;
       if(d.label) def.label = d.label;
       if(d.lock && d.lock !== "key"){ def.lock = d.lock; def.inside = sides[1]; }
@@ -4374,9 +4374,8 @@ x_sn_9 m_sn_sn_sn sn p
   //   (buildDoors()), so every reader sees one shape.
   //   Definition fields:
   //     sides     the two rooms the door physically separates
-  //     building  a building instance's id ("pharmacy"): which master key
-  //               opens it. Not room.building, which holds a name (see ROOM
-  //               SCHEMA).
+  //     buildingId a building instance's id ("pharmacy"): which master key
+  //               opens it (a master key's `buildingId`, ITEM DATA SCHEMA).
   //     locked    the authored starting lock state
   //     lockable  optional, default true. false: an interior door with no
   //               lock, which never locks, offers no key action and never
@@ -6219,7 +6218,7 @@ x_sn_9 m_sn_sn_sn sn p
       actions.push({ label:"Equip", onClick:()=>doEquip(side, index) });
     if(it.category === "Key"){
       if(it.masterKey){
-        doorsTouchingRoom(state.currentRoom).filter(doorId=>doors[doorId].building===it.building && doorLocks(doors[doorId])).forEach(doorId=>{
+        doorsTouchingRoom(state.currentRoom).filter(doorId=>doors[doorId].buildingId===it.buildingId && doorLocks(doors[doorId])).forEach(doorId=>{
           const label = (doors[doorId].locked ? "Unlock the " : "Lock the ") + doorLabel(doorId, state.currentRoom) + " door";
           actions.push({ label, onClick:()=>doToggleLock(doorId) });
         });
@@ -6389,7 +6388,7 @@ x_sn_9 m_sn_sn_sn sn p
     for(const list of invPools()){
       for(const it of list){
         if(it.category !== "Key") continue;
-        if(it.masterKey && it.building === door.building) return it;
+        if(it.masterKey && it.buildingId === door.buildingId) return it;
         if(!it.masterKey && it.doorId === doorId) return it;
       }
     }
@@ -7204,8 +7203,9 @@ x_sn_9 m_sn_sn_sn sn p
     });
   }
   // Sleep's runtime flags, never saved: `asleep` while doSleep()'s loop runs,
-  // so an event picks its asleep line; `wokenUp` set when a waking event
-  // fires during it, which ends the sleep after that step.
+  // and while a blackout runs (advanceTime()), so an event picks its asleep
+  // line; `wokenUp` set when a waking event fires during either, which ends
+  // it after that step.
   let asleep = false, wokenUp = false;
   // Where a room is, for the siren: "near" within SIREN_NEAR_M of
   // SIREN_SOURCE_STOP, "outside" at a rural or rail stop or in a building
@@ -7238,8 +7238,9 @@ x_sn_9 m_sn_sn_sn sn p
   // fires once, in the step whose interval crosses `at` (minutes since the
   // collapse), in every time loop, since all of them run
   // applyWorldTicking(). Derived, never stored: a save from before one hears
-  // it again. One marked `wakes` ends a sleep (doSleep()); `line` is told
-  // whether the player is asleep, and so being woken.
+  // it again. One marked `wakes` ends a sleep (doSleep()) or a blackout
+  // (advanceTime()); `line` is told whether the player is asleep, a blackout
+  // included, and so being woken.
   const CLOCK_EVENTS = [
     { at: POWER_FAILS_MIN + SIREN_AFTER_FAIL_MIN, wakes: true,
       line: (roomId, sleeping)=> SIREN_LINES[sirenPlace(roomId)][sleeping ? "asleep" : "awake"] }
@@ -7319,8 +7320,8 @@ x_sn_9 m_sn_sn_sn sn p
   // SCHEMA). Pure: the dev seam expands a test network through it
   // (simulatePower()). A reference that does not resolve is skipped and
   // reported in `problems`, which validateWiring() reads.
-  //   boards    { id: { id, building, name, room, volts, main, panels:[id] } }
-  //   panels    { id: { id, building, board, name, room, volts, main, feeder,
+  //   boards    { id: { id, buildingId, name, room, volts, main, panels:[id] } }
+  //   panels    { id: { id, buildingId, board, name, room, volts, main, feeder,
   //              circuits:[breakerId], loads:[loadId], roles:{ role: roomId },
   //              rooms:[roomId] } }
   //             `feeder` is null on a direct board's panel (POWER SCHEMA's
@@ -7357,7 +7358,7 @@ x_sn_9 m_sn_sn_sn sn p
       if(!bd){ net.problems.push(`${b}: no board`); return; }
       const boardId = claim(`${b}.board`);
       const boardMain = claim(`${boardId}.main`);
-      const board = { id:boardId, building:b, name:bd.name || boardId, room:bd.room,
+      const board = { id:boardId, buildingId:b, name:bd.name || boardId, room:bd.room,
         volts:bd.volts || PANEL_DEFAULT_VOLTS, main:boardMain, panels:[] };
       net.boards[boardId] = board;
       net.breakers[boardMain] = { id:boardMain, layer:"board", label:"MAIN", rating:bd.rating, curve:breakerCurve(bd),
@@ -7376,7 +7377,7 @@ x_sn_9 m_sn_sn_sn sn p
         if(feederId && !feeder) net.problems.push(`${panelId}: the board has no feeder for it`);
         const main = layout.main || {};
         const rooms = pd.rooms || {};
-        const panel = { id:panelId, building:b, board:boardId, name:pd.name || panelId, room:pd.room,
+        const panel = { id:panelId, buildingId:b, board:boardId, name:pd.name || panelId, room:pd.room,
           volts:main.volts || PANEL_DEFAULT_VOLTS, main:panelMain, feeder:feederId, circuits:[], loads:[],
           roles:Object.assign({}, rooms), rooms:Array.from(new Set(Object.values(rooms))) };
         net.panels[panelId] = panel;
@@ -7459,7 +7460,7 @@ x_sn_9 m_sn_sn_sn sn p
             return null;
           }
           if(sides[0] === sides[1]) return null;
-          const def = { locked:!!d.locked, sides, building:b };
+          const def = { locked:!!d.locked, sides, buildingId:b };
           if(d.lockable === false) def.lockable = false;
           return { id: d.id || `${unit}-${d.key}`, def };
         });
@@ -7747,8 +7748,8 @@ x_sn_9 m_sn_sn_sn sn p
       }
       return idx.sub[b];
     };
-    Object.values(net.boards).forEach(bd=>{ subOf(bd.building).boards[bd.id] = bd; idx.of[bd.id] = bd.building; });
-    Object.values(net.panels).forEach(pn=>{ subOf(pn.building).panels[pn.id] = pn; idx.of[pn.id] = pn.building; });
+    Object.values(net.boards).forEach(bd=>{ subOf(bd.buildingId).boards[bd.id] = bd; idx.of[bd.id] = bd.buildingId; });
+    Object.values(net.panels).forEach(pn=>{ subOf(pn.buildingId).panels[pn.id] = pn; idx.of[pn.id] = pn.buildingId; });
     Object.values(net.breakers).forEach(br=>{
       const b = idx.of[br.device];
       subOf(b).breakers[br.id] = br;
@@ -8132,10 +8133,13 @@ x_sn_9 m_sn_sn_sn sn p
   // Advances awake game time in <=1-minute steps so the Stamina/Fatigue
   // recovery delay (exactly 1 game minute) and the Energy-driven recovery
   // bands are evaluated at natural resolution instead
-  // of being approximated over an arbitrarily long jump.
-  function runAwakeStep(min){
+  // of being approximated over an arbitrarily long jump. `untilWoken`: stop
+  // after the step in which a waking event sets `wokenUp`, as doSleep()'s
+  // loop does (the blackout, advanceTime()). Returns the minutes left unrun,
+  // 0 when it ran them all.
+  function runAwakeStep(min, untilWoken){
     let remaining = min;
-    while(remaining > 1e-9){
+    while(remaining > 1e-9 && !(untilWoken && wokenUp)){
       const dt = Math.min(1, remaining);
       state.totalMinutes += dt;
       applyHungerThirst(dt);
@@ -8143,9 +8147,17 @@ x_sn_9 m_sn_sn_sn sn p
       recoveryStep(dt, "normal");
       remaining -= dt;
     }
+    return remaining;
   }
   // Collapsing at zero Energy. Every COLLAPSE_BLACKOUT_EVERY-th collapse is
   // the long one; the others are a stumble. Balance values, retunable.
+  //
+  // The blackout counts as asleep for clock events (`asleep`), so a waking
+  // one (the siren) wakes you and ends it after that step. Woken early,
+  // Energy is set to COLLAPSE_BLACKOUT_ENERGY's share for the minutes taken
+  // (120 of 300 gives 36), a balance choice, retunable, and the waking
+  // event's own line is the record, as for sleep. A waking event in the last
+  // step leaves the blackout complete. The stumble stays awake.
   const COLLAPSE_BLACKOUT_EVERY = 3;
   const COLLAPSE_BLACKOUT_MIN = 300;
   const COLLAPSE_BLACKOUT_ENERGY = 90;    // Energy set to, not added
@@ -8156,8 +8168,24 @@ x_sn_9 m_sn_sn_sn sn p
     if(state.vitals.energy <= 0){
       state.collapseCount += 1;
       if(state.collapseCount % COLLAPSE_BLACKOUT_EVERY === 0){
-        log("Your body gives out completely. You black out — hours pass before you come to, disoriented and vulnerable.", "warn");
-        runAwakeStep(COLLAPSE_BLACKOUT_MIN); state.vitals.energy = clamp(COLLAPSE_BLACKOUT_ENERGY);
+        log("Your body gives out completely. You black out.", "warn");
+        let left = COLLAPSE_BLACKOUT_MIN, woken = false;
+        asleep = true;
+        wokenUp = false;
+        try {
+          left = runAwakeStep(COLLAPSE_BLACKOUT_MIN, true);
+        } finally {
+          woken = wokenUp;
+          asleep = false;
+          wokenUp = false;
+        }
+        if(woken && left > 1e-9){
+          const taken = COLLAPSE_BLACKOUT_MIN - left;
+          state.vitals.energy = clamp(COLLAPSE_BLACKOUT_ENERGY * taken / COLLAPSE_BLACKOUT_MIN);
+        } else {
+          state.vitals.energy = clamp(COLLAPSE_BLACKOUT_ENERGY);
+          log("Hours pass before you come to, disoriented and vulnerable.", "warn");
+        }
       } else {
         log("Exhaustion drops you where you stand. A few minutes pass before you can get up.", "warn");
         runAwakeStep(COLLAPSE_STUMBLE_MIN); state.vitals.energy = clamp(state.vitals.energy + COLLAPSE_STUMBLE_ENERGY);
@@ -8640,7 +8668,8 @@ x_sn_9 m_sn_sn_sn sn p
   // power, and turns nothing off. It is not the range's own electronics,
   // whose electrics are `gas_range` in APPLIANCES (#270). When it
   // runs down it rings, heard anywhere in the stove's building: the player's
-  // room must have a `building`, and the same one. Otherwise it rings unheard.
+  // room must have a `buildingId`, the same as the stove's room's. Otherwise
+  // it rings unheard.
   // The ring's wording is Tom's.
   function doAddStoveTimer(minutes){
     const stove = roomStove(world[state.currentRoom]);
@@ -11337,7 +11366,7 @@ x_sn_9 m_sn_sn_sn sn p
     return (device)=>{
       const node = powerNode(device);
       if(devices.filter(d=> powerNode(d).name === node.name).length < 2) return node.name;
-      const b = BUILDING_INFO[node.building];
+      const b = BUILDING_INFO[node.buildingId];
       return b && b.name ? `${node.name} (${b.name})` : node.name;
     };
   }
