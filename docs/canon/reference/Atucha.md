@@ -427,6 +427,48 @@ Convention on Nuclear Safety, cited above, read in full text 2026-09-30.
 - The ARN's Emergency Control Centre is at its headquarters in Buenos
   Aires.
 
+**Who declares it, and how (primary, 9th report, 3.16.2–3.16.3):**
+- Emergencies are classed as an **Alert** (a lowered or unknown level of
+  defence in depth), an **On-site emergency**, or a **General Emergency**
+  (significant risk; off-site protective action needed). **In a General
+  Emergency the plant notifies the local response organisations and the
+  ARN**, and two stages follow: **Green Alert**, "when an unusual situation
+  that may affect the NPP safety is detected", which convenes the
+  municipal emergency operations centre (COEM: fire brigades, civil
+  protection, police, Gendarmería, Prefectura, the armed forces) and sets
+  the automatic protective measures going; and **Red Alarm**, when a
+  release is imminent.
+- **The plant manager acts as the emergency's chief (JOEN)** until the
+  ARN's officer arrives to take over.
+- **Iodine tablets are not handed out in advance.** "Currently, stable
+  iodine tablets are stored in the NPP and at strategic points in the
+  cities involved", to be distributed at Green Alert (9th report, answer to
+  question 92; primary). Which buildings in Lima are the strategic points
+  is unconfirmed.
+
+**The drills** (secondary, 2026-09-30; the 43rd exercise was held on
+2 October 2025, after the era, but they are required by the plants'
+licences and recur):
+- **A first siren** announces the **Green Alert** and **a second siren the
+  Red Alarm**; messages and instructions go out through the **Public Alert
+  System**, **megaphones** and a **local FM radio station**.
+- In the 2025 exercise, people **within 3 km were evacuated by road and by
+  river to the Base Naval Zárate**; those **between 3 and 10 km practised
+  sheltering in schools**, and **iodine tablets were handed out**. Some
+  4,500 pupils in 28 schools were briefed beforehand.
+- [Argentina.gob.ar, 43rd exercise](https://www.argentina.gob.ar/noticias/se-realizo-el-43deg-ejercicio-de-aplicacion-del-plan-de-emergencias-del-complejo-nuclear),
+  [El Debate](https://eldebate.com.ar/atucha-activa-su-protocolo-simulacro-externo-de-emergencia-nuclear-en-zarate-y-lima/)
+  (search summaries).
+
+**Whether the sirens work without the grid is unconfirmed.** In the US,
+the Energy Policy Act of 2005 required backup power for the sirens of
+plants with more than 15 million people within 50 miles; siren backup
+batteries are commonly sized for **72 hours on standby and at least 30
+minutes of sounding**. Secondary, 2026-09-30:
+[NRC, backup means for alert and notification](https://www.nrc.gov/docs/ML0704/ML070440153.pdf),
+[Electronic Sirens, backup power](https://www.electronic-sirens.com/back-up-power-supply/)
+(search summaries). Atucha's own sirens' supply isn't known.
+
 ### How long the diesel fuel could last (2026-09-30)
 
 - **The US standard is a week of fuel per diesel.** NRC Regulatory Guide
