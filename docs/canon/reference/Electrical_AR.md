@@ -328,10 +328,24 @@ recorded here (#311), which gave old boards only to homes on dirt streets:
 **A blown *tapón* needs a spare fuse** (Tom, #306). It isn't reset like a
 breaker: it is replaced with a spare fuse item.
 
-Still open, on #306: which homes (every dirt-street home plus a stable share
-of the rest, or a flat share), whether the player's home and the landmarks
-stay modern as the earlier rule had them, and the chance that an old board
-isn't earthed.
+**Settled for #358** (Tom, 2026-09-30), all game rules, retunable:
+
+- **Which homes:** a flat, stable share of the generated casas, half of them,
+  rolled per building. The **Barrio Atucha's casas stay modern**, since the
+  plant's operator (NA-SA) looks after the barrio. The player's home is a
+  row house, and the landmarks are other building types.
+- **An old board carries two *tapones*, one on each pole, on a single
+  circuit**, behind the bipolar cut-off switch (Tom). The two-pole fusing is
+  the regulated practice of the time (Rosario 3419/83, below). The single
+  circuit rests on Tom's account.
+- **A blown *tapón* is rewired with fuse wire of its rating**, not replaced
+  with a boxed spare. The bodge, a copper strand in place of fuse wire, is
+  #365.
+- **The fuse rating is 15 A**, the regulated cap for a dwelling's
+  general-use circuit (Rosario 3419/83 §2.8.1.a). Lima's own is
+  unconfirmed.
+- **Earthing is left to #247**, and the chance per old board is still open
+  there.
 
 **What an old board is, from what could be found:**
 
@@ -377,8 +391,77 @@ isn't earthed.
 - **Boards often aren't properly earthed** (Tom, first-hand, 2026-09-28): it's
   a common occurrence, so there's a noticeable chance an old board isn't. That
   agrees with the guides above. How often isn't a sourced figure.
-- **The fuse ratings** of an old board, and whether the meter sits in a
-  pillar or on the façade in old Lima homes, are **unconfirmed**.
+- **What a *tapón* is: a rewireable plug fuse.** It is a porcelain plug with
+  an Edison thread, holding a piece of fuse wire. Calibrated fuse wire is sold
+  **by the metre** at hardware and electrical shops, and **25 A** is said to
+  be the usual rating. *Tapones* **haven't been made for years**, and the
+  safety advice is "don't repair *tapones* or reinforce their wires, install
+  new ones". **Secondary**, from search-result summaries only, 2026-09-30:
+  the pages themselves (YoReparo threads, MercadoLibre listings, Estrucplan's
+  *La seguridad eléctrica en el hogar*) were blocked by the session's network
+  proxy. A full page read would confirm any of it.
+- **The copper-strand bodge.** Rewiring a fuse with a strand pulled from a
+  1.5 mm² cable is common enough that an Argentine forum jokes about it,
+  asking what current such a strand melts at. Secondary, one thread
+  ([Foros de Electrónica, *El típico fusible casero*, 2010-02-20](https://www.forosdeelectronica.com/threads/el-tipico-fusible-casero.31635/),
+  read 2026-09-30).
+- **Fuses on both poles, behind a manual switch: the regulated practice.**
+  Rosario's building regulation, Ordenanza 3419/83 (Reglamento de
+  Edificación, Sección 4, electrical installations), is **primary** for
+  Rosario, Santa Fe, not for Buenos Aires province. It shows the rules of the
+  time:
+  - §2.8, circuits: protected by "interruptores automáticos … o **interruptor
+    manual y fusibles (en ese orden), en todos los conductores**", except the
+    neutral of industrial four-wire three-phase lines. So a single-phase
+    circuit was **fused on both poles**.
+  - §2.4: the main switch cuts **phase and neutral together** in a
+    single-phase installation.
+  - §8.2.7 (quoting the regulation it amends): "Los fusibles a rosca EDISON,
+    solo podrán emplearse hasta intensidades de **30 A**". Fuses up to 60 A
+    must be enclosed.
+  - §8.2.2: fuses **must not be changed live**, and an interlock should make
+    that impossible without opening the circuit that feeds them.
+  - §2.8.1.a, a dwelling's general-use circuits (lights and sockets
+    together): protection **no greater than 15 A**, at most 3,300 VA each.
+    §2.8.1.b, special socket circuits: at most **25 A**.
+
+  [rosario.gob.ar](https://www.rosario.gob.ar/mr/normativa/reglamento-de-edificacion/seccion-4/ordenanza-3419-83),
+  read 2026-09-30.
+- **An old board in flats and buildings**, from an electrician's course
+  page: "llave de corte 20A y fusible tapón, 2 circuitos". Secondary
+  ([Loco Eléctrico, *Electricista instalador*](https://locoelectrico.jimdofree.com/electricista-instalador-curso),
+  read 2026-09-30).
+- **How a fuse blows: IEC 60269, class gG.** From Mersen, *IEC 60269 gG & aM
+  Standard Low Voltage Fuses*, EduPack training module TM-104 (2012): primary
+  for the maker, **secondary** for the standard, which wasn't read
+  ([PDF](https://www.mersen.com/sites/default/files/files_imported_ep/TM-104-Mersen-EduPack-IEC60269-gG-aM-Standard-Low-Voltage-Fuses.pdf),
+  read 2026-09-30).
+  - A gG fuse **must not blow at 1.25 × In**, and **must blow at 1.6 × In**,
+    within a conventional time of **1 h to 4 h** that depends on the rating.
+    The module doesn't say which ratings get which time.
+  - Its "gates" for some ratings:
+
+    | Rating | Least current to blow in 10 s | Most current to blow in 5 s | Blows in 0.1 s between |
+    |---|---|---|---|
+    | 25 A | 52 A | 110 A | 150 and 260 A |
+    | 80 A | 215 A | 425 A | 610 and 1,100 A |
+    | 250 A | 750 A | 1,650 A | 2,590 and 4,500 A |
+
+  - A gG fuse "will typically blow within 2–5 seconds at five times the rated
+    current, and within 0.1–0.2 seconds at ten times" (Wikipedia, *IEC 60269*,
+    read 2026-09-30; secondary). A fuse has no separate instant band, unlike a
+    breaker's curves.
+  - **A rewired *tapón* is not a gG cartridge.** Its fuse wire has no class,
+    so the gG figures are only the best-sourced stand-in for how it blows.
+    **Unconfirmed** for fuse wire.
+- **The D-system (Diazed) cartridge** is the screw-in cartridge fuse, with an
+  E27 thread in its D II size, rated 2, 4, 6, 10, 13, 16, 20 and 25 A.
+  Secondary (Wikipedia, *IEC 60269*, read 2026-09-30). Whether Lima's old
+  boards took cartridges or rewireable plugs is unconfirmed, though the search
+  results above point to rewireable ones.
+- **Still unconfirmed:** the rating a Lima *tapón* actually carries (15 A is
+  the regulated cap, and 25 A the figure search summaries give), and whether
+  old homes' meters sit in a pillar or on the façade.
 
 ## Appliances as sold in Argentina (#311, 2026-09-28)
 
@@ -674,5 +757,7 @@ Argentine retail listings: **secondary** unless marked otherwise.
 - **The date of CNDC file C-1349.**
 - **AEA 771-D.10's text** (a generator's changeover: interlock type and poles
   switched), and the generator inlet used in Argentina.
-- **An old board's fuse ratings**, and whether old homes' meters sit in a
-  pillar or on the façade.
+- **An old Lima board's actual fuse rating** (the regulated cap is 15 A, and
+  the search summaries say 25 A), a blowing curve for fuse wire rather than a
+  gG cartridge, and whether old homes' meters sit in a pillar or on the
+  façade. See "Old installations".
