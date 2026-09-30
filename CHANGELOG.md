@@ -20,6 +20,69 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 <!-- New entries go directly below this line. -->
 
+## v0.11.0 — Event scheduler, power on events, ageing worked out when read
+
+Implements: handoffs/event-scheduler.md
+
+Implements #372, #369 and #373 in full, per `handoffs/event-scheduler.md`. Nothing in the world is checked every game minute any more: a step of time is the player's vitals and whatever is due, and everything else is settled over a span when it is read or fires as a scheduled event. MINOR: `state.power` loses `heat`, and perishable rows and running devices gain saved fields.
+
+**New**
+- **The clock** (`clockStep()`): the one step every time loop takes (`runAwakeStep()`, `doRest()`, `doSleep()`): `state.totalMinutes`, `applyHungerThirst()`, then `processDueEvents()`. Each loop keeps its own vitals piece and stop condition. `advanceTime()`, `doRest()` and `doSleep()` plan the next due minute first (`planNextDue()`) and settle to now last (`settleToNow()`), on every branch.
+- **The scheduler.** `settledAt` is the minute the scheduled systems stand at; `settleWorld(m)` brings them to `m` by the span and does what is due there, in the order grid changes, tanks coming full, battery deaths, stove timers, cooking, fires; clock events follow (`fireClockEvents()`, `lastClock`). The next due minute is the least of: every bound of `GRID_UP_SPANS` (`GRID_CHANGES`, `lastGrid`), each refilling tank coming full (`tankFullDue()`), each battery death (`batteryDeaths`), each running timer, each lit room's next event (`heatRoomDue()`: its fire, or the soonest completion across all its heat containers, `soonestIn()`), and each unfired `CLOCK_EVENTS` entry. Events land on their exact minute, in time order. `SCHEDULER_MAX_EVENTS_PER_STEP` guards against an event that never clears.
+- **Runtime lists**: `heatRooms` and `timerStoves`, walked in world order through `roomOrder()`, kept by `scheduleHeat()` and `scheduleTimer()` at every writer (`doLightStove()`, `doBuildFire()`, `doExtinguish()`, `doAddStoveTimer()`, the settles) and rebuilt by `rebuildSchedule()` on boot, restart, load and after the benchmark's setup.
+- **The resolve** (`resolvePower()`): pure, no time. Lowest layer first: an instant trip (momentary over the curve's `instant` × rating, breakers only) and an overload trip (running over the rating, breakers and fuses). RCDs and cut-off switches never trip.
+- **Draw and starts.** A cycling load draws watts × `dutyCycle` whenever powered (`loadDrawWatts()`); a pump while its float calls; a motor load starts only when it draws and did not in its building's previous resolve. Nothing starts on boot, restart or load.
+- **Power resolves on events only** (POWER RUNS, `powerNow` now holds the grid and each resolved building's look; still buildings are worked out when read, `stillLook()`): the four power actions and a float-moving `doFillAtSink()` resolve their building at once (`changePower()`); a tank coming full resolves its building; a grid change resolves every busy building (`resolveGrid()`), then `logGridChange()` and `logTrips()`.
+- **What the player sees running** (`loadRunningAt()`, `loadRunningNow()`): presentation only, today's cycle phase for a cycling load, drawing for a pump, powered otherwise. It serves `loadStatusText()`'s idle word and `logGridChange()`, at the minute before a change and at it.
+- **Tanks settled**: `settleTanks()` refills over a span at `tankRefillLph()`, rounded to the millilitre once per settle.
+- **Food ageing worked out when read** (`docs/systems/spoilage.md`): a perishable row's `agedAt`; `ageOver()` (fridge and freezer: powered rate for `gridUpMinutes()` when the load would be powered with the grid up, `coldStoreWired()`); `settleList()` and `settleListDeep()`; the three settle points: `settleReachable()` at the end of every advance, after every `doMove()` and on new game, restart and load; `settleColdStores()` before any resolve that changes a building's switches or breakers is adopted (`adoptPower()`); and a lit room's heat containers before cooking touches them (`settleHeat()`).
+- **Batteries worked out when read**: `durability.asOf` while a device is on, `batteryCharge()`, `switchDevice()` (Turn on / Turn off, and Remove batteries through it; Replace batteries on a device that is on sets `asOf` and schedules), `scheduleBatteryDeath()`, `settleBatteryDeaths()` with today's lines. The benchmark's radios go through `switchDevice()`.
+- **The replay page** (`ashfall.html?replay`, `runReplay()`): a seven-step scenario from `REPLAY_SEED`, leaving `window.ashfallReplayResult` with each step's log lines (`replayLog`), a canonical digest (`replayDigest()`) and a consistency check (`replayProblems()`: the runtime lists against a full scan, `settledAt` against now, every busy building resolved, the grid in `powerNow`, the battery minutes, the reachable lists settled). Save refuses on it, as on the benchmark page. `.github/scripts/replay_compare.py` replays two commits and reports every difference.
+
+**Changed / Reworked**
+- *Cooking*: `cookVessel()` became `settleVessel()`: a ready dish forms first; tainted water boils, and water that comes clean forms its dish and stops the span there. `soonestCooking()` now reads `soonestIn()` over the room's heat container, and keeps its answer. `tickStoveTimers()` became `settleTimer()`; the fire's burn-down moved into `settleHeat()`, out at `TICK_EPSILON`.
+- *Power*: electricity is a gameplay system (#369). An overload trips at once, on the action or event that causes it, with unchanged wording; the water heater, at its average, effectively stops causing trips; the fridge no longer surges on each cycle; the clamp reads a cycling load's average (the fridge about 0.16 A); a switch change is seen by spoilage at once. `refreshPower()` is a resolve with no previous one, and commits any trip it finds silently. `rewireFuseIn()` is a reset. `loadLookNow()` and `loadPoweredNow()` collapsed into `isPowered()` and `loadRunningNow()`: actions now resolve at once, so every caller's answer is unchanged.
+- *Exact minute* (decided, Tom): food on a fire that goes out partway through a step cooks up to that minute; a dish formed when its water finishes boiling cooks from that minute; events inside one step log in time order.
+- *Grid changes are events on their exact minute*: a pump refills up to the failure's minute and from the recovery's end, where the per-minute loop took the grid's state at the end of each step for the whole step.
+- `ashfallDev.simulatePower()` keeps its signature less `heat`: options' `power` has none, rows have none, and it resolves the whole test network each minute with `resolvePower()`.
+
+**Removed**
+- `power.heat`, `heatIn()`, `setHeatIn()`, the heat check, `tripMinutes()`, `fuseBlowMinutes()`, `anchorMinutes()`, `bandMinutes()`, `HEAT_COOL_MIN`, `BREAKER_F_LOW`, `BREAKER_F_HIGH`, `BREAKER_T_LOW_MIN`, `BREAKER_T_HIGH_MIN`, `BREAKER_F_NO_TRIP`, `BREAKER_NO_TRIP_MIN`, `FUSE_F_NO_BLOW`, `FUSE_NO_BLOW_MIN`, `FUSE_F_LOW`, `FUSE_T_LOW_MIN`, `FUSE_F_HIGH`, `FUSE_T_HIGH_MIN`, and `validateWiring()`'s two time-to-trip checks.
+- `resolvePowerStep()`, `stepPower()`, `powerStep()`, `powerLook()`, `powerFlat()`, `priorOf()`, `priorDrawing()`, `priorDrawingFor()`, `subnetOf()`, `NOTHING_DREW`, `STILL_FIELDS`; `refillTanks()`; `ageFood()`; the per-minute battery drain; `applyWorldTicking()`, whose last work went with them.
+
+**UI**
+- A trip's line appears with the action that causes it. The clamp reads a cycling load's average. The water heater's readout still alternates between "Running" and "Standing by". No new controls or wording.
+
+**Documentation**
+- New `docs/systems/time.md`, `docs/systems/power.md`, `docs/systems/spoilage.md`; `docs/systems/README.md`'s index lists them, and its example constant is `FRIDGE_RATE_POWERED`. The POWER, POWER RUNS, SPOILAGE and scheduler overview comments moved into them, leaving pointers.
+- The ARCHITECTURE comment's SIMULATION paragraph names the clock and the scheduler and `resolvePower()`; MECHANICS PASS points the world's time to `clockStep()` / `settleWorld()`.
+- Schema comments: PLAYER STATE's `state.power` is `{ switches, breakers }`; ITEM DATA SCHEMA documents `agedAt` beside `ages` and `asOf` in `durability`; POWER SCHEMA's readout, `dutyCycle`, `rcd` and `fuse` entries; `mergeRows()` says both rows are settled to the same minute.
+- Filed #380: the benchmark's `serializeGame()` timing swings with what the timings before it left behind. Nothing else was deferred.
+
+**Validation performed**
+- `replay_compare.py`, Phase 1 → Phase 2 (`7a2ef2b` → `66db818`): logs identical at every step; the digests differ only by the two exact-minute kinds. The stew formed when its water boiled now cooks from that minute, so the wait runs one minute longer and everything after shifts by a minute (ages, vitals, `totalMinutes`) until step 6's advance to a fixed minute; the campfire fish's `cookMinutes` is 6.3 (the fire's length) not 6.5.
+- Phase 2 → Phase 3 (`66db818` → `bb7a87a`): logs identical; digests differ only in `state.power.heat` and `state.tankDrawn.home` (120.25 → 80.25 L): the pump refills its minute up to the failure and its minute after the recovery's end, and loses its minute after the recovery's start, since grid changes land on their exact minute. No trip happens in the replay, so no trip timing changes.
+- Phase 3 → Phase 4 (`bb7a87a` → `1e95939`, `--ignore agedAt --ignore asOf --tolerance 1e-6`, the digest settling every list on the replay page): identical.
+- The consistency check found nothing at any step. Save and load, an overload trip from the Electrical view (on the action, "Everything in here goes quiet."), `simulatePower()`'s overload trip and 0.16 A fridge clamp, a flashlight's charge across Turn on, a rest and Turn off, and a fridge's ageing across a switch-off (+6 at `FRIDGE_RATE_POWERED`, then +60) were checked in headless Chromium. `docs_check.py` passes.
+- Performance (`perf_check.py` locally, against `main`): the 8-hour sleep 2832.1 → 4.3 ms, the 10-minute action 69.5 → 3.3 ms, `render()` 2.4 → 2.2 ms, `serializeGame()` 69.3 → 92.7 ms. The Costs section predicted the sleep falling toward its budget and nothing else rising; the save's rise is not the save's cost (see #380).
+
+**Sections touched**
+- CONFIG / CONSTANTS; WORLD DATA (ITEM DATA SCHEMA, POWER SCHEMA, APPLIANCES' comments); PLAYER STATE; CORE UTILITIES (`log()`'s replay hook); INVENTORY / ITEM SYSTEM (`asNewlyMade()`, `batteryActions()`, `mergeRows()`'s comment, `doFillAtSink()`); WORLD INTERACTION (`doMove()`, the power actions, tanks); SURVIVAL / TIME SIMULATION with POWER and STAMINA / FATIGUE (the clock, the scheduler, batteries, spoilage, the resolve); CRAFTING (`doCraft()`); FIRE / COOKING; PERSISTENCE (`backfillPowerState()`, the rebuild on load and restart, `simulatePower()`, `validateWiring()`, the benchmark, the replay page); RENDERING (`durabilityText()`, `loadStatusText()`, `DESC_READERS`); the ARCHITECTURE comment.
+
+**Open questions / decisions resolved**
+- Names: `clockStep()`, `settleWorld()` / `settleToNow()`, `settledAt`, `ageOver()`, `loadRunningAt()`, `resolvePower()`.
+- The runtime lists: sets walked in world order through a per-world index (`roomOrder()`).
+- `loadLookNow()` collapsed into reads of `powerNow`.
+- `resolvePower()` takes no `minute`: with a cycling load drawn at its average, nothing in a resolve depends on it.
+- The replay scenario: seed 372 (it rolls something in the home freezer); the walk and the campfire's moves on `HOME_STOP`, `x_c117_c90b` and `x_c117_c90`; a 6.3-minute fire; radios with 5.5, 12.25 and 20.7 minutes of charge (carried, on the stop's floor, on `home_bedroom`'s floor); the home's tank drawn 0.25 L short of its float level in code, then by a bottle and 200 pot fills, 8 minutes before the failure. The run starts six hours before the grid fails (`doRestart()` gained an optional start minute, which the replay alone passes), so the failure falls in step 6 without a day of play; step 6 advances to its minute for real, where the handoff had it set the clock, since a set clock would skip ageing that the per-minute loop and the read-time one must agree on.
+
+**Notes / assumptions**
+- `SCHEDULER_MAX_EVENTS_PER_STEP` and the replay's figures are judgment calls, retunable. The replay's figures change every digest, so compare only commits that share them.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.10.11"` → `"0.11.0"`
+
+---
+
 ## v0.10.11 — Performance benchmark and budget
 
 Implements: handoffs/performance-benchmark.md

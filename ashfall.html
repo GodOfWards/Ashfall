@@ -402,13 +402,17 @@
   //                time, and progression.
   //   UTILITIES    provide small reusable operations (formatting, lookup).
   //   SIMULATION   owns time-dependent consequences (decay, fire burn-down,
-  //                collapse from exhaustion, game-over checks). STAMINA/FATIGUE
-  //                is a sub-section living inside SURVIVAL/TIME SIMULATION, not
-  //                a separate top-level section. So is POWER: the network's
-  //                expansion and resolver (expandWiring(), resolvePowerStep(),
-  //                isPowered()). Its definitions (APPLIANCES, WIRING_TEMPLATES,
-  //                WIRING, GAME_WIRING, and BUILDING TYPES' `wiring`) are WORLD
-  //                DATA, and state.power is PLAYER STATE.
+  //                collapse from exhaustion, game-over checks). Time moves
+  //                through one step, clockStep(), and the world changes on
+  //                scheduled events or when read, never every minute: the
+  //                scheduler (settleWorld(), planNextDue()) lives in
+  //                SURVIVAL/TIME SIMULATION, beside spoilage and batteries.
+  //                STAMINA/FATIGUE is a sub-section living inside SURVIVAL/TIME
+  //                SIMULATION, not a separate top-level section. So is POWER:
+  //                the network's expansion and resolve (expandWiring(),
+  //                resolvePower(), isPowered()). Its definitions (APPLIANCES,
+  //                WIRING_TEMPLATES, WIRING, GAME_WIRING, and BUILDING TYPES'
+  //                `wiring`) are WORLD DATA, and state.power is PLAYER STATE.
   //   ACTIONS      perform gameplay operations (move, take, craft, etc.)
   //                and are grouped by the system they belong to:
   //                INVENTORY/ITEM SYSTEM, WORLD INTERACTION, CRAFTING,
@@ -429,7 +433,8 @@
   //     movement/inventory/simulation code unless the content genuinely
   //     introduces a new mechanic.
   //   MECHANICS PASS: modify the smallest relevant function/section —
-  //     survival/time -> advanceTime()/runAwakeStep()/recoveryStep(); inventory transfer ->
+  //     survival/time -> advanceTime()/runAwakeStep()/recoveryStep(), and
+  //     the world's time -> clockStep()/settleWorld(); inventory transfer ->
   //     the INVENTORY/ITEM SYSTEM section (doTake/doStore/getItemAt/etc.);
   //     tools -> hasTool()/tags; fire -> FIRE/COOKING; crafting ->
   //     CRAFTING; persistence -> PERSISTENCE. UI changes are separate from
@@ -465,7 +470,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.10.11" };
+  const GAME_CONFIG = { VERSION: "0.11.0" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -540,7 +545,7 @@
   // water has no day of its own: the town's pumps run on the grid, so the
   // mains stop with it (mainsWaterUp()). A house's own tank keeps its taps
   // running while it holds water, and its own pump refills it only while that
-  // pump has power (waterRunningIn(), refillTanks(), HOUSE_TANK_L). #149's
+  // pump has power (waterRunningIn(), settleTanks(), HOUSE_TANK_L). #149's
   // separate water option is moot while that holds. Both are retunable; the
   // Day N clock still counts from the start of the run.
   const START_DAYS_AFTER_COLLAPSE = 2;
@@ -558,41 +563,23 @@
   const SIREN_SOURCE_STOP = "atucha_gate";
   const SIREN_NEAR_M = 1000;
   // The power network's figures (see POWER in SURVIVAL / TIME SIMULATION).
-  // Breakers, per IEC 60898-1 (ABB 2CDC400002D0201; Enel E-BT-004 Table 12;
-  // both secondary for the standard). Its thermal points are the same for
-  // curves B, C and D: at BREAKER_F_NO_TRIP × In a breaker does not trip
-  // within BREAKER_NO_TRIP_MIN; at BREAKER_F_LOW × In it trips within 1 h;
-  // at BREAKER_F_HIGH × In within 1–60 s (In ≤ 32 A) or 1–120 s (above).
-  // tripMinutes() passes through the two anchor points at the slowest times
-  // the standard allows. The standard gives only bounds, so the points are
-  // balance values, retunable. Each time is a list of rating bands, `upTo`
-  // amps inclusive. The 1 h at BREAKER_F_LOW covers In ≤ 63 A, which is every
-  // home (AEA 90364-7-770's own scope); ratings above 63 A reuse it, unsourced.
-  const BREAKER_F_LOW = 1.45;
-  const BREAKER_F_HIGH = 2.55;
-  const BREAKER_T_LOW_MIN = [ { upTo:Infinity, min:60 } ];
-  const BREAKER_T_HIGH_MIN = [ { upTo:32, min:1 }, { upTo:Infinity, min:2 } ];
-  // The conventional non-tripping point, which the curve must respect:
-  // validateWiring() checks every breaker against it.
-  const BREAKER_F_NO_TRIP = 1.13;
-  const BREAKER_NO_TRIP_MIN = 60;
+  // Electricity is a gameplay system, not a realistic one (#369): a breaker
+  // or a fuse trips at once when its running current passes its rating, with
+  // no time to trip and no heat (resolvePower()).
   // The instant (magnetic) trip, as a multiple of the rating, per IEC 60898-1
-  // curve: the high end of each curve's band (B 3–5 × In, C 5–10, D 10–20),
-  // where the standard guarantees a trip in under 0.1 s. Below it the heat
-  // curve handles the current, as the band's low end may take up to 45 s
-  // (B), 15 s (C) or 4 s (D). Home breakers are curve C, as Lima's mostly
-  // are (Tom, first-hand) and as the two-pole breakers sold in Argentina are;
-  // AEA 770's worked example uses B. A breaker without its own `curve` is
-  // DEFAULT_BREAKER_CURVE.
+  // curve (ABB 2CDC400002D0201; Enel E-BT-004 Table 12; both secondary for
+  // the standard): the high end of each curve's band (B 3–5 × In, C 5–10,
+  // D 10–20), where the standard guarantees a trip in under 0.1 s, as the
+  // band's low end may take up to 45 s (B), 15 s (C) or 4 s (D). Home
+  // breakers are curve C, as Lima's mostly are (Tom, first-hand) and as the
+  // two-pole breakers sold in Argentina are; AEA 770's worked example uses
+  // B. A breaker without its own `curve` is DEFAULT_BREAKER_CURVE.
   const BREAKER_CURVES = { B:{ instant:5 }, C:{ instant:10 }, D:{ instant:20 } };
   const DEFAULT_BREAKER_CURVE = "C";
-  // Judgment calls, retunable: a breaker's heat meter drains fully in
-  // HEAT_COOL_MIN below its rating. A home is single-phase at 220 V (AEA
-  // 90364-7-770 §770.4.2, from a 220/380 V, 50 Hz supply), which a panel or
-  // board without its own `volts` is. How likely an appliance's switch is to
-  // be found on is each appliance's own `leftOnChance` (APPLIANCES, POWER
-  // SCHEMA).
-  const HEAT_COOL_MIN = 30;
+  // A home is single-phase at 220 V (AEA 90364-7-770 §770.4.2, from a
+  // 220/380 V, 50 Hz supply), which a panel or board without its own `volts`
+  // is. How likely an appliance's switch is to be found on is each
+  // appliance's own `leftOnChance` (APPLIANCES, POWER SCHEMA).
   const PANEL_DEFAULT_VOLTS = 220;
   // The breaker ratings, in A: IEC 60898-1's preferred values as reported
   // (secondary: the standard wasn't read, and the list is unconfirmed as
@@ -611,21 +598,6 @@
   // Edison-thread plug fuses go up to 30 A (Rosario 3419/83 §8.2.7):
   // validateWiring() holds every fuse's rating to it.
   const EDISON_FUSE_MAX_A = 30;
-  // How a fuse blows, per IEC 60269's gG class (Mersen's EduPack TM-104;
-  // secondary for the standard): it must not blow at FUSE_F_NO_BLOW × In
-  // within FUSE_NO_BLOW_MIN, the low end of its 1–4 h conventional time, and
-  // must blow at FUSE_F_LOW × In within it; a 25 A fuse blows in at most 5 s
-  // at 110 A. fuseBlowMinutes() passes through (FUSE_F_LOW, FUSE_T_LOW_MIN)
-  // and (FUSE_F_HIGH, FUSE_T_HIGH_MIN) as tripMinutes() does through a
-  // breaker's anchors. A fuse has no instant band. A rewired tapón's fuse
-  // wire is not a gG cartridge, so these stand in for it: unconfirmed, and
-  // retunable.
-  const FUSE_F_NO_BLOW = 1.25;
-  const FUSE_NO_BLOW_MIN = 60;
-  const FUSE_F_LOW = 1.6;
-  const FUSE_T_LOW_MIN = 60;
-  const FUSE_F_HIGH = 110 / 25;
-  const FUSE_T_HIGH_MIN = 5 / 60;
   // How long rewiring a blown fuse takes, in minutes (doRewireFuse()). A
   // judgment call, retunable.
   const REWIRE_FUSE_MIN = 5;
@@ -787,7 +759,7 @@
   //                 { reads, variants:{ state: text } }. `reads` names what
   //                 picks the text, { kind, … }, a DESC_READERS entry
   //                 (RENDERING): "load" with its `id`, on while that load is
-  //                 powered (loadPoweredNow()); "grid", on while the grid is
+  //                 powered (isPowered()); "grid", on while the grid is
   //                 up (gridUp()). Each reader returns one of its
   //                 own `states`, and `variants` holds a text for every one
   //                 (validateRoomSchema()). A later reader (weather, time of
@@ -847,8 +819,8 @@
   //     (roomStove()).
   //   Optional: timerMinutes — a stove's wind-up timer, minutes left (absent
   //     = 0). It needs neither power nor a battery. Set from its device
-  //     pop-up, counted down by tickStoveTimers() whether or not the stove
-  //     is on or has power.
+  //     pop-up, run down by the scheduler (settleTimer()) whether or not
+  //     the stove is on or has power.
   //     Authored containers carry their tags in WORLD DATA. The campfire's
   //     container is created by doBuildFire(), which gives it `heat`.
   //   Optional (spawn pools — see SPAWN_POOLS below):
@@ -926,7 +898,11 @@
   //                   `screwdriving` is the tool a blown fuse is rewired
   //                   with, and `fuse-wire` the wire it is rewired with, of
   //                   the fuse's own `fuseRating` (doRewireFuse()).
-  //     durability    { current, max, mode } — mode is "uses" or "time"
+  //     durability    { current, max, mode, asOf? } — mode is "uses" or
+  //                   "time". A "time" device's `asOf` is present exactly
+  //                   while it is `on`: the minute since the collapse its
+  //                   `current` is true at, its charge worked out when read
+  //                   (batteryCharge())
   //     restores      { hunger, thirst } — consumable effect
   //     verb          display/use verb, e.g. "Eat", "Drink"
   //     sealed        packaged-item state. `true` on a registry entry means
@@ -1015,6 +991,11 @@
   //                   through `overrides`; otherwise the world's items are
   //                   aged from the collapse (stampMissingAges()) and an
   //                   action's are new (asNewlyMade()).
+  //     agedAt        instance: the minute since the collapse at which a
+  //                   perishable row's `ages` are true. Every writer of
+  //                   `ages` sets it, and a row read without one is taken as
+  //                   true now. Ageing is worked out when the row's list is
+  //                   next settled (settleList()).
   //     holdsWater    { kg, restores } — the item holds water: `kg` when
   //                   full, and what drinking a full one restores. A bottle.
   //                   Definition data, read by itemId.
@@ -3879,7 +3860,7 @@ x_sn_9 m_sn_sn_sn sn p
   //            (waterRunningIn()). It is refilled by the building's pump (a
   //            load whose appliance has `flowLph`) while that pump has power
   //            and its float calls, or, where the building is unwired, while
-  //            the mains run (refillTanks(), mainsWaterUp()). Absent: its
+  //            the mains run (settleTanks(), mainsWaterUp()). Absent: its
   //            sinks run on the mains alone.
   //   wiring   optional, { board:{ name, role, rating, curve?, direct?,
   //            feeders? }, panels:[{ id, name, role, template | layout }] }:
@@ -3957,7 +3938,7 @@ x_sn_9 m_sn_sn_sn sn p
   // tank moves 1,800–2,400 L/h (Czerweny's QB60-L1, 40 L/min, and Rowa's
   // RW-PR60; secondary). 2,400 is Tom's pick, which refills a 1,000 L tank
   // from empty in 25 minutes. The house_pump appliance's `flowLph`, and the
-  // rate an unwired building's tank refills at (refillTanks()). Retunable.
+  // rate an unwired building's tank refills at (tankRefillLph()). Retunable.
   const HOUSE_PUMP_FLOW_LPH = 2400;
   // The tank's float switch starts its pump when the tank holds less than
   // this fraction of it, and the pump then fills it to full (powerSnapshot(),
@@ -4598,8 +4579,9 @@ x_sn_9 m_sn_sn_sn sn p
   //   readout      { on, idle?, off }: the words for its state
   //                (loadStatusText()): `off` while it has no power, with its
   //                switch's position after it; `idle` while it has power but
-  //                isn't drawing (between a cycle's on parts, or while a
-  //                pump's float isn't calling); `on` otherwise. Without
+  //                isn't running (loadRunningAt(): between a cycle's on
+  //                parts, or while a pump's float isn't calling); `on`
+  //                otherwise. Without
   //                `idle`, `on` shows whenever it has power. `idle` is only
   //                for a load that can stand powered and idle, one with
   //                dutyCycle or flowLph (validateWiring()). The readout is
@@ -4607,11 +4589,14 @@ x_sn_9 m_sn_sn_sn sn p
   //                a switchless load's readout is never shown. Functional
   //                UI text, retunable.
   //   startWatts   the total draw at a start; present on a motor load
-  //   dutyCycle, cycleMinutes  present on a cycling load: it draws for
-  //                dutyCycle × cycleMinutes of every cycleMinutes
+  //   dutyCycle, cycleMinutes  present on a cycling load: it runs for
+  //                dutyCycle × cycleMinutes of every cycleMinutes, which is
+  //                what the player sees and hears (loadRunningAt()), and its
+  //                current is its average, watts × dutyCycle, whenever it
+  //                has power (loadDrawWatts())
   //   flowLph      a pump's flow in L/h; present on a load that fills its
   //                building's tank, drawing only while the tank's float calls
-  //                (powerSnapshot(), refillTanks())
+  //                (powerSnapshot(), settleTanks())
   //   nameplate    what its rating label prints (#249), in one of three
   //                forms: { amps }, printed as "<volts> V · <amps> A" at the
   //                entry's own `volts`; { printsWatts:true }, printed as its
@@ -4750,8 +4735,8 @@ x_sn_9 m_sn_sn_sn sn p
   //             diferencial (an RCD), labelled "RCD", in place of a main
   //             breaker. Power passes it only while it is closed, and it is
   //             switched by hand like a breaker, but it never trips on
-  //             overcurrent: neither the instant trip nor the heat trip
-  //             touches it (resolvePowerStep()), under either rules, and it
+  //             overcurrent: neither the instant trip nor the overload trip
+  //             touches it (resolvePower()), under either rules, and it
   //             has no curve. Its leakage trip is #247's. Its rating is
   //             still an IEC preferred one (validateWiring()).
   //   cutoff    on a main, optional: true makes the head device an old
@@ -4765,12 +4750,13 @@ x_sn_9 m_sn_sn_sn sn p
   //             roles:[role] }. `label` is the hand-written one on the panel
   //             door ("KITCHEN"); `roles` are the rooms, by role, it serves.
   //   fuse      on a circuit, optional: true makes it a fuse, not a breaker
-  //             (#358). It has no curve and no instant trip; it heats on its
-  //             own curve (fuseBlowMinutes()) and at 1 it blows, which is the
-  //             breaker's `tripped`. It is never switched or reset: it is
-  //             rewired (doRewireFuse()). Unlike every other circuit, it is
-  //             consulted under simplified rules too, for trips and for
-  //             liveness (consultsBreaker(), circuitSkipped()). Its rating is
+  //             (#358). It has no curve and no instant trip; it blows when
+  //             its running current passes its rating (resolvePower()), and
+  //             blown is a breaker's `tripped`. It is never switched or
+  //             reset: it is rewired (doRewireFuse()). Unlike every other
+  //             circuit, it is consulted under simplified rules too, for
+  //             trips and for liveness (consultsBreaker(), circuitSkipped()).
+  //             Its rating is
   //             any up to EDISON_FUSE_MAX_A, not an IEC breaker's
   //             (validateWiring()). Only a circuit carries it.
   //   curve     on a main or a circuit, optional: its IEC 60898-1 curve, a
@@ -5095,7 +5081,7 @@ x_sn_9 m_sn_sn_sn sn p
       enteredBuildings:[],
       // Litres drawn from each building's tank, by building id: raised
       // whenever a sink draws on it (doFillAtSink()), lowered as its pump
-      // refills it (refillTanks()). A full tank has no entry. See tankLeft().
+      // refills it (settleTanks()). A full tank has no entry. See tankLeft().
       tankDrawn:{},
       // Running illnesses, keyed by ILLNESSES id: the minutes each has left.
       // A missing or 0 entry means not ill with it.
@@ -5107,9 +5093,7 @@ x_sn_9 m_sn_sn_sn sn p
       //             at its appliance's leftOnChance, keyed and pure
       //             (switchOnIn()). A switchless appliance has no entry.
       //   breakers  { breakerId: { on, tripped } }. Default: on, untripped.
-      //   heat      { breakerId: number } — the delayed-trip meter, toward 1.
-      //             Default: 0.
-      power:{ switches:{}, breakers:{}, heat:{} },
+      power:{ switches:{}, breakers:{} },
       // One of ELECTRICAL_RULES, chosen when the run starts and never
       // changed during it (#243). The Options choice applies at a restart.
       electricalRules:"detailed",
@@ -5135,6 +5119,13 @@ x_sn_9 m_sn_sn_sn sn p
   // and never saved: the benchmark plays a fabricated town, so Save refuses
   // on this page (doSaveLocal()).
   const benchMode = new URLSearchParams(location.search).has("bench");
+  // Whether this is the replay page, opened with a `replay` query parameter
+  // (runReplay() in PERSISTENCE). Read once, at boot, UI-only and never
+  // saved, as benchMode is: the replay plays a scripted run, so Save refuses
+  // on this page too. While a replay step runs, `replayLog` collects every
+  // line log() is given, in order; null otherwise.
+  const replayMode = new URLSearchParams(location.search).has("replay");
+  let replayLog = null;
   let detailItem = null; // UI-only: { uid, side } — resolved fresh via findItemByUid(), safe against list mutation
   // What the device pop-up is open on, or null when it is closed:
   // { kind:"container", id }, a room fixture tagged `device`, or
@@ -5387,6 +5378,7 @@ x_sn_9 m_sn_sn_sn sn p
   // DOM-only and unserialized.
   const LOG_MAX_ENTRIES = 50;   // oldest lines are dropped past this
   function log(text, cls, key, outcome){
+    if(replayLog) replayLog.push(text);
     const logDiv = document.getElementById("log");
     const last = logDiv.lastElementChild;
     let p;
@@ -5489,7 +5481,10 @@ x_sn_9 m_sn_sn_sn sn p
   function waterKindOf(it){ return it.water ? it.water.kind : null; }
   // Folds `row` into `target`, an existing row sameStackState() accepts. The
   // one place two rows become one: the units' ages come along, re-sorted
-  // oldest first.
+  // oldest first. Both rows are always settled to the same minute, so their
+  // ages join as they are: anything that moves or merges rows acts on lists
+  // already settled (settleReachable(), settleHeat()), and a settle folds
+  // only rows of its own list.
   function mergeRows(target, row){
     target.qty += row.qty;
     if(Array.isArray(target.ages) || Array.isArray(row.ages))
@@ -5878,7 +5873,10 @@ x_sn_9 m_sn_sn_sn sn p
   // every unit at age 0. What distinguishes it from a world item, which
   // stampMissingAges() ages as if it had sat there since the collapse.
   function asNewlyMade(item){
-    if(isPerishable(item)) item.ages = new Array(item.qty).fill(0);
+    if(isPerishable(item)){
+      item.ages = new Array(item.qty).fill(0);
+      item.agedAt = minutesSinceCollapse();
+    }
     return item;
   }
   // Rationing. A unit can be eaten whole or by the half and the quarter;
@@ -6015,14 +6013,17 @@ x_sn_9 m_sn_sn_sn sn p
     const def = registryEntryOf(it);
     const fill = def && def.holdsWater ? Math.round(((it.water ? it.water.fill : 0) + litres / def.holdsWater.kg) * 1000) / 1000 : 1;
     const filled = changeOneUnit(src.items, it, unit=> addWater(unit, "clean", Math.min(1, fill)));
-    if(fromTank){
-      const b = world[state.currentRoom].buildingId;
-      state.tankDrawn[b] = Math.round(((state.tankDrawn[b] || 0) + litres) * 1000) / 1000;
-    }
+    // A draw that moves a pumped tank's float resolves its building at once,
+    // so its pump starts, or stops calling, with the draw.
+    const b = world[state.currentRoom].buildingId;
+    const floatNow = ()=> TANK_PUMPS[b] !== undefined ? JSON.stringify(tankFloat(BUILDING_INFO[b].tankL, state.tankDrawn[b] || 0)) : null;
+    const floatBefore = fromTank ? floatNow() : null;
+    if(fromTank) state.tankDrawn[b] = Math.round(((state.tankDrawn[b] || 0) + litres) * 1000) / 1000;
     // The pop-up follows the filled bottle, as doOpen()'s follows the opened can.
     detailItem = { uid: ensureUid(filled), side: sourceKind };
     log(fromTank && tankLeft(state.currentRoom) <= 0 ? "The tap coughs, spits, and runs dry."
       : `You fill the ${it.name.toLowerCase()} at the sink.`);
+    if(fromTank && floatNow() !== floatBefore) resolveBuilding(b);
     render();
   }
   // Vessels within reach of an item: every vessel in the lists crafting
@@ -6435,13 +6436,13 @@ x_sn_9 m_sn_sn_sn sn p
     if(!it.durability || it.durability.mode !== "time") return actions;
     if(it.hasBatteries !== false){
       actions.push({ label: it.on ? "Turn off" : "Turn on", onClick:()=>{
-        it.on = !it.on;
+        switchDevice(it, !it.on);
         // Silent: the status line already reads "— On" / "— Off".
         render();
       }});
       actions.push({ label:"Remove batteries", onClick:()=>{
+        if(it.on) switchDevice(it, false);
         it.hasBatteries = false;
-        it.on = false;
         giveItem(itemFromRegistry({ id:"spare_batteries", qty:1 }));
         // Silent: the batteries appear in inventory and the status line
         // reads "No batteries installed".
@@ -6452,6 +6453,11 @@ x_sn_9 m_sn_sn_sn sn p
       consumeByTag("battery", 1);
       it.durability.current = it.durability.max;
       it.hasBatteries = true;
+      // Fresh batteries in a device that is on: its charge is true from now.
+      if(it.on){
+        it.durability.asOf = minutesSinceCollapse();
+        scheduleBatteryDeath(it);
+      }
       // Silent: the status line's charge readout jumps to 100%.
       render();
     }});
@@ -6600,7 +6606,7 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // mainsWaterUp() is whether the town's water network runs: the mains a
   // sink without a tank draws on, and what a house pump draws from to fill
-  // its tank (refillTanks()). The town's own pumps run on the grid, so today
+  // its tank (settleTanks()). The town's own pumps run on the grid, so today
   // it is gridUp(). It is its own predicate so that #300's decision, whether
   // the network outlives the grid, has one place to land before generators
   // (#245) can power a house pump without the grid.
@@ -6608,7 +6614,7 @@ x_sn_9 m_sn_sn_sn sn p
   // Water: a room in a building with its own tank (BUILDING_INFO's tankL)
   // runs while the tank holds water, whatever the grid; a room without one
   // runs on the mains. The tank is refilled by its pump while that pump has
-  // power, and an unwired building's while the mains run (refillTanks()).
+  // power, and an unwired building's while the mains run (settleTanks()).
   // tankOf() is the room's building's tank in litres, or 0 for none;
   // tankLeft() what it holds now.
   function tankOf(roomId){
@@ -6625,7 +6631,7 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // A tank's float switch, from its size and the litres drawn from it: `low`
   // below TANK_FLOAT_START, `full` with nothing drawn. powerSnapshot() turns
-  // these and the pump's last step into whether it draws. Pure.
+  // these and the pump's last resolve into whether it draws. Pure.
   function tankFloat(tankL, drawn){
     return { low: tankL - drawn < TANK_FLOAT_START * tankL, full: !(drawn > 0) };
   }
@@ -6635,28 +6641,43 @@ x_sn_9 m_sn_sn_sn sn p
   function refilledDrawn(drawn, flowLph, dt){
     return Math.max(0, Math.round((drawn - flowLph / 60 * dt) * 1000) / 1000);
   }
-  // Refilling, after each step's power (applyWorldTicking()), and only while
-  // the mains run: a tank whose pump drew this step (powerNow) gains the
-  // pump's flow for the step. A tank in a building with no pump load
-  // (TANK_PUMPS; today shop_home) is the unwired fallback: it has no float
-  // and no latch, and refills at HOUSE_PUMP_FLOW_LPH whenever it is below
-  // full, until #307 wires that type (#258). Only a tank
-  // below full has an entry, and one refilled to full loses it.
-  function refillTanks(dt){
-    if(!mainsWaterUp()) return;
+  // What a tank refills at, in L/h, at minute `m`, or 0: only while the
+  // mains run, a tank whose pump is drawing (powerNow) at the pump's flow,
+  // and a tank in a building with no pump load (TANK_PUMPS; today shop_home),
+  // the unwired fallback with no float and no latch, at HOUSE_PUMP_FLOW_LPH
+  // whenever it is below full, until #307 wires that type (#258). It never
+  // changes between two settles: grid events and resolves are settle points.
+  function tankRefillLph(b, m){
+    const info = BUILDING_INFO[b];
+    if(!info || !(info.tankL > 0) || !mainsWaterUp(m)) return 0;
+    const pump = TANK_PUMPS[b];
+    if(pump === undefined) return HOUSE_PUMP_FLOW_LPH;
+    return powerNow && powerRead(powerNow, "drawing", pump) ? APPLIANCES[POWER_NET.loads[pump].appliance].flowLph : 0;
+  }
+  // Refilling, settled (settleWorld()): every tank below full refilled for
+  // the `span` minutes from minute `from`, rounded to the millilitre once,
+  // and one refilled to full loses its entry, which only a tank below full
+  // has. Returns the buildings whose tank came full.
+  function settleTanks(from, span){
+    const filled = [];
     Object.keys(state.tankDrawn).forEach(b=>{
-      const info = BUILDING_INFO[b];
-      if(!info || !(info.tankL > 0)) return;
-      const pump = TANK_PUMPS[b];
-      let flow = HOUSE_PUMP_FLOW_LPH;
-      if(pump !== undefined){
-        if(!(powerNow && powerRead(powerNow, "drawing", pump))) return;
-        flow = APPLIANCES[POWER_NET.loads[pump].appliance].flowLph;
-      }
-      const left = refilledDrawn(state.tankDrawn[b], flow, dt);
+      const lph = tankRefillLph(b, from);
+      if(!(lph > 0)) return;
+      const left = refilledDrawn(state.tankDrawn[b], lph, span);
       if(left > 0) state.tankDrawn[b] = left;
-      else delete state.tankDrawn[b];
+      else { delete state.tankDrawn[b]; filled.push(b); }
     });
+    return filled;
+  }
+  // Minutes from settledAt to the soonest tank coming full, a scheduled event
+  // (planNextDue()), or Infinity when none is refilling.
+  function tankFullDue(){
+    let due = Infinity;
+    Object.keys(state.tankDrawn).forEach(b=>{
+      const lph = tankRefillLph(b, settledAt);
+      if(lph > 0) due = Math.min(due, state.tankDrawn[b] / (lph / 60));
+    });
+    return due;
   }
   function getWindowsInRoom(roomId){
     return Object.keys(windows).filter(id=>windows[id].rooms.includes(roomId)).map(id=>Object.assign({id}, windows[id]));
@@ -6743,6 +6764,7 @@ x_sn_9 m_sn_sn_sn sn p
       checkGameOver();
     }
     state.currentRoom = exit.to;
+    settleReachable();
     const entered = world[exit.to].buildingId;
     if(entered && !state.enteredBuildings.includes(entered)) state.enteredBuildings.push(entered);
     worldTab = "floor";
@@ -6857,14 +6879,14 @@ x_sn_9 m_sn_sn_sn sn p
     // but baseline awake Energy consumption still applies and Rest does not
     // restore Energy itself.
     let remaining = REST_DURATION_MIN;
+    planNextDue();
     while(remaining > 1e-9){
       const dt = Math.min(1, remaining);
-      state.totalMinutes += dt;
-      applyHungerThirst(dt);
-      applyWorldTicking(dt);
+      clockStep(dt);
       recoveryStep(dt, "rest");
       remaining -= dt;
     }
+    settleToNow();
     checkGameOver();
     log("You take an hour to rest and catch your breath.", null, "rest");
     render();
@@ -6882,19 +6904,19 @@ x_sn_9 m_sn_sn_sn sn p
     let remaining = planned;
     asleep = true;
     wokenUp = false;
+    planNextDue();
     try {
       while(remaining > 1e-9 && !wokenUp){
         const dt = Math.min(1, remaining);
-        state.totalMinutes += dt;
-        applyHungerThirst(dt);
-        applyWorldTicking(dt);
+        clockStep(dt);
         state.vitals.energy = Math.min(ceiling, state.vitals.energy + SLEEP_ENERGY_RATE*dt);
         remaining -= dt;
       }
     } finally {
       asleep = false;
     }
-    // Woken before the sleep was done (fireClockEvents()): Energy keeps what
+    settleToNow();
+    // Woken before the sleep was done (a waking clock event): Energy keeps what
     // it gained, Fatigue drops by the share of the sleep taken, and no
     // cooldown starts, so Sleep is offered again at once. The waking event's
     // own line is the record. A waking event in the last step leaves the
@@ -7011,7 +7033,8 @@ x_sn_9 m_sn_sn_sn sn p
     render();
   }
   // A breaker in a panel or board, by hand, from its device pop-up. Instant,
-  // and seen by the next step's resolution (stepPower()). The lines are
+  // and resolved at once (changePower()), so a trip it causes follows its
+  // line. The lines are
   // functional, named by the breaker's hand-written label, an RCD as "the
   // RCD", never "the RCD breaker", and a cut-off switch as "the cut-off
   // switch"; retunable. A fuse is never switched or reset: it is rewired
@@ -7019,22 +7042,22 @@ x_sn_9 m_sn_sn_sn sn p
   function doSwitchBreaker(id, on){
     const br = POWER_NET.breakers[id];
     if(!br || br.fuse) return;
-    switchBreakerIn(state.power, id, on);
     log(`You switch the ${br.rcd ? "RCD" : br.cutoff ? "cut-off switch" : br.label + " breaker"} ${on ? "on" : "off"}.`);
+    changePower(POWER_INDEX.of[id], p=> switchBreakerIn(p, id, on));
     render();
   }
   // A load's own switch, by hand: today from a fridge's or freezer's device
-  // pop-up, later from the electrical view (#242). Instant, and seen by the
-  // next step's resolution, as a breaker is: switching a fridge on can start
-  // it, surge and all. Nothing else in play writes state.power.switches. The
-  // line names the appliance; functional, retunable.
+  // pop-up, and from the electrical view (#242). Instant, and resolved at
+  // once, as a breaker is: switching a fridge on starts it, surge and all.
+  // Nothing else in play writes state.power.switches. The line names the
+  // appliance; functional, retunable.
   function doSwitchLoad(loadId, on){
     const l = POWER_NET.loads[loadId];
     const a = l && APPLIANCES[l.appliance];
     on = !!on;
     if(!a || a.switchless || switchOnIn(state.power, state.seed, loadId, a) === on) return;
-    setSwitchIn(state.power, state.seed, loadId, a, on);
     log(`You switch the ${a.name.toLowerCase()} ${on ? "on" : "off"}.`);
+    changePower(POWER_INDEX.of[loadId], p=> setSwitchIn(p, state.seed, loadId, a, on));
     render();
   }
   // The meters (#249), from the Electrical view. A reading takes
@@ -7070,16 +7093,16 @@ x_sn_9 m_sn_sn_sn sn p
   function doResetBreaker(id){
     const br = POWER_NET.breakers[id];
     if(!br || br.fuse || !breakerStateIn(state.power, id).tripped) return;
-    resetBreakerIn(state.power, id);
     log(`You push the tripped ${br.label} breaker back on.`);
+    changePower(POWER_INDEX.of[id], p=> resetBreakerIn(p, id));
     render();
   }
   // Rewiring a blown fuse (#358), from its device pop-up: offered only while
   // it is blown, a `screwdriving` tool is carried, and so is fuse wire of its
   // own rating (fuseWireFor()). It spends one length, takes REWIRE_FUSE_MIN,
-  // and leaves the fuse unblown and cold (rewireFuseIn()); an overload still
-  // there blows the new wire on the fuse's own curve. The cut-off switch is
-  // neither required nor checked: rewiring live is #247's.
+  // and leaves the fuse unblown (rewireFuseIn()), resolved at once: an
+  // overload still there blows the new wire straight away. The cut-off
+  // switch is neither required nor checked: rewiring live is #247's.
   function canRewireFuse(id){
     const br = POWER_NET.breakers[id];
     return !!br && !!br.fuse && breakerStateIn(state.power, id).tripped
@@ -7089,8 +7112,8 @@ x_sn_9 m_sn_sn_sn sn p
     if(!canRewireFuse(id)) return;
     consumeMatching(fuseWireFor(POWER_NET.breakers[id].rating), 1);
     advanceTime(REWIRE_FUSE_MIN);
-    rewireFuseIn(state.power, id);
     log("You unscrew the blown plug, wind a length of fuse wire under its screws and screw it back in.");
+    changePower(POWER_INDEX.of[id], p=> rewireFuseIn(p, id));
     render();
   }
   function doUnlockContainer(containerId){
@@ -7213,13 +7236,8 @@ x_sn_9 m_sn_sn_sn sn p
   // Two independent chances of food poisoning as one: the chance that either
   // strikes.
   function combinePoisoning(a, b){ return 1 - (1 - a) * (1 - b); }
-  // SPOILAGE. A perishable item is one whose registry entry carries `spoils`
-  // and that is not sealed: a sealed item does not age. A perishable row
-  // keeps one effective age per unit in `ages`, in minutes, oldest first,
-  // ages.length === qty. A unit is Fresh below `spoils.staleAfter`, Stale
-  // below `spoils.rottenAfter`, and Rotten from there. Effective age grows at
-  // spoilageRate() of the container the item is in or under, so a fridge
-  // slows it and a working freezer stops it.
+  // SPOILAGE: docs/systems/spoilage.md has the model. A perishable item is
+  // one whose registry entry carries `spoils` and that is not sealed.
   function isPerishable(it){
     const def = registryEntryOf(it);
     return !!(def && def.spoils) && it.sealed !== true;
@@ -7291,13 +7309,16 @@ x_sn_9 m_sn_sn_sn sn p
     return spoilageRate(container, wasOn) * up + spoilageRate(container, false) * (toM - fromM - up);
   }
   // Gives a perishable without `ages` the age it would have if it had sat in
-  // `container`, in `roomId`, since the collapse. A world item's starting
-  // age; an item an action makes is new instead (asNewlyMade()), and a
-  // placement that sets `ages` itself keeps them.
+  // `container`, in `roomId`, since the collapse, true now (`agedAt`). A
+  // world item's starting age; an item an action makes is new instead
+  // (asNewlyMade()), and a placement that sets `ages` itself keeps them, and
+  // is taken as true now when it says no `agedAt`.
   function stampAges(it, container, roomId){
     (Array.isArray(it.contents) ? it.contents : []).forEach(c=> stampAges(c, container, roomId));
-    if(!isPerishable(it) || Array.isArray(it.ages)) return;
-    it.ages = new Array(it.qty).fill(effectiveAge(container, roomId, 0, minutesSinceCollapse()));
+    if(!isPerishable(it)) return;
+    const now = minutesSinceCollapse();
+    if(!Array.isArray(it.ages)) it.ages = new Array(it.qty).fill(effectiveAge(container, roomId, 0, now));
+    if(typeof it.agedAt !== "number") it.agedAt = now;
   }
   // stampAges() over every item list, each with its container. Run on a new
   // game, once the world is built — not inside makeDefaultWorld(), which
@@ -7325,32 +7346,94 @@ x_sn_9 m_sn_sn_sn sn p
       list.splice(list.indexOf(row), 0, takeUnits(row, n));
     }
   }
-  // One tick of ageing: every perishable unit grows by the step at its
-  // container's rate from the power state now (stepPower() has just run). A
-  // row that changes state is split where its units now differ, and any row
-  // that changed folds into a matching row of its list, so each list holds
-  // one row per item and state.
-  function ageFood(dt){
-    forEachItemList((list, roomId, container)=>{
-      let grow = null, changed = false;
-      list.slice().forEach(row=>{
-        if(!isPerishable(row)) return;
-        if(grow === null) grow = container ? spoilageRate(container, containerPowered(roomId, container)) * dt : dt;
-        if(!(grow > 0)) return;
-        normalizeAges(row);
-        const before = rowFreshness(row);
-        row.ages = row.ages.map(a=> a + grow);
-        if(rowFreshness(row) === before) return;
-        splitByFreshness(list, row);
-        changed = true;
+  // AGEING, worked out when read: docs/systems/spoilage.md has the model.
+  //   The age a row gains over [from, to), in `container` in `roomId`: 1 a
+  // minute carried, on the floor, or in a container that is neither a
+  // fridge nor a freezer; in a fridge or a freezer, its powered rate while
+  // the grid was up (gridUpMinutes()) if its load would be powered with the
+  // grid up (coldStoreWired()), and its unpowered rate the rest of the time.
+  // Only the grid changes power over a span: every other change is a settle
+  // point. A new source of power (#245) changes this rule.
+  function ageOver(container, roomId, from, to){
+    if(!(to > from)) return 0;
+    if(!hasTag(container, "fridge") && !hasTag(container, "freezer")) return to - from;
+    if(!coldStoreWired(roomId, container)) return spoilageRate(container, false) * (to - from);
+    const up = gridUpMinutes(from, to);
+    return spoilageRate(container, true) * up + spoilageRate(container, false) * (to - from - up);
+  }
+  // Whether a room container's load would be powered with the grid up, as
+  // the power state stands: its switch on and its path closed, a look at its
+  // own building with the grid taken as live (powerSnapshot(): pure, no
+  // trips). A container no load is wired to takes the grid straight.
+  function coldStoreWired(roomId, container){
+    const loadId = POWER_NET.containerLoad[roomId + KEY_SEP + container.id];
+    if(!loadId) return true;
+    const b = POWER_INDEX.of[loadId];
+    return !!powerSnapshot(POWER_INDEX.sub[b], APPLIANCES, state.power, state.electricalRules, true, null, state.seed, null)
+      .powered[loadId];
+  }
+  // One list (not its nested contents) settled to minute `m`: each perishable
+  // row gains ageOver() from its `agedAt` (now, when it has none) for every
+  // unit, and is true at `m`. A row that changes state is split where its
+  // units now differ, and any row that changed folds into a matching row of
+  // its list, so each list holds one row per item and state. Nothing is
+  // logged: a row in a list nobody reaches goes "mixed" silently until it is
+  // next settled.
+  function settleList(list, roomId, container, m){
+    let changed = false;
+    list.slice().forEach(row=>{
+      if(!isPerishable(row)) return;
+      const from = typeof row.agedAt === "number" ? row.agedAt : m;
+      const grow = ageOver(container, roomId, from, m);
+      row.agedAt = m;
+      if(!(grow > 0)) return;
+      normalizeAges(row);
+      const before = rowFreshness(row);
+      row.ages = row.ages.map(a=> a + grow);
+      if(rowFreshness(row) === before) return;
+      splitByFreshness(list, row);
+      changed = true;
+    });
+    if(changed) list.slice().forEach(row=>{ if(list.includes(row) && isPerishable(row)) remergeRow(list, row); });
+  }
+  // A list and every list nested in its items' `contents`, to any depth,
+  // settled to `m`, all in `container` as forEachItemList() has it.
+  function settleListDeep(list, roomId, container, m){
+    if(!Array.isArray(list) || !list.length) return;
+    settleList(list, roomId, container, m);
+    list.forEach(it=>{ if(it && Array.isArray(it.contents)) settleListDeep(it.contents, roomId, container, m); });
+  }
+  // Every list the player can reach, settled to now: what is carried, and
+  // the current room's floor, containers and car containers, with every
+  // list nested in them. Run at the end of every advance of time
+  // (settleToNow()), after every room change (doMove()), and on a new game,
+  // restart and load (rebuildSchedule()), so every reader of ages reads a
+  // settled list.
+  function settleReachable(){
+    const m = minutesSinceCollapse(), room = world[state.currentRoom];
+    invPools().forEach(list=> settleListDeep(list, null, null, m));
+    if(!room) return;
+    settleListDeep(room.floor, state.currentRoom, null, m);
+    room.containers.concat(room.carContainers || []).forEach(c=> settleListDeep(c.items, state.currentRoom, c, m));
+  }
+  // Building `b`'s wired fridges and freezers, settled to minute `m` under
+  // the power state as it stands: before a change to its switches or
+  // breakers is committed (commitResolve()), since ageOver() takes the power
+  // state as constant over a span.
+  function settleColdStores(b, m){
+    Object.values(POWER_INDEX.sub[b].loads).forEach(l=>{
+      const room = world[l.room];
+      if(!room) return;
+      l.containers.forEach(id=>{
+        const c = room.containers.find(x=> x.id === id);
+        if(c && (hasTag(c, "fridge") || hasTag(c, "freezer"))) settleListDeep(c.items, l.room, c, m);
       });
-      if(changed) list.slice().forEach(row=>{ if(list.includes(row) && isPerishable(row)) remergeRow(list, row); });
     });
   }
-  // applyHungerThirst/applyWorldTicking/applyEnergyBaseline are the pieces
-  // applyDecay used to do in one shot. They're split out so Sleep (which
-  // suspends the awake Energy/Stamina/Fatigue system) can run Hunger/Thirst
-  // and world ticking without the awake Energy baseline, and so the
+  // applyHungerThirst/applyEnergyBaseline are the pieces applyDecay used to
+  // do in one shot. They're split out so Sleep (which suspends the awake
+  // Energy/Stamina/Fatigue system) can run Hunger/Thirst and the world's
+  // time (clockStep()) without the awake Energy baseline, and so the
   // Stamina/Fatigue system can drive Energy's *recovery* multiplier without
   // duplicating the baseline-depletion math.
   function applyHungerThirst(min){
@@ -7402,63 +7485,207 @@ x_sn_9 m_sn_sn_sn sn p
       asleep: "A siren wakes you. It's close by, and after a while it stops. Nothing follows it." }
   };
   // Events on the collapse clock: { at, wakes, line(roomId, asleep) }. Each
-  // fires once, in the step whose interval crosses `at` (minutes since the
-  // collapse), in every time loop, since all of them run
-  // applyWorldTicking(). Derived, never stored: a save from before one hears
-  // it again. One marked `wakes` ends a sleep (doSleep()) or a blackout
-  // (advanceTime()); `line` is told whether the player is asleep, a blackout
-  // included, and so being woken.
+  // fires once, at its minute `at` (minutes since the collapse), as a
+  // scheduled event (fireClockEvents()), in every time loop. Derived, never
+  // stored: a save from before one hears it again. One marked `wakes` ends a
+  // sleep (doSleep()) or a blackout (advanceTime()) after the step it fires
+  // in; `line` is told whether the player is asleep, a blackout included,
+  // and so being woken.
   const CLOCK_EVENTS = [
     { at: POWER_FAILS_MIN + SIREN_AFTER_FAIL_MIN, wakes: true,
       line: (roomId, sleeping)=> SIREN_LINES[sirenPlace(roomId)][sleeping ? "asleep" : "awake"] }
   ];
-  function fireClockEvents(dt){
-    const now = minutesSinceCollapse(), before = now - dt;
+  // Fires every CLOCK_EVENTS entry not yet fired whose minute is `m` or
+  // before (lastClock < at ≤ m), then marks the clock fired up to `m`.
+  function fireClockEvents(m){
     CLOCK_EVENTS.forEach(ev=>{
-      if(!(before < ev.at && now >= ev.at)) return;
+      if(!(lastClock < ev.at && ev.at <= m)) return;
       log(ev.line(state.currentRoom, asleep), "warn");
       if(ev.wakes && asleep) wokenUp = true;
     });
+    lastClock = Math.max(lastClock, m);
   }
-  // A device drains wherever it is: carried, stowed in a bag, or left switched
-  // on anywhere in the world. Where it is decides only who hears it die: a
+  // BATTERIES, worked out when read: docs/systems/time.md has the model. A
+  // device on batteries' charge at minute `m`: its `current`, less its drain
+  // since `durability.asOf` while it is on.
+  function batteryCharge(it, m = minutesSinceCollapse()){
+    const d = it.durability;
+    if(!it.on || typeof d.asOf !== "number") return d.current;
+    return Math.max(0, d.current - it.drainRate * (m - d.asOf));
+  }
+  // Turning a device on or off, the one way it is done: on, its charge is
+  // true from now and its running out is scheduled; off, its charge is
+  // written down and `asOf` goes.
+  function switchDevice(it, on){
+    if(on){
+      it.on = true;
+      it.durability.asOf = minutesSinceCollapse();
+      scheduleBatteryDeath(it);
+    } else {
+      it.durability.current = batteryCharge(it);
+      delete it.durability.asOf;
+      it.on = false;
+    }
+  }
+  // The minutes since the collapse at which a device switched on runs out,
+  // runtime only: added to by every switching on (scheduleBatteryDeath()),
+  // rebuilt by one walk on a new game, restart and load (rebuildSchedule()),
+  // and dropped once due. A minute left behind by a device switched off
+  // since finds nothing. Not keyed by _uid, since moving an item strips it.
+  let batteryDeaths = [];
+  function scheduleBatteryDeath(it){
+    if(it.drainRate > 0) batteryDeaths.push(it.durability.asOf + it.durability.current / it.drainRate);
+  }
+  // Every device whose charge is out at minute `m`, when a death is due by
+  // then: one walk switches each off, with its line by where it is. A
   // carried one is "your", one in the room you are in is "the", and one
   // anywhere else shuts off silently, the way a fire elsewhere goes out.
-  function applyWorldTicking(min){
-    // The network first: what spoilage reads this step is this step's power.
-    // Then the tanks, from what this step's pumps drew.
-    stepPower(min);
-    refillTanks(min);
-    ageFood(min);
-    forEachItemList((list, roomId)=>{
-      list.forEach(it=>{
-        if(it.on && it.durability){
-          it.durability.current = Math.max(0, it.durability.current - it.drainRate*min);
-          if(it.durability.current <= 0){
-            it.on = false;
-            const name = it.name.toLowerCase();
-            if(roomId === null) log(`Your ${name} runs out of battery and shuts off.`, "warn");
-            else if(roomId === state.currentRoom) log(`The ${name} runs out of battery and shuts off.`, "warn");
-          }
-        }
-      });
+  function settleBatteryDeaths(m){
+    if(!batteryDeaths.some(t=> t <= m)) return;
+    forEachItemList((list, roomId)=> list.forEach(it=>{
+      if(!it.on || !it.durability || it.durability.mode !== "time" || batteryCharge(it, m) > TICK_EPSILON) return;
+      it.durability.current = 0;
+      it.on = false;
+      delete it.durability.asOf;
+      const name = it.name.toLowerCase();
+      if(roomId === null) log(`Your ${name} runs out of battery and shuts off.`, "warn");
+      else if(roomId === state.currentRoom) log(`The ${name} runs out of battery and shuts off.`, "warn");
+    }));
+    batteryDeaths = batteryDeaths.filter(t=> t > m);
+  }
+  // THE CLOCK AND THE SCHEDULER: docs/systems/time.md has the model. The
+  // runtime state, none of it saved (rebuildSchedule()):
+  //   settledAt  the minute since the collapse the scheduled systems stand
+  //              at. Every advance of time ends by settling to now, so
+  //              between two advances it is now.
+  //   lastClock  the minute since the collapse CLOCK_EVENTS have been fired
+  //              up to.
+  //   lastGrid   the same for the grid's changes (GRID_CHANGES).
+  //   batteryDeaths  the minutes devices switched on run out at.
+  //   nextDue    the least of every scheduled system's next event: planned
+  //              at the start of every advance, since an action may have
+  //              changed anything since the last one, and after every event.
+  // The runtime lists are the rooms whose heat is on (heatRooms) and the
+  // stoves whose timer runs (timerStoves), each a set walked in world order
+  // (roomOrder()). Every writer of heatActive or timerMinutes keeps them
+  // (scheduleHeat(), scheduleTimer()).
+  let settledAt = 0, lastClock = 0, lastGrid = 0, nextDue = Infinity;
+  // Every minute since the collapse at which the grid fails or returns: the
+  // bounds of GRID_UP_SPANS, each a scheduled event.
+  const GRID_CHANGES = GRID_UP_SPANS.flat().filter(Number.isFinite).sort((a, b)=> a - b);
+  const heatRooms = new Set();
+  const timerStoves = new Map();
+  // A room's place in world order (roomIds()), from an index built once per
+  // world, so a list kept as a set can be walked in that order.
+  let roomOrderWorld = null, roomOrderIndex = new Map();
+  function roomOrder(id){
+    if(roomOrderWorld !== world){ roomOrderWorld = world; roomOrderIndex = new Map(roomIds().map((r, i)=> [r, i])); }
+    return roomOrderIndex.get(id);
+  }
+  // A room's heat, or a stove's timer, just written: listed while it is on,
+  // or running, and dropped once it isn't.
+  function scheduleHeat(roomId){
+    if(world[roomId] && world[roomId].heatActive) heatRooms.add(roomId);
+    else heatRooms.delete(roomId);
+  }
+  function scheduleTimer(roomId, container){
+    const key = roomId + KEY_SEP + container.id;
+    if(container.timerMinutes > 0) timerStoves.set(key, { roomId, container });
+    else timerStoves.delete(key);
+  }
+  function heatRoomsInOrder(){ return Array.from(heatRooms).sort((a, b)=> roomOrder(a) - roomOrder(b)); }
+  function timersInOrder(){
+    return Array.from(timerStoves.values()).sort((a, b)=> roomOrder(a.roomId) - roomOrder(b.roomId)
+      || world[a.roomId].containers.indexOf(a.container) - world[b.roomId].containers.indexOf(b.container));
+  }
+  // The runtime lists and the battery deaths from one walk of the world, and
+  // the schedule and the reachable lists settled at now: on a new game,
+  // restart and load, and after the benchmark's setup.
+  function rebuildSchedule(){
+    heatRooms.clear();
+    timerStoves.clear();
+    roomIds().forEach(id=>{
+      scheduleHeat(id);
+      world[id].containers.forEach(c=> scheduleTimer(id, c));
     });
-    tickStoveTimers(min);
-    for(const id of roomIds()){
-      const r = world[id];
-      if(!r.heatActive) continue;
-      // Before the fire burns down, so a step the heat was on for counts.
-      cookInHeat(r, min);
-      if(r.heatActive && r.fireMinutesLeft != null){
-        r.fireMinutesLeft -= min;
-        if(r.fireMinutesLeft <= 0){
-          r.heatActive = false;
-          r.fireMinutesLeft = null;
-          if(id === state.currentRoom) log("The fire burns down and goes out.", "warn");
-        }
+    batteryDeaths = [];
+    forEachItemList(list=> list.forEach(it=>{
+      if(!it || !it.on || !it.durability || it.durability.mode !== "time") return;
+      // A device a save from before #373 left on has no `asOf`: its charge
+      // is taken as true now.
+      if(typeof it.durability.asOf !== "number") it.durability.asOf = minutesSinceCollapse();
+      scheduleBatteryDeath(it);
+    }));
+    settledAt = lastClock = lastGrid = minutesSinceCollapse();
+    settleReachable();
+    planNextDue();
+  }
+  // The next due minute, from what is lit or running now: a grid change not
+  // yet made, a tank coming full (tankFullDue()), a battery running out, a
+  // timer's end, a lit room's next event (heatRoomDue()), and every clock
+  // event not yet fired.
+  function planNextDue(){
+    let due = settledAt + tankFullDue();
+    batteryDeaths.forEach(t=>{ due = Math.min(due, t); });
+    GRID_CHANGES.forEach(g=>{ if(g > lastGrid) due = Math.min(due, g); });
+    timerStoves.forEach(({ container })=>{ due = Math.min(due, settledAt + container.timerMinutes); });
+    heatRooms.forEach(id=>{ due = Math.min(due, settledAt + heatRoomDue(world[id])); });
+    CLOCK_EVENTS.forEach(ev=>{ if(ev.at > lastClock) due = Math.min(due, ev.at); });
+    nextDue = due;
+  }
+  // Brings the scheduled systems to minute `m`, each by the span since
+  // settledAt, and does what is due there, in this order: the tanks
+  // (settleTanks()), then a grid change at `m` (resolveGrid()), then a
+  // tank come full resolves its building so its pump stops, then the
+  // batteries out by `m` (settleBatteryDeaths()), then every running timer
+  // in world order, then every lit room, its cooking and then its fire
+  // (settleTimer(), settleHeat()). It never runs past an event
+  // nobody has processed, since it is only ever asked for the next due
+  // minute or for now, and TICK_EPSILON absorbs the float left over. A span
+  // of 0 still finishes what is due at `m`.
+  function settleWorld(m){
+    const from = settledAt, span = Math.max(0, m - from);
+    settledAt = Math.max(from, m);
+    const filled = settleTanks(from, span);
+    GRID_CHANGES.forEach(g=>{ if(lastGrid < g && g <= m) resolveGrid(g); });
+    lastGrid = Math.max(lastGrid, m);
+    filled.forEach(b=>{ if(TANK_PUMPS[b] !== undefined) resolveBuilding(b); });
+    settleBatteryDeaths(m);
+    timersInOrder().forEach(({ roomId, container })=> settleTimer(roomId, container, span));
+    heatRoomsInOrder().forEach(id=> settleHeat(id, span));
+  }
+  // What an advance of time ends with: the world settled to now, and every
+  // list the player can reach.
+  function settleToNow(){
+    settleWorld(minutesSinceCollapse());
+    settleReachable();
+  }
+  // Every event due by now, each at its own minute and in time order: the
+  // world settled to it, which does what is due there and logs it, then the
+  // clock events up to it. At one minute the order is grid changes, tanks
+  // coming full, battery deaths, timers, cooking, fires, clock events. The cap guards against an event that never clears,
+  // which would otherwise hang the step: a bug, reported and cut short.
+  const SCHEDULER_MAX_EVENTS_PER_STEP = 1000;
+  function processDueEvents(){
+    const now = minutesSinceCollapse();
+    for(let n = 0; nextDue <= now + TICK_EPSILON; n++){
+      if(n >= SCHEDULER_MAX_EVENTS_PER_STEP){
+        console.warn(`processDueEvents: more than ${SCHEDULER_MAX_EVENTS_PER_STEP} events due at minute ${nextDue}; the rest wait`);
+        return;
       }
+      const m = nextDue;
+      settleWorld(m);
+      fireClockEvents(m);
+      planNextDue();
     }
-    fireClockEvents(min);
+  }
+  // The one step of time, `dt` minutes of at most one: the clock, Hunger
+  // and Thirst, then what is due. Its caller adds its own vitals piece after
+  // it, and its own stop condition.
+  function clockStep(dt){
+    state.totalMinutes += dt;
+    applyHungerThirst(dt);
+    processDueEvents();
   }
   function applyEnergyBaseline(min, multiplier){
     state.vitals.energy = clamp(state.vitals.energy - DECAY.energy*min*multiplier);
@@ -7472,13 +7699,9 @@ x_sn_9 m_sn_sn_sn sn p
   // ==================================================
   // POWER
   // ==================================================
-  // The power network: sources (the grid, for now), distribution (a
-  // complex's main board, a unit's panel, branch circuits, each protected by
-  // a breaker) and loads (fixtures and appliances). The rest of the game asks
-  // it one question, isPowered(loadId), and spoilage is its first reader.
-  // Definitions live in WORLD DATA (POWER SCHEMA); what changes in play is
-  // state.power (PLAYER STATE). A sub-section of SURVIVAL / TIME SIMULATION,
-  // the way STAMINA / FATIGUE is.
+  // The power network: docs/systems/power.md has the model. Definitions
+  // live in WORLD DATA (POWER SCHEMA); what changes in play is state.power
+  // (PLAYER STATE).
   //
   // The layers a breaker sits in, lowest first: the order every check runs
   // in.
@@ -7676,7 +7899,7 @@ x_sn_9 m_sn_sn_sn sn p
   // The game's tank pumps, found once: { buildingId: loadId } for every
   // building with a tank and a pump. A building with two keeps its first,
   // which validateWiring() reports. A tank with no pump here is unwired, and
-  // refills by the fallback (refillTanks()).
+  // refills by the fallback (tankRefillLph()).
   const TANK_PUMPS = (function(){
     const out = {};
     const found = tankPumpsOf(POWER_NET, APPLIANCES, world);
@@ -7720,23 +7943,13 @@ x_sn_9 m_sn_sn_sn sn p
     if(on && !tripped) delete power.breakers[id];
     else power.breakers[id] = { on, tripped };
   }
-  function heatIn(power, id){ return power.heat[id] > 0 ? power.heat[id] : 0; }
-  function setHeatIn(power, id, h){
-    if(h > 0) power.heat[id] = h;
-    else delete power.heat[id];
-  }
   // What a hand on a breaker does: switching it moves the handle and leaves a
   // trip as it is; a reset pushes a tripped breaker back on. The device
   // pop-up and the dev seam's scripts both go through these.
   function switchBreakerIn(power, id, on){ setBreakerIn(power, id, on, breakerStateIn(power, id).tripped); }
   function resetBreakerIn(power, id){ setBreakerIn(power, id, true, false); }
-  // Rewiring a blown fuse: unblown, as a reset leaves a breaker, and its heat
-  // cleared, since new wire starts cold. A breaker's reset keeps its heat;
-  // this difference is deliberate (#358).
-  function rewireFuseIn(power, id){
-    resetBreakerIn(power, id);
-    setHeatIn(power, id, 0);
-  }
+  // Rewiring a blown fuse leaves it unblown, as a reset leaves a breaker.
+  function rewireFuseIn(power, id){ resetBreakerIn(power, id); }
   function breakerClosedIn(power, id){
     const b = breakerStateIn(power, id);
     return b.on && !b.tripped;
@@ -7750,35 +7963,18 @@ x_sn_9 m_sn_sn_sn sn p
   function consultedLayers(rules){ return rules === "simplified" ? ["panel", "board"] : BREAKER_LAYERS; }
   function consultsBreaker(br, rules){ return !!br.fuse || consultedLayers(rules).includes(br.layer); }
   function circuitSkipped(br, rules){ return rules === "simplified" && !(br && br.fuse); }
-  // How long a breaker takes to trip at `f` times its rating (f > 1), in
-  // minutes, through the two IEC anchor points (see BREAKER_F_LOW):
-  //   t(f) = tHigh × ((F_HIGH − 1) ÷ (f − 1))^n,
-  //   n = ln(tLow ÷ tHigh) ÷ ln((F_HIGH − 1) ÷ (F_LOW − 1)),
-  // which passes exactly through (F_LOW, tLow) and (F_HIGH, tHigh). A breaker
-  // with no usable rating never trips. Where the result is a minute or less
-  // (F_HIGH and above, up to 32 A), one step's rise fills the heat meter:
-  // time moves in steps of at most a minute (runAwakeStep()), so the breaker
-  // trips at the end of the first step. That is intended: no action is
-  // shorter, and nothing resolves seconds.
-  // The formula is anchorMinutes(), once; a fuse's blow runs through it on
-  // its own anchors (fuseBlowMinutes(), FUSE_F_LOW).
-  function bandMinutes(bands, rating){ return bands.find(b=> rating <= b.upTo).min; }
-  function anchorMinutes(f, fLow, tLow, fHigh, tHigh){
-    const n = Math.log(tLow / tHigh) / Math.log((fHigh - 1) / (fLow - 1));
-    return tHigh * Math.pow((fHigh - 1) / (f - 1), n);
-  }
-  function tripMinutes(rating, f){
-    if(!(rating > 0)) return Infinity;
-    return anchorMinutes(f, BREAKER_F_LOW, bandMinutes(BREAKER_T_LOW_MIN, rating),
-      BREAKER_F_HIGH, bandMinutes(BREAKER_T_HIGH_MIN, rating));
-  }
-  function fuseBlowMinutes(f){ return anchorMinutes(f, FUSE_F_LOW, FUSE_T_LOW_MIN, FUSE_F_HIGH, FUSE_T_HIGH_MIN); }
-  // One look at the network at `minute`, changing nothing. Pure: a function
-  // of the expanded network, the appliances, a power state, the rules,
-  // whether the grid is live, the minute, the previous step's `drawing`, the
-  // seed, and `floats`, { loadId: { low, full } }, the float switch of each
-  // tank a pump fills, as the step starts (tankFloat()). A pump (`flowLph`)
-  // with no entry in `floats` has no tank to fill, and never draws.
+  // What a load draws, in watts, while it draws at all: a cycling load
+  // (`dutyCycle`) its average, watts × dutyCycle, whenever it has power;
+  // anything else its watts. Current, and so trips and the clamp, read this.
+  // When a cycling load is in the on part of its cycle is presentation only
+  // (loadRunningAt()).
+  function loadDrawWatts(a){ return a.dutyCycle !== undefined && a.cycleMinutes > 0 ? a.watts * a.dutyCycle : a.watts; }
+  // One look at the network, changing nothing. Pure: a function of the
+  // expanded network, the appliances, a power state, the rules, whether the
+  // grid is live, the previous resolve's `drawing`, the seed, and `floats`,
+  // { loadId: { low, full } }, the float switch of each tank a pump fills
+  // (tankFloat()). A pump (`flowLph`) with no entry in `floats` has no tank
+  // to fill, and never draws.
   //   live      board, panel and circuit ids: whether power reaches past
   //             their breaker. A board is live when the grid is and its
   //             main is closed; a panel when its board is, and its feeder
@@ -7789,25 +7985,23 @@ x_sn_9 m_sn_sn_sn sn p
   //   powered   load ids: its switch is on and its circuit (simplified: its
   //             panel, unless the circuit is a fuse) is live. What spoilage
   //             asks, through isPowered().
-  //   drawing   load ids: powered, and a cycling load in the on part of its
-  //             cycle, ((minute + phase) mod cycleMinutes) < dutyCycle ×
-  //             cycleMinutes, its phase fixed per load by a keyed roll so
-  //             the kitchens don't all cycle together; and a pump only
-  //             while its float calls: its tank is below TANK_FLOAT_START,
-  //             or the pump was drawing in `prevDrawing` and the tank is not
-  //             yet full. It never calls on a full tank. With no
-  //             `prevDrawing` only the first test applies, so a tank between
-  //             the start level and full waits after a load or a return of
-  //             power (#317's accepted gap: the latch is never saved).
+  //   drawing   load ids: powered, and a pump only while its float calls:
+  //             its tank is below TANK_FLOAT_START, or the pump was drawing
+  //             in `prevDrawing` and the tank is not yet full. It never
+  //             calls on a full tank. With no `prevDrawing` only the first
+  //             test applies, so a tank between the start level and full
+  //             waits after a load (#317's accepted gap: the latch is never
+  //             saved). A cycling load draws whenever it is powered, at its
+  //             average (loadDrawWatts()).
   //   starting  load ids: a motor load (startWatts) drawing now that was not
-  //             in `prevDrawing`: switched on, its cycle turned on, its
-  //             float called, or its circuit came back. No `prevDrawing`
-  //             means no starts.
+  //             in `prevDrawing`: switched on, its float called, or its
+  //             circuit came live. No `prevDrawing` means no starts.
   //   running, momentary  breaker ids: the current through it in amps, from
-  //             the watts of the loads it feeds that are drawing; momentary
+  //             the draw of the loads it feeds that are drawing; momentary
   //             counts a starting load at its startWatts.
   // A cycle's phase roll is a pure function of the seed and the load id, so
-  // cycleRoll() keeps each one for as long as the seed stays the same.
+  // cycleRoll() keeps each one for as long as the seed stays the same. Only
+  // loadRunningAt() reads it.
   let cycleRolls = { seed:null, byLoad:new Map() };
   function cycleRoll(seed, loadId){
     if(cycleRolls.seed !== seed) cycleRolls = { seed, byLoad:new Map() };
@@ -7815,7 +8009,7 @@ x_sn_9 m_sn_sn_sn sn p
     if(r === undefined){ r = rollValueFor(seed, ["power", "cycle", loadId]); cycleRolls.byLoad.set(loadId, r); }
     return r;
   }
-  function powerSnapshot(net, appliances, power, rules, gridLive, minute, prevDrawing, seed, floats){
+  function powerSnapshot(net, appliances, power, rules, gridLive, prevDrawing, seed, floats){
     const simple = rules === "simplified";
     const closed = (id)=> breakerClosedIn(power, id);
     const live = {}, supplied = {};
@@ -7835,10 +8029,6 @@ x_sn_9 m_sn_sn_sn sn p
         const f = floats && floats[l.id];
         if(!f || f.full || !(f.low || (prevDrawing && prevDrawing[l.id]))) return;
       }
-      if(a.dutyCycle !== undefined && a.cycleMinutes > 0){
-        const phase = cycleRoll(seed, l.id) * a.cycleMinutes;
-        if(!((minute + phase) % a.cycleMinutes < a.dutyCycle * a.cycleMinutes)) return;
-      }
       drawing[l.id] = true;
       if(a.startWatts !== undefined && prevDrawing && !prevDrawing[l.id]) starting[l.id] = true;
     });
@@ -7848,43 +8038,40 @@ x_sn_9 m_sn_sn_sn sn p
       br.loads.forEach(id=>{
         if(!drawing[id]) return;
         const a = appliances[net.loads[id].appliance];
-        run += a.watts;
-        mom += starting[id] ? a.startWatts : a.watts;
+        run += loadDrawWatts(a);
+        mom += starting[id] ? a.startWatts : loadDrawWatts(a);
       });
       running[br.id] = run / br.volts;
       momentary[br.id] = mom / br.volts;
     });
     return { live, supplied, powered, drawing, starting, running, momentary };
   }
-  // One step of `dt` minutes ending at `minute`: the snapshot after this
-  // step's trips, plus `power`, the new power state (the one passed in is
-  // never written), and `trips`, [{ id, cause, running }] in the order they
-  // happened, `running` being the loads the breaker fed that were drawing
-  // when it went. Pure, like powerSnapshot(). Each check runs lowest layer
-  // first and looks again after every layer, so a trip below is seen above.
-  //   Instant: a closed breaker whose momentary current exceeds its curve's
-  //     `instant` multiple (BREAKER_CURVES) × its rating trips at once. One
-  //     whose curve is not in BREAKER_CURVES never does (validateWiring()
-  //     reports it).
-  //   Heat, the delayed trip: at f = running current ÷ rating, heat rises by
-  //     dt ÷ tripMinutes() while f > 1 and drains by dt ÷ HEAT_COOL_MIN
-  //     otherwise, never below 0. At 1 the breaker trips. Tripped means off
-  //     until reset; its heat keeps draining meanwhile, so a reset with the
-  //     overload still there trips again quickly, as a real breaker does.
-  //   A fuse (`fuse`) has no instant trip. It heats as a breaker does, but at
-  //     dt ÷ fuseBlowMinutes(), and at 1 it blows, which is its `tripped`.
+  // The resolve: the look after this resolve's trips, plus `power`, the new
+  // power state (the one passed in is never written), and `trips`, [{ id,
+  // cause, running }] in the order they happened, `running` being the loads
+  // the breaker fed that were drawing when it went. Pure, like
+  // powerSnapshot(), and with no time in it: electricity is a gameplay
+  // system, not a realistic one (#369), so a breaker has no heat to build.
+  // Each check runs lowest layer first and looks again after every layer,
+  // so a trip below is seen above.
+  //   Instant: a closed breaker (never a fuse) whose momentary current
+  //     exceeds its curve's `instant` multiple (BREAKER_CURVES) × its rating
+  //     trips at once (cause "instant"). One whose curve is not in
+  //     BREAKER_CURVES never does (validateWiring() reports it).
+  //   Overload: a closed breaker or fuse whose running current exceeds its
+  //     rating trips at once (cause "overload"). A fuse's trip is its
+  //     blowing.
   // A breaker the rules don't consult (consultsBreaker()) is left exactly as
   // it is, and so is an RCD (`rcd`) or a cut-off switch (`cutoff`), which
-  // neither check touches under either rules: neither trips on overcurrent,
-  // and neither holds heat.
-  // Only a trip changes what a look sees (heat is not among its inputs), so
-  // a look is kept until one happens, and taken again at the next layer.
-  function resolvePowerStep(net, appliances, power, rules, gridLive, minute, dt, prevDrawing, seed, floats){
-    const p = { switches:Object.assign({}, power.switches), heat:Object.assign({}, power.heat), breakers:{} };
+  // neither check touches under either rules: neither trips on overcurrent.
+  // Only a trip changes what a look sees, so a look is kept until one
+  // happens, and taken again at the next layer.
+  function resolvePower(net, appliances, power, rules, gridLive, prevDrawing, seed, floats){
+    const p = { switches:Object.assign({}, power.switches), breakers:{} };
     Object.keys(power.breakers).forEach(id=>{ p.breakers[id] = Object.assign({}, power.breakers[id]); });
     const trips = [];
     let kept = null;
-    const look = ()=> kept || (kept = powerSnapshot(net, appliances, p, rules, gridLive, minute, prevDrawing, seed, floats));
+    const look = ()=> kept || (kept = powerSnapshot(net, appliances, p, rules, gridLive, prevDrawing, seed, floats));
     const trip = (id, cause, snap)=>{
       setBreakerIn(p, id, breakerStateIn(p, id).on, true);
       trips.push({ id, cause, running: net.breakers[id].loads.filter(l=> snap.drawing[l]) });
@@ -7904,52 +8091,32 @@ x_sn_9 m_sn_sn_sn sn p
     BREAKER_LAYERS.forEach(layer=>{
       const snap = look();
       net.byLayer[layer].filter(tripsOnOvercurrent).forEach(id=>{
-        const br = net.breakers[id], rating = br.rating;
-        const f = snap.running[id] / rating;
-        let h = heatIn(p, id);
-        h = f > 1 ? h + dt / (br.fuse ? fuseBlowMinutes(f) : tripMinutes(rating, f)) : Math.max(0, h - dt / HEAT_COOL_MIN);
-        h = Math.min(h, 1);
-        if(h >= 1 - TICK_EPSILON && breakerClosedIn(p, id)){ h = 1; trip(id, "heat", snap); }
-        setHeatIn(p, id, h);
+        if(breakerClosedIn(p, id) && snap.running[id] > net.breakers[id].rating) trip(id, "overload", snap);
       });
     });
-    return Object.assign(look(), { power:p, trips });
+    return Object.assign({}, look(), { power:p, trips });
   }
-  // POWER RUNS. Buildings share nothing but the grid, so each resolves on its
-  // own, and one nobody has touched needs no resolving at all: with no entry
-  // in the power state its breakers are closed, its switches at their rolled
-  // defaults and its heat nil, and with a full tank its pump never draws, so
-  // its look at any minute is a pure function of the seed, the rules, the
-  // grid and that minute. A run resolves, each step, only the buildings that
-  // are busy: an entry in the power state under one of its ids, a float
-  // that is not full, or default-on loads that could overload one of its
-  // breakers (untouchedTrippers()). Every other building is still, and its
-  // values are worked out when something reads them (powerRead()), from its
-  // own nodes, never from anything a step stored. Nothing is approximated: a still
-  // building's look is exactly what the whole network's resolver would give
-  // it, so the results are the same as resolving everything, trips and their
-  // order included (the busy buildings resolve as one network, in the
-  // network's own order).
+  // POWER RUNS: each building resolves on its own, and a still one not at
+  // all (docs/systems/power.md).
   //
-  // The index a run reads, built once per expanded network and its
+  // The index the game reads, built once per expanded network and its
   // appliances, beside it (expandWiring()'s output is left as it is):
-  //   buildings  building ids, in the network's order; `order` { b: n }
+  //   buildings  building ids, in the network's order
   //   of         { nodeId: buildingId }, for every board, panel, breaker
   //              and load
   //   sub        { buildingId: a network of that building's nodes alone }, of
   //              expandWiring()'s shape (boards, panels, breakers, loads,
   //              byLayer), in the network's order
   //   roomLoads  { roomId: [loadId] }
-  //   memo       what the run keeps: busy sub-networks, the trippers and the
-  //              still looks, each a pure function of its keys
+  //   memo       the trippers and the still looks, each a pure function of
+  //              its keys
   function powerIndex(net, appliances){
-    const idx = { net, appliances, buildings:[], order:{}, of:{}, sub:{}, roomLoads:{},
-      memo:{ subnets:new Map(), trippers:{}, still:{} } };
+    const idx = { net, appliances, buildings:[], of:{}, sub:{}, roomLoads:{},
+      memo:{ trippers:{}, still:{} } };
     const subOf = (b)=>{
       if(!idx.sub[b]){
         idx.sub[b] = { boards:{}, panels:{}, breakers:{}, loads:{}, byLayer:{} };
         BREAKER_LAYERS.forEach(layer=>{ idx.sub[b].byLayer[layer] = []; });
-        idx.order[b] = idx.buildings.length;
         idx.buildings.push(b);
       }
       return idx.sub[b];
@@ -7971,28 +8138,14 @@ x_sn_9 m_sn_sn_sn sn p
     return idx;
   }
   // The power state of a building nobody has touched: no entries at all.
-  const UNTOUCHED_POWER = Object.freeze({ switches:Object.freeze({}), breakers:Object.freeze({}), heat:Object.freeze({}) });
-  // One network of the buildings `list` (in the index's order), in the
-  // network's order: one building's own, or a merge kept for the next step,
-  // since the busy set seldom changes.
-  function subnetOf(idx, list){
-    if(list.length === 1) return idx.sub[list[0]];
-    const key = list.join("\n");
-    let net = idx.memo.subnets.get(key);
-    if(net) return net;
-    net = { boards:{}, panels:{}, breakers:{}, loads:{}, byLayer:{} };
-    list.forEach(b=> ["boards", "panels", "breakers", "loads"].forEach(k=> Object.assign(net[k], idx.sub[b][k])));
-    BREAKER_LAYERS.forEach(layer=>{ net.byLayer[layer] = [].concat(...list.map(b=> idx.sub[b].byLayer[layer])); });
-    if(idx.memo.subnets.size >= 16) idx.memo.subnets.clear();
-    idx.memo.subnets.set(key, net);
-    return net;
-  }
+  const UNTOUCHED_POWER = Object.freeze({ switches:Object.freeze({}), breakers:Object.freeze({}) });
   // The buildings that could trip untouched, once per rules and seed: those
   // with a consulted breaker that its default-on loads would overload if
-  // they all drew at once, each at the larger of its running and starting
-  // watts, as after the grid returns. Their sums are taken as
-  // resolvePowerStep() takes its own, over a superset of any loads that can
-  // be drawing, so a building not listed here cannot trip while untouched.
+  // they all drew at once, each at its draw (loadDrawWatts()) and, for the
+  // momentary, at the larger of its draw and its starting watts, as after
+  // the grid returns. Their sums are taken as resolvePower() takes its own,
+  // over a superset of any loads that can be drawing, so a building not
+  // listed here cannot trip while untouched.
   function untouchedTrippers(idx, rules, seed){
     const key = rules + "|" + seed;
     if(idx.memo.trippers[key]) return idx.memo.trippers[key];
@@ -8010,21 +8163,21 @@ x_sn_9 m_sn_sn_sn sn p
         br.loads.forEach(lid=>{
           if(!on(lid)) return;
           const a = idx.appliances[s.loads[lid].appliance];
-          run += a.watts;
-          mom += a.startWatts !== undefined ? Math.max(a.watts, a.startWatts) : a.watts;
+          run += loadDrawWatts(a);
+          mom += a.startWatts !== undefined ? Math.max(loadDrawWatts(a), a.startWatts) : loadDrawWatts(a);
         });
         const curve = BREAKER_CURVES[br.curve];
-        return (run / br.volts) / br.rating > 1 || !!(curve && mom / br.volts > curve.instant * br.rating);
+        return run / br.volts > br.rating || !!(curve && mom / br.volts > curve.instant * br.rating);
       }));
       if(overloads) out.push(b);
     });
     return (idx.memo.trippers[key] = out);
   }
-  // The busy buildings, in the index's order, for a power state and floats
-  // as a step starts. An entry under an id the network lacks is nobody's.
+  // The busy buildings, in the index's order, for a power state and floats.
+  // An entry under an id the network lacks is nobody's.
   function busyBuildings(idx, power, rules, seed, floats){
     const busy = new Set(untouchedTrippers(idx, rules, seed));
-    ["switches", "breakers", "heat"].forEach(k=> Object.keys(power[k] || {}).forEach(id=>{
+    ["switches", "breakers"].forEach(k=> Object.keys(power[k] || {}).forEach(id=>{
       const b = idx.of[id];
       if(b !== undefined) busy.add(b);
     }));
@@ -8032,162 +8185,160 @@ x_sn_9 m_sn_sn_sn sn p
       const b = idx.of[id];
       if(b !== undefined && floats[id] && !floats[id].full) busy.add(b);
     });
-    return Array.from(busy).sort((x, y)=> idx.order[x] - idx.order[y]);
-  }
-  // What the next step needs of a run's result: which buildings were busy,
-  // what they drew, and enough to work out what a still one drew. `null` is
-  // no step before (nothing starts), and NOTHING_DREW a step before in which
-  // nothing drew (everything drawing starts: the dev seam's default).
-  const NOTHING_DREW = Object.freeze({ busy:new Set(), drawing:Object.freeze({}), nothing:true });
-  function priorOf(result){
-    if(!result || result === NOTHING_DREW) return result || null;
-    return { busy:result.busy, drawing:result.snap.drawing, rules:result.rules, seed:result.seed,
-      gridLive:result.gridLive, minute:result.minute };
+    return idx.buildings.filter(b=> busy.has(b));
   }
   // A still building's look, with nothing stored: its own nodes at the
-  // untouched power state, with no floats (every one of its tanks is full).
-  function stillLook(idx, b, rules, gridLive, minute, prevDrawing, seed){
-    return powerSnapshot(idx.sub[b], idx.appliances, UNTOUCHED_POWER, rules, gridLive, minute, prevDrawing, seed, null);
+  // untouched power state, with no floats (every one of its tanks is full)
+  // and no resolve before (nothing starts). Kept per rules, seed and grid.
+  function stillLook(idx, b, rules, gridLive, seed){
+    const key = rules + "|" + seed + "|" + !!gridLive;
+    if(!idx.memo.still[key]){
+      if(Object.keys(idx.memo.still).length >= 4) idx.memo.still = {};
+      idx.memo.still[key] = {};
+    }
+    const kept = idx.memo.still[key];
+    return kept[b] || (kept[b] = powerSnapshot(idx.sub[b], idx.appliances, UNTOUCHED_POWER, rules, gridLive, null, seed, null));
   }
-  // What building `b` drew in the step before, from `prior` (priorOf()). A
-  // still building's drawing never depends on the step before its own: only
-  // a pump's does, and a still building's pump never draws.
-  function priorDrawing(idx, prior, b){
-    if(!prior) return null;
-    if(prior.nothing || prior.busy.has(b)) return prior.drawing;
-    return stillLook(idx, b, prior.rules, prior.gridLive, prior.minute, null, prior.seed).drawing;
-  }
-  // The step before's drawing, for the busy buildings `list`.
-  function priorDrawingFor(idx, prior, list){
-    if(!prior) return null;
-    if(prior.nothing || list.every(b=> prior.busy.has(b))) return prior.drawing;
-    const out = {};
-    list.forEach(b=>{
-      const d = priorDrawing(idx, prior, b);
-      Object.keys(idx.sub[b].loads).forEach(id=>{ if(d[id]) out[id] = true; });
-    });
-    return out;
-  }
-  function powerResult(idx, busy, snap, rules, gridLive, minute, prior, seed){
-    return { idx, busy:new Set(busy), snap, rules, gridLive, minute, prior, seed, lazy:{} };
-  }
-  // A look at the whole network, changing nothing, as powerSnapshot() gives
-  // one, read through powerRead(). `prev` is the result before it (a run's
-  // result, NOTHING_DREW or null), in the role powerSnapshot()'s prevDrawing
-  // plays.
-  function powerLook(idx, power, rules, gridLive, minute, prev, seed, floats){
-    const busy = busyBuildings(idx, power, rules, seed, floats);
-    const prior = priorOf(prev);
-    const snap = powerSnapshot(subnetOf(idx, busy), idx.appliances, power, rules, gridLive, minute,
-      priorDrawingFor(idx, prior, busy), seed, floats);
-    return powerResult(idx, busy, snap, rules, gridLive, minute, prior, seed);
-  }
-  // One step, as resolvePowerStep() takes one over the whole network: the
-  // look after it, plus `power` and `trips`.
-  function powerStep(idx, power, rules, gridLive, minute, dt, prev, seed, floats){
-    const busy = busyBuildings(idx, power, rules, seed, floats);
-    const prior = priorOf(prev);
-    const r = resolvePowerStep(subnetOf(idx, busy), idx.appliances, power, rules, gridLive, minute, dt,
-      priorDrawingFor(idx, prior, busy), seed, floats);
-    return Object.assign(powerResult(idx, busy, r, rules, gridLive, minute, prior, seed), { power:r.power, trips:r.trips });
-  }
+  // The network as it stands, { idx, rules, seed, gridLive, looks }: the
+  // grid's state, and `looks`, the look each resolved building's last
+  // resolve left, by building id (resolvePower() less its `power` and
+  // `trips`). A result is never changed once made: a resolve makes a new one
+  // (withLooks()), so the one before stays readable, as logGridChange() needs.
+  function powerResult(idx, rules, seed, gridLive, looks){ return { idx, rules, seed, gridLive, looks }; }
+  function lookOf(result, b){ return result.looks.get(b) || stillLook(result.idx, b, result.rules, result.gridLive, result.seed); }
   // One value of a result: `field` is one of powerSnapshot()'s (live,
   // supplied, powered, drawing, starting, running, momentary) and `id` a node
-  // of it. A still building's live, supplied and powered depend on the grid
-  // alone, so they are kept per rules, seed and grid; its drawing, starting,
-  // running and momentary are worked out once per result, when first read.
-  const STILL_FIELDS = ["live", "supplied", "powered"];
+  // of it.
   function powerRead(result, field, id){
-    const idx = result.idx, b = idx.of[id];
-    if(b === undefined) return undefined;
-    if(result.busy.has(b)) return result.snap[field][id];
-    if(STILL_FIELDS.includes(field)){
-      const key = result.rules + "|" + result.seed + "|" + !!result.gridLive;
-      if(!idx.memo.still[key]){
-        if(Object.keys(idx.memo.still).length >= 4) idx.memo.still = {};
-        idx.memo.still[key] = {};
-      }
-      const kept = idx.memo.still[key];
-      if(!kept[b]) kept[b] = stillLook(idx, b, result.rules, result.gridLive, 0, null, result.seed);
-      return kept[b][field][id];
-    }
-    if(!result.lazy[b]) result.lazy[b] = stillLook(idx, b, result.rules, result.gridLive, result.minute,
-      priorDrawing(idx, result.prior, b), result.seed);
-    return result.lazy[b][field][id];
+    const b = result.idx.of[id];
+    return b === undefined ? undefined : lookOf(result, b)[field][id];
   }
-  // Every value of a result, as the whole network's powerSnapshot() would
-  // give them, in its key order. For the dev seam, which reports whole maps;
-  // the game reads through powerRead().
-  function powerFlat(result){
-    const net = result.idx.net, rd = (field, id)=> powerRead(result, field, id);
-    const out = { live:{}, supplied:{}, powered:{}, drawing:{}, starting:{}, running:{}, momentary:{} };
-    Object.values(net.boards).forEach(b=>{ out.live[b.id] = rd("live", b.id); });
-    Object.values(net.panels).forEach(p=>{
-      out.supplied[p.id] = rd("supplied", p.id);
-      out.live[p.id] = rd("live", p.id);
-      p.circuits.forEach(c=>{ out.live[c] = rd("live", c); });
-    });
-    Object.keys(net.loads).forEach(id=>{
-      out.powered[id] = rd("powered", id);
-      if(rd("drawing", id)) out.drawing[id] = true;
-      if(rd("starting", id)) out.starting[id] = true;
-    });
-    Object.keys(net.breakers).forEach(id=>{
-      out.running[id] = rd("running", id);
-      out.momentary[id] = rd("momentary", id);
-    });
-    return out;
+  // Whether a load is running at minute `m`, for what the player sees and
+  // hears, never for current or trips: a cycling load while it is powered
+  // and in the on part of its cycle, ((m + phase) mod cycleMinutes) <
+  // dutyCycle × cycleMinutes, its phase fixed per load by a keyed roll
+  // (cycleRoll()) so the kitchens don't all cycle together; a pump while its
+  // float calls (drawing); anything else while it is powered. The readouts'
+  // idle word (loadStatusText()) and the grid's lines (logGridChange()) read
+  // it.
+  function loadRunningAt(result, loadId, m){
+    const l = result.idx.net.loads[loadId], a = l && result.idx.appliances[l.appliance];
+    if(!a || !powerRead(result, "powered", loadId)) return false;
+    if(a.flowLph !== undefined) return !!powerRead(result, "drawing", loadId);
+    if(a.dutyCycle !== undefined && a.cycleMinutes > 0)
+      return (m + cycleRoll(result.seed, loadId) * a.cycleMinutes) % a.cycleMinutes < a.dutyCycle * a.cycleMinutes;
+    return true;
   }
-  // The game's run over its network, and the network now: the last step's
-  // result, kept for render and for isPowered(). Runtime only, never saved.
-  // refreshPower() rebuilds it without a step, and without starting
-  // anything, on boot, restart and load; a switch or breaker changed from its
-  // device pop-up shows in the next step.
+  // The game's network as it stands (powerResult()): runtime only, never
+  // saved, rebuilt by refreshPower() on boot, restart and load.
   const POWER_INDEX = powerIndex(POWER_NET, APPLIANCES);
   let powerNow = null;
-  function refreshPower(){
-    powerNow = powerLook(POWER_INDEX, state.power, state.electricalRules, gridUp(),
-      minutesSinceCollapse(), null, state.seed, tankFloatsNow());
+  function withLooks(result, gridLive, looks){ return powerResult(result.idx, result.rules, result.seed, gridLive, looks); }
+  // A copy of a power state, for a change to be resolved before it is
+  // committed.
+  function copyPower(power){
+    const p = { switches:Object.assign({}, power.switches), breakers:{} };
+    Object.keys(power.breakers).forEach(id=>{ p.breakers[id] = Object.assign({}, power.breakers[id]); });
+    return p;
   }
-  // Resolved every step, from applyWorldTicking(), before anything reads it.
-  // A step costs the busy buildings, not the network: Lima's hundreds of
-  // wired homes sit still until someone touches one (POWER RUNS). What keeps
-  // that honest is that nothing is stored for a still building: its values
-  // are worked out from its own nodes when read, and the busy set is taken
-  // afresh from the power state and the floats at every step, so a building
-  // is resolved from the first step after anything touches it. The trippers
-  // are kept per rules and seed, the network being fixed. The floats are
-  // read as the step starts, before this step's refill.
-  function stepPower(dt){
-    const before = powerNow;
-    const r = powerStep(POWER_INDEX, state.power, state.electricalRules, gridUp(),
-      minutesSinceCollapse(), dt, before, state.seed, tankFloatsNow());
+  // Resolves building `b` on the power state `power`, from the look `before`
+  // gives it (its previous resolve's, for its starts; null: none), and
+  // returns what resolvePower() does. Pure.
+  function resolveBuildingOn(b, power, gridLive, before){
+    return resolvePower(POWER_INDEX.sub[b], APPLIANCES, power, state.electricalRules, gridLive,
+      before ? lookOf(before, b).drawing : null, state.seed, tankFloatsNow());
+  }
+  // Whether building `b`'s switches or breakers differ between two power
+  // states.
+  function buildingPowerChanged(b, from, to){
+    return ["switches", "breakers"].some(k=>{
+      const ids = new Set(Object.keys(from[k]).concat(Object.keys(to[k])));
+      return Array.from(ids).some(id=> POWER_INDEX.of[id] === b && JSON.stringify(from[k][id]) !== JSON.stringify(to[k][id]));
+    });
+  }
+  // A resolve's result for building `b` made the game's at minute `m`: when
+  // it changes the building's switches or breakers, its fridges and freezers
+  // are first settled under the power state as it stood
+  // (settleColdStores()), then its power state becomes the game's.
+  function adoptPower(b, r, m){
+    if(buildingPowerChanged(b, state.power, r.power)) settleColdStores(b, m);
     state.power = r.power;
-    powerNow = r;
-    logGridChange(dt, before, r);
+  }
+  // A resolve's result committed now (adoptPower()), and its look made the
+  // building's in powerNow.
+  function commitResolve(b, r){
+    adoptPower(b, r, minutesSinceCollapse());
+    const looks = new Map(powerNow.looks);
+    const { power, trips, ...look } = r;
+    looks.set(b, look);
+    powerNow = withLooks(powerNow, powerNow.gridLive, looks);
+  }
+  // The network on boot, restart and load: every busy building resolved,
+  // with no resolve before it, so nothing starts. A trip it finds (only an
+  // imported save could hold one unresolved) is committed silently.
+  function refreshPower(){
+    const gridLive = gridUp(), looks = new Map();
+    powerNow = powerResult(POWER_INDEX, state.electricalRules, state.seed, gridLive, looks);
+    busyBuildings(POWER_INDEX, state.power, state.electricalRules, state.seed, tankFloatsNow()).forEach(b=>{
+      const r = resolveBuildingOn(b, state.power, gridLive, null);
+      adoptPower(b, r, minutesSinceCollapse());
+      const { power, trips, ...look } = r;
+      looks.set(b, look);
+    });
+  }
+  // A change to building `b`'s power state, by an action: `change(power)` is
+  // made on a copy, the building resolved on it, and the result committed,
+  // so the action's trips happen, and are heard, with it (logTrips()).
+  // With no change it is a plain resolve: a tank's float moved by a draw
+  // (doFillAtSink()), or its tank come full (settleTanks()).
+  function changePower(b, change){
+    if(!powerNow) refreshPower();
+    if(b === undefined) return;
+    const next = copyPower(state.power);
+    if(change) change(next);
+    const r = resolveBuildingOn(b, next, powerNow.gridLive, powerNow);
+    commitResolve(b, r);
     logTrips(r.trips);
+  }
+  function resolveBuilding(b){ changePower(b, null); }
+  // The grid failing or coming back at minute `m`, a scheduled event
+  // (settleWorld()): every busy building resolved at the grid's new state,
+  // from what it drew before, so what the return powers starts; then what the
+  // player notices of it.
+  function resolveGrid(m){
+    if(!powerNow) refreshPower();
+    const before = powerNow, gridLive = gridUp(m), looks = new Map(), trips = [];
+    busyBuildings(POWER_INDEX, state.power, state.electricalRules, state.seed, tankFloatsNow()).forEach(b=>{
+      const r = resolveBuildingOn(b, state.power, gridLive, before);
+      adoptPower(b, r, m);
+      const { power, trips:t, ...look } = r;
+      looks.set(b, look);
+      trips.push(...t);
+    });
+    powerNow = withLooks(before, gridLive, looks);
+    logGridChange(m, before, powerNow);
+    logTrips(trips);
   }
   // What the player notices when something in their room stops or starts:
   // a trip's quiet (logTrips()) and the grid going down (logGridChange())
   // share one line.
   const ROOM_GOES_QUIET = "Everything in here goes quiet.";
-  // The grid itself logs nothing. When it goes down (the failure, and the end
-  // of the recovery), the room goes quiet if a load in it was drawing the
-  // step before; when it comes back, something starts up if a load in it is
-  // drawing this step. Only wired loads count, and neither line wakes a
-  // sleeper. One line per transition at most. Wording retunable.
-  function logGridChange(dt, before, after){
-    const now = minutesSinceCollapse(), up = gridUp(now);
-    if(up === gridUp(now - dt)) return;
-    const drewHere = (r)=> !!r && (POWER_INDEX.roomLoads[state.currentRoom] || []).some(id=> powerRead(r, "drawing", id));
-    if(!up && drewHere(before)) log(ROOM_GOES_QUIET, "warn");
-    if(up && drewHere(after)) log("Something in here starts up again.");
+  // The grid itself logs nothing. When it goes down at minute `m` (the
+  // failure, and the end of the recovery), the room goes quiet if a load in
+  // it was running the minute before (loadRunningAt(), on the network before
+  // the change); when it comes back, something starts up if a load in it is
+  // running at `m`. Only wired loads count, and neither line wakes a sleeper.
+  // One line per change at most. Wording retunable.
+  function logGridChange(m, before, after){
+    const ranHere = (r, minute)=> (POWER_INDEX.roomLoads[state.currentRoom] || []).some(id=> loadRunningAt(r, id, minute));
+    if(!after.gridLive && before.gridLive && ranHere(before, m - 1)) log(ROOM_GOES_QUIET, "warn");
+    if(after.gridLive && !before.gridLive && ranHere(after, m)) log("Something in here starts up again.");
   }
   // A trip is heard where its panel or board hangs, and noticed where
   // something it fed was running; anywhere else it passes unremarked. A fuse
   // blowing is heard as its own line, in place of the panel's (#358). The
   // grid going down or coming back is logGridChange()'s. One line of each
-  // kind per step. Wording retunable.
+  // kind per resolve. Wording retunable.
   function logTrips(trips){
     let atPanel = false, atFuse = false, quiet = false;
     trips.forEach(t=>{
@@ -8199,29 +8350,19 @@ x_sn_9 m_sn_sn_sn sn p
     if(atFuse) log("Something pops in the fuse box.", "warn");
     if(quiet) log(ROOM_GOES_QUIET, "warn");
   }
-  // Whether a load has power: its switch is on and its path is live.
+  // Whether a load has power: its switch is on and its path is live. An
+  // action resolves at once, so this sees a switch or a breaker as soon as
+  // the hand has moved it.
   function isPowered(loadId){
     if(!powerNow) refreshPower();
     return !!powerRead(powerNow, "powered", loadId);
   }
-  // Whether a load has power, and whether it is drawing, on state.power as
-  // it stands, before the next step resolves it: a hand on the load's own
-  // switch shows at once in the load's own readout, where isPowered() and
-  // spoilage see it from the next step, as they see a breaker. A fresh look,
-  // stored nowhere and starting nothing, so it is render-safe. Buildings
-  // share nothing but the grid, so the look is the load's own building's.
-  // Its step before is the last step's (powerNow, priorDrawing()), so a pump
-  // that started below its float's start level keeps drawing until its tank
-  // is full, as the resolver has it. Before the first step there is none.
-  function loadLookNow(loadId){
-    const b = POWER_INDEX.of[loadId];
-    if(b === undefined) return { powered:false, drawing:false };
-    const snap = powerSnapshot(POWER_INDEX.sub[b], APPLIANCES, state.power, state.electricalRules, gridUp(),
-      minutesSinceCollapse(), priorDrawing(POWER_INDEX, priorOf(powerNow), b), state.seed, tankFloatsNow());
-    return { powered:!!snap.powered[loadId], drawing:!!snap.drawing[loadId] };
+  // Whether a load is running now (loadRunningAt()), for its readout.
+  function loadRunningNow(loadId){
+    if(!powerNow) refreshPower();
+    return loadRunningAt(powerNow, loadId, minutesSinceCollapse());
   }
-  function loadPoweredNow(loadId){ return loadLookNow(loadId).powered; }
-  // What a meter reads, from the last step (powerNow). They add no rule to
+  // What a meter reads, from the network as it stands (powerNow). They add no rule to
   // the resolver: each is a look at what it already worked out (#249).
   //   A load's supply, up to its own switch: its circuit's volts while the
   //   circuit is live (simplified rules: its panel, unless the circuit is a
@@ -8246,7 +8387,7 @@ x_sn_9 m_sn_sn_sn sn p
   }
   //   The current through a breaker, in amps: one conductor clamped at the
   //   panel. A main or a feeder reads its total, since a panel is
-  //   single-phase. A cycling load reads whatever it is doing this minute.
+  //   single-phase. A cycling load reads its average draw (loadDrawWatts()).
   function breakerCurrent(id){
     if(!powerNow) refreshPower();
     return powerRead(powerNow, "running", id) || 0;
@@ -8355,9 +8496,7 @@ x_sn_9 m_sn_sn_sn sn p
     let remaining = min;
     while(remaining > 1e-9 && !(untilWoken && wokenUp)){
       const dt = Math.min(1, remaining);
-      state.totalMinutes += dt;
-      applyHungerThirst(dt);
-      applyWorldTicking(dt);
+      clockStep(dt);
       recoveryStep(dt, "normal");
       remaining -= dt;
     }
@@ -8378,6 +8517,7 @@ x_sn_9 m_sn_sn_sn sn p
   const COLLAPSE_STUMBLE_MIN = 20;
   const COLLAPSE_STUMBLE_ENERGY = 30;     // Energy added, not set
   function advanceTime(min){
+    planNextDue();
     runAwakeStep(min);
     if(state.vitals.energy <= 0){
       state.collapseCount += 1;
@@ -8405,6 +8545,7 @@ x_sn_9 m_sn_sn_sn sn p
         runAwakeStep(COLLAPSE_STUMBLE_MIN); state.vitals.energy = clamp(state.vitals.energy + COLLAPSE_STUMBLE_ENERGY);
       }
     }
+    settleToNow();
     checkGameOver();
   }
   // ==================================================
@@ -8474,6 +8615,7 @@ x_sn_9 m_sn_sn_sn sn p
     if(isPerishable(crafted)){
       const ages = used.filter(isPerishable).map(u=> unitAges(u)[0]);
       crafted.ages = [ages.length ? Math.max(...ages) : 0];
+      crafted.agedAt = minutesSinceCollapse();
     }
     const room = world[state.currentRoom];
     if(room.floorCap && totalWeight(room.floor) + itemWeight(crafted) > room.floorCap) logHeap(crafted);
@@ -8572,6 +8714,7 @@ x_sn_9 m_sn_sn_sn sn p
     if(!how) return;
     if(how === "hand" && !hasTool("heat")) consumeMatchUse();
     room.heatActive = true;
+    scheduleHeat(state.currentRoom);
     advanceTime(LIGHT_STOVE_MIN);
     log(how === "self" ? "You light the stove." : "You light a burner by hand.", "good");
     render();
@@ -8602,6 +8745,7 @@ x_sn_9 m_sn_sn_sn sn p
     }
     ensureHeatContainer(room, "campfire", "Campfire", HEAT_CONTAINER_CAPACITY_KG, ["heat"]);
     room.heatActive = true;
+    scheduleHeat(state.currentRoom);
     advanceTime(BUILD_FIRE_MIN);
     log(firstTime ? "You set up the campfire kit and get a fire going."
       : (banked ? "You relight the fire from what's left of the wood." : "You get a fire going."), "good");
@@ -8618,6 +8762,7 @@ x_sn_9 m_sn_sn_sn sn p
   function doExtinguish(){
     const room = world[state.currentRoom];
     room.heatActive = false;
+    scheduleHeat(state.currentRoom);
     log("You put it out.");
     render();
   }
@@ -8651,11 +8796,14 @@ x_sn_9 m_sn_sn_sn sn p
   function roomStove(room){
     return room.containers.find(c=> hasTag(c, "device") && hasTag(c, "heat")) || null;
   }
-  // Cooking is passive: nothing is cooked by a button. Every tick the heat
-  // is on, each raw cookable row lying directly in the room's heat
+  // Cooking is passive: nothing is cooked by a button. For as long as the
+  // heat is on, each raw cookable row lying directly in the room's heat
   // containers — or in a vessel there — gains `cookMinutes`, and at its
   // entry's `cooks.minutes` it turns Cooked, drops its progress and folds
-  // into any matching cooked row.
+  // into any matching cooked row. It is settled, not ticked: a lit room's
+  // cooking is brought up to a minute when that minute is asked for
+  // (settleHeat()), and each completion is a scheduled event at its own
+  // minute (soonestIn(), heatRoomDue()).
   // The counter stops there in this release; burning (#179) will extend it.
   // Progress lives on the item, so it holds when the heat stops, and an item
   // taken out and put back continues from where it was. Nothing is logged,
@@ -8665,13 +8813,41 @@ x_sn_9 m_sn_sn_sn sn p
   // fractional minutes, so a wait of exactly the remaining time finishes the
   // cooking, or runs a timer down, that it was sized for.
   const TICK_EPSILON = 1e-9;
+  // Every container of a room tagged `heat`, in the room's order: a stove's
+  // or a campfire's.
+  function heatContainersOf(room){ return room.containers.filter(c=> hasTag(c, "heat")); }
+  // `dt` minutes of a lit room's cooking, everything in its heat containers.
   function cookInHeat(room, dt){
-    room.containers.filter(c=> hasTag(c, "heat")).forEach(c=>{
+    heatContainersOf(room).forEach(c=>{
       c.items.slice().forEach(it=>{
-        if(vesselDefOf(it)) cookVessel(it, dt);
+        if(vesselDefOf(it)) settleVessel(it, dt);
         else cookItem(c.items, it, dt);
       });
     });
+  }
+  // A lit room settled by `span` minutes (settleWorld()): its heat
+  // containers' food aged to the minute first, since cooking and forming a
+  // dish change it (settleListDeep()), then its cooking, then its fire,
+  // whose last minute still cooks. A fire that runs out goes out at its own
+  // minute, said where the player is.
+  function settleHeat(roomId, span){
+    const r = world[roomId];
+    heatContainersOf(r).forEach(c=> settleListDeep(c.items, roomId, c, settledAt));
+    cookInHeat(r, span);
+    if(r.fireMinutesLeft == null) return;
+    r.fireMinutesLeft -= span;
+    if(r.fireMinutesLeft > TICK_EPSILON) return;
+    r.heatActive = false;
+    r.fireMinutesLeft = null;
+    scheduleHeat(roomId);
+    if(roomId === state.currentRoom) log("The fire burns down and goes out.", "warn");
+  }
+  // Minutes from settledAt to a lit room's next event: its fire going out,
+  // or the soonest cooking to finish in any of its heat containers.
+  function heatRoomDue(room){
+    const next = soonestIn(heatContainersOf(room));
+    const cooking = next ? next.remaining : Infinity;
+    return room.fireMinutesLeft != null ? Math.min(cooking, room.fireMinutesLeft) : cooking;
   }
   function cookItem(list, it, dt){
     if(cookStateOf(it) !== "raw") return;
@@ -8679,8 +8855,11 @@ x_sn_9 m_sn_sn_sn sn p
     if(it.cookMinutes < cookMinutesOf(it) - TICK_EPSILON) return;
     it.cookState = "cooked";
     delete it.cookMinutes;
-    // Cooked food starts Fresh.
-    if(isPerishable(it)) it.ages = new Array(it.qty).fill(0);
+    // Cooked food starts Fresh, at the minute it is settled to.
+    if(isPerishable(it)){
+      it.ages = new Array(it.qty).fill(0);
+      it.agedAt = settledAt;
+    }
     remergeRow(list, it);
   }
   function cookMinutesOf(it){ return registryEntryOf(it).cooks.minutes; }
@@ -8815,44 +8994,55 @@ x_sn_9 m_sn_sn_sn sn p
   function formDish(v, t){
     const dish = buildDish(t, v.contents || [], t.water ? vesselDefOf(v).waterKg : 0);
     dish.ages = [0];
+    dish.agedAt = settledAt;
     dish.cookState = "raw";
     dish.cookMinutes = 0;
     v.contents = [dish];
     delete v.water;
     delete v.boilMinutes;
   }
-  // One tick of a vessel in a lit heat container. Tainted water boils:
-  // BOIL_MINUTES make it clean, and the count holds when the heat stops. Then
-  // a vessel still without a dish forms one if its contents now match a
-  // template. Then whatever it holds cooks: the dish, or, when nothing
-  // matched, each ingredient by its own `cooks`. Nothing is logged.
-  function cookVessel(v, dt){
+  // `span` minutes of a vessel in a lit heat container, in order:
+  //   1. With no dish, it forms one if its contents and water already make
+  //      one (formDish()).
+  //   2. Still without one, tainted water boils: BOIL_MINUTES make it clean,
+  //      and the count holds when the heat stops. Water that comes clean
+  //      forms the dish it now makes, and the settle stops there: the dish
+  //      cooks from the next span, since the boiling finishing is an event
+  //      and the span ends at it.
+  //   3. Whatever it holds cooks by the span: the dish, or, when nothing
+  //      matched, each ingredient by its own `cooks`.
+  // Nothing is logged.
+  function settleVessel(v, span){
     if(!dishIn(v)){
-      if(waterKindOf(v) === "tainted"){
-        v.boilMinutes = (v.boilMinutes || 0) + dt;
-        if(v.boilMinutes >= BOIL_MINUTES - TICK_EPSILON){ v.water.kind = "clean"; delete v.boilMinutes; }
+      const ready = matchingTemplate(v);
+      if(ready) formDish(v, ready);
+    }
+    if(!dishIn(v) && waterKindOf(v) === "tainted"){
+      v.boilMinutes = (v.boilMinutes || 0) + span;
+      if(v.boilMinutes >= BOIL_MINUTES - TICK_EPSILON){
+        v.water.kind = "clean";
+        delete v.boilMinutes;
+        const t = matchingTemplate(v);
+        if(t){ formDish(v, t); return; }
       }
-      const t = matchingTemplate(v);
-      if(t) formDish(v, t);
     }
     const list = v.contents || [];
-    list.slice().forEach(it=> cookItem(list, it, dt));
+    list.slice().forEach(it=> cookItem(list, it, span));
   }
-  // What the room's heat is cooking that will finish soonest: { name,
-  // remaining, water } for whatever has the least time left among everything
-  // still progressing in its heat container — a raw cookable item, a vessel's
-  // raw dish, one that will form, the ingredients cooking alone in a vessel
-  // no dish matches, or tainted water boiling (`water` true) — or null when
-  // nothing is.
-  function soonestCooking(room){
-    const heat = getHeatContainer(room);
-    if(!heat) return null;
+  // What the heat containers `containers` are cooking that will finish
+  // soonest: { name, remaining, water } for whatever has the least time left
+  // among everything still progressing in them — a raw cookable item, a
+  // vessel's raw dish, one that will form, the ingredients cooking alone in a
+  // vessel no dish matches, or tainted water boiling (`water` true) — or null
+  // when nothing is. On a tie, the first found. The scheduler reads it over
+  // a room's every heat container (heatRoomDue()).
+  function soonestIn(containers){
     let best = null;
     const consider = (name, remaining, water)=>{
       if(!best || remaining < best.remaining) best = { name, remaining, water:!!water };
     };
     const rawRows = (list)=> list.forEach(it=>{ if(cookStateOf(it) === "raw") consider(it.name.toLowerCase(), cookRemaining(it)); });
-    heat.items.forEach(it=>{
+    containers.forEach(heat=> heat.items.forEach(it=>{
       if(!vesselDefOf(it)){ rawRows([it]); return; }
       const dish = dishIn(it);
       if(dish){ rawRows([dish]); return; }
@@ -8862,8 +9052,14 @@ x_sn_9 m_sn_sn_sn sn p
         const water = t.water ? vesselDefOf(it).waterKg : 0;
         consider(buildDish(t, it.contents || [], water).name.toLowerCase(), cookMinutesOf({ itemId:t.item }));
       } else rawRows(it.contents || []);
-    });
+    }));
     return best;
+  }
+  // What the room's heat container is cooking that will finish soonest
+  // (soonestIn()), or null: the Wait button's target.
+  function soonestCooking(room){
+    const heat = getHeatContainer(room);
+    return heat ? soonestIn([heat]) : null;
   }
   // Whether the Wait can be offered: the heat is on, something is cooking,
   // and the heat will outlast it — always for a stove, which never runs out,
@@ -8889,24 +9085,21 @@ x_sn_9 m_sn_sn_sn sn p
     const stove = roomStove(world[state.currentRoom]);
     if(!stove) return;
     stove.timerMinutes = (stove.timerMinutes || 0) + minutes;
+    scheduleTimer(state.currentRoom, stove);
     // Silent: the timer readout shows the new time.
     render();
   }
-  function tickStoveTimers(dt){
+  // A running timer settled by `span` minutes (settleWorld()). Its running
+  // down is a scheduled event at its own minute.
+  function settleTimer(roomId, c, span){
+    c.timerMinutes -= span;
+    if(c.timerMinutes > TICK_EPSILON) return;
+    c.timerMinutes = 0;
+    scheduleTimer(roomId, c);
+    // Heard anywhere in the same building, by id: every generated home is
+    // called "House".
     const here = world[state.currentRoom];
-    // Plain loops: this runs every minute over every room in town.
-    for(const id of roomIds()){
-      const room = world[id];
-      for(const c of room.containers){
-        if(!(c.timerMinutes > 0)) continue;
-        c.timerMinutes -= dt;
-        if(c.timerMinutes > TICK_EPSILON) continue;
-        c.timerMinutes = 0;
-        // Heard anywhere in the same building, by id: every generated home
-        // is called "House".
-        if(here.buildingId && here.buildingId === room.buildingId) log("You hear the ringing sound of the timer.");
-      }
-    }
+    if(here.buildingId && here.buildingId === world[roomId].buildingId) log("You hear the ringing sound of the timer.");
   }
   // Waits out the soonest-finishing item. Not interruptible (#212). The log
   // line's wording is retunable.
@@ -8978,7 +9171,7 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // What a room's saved state is made of: the fields play writes on a room
   // (every write site: doSearch(), doBreakCar(), FIRE / COOKING, the fire's
-  // burn-down in applyWorldTicking(), doChopTree(), every take and drop), and
+  // burn-down in settleHeat(), doChopTree(), every take and drop), and
   // on a container, in `containers` and `carContainers` alike
   // (doOpenContainer(), doUnlockContainer(), the stove timer). Everything
   // else on a room is definition, rebuilt on every load.
@@ -9074,8 +9267,8 @@ x_sn_9 m_sn_sn_sn sn p
   // ignores both.
   // An empty list is skipped: every visitor acts on the items in a list, and
   // the town's thousands of unopened containers are empty, so passing them
-  // over is what keeps a one-minute tick cheap (applyWorldTicking() walks the
-  // lists twice a minute).
+  // over is what keeps a whole-world walk cheap (a battery running out, the
+  // load-time rebuilds).
   // The world's room ids, listed once per world: no room is added or removed
   // after a build (makeDefaultWorld(), buildWorld()), so the list holds until
   // `world` itself is replaced, by a restart or a load. The per-minute scans
@@ -9246,12 +9439,13 @@ x_sn_9 m_sn_sn_sn sn p
   // before it (0.8) has no `power` or `electricalRules` and takes them from
   // makeDefaultState()'s spread in applyLoadedData(): an empty power state,
   // so every switch reads its rolled default, and "detailed". This makes
-  // sure a present one has the shape the resolver reads, three plain
-  // objects and a known rules value, dropping anything else. Idempotent.
+  // sure a present one has the shape the resolver reads, two plain objects
+  // and a known rules value, dropping anything else, a `heat` from before
+  // #369 included. Idempotent.
   function backfillPowerState(){
     const obj = (v)=> v && typeof v === "object" && !Array.isArray(v) ? v : {};
     const p = obj(state.power);
-    state.power = { switches:obj(p.switches), breakers:obj(p.breakers), heat:obj(p.heat) };
+    state.power = { switches:obj(p.switches), breakers:obj(p.breakers) };
     if(!ELECTRICAL_RULES.includes(state.electricalRules)) state.electricalRules = "detailed";
   }
   // migrateCookingRelease(): brings a 0.7 save into the cooking release,
@@ -9282,13 +9476,15 @@ x_sn_9 m_sn_sn_sn sn p
     pot_of_spoiled_stew: it=>{
       const dish = dishFrom("stew", "cooking_pot", ["meat", "vegetables"], "cooked");
       dish.ages = [ITEM_REGISTRY[dish.itemId].spoils.rottenAfter];
+      dish.agedAt = minutesSinceCollapse();
       return Object.assign(itemFromRegistry({ id:"cooking_pot", qty:it.qty }), { contents:[dish] });
     },
     bottled_water:       it=> Object.assign(itemFromRegistry({ id:"plastic_bottle", qty:it.qty }), { water:{ kind:"clean", fill:1 } })
   };
   // `qty` units of `id`, every one of them exactly Rotten.
   function rottenItem(id, qty){
-    return Object.assign(itemFromRegistry({ id, qty }), { ages: new Array(qty).fill(ITEM_REGISTRY[id].spoils.rottenAfter) });
+    return Object.assign(itemFromRegistry({ id, qty }), { ages: new Array(qty).fill(ITEM_REGISTRY[id].spoils.rottenAfter),
+      agedAt: minutesSinceCollapse() });
   }
   function migrateCookingRelease(){
     forEachItemList(list=> list.forEach((it, i)=>{
@@ -9368,6 +9564,7 @@ x_sn_9 m_sn_sn_sn sn p
     backfillIllnessScale();
     backfillInventoryCap();
     migrateCookingRelease();
+    rebuildSchedule();
     render();
     return true;
   }
@@ -9499,14 +9696,11 @@ x_sn_9 m_sn_sn_sn sn p
   //     (nameplateWatts()), every circuit's volts is 220, and every
   //     circuit's roles are in its panel's rooms;
   //   every breaker's rating is an IEC 60898-1 preferred rating
-  //     (STANDARD_BREAKER_RATINGS), its curve is in BREAKER_CURVES, and it
-  //     does not trip at BREAKER_F_NO_TRIP × its rating within
-  //     BREAKER_NO_TRIP_MIN (tripMinutes()), a guard for a later retune. An
+  //     (STANDARD_BREAKER_RATINGS) and its curve is in BREAKER_CURVES. An
   //     RCD has no curve and never trips on overcurrent, so only its rating
   //     is checked. A cut-off switch has neither rating nor curve, so
   //     nothing is. A fuse's rating is over 0 and at most EDISON_FUSE_MAX_A,
-  //     not an IEC breaker rating, and its curve (fuseBlowMinutes()) does
-  //     not blow at FUSE_F_NO_BLOW × its rating within FUSE_NO_BLOW_MIN;
+  //     not an IEC breaker rating;
   //   every tank has one pump (tankPumpsOf()): a wired building with a tank
   //     (BUILDING_INFO's tankL) and no `flowLph` load, or with two, and a
   //     `flowLph` load in a building with no tank, which never draws.
@@ -9546,20 +9740,14 @@ x_sn_9 m_sn_sn_sn sn p
       roomExists(p.room, p.id);
       p.rooms.forEach(id=> roomExists(id, `${p.id} rooms`));
     });
-    if(fuseBlowMinutes(FUSE_F_NO_BLOW) < FUSE_NO_BLOW_MIN)
-      problems.push(`fuses blow at ${FUSE_F_NO_BLOW} × their rating within ${FUSE_NO_BLOW_MIN} min`);
     Object.values(net.breakers).forEach(br=>{
       if(br.fuse){
         if(!(br.rating > 0 && br.rating <= EDISON_FUSE_MAX_A))
           problems.push(`${br.id}: fuse rating ${br.rating} A is not over 0 and at most ${EDISON_FUSE_MAX_A} A`);
       } else if(!br.cutoff && !STANDARD_BREAKER_RATINGS.includes(br.rating))
         problems.push(`${br.id}: rating ${br.rating} A is not an IEC 60898-1 preferred rating`);
-      if(!br.rcd && !br.cutoff && !br.fuse){
-        if(!Object.prototype.hasOwnProperty.call(BREAKER_CURVES, br.curve))
-          problems.push(`${br.id}: curve "${br.curve}" is not in BREAKER_CURVES`);
-        if(tripMinutes(br.rating, BREAKER_F_NO_TRIP) < BREAKER_NO_TRIP_MIN)
-          problems.push(`${br.id}: trips at ${BREAKER_F_NO_TRIP} × ${br.rating} A within ${BREAKER_NO_TRIP_MIN} min`);
-      }
+      if(!br.rcd && !br.cutoff && !br.fuse && !Object.prototype.hasOwnProperty.call(BREAKER_CURVES, br.curve))
+        problems.push(`${br.id}: curve "${br.curve}" is not in BREAKER_CURVES`);
       if(br.layer !== "circuit") return;
       if(br.volts !== 220) problems.push(`${br.id}: volts ${br.volts} is not 220`);
       const roles = net.panels[br.device].roles;
@@ -9925,9 +10113,10 @@ x_sn_9 m_sn_sn_sn sn p
   //            script   { t: [change] } applied before step t + 1, t counting
   //                     from 0: { switch: loadId, on }, { breaker: id, on },
   //                     { reset: id }, { rewire: id } (a fuse, rewired as
-  //                     doRewireFuse() does, wire and time aside). A switch goes through setSwitchIn(),
-  //                     as the game's does, so one for a switchless or an
-  //                     unknown load is ignored.
+  //                     doRewireFuse() does, wire and time aside). A
+  //                     switch goes through setSwitchIn(), as the game's
+  //                     does, so one for a switchless or an unknown load is
+  //                     ignored.
   //            tanks    { loadId: { tankL, drawn? } }: the tank each pump
   //                     (`flowLph`) fills, its size and the litres drawn
   //                     from it at the start (default 0, full). Its float is
@@ -9938,11 +10127,13 @@ x_sn_9 m_sn_sn_sn sn p
   //            mains    true / false, or a function of the minute (default
   //                     mainsWaterUp())
   // Returns { problems, steps, power, tanks }: the expansion's problems, then
-  // one row per step, { minute, running, momentary, heat, trips:[{ id,
-  // cause }], powered, drawing:[loadId], starting:[loadId], tanks:{ loadId:
-  // litres held } }, `minute` counting from 1, and the final power state and
-  // litres drawn. It steps as the game does (POWER RUNS), and reports the
-  // whole network each step (powerFlat()). Call it as
+  // one row per step, { minute, running, momentary, trips:[{ id, cause }],
+  // powered, drawing:[loadId], starting:[loadId], tanks:{ loadId: litres
+  // held } }, `minute` counting from 1, and the final power state and litres
+  // drawn. Where the game resolves only on events, this resolves the whole
+  // network every minute (resolvePower()), each resolve's drawing the next
+  // one's before, and refills its tanks per minute: a dev tool, so per
+  // minute is fine. Call it as
   // `ashfallDev.simulatePower({ wiring:{ … } }, 120)`.
   function simulatePower(network, minutes = 60, options = {}){
     const nw = network || {};
@@ -9953,7 +10144,8 @@ x_sn_9 m_sn_sn_sn sn p
     const start = options.start || 0;
     const grid = typeof options.grid === "boolean" ? ()=> options.grid : (options.grid || ((m)=> gridUp(m)));
     const mains = typeof options.mains === "boolean" ? ()=> options.mains : (options.mains || ((m)=> mainsWaterUp(m)));
-    let power = JSON.parse(JSON.stringify(options.power || { switches:{}, breakers:{}, heat:{} }));
+    const given = options.power || {};
+    let power = JSON.parse(JSON.stringify({ switches:given.switches || {}, breakers:given.breakers || {} }));
     const tankDefs = options.tanks || {};
     const drawn = {};
     Object.keys(tankDefs).forEach(id=>{ drawn[id] = tankDefs[id].drawn || 0; });
@@ -9962,8 +10154,7 @@ x_sn_9 m_sn_sn_sn sn p
       Object.keys(tankDefs).forEach(id=>{ out[id] = tankFloat(tankDefs[id].tankL, drawn[id]); });
       return out;
     };
-    const idx = powerIndex(net, appliances);
-    let prev = options.running ? powerLook(idx, power, rules, grid(start), start, null, seed, floats()) : NOTHING_DREW;
+    let prev = options.running ? powerSnapshot(net, appliances, power, rules, grid(start), null, seed, floats()).drawing : {};
     const script = options.script || {};
     const steps = [];
     for(let t = 0; t < minutes; t++){
@@ -9977,19 +10168,18 @@ x_sn_9 m_sn_sn_sn sn p
         else if("rewire" in c) rewireFuseIn(power, c.rewire);
       });
       const m = start + t + 1;
-      const r = powerStep(idx, power, rules, grid(m), m, 1, prev, seed, floats());
+      const r = resolvePower(net, appliances, power, rules, grid(m), prev, seed, floats());
       power = r.power;
-      prev = r;
-      const flat = powerFlat(r);
+      prev = r.drawing;
       Object.keys(tankDefs).forEach(id=>{
         const a = net.loads[id] && appliances[net.loads[id].appliance];
-        if(flat.drawing[id] && mains(m) && a) drawn[id] = refilledDrawn(drawn[id], a.flowLph, 1);
+        if(r.drawing[id] && mains(m) && a) drawn[id] = refilledDrawn(drawn[id], a.flowLph, 1);
       });
       const held = {};
       Object.keys(tankDefs).forEach(id=>{ held[id] = tankDefs[id].tankL - drawn[id]; });
-      steps.push({ minute:t + 1, running:flat.running, momentary:flat.momentary, heat:Object.assign({}, power.heat),
-        trips:r.trips.map(x=> ({ id:x.id, cause:x.cause })), powered:flat.powered, drawing:Object.keys(flat.drawing),
-        starting:Object.keys(flat.starting), tanks:held });
+      steps.push({ minute:t + 1, running:r.running, momentary:r.momentary,
+        trips:r.trips.map(x=> ({ id:x.id, cause:x.cause })), powered:r.powered, drawing:Object.keys(r.drawing),
+        starting:Object.keys(r.starting), tanks:held });
     }
     return { problems:net.problems, steps, power, tanks:drawn };
   }
@@ -10022,8 +10212,8 @@ x_sn_9 m_sn_sn_sn sn p
   let benchBootMs = null;
   // Builds the scenario on a fresh restart and returns its counts, {
   // buildings, rowsRolled }. Each building touched gets one switch flipped
-  // from its rolled default, so the power run resolves it every step (POWER
-  // RUNS), and is marked entered. Every container in it is rolled as
+  // from its rolled default, so it is busy and every grid change resolves it
+  // (POWER RUNS), and is marked entered. Every container in it is rolled as
   // doOpenContainer() rolls one, but by its own room's id rather than the
   // player's. Two stoves burn with long timers, and radios play in the
   // inventory and on two floors. The player stays in the start room.
@@ -10057,14 +10247,13 @@ x_sn_9 m_sn_sn_sn sn p
       roomStove(world[id]).timerMinutes = BENCH_STOVE_TIMER_MIN;
     });
     const floors = [state.inventory.items].concat(rooms.slice(0, BENCH_RADIOS - 1).map(id=> world[id].floor));
-    floors.forEach(list=>{
-      const radio = itemFromRegistry({ id:"portable_radio", qty:1 });
-      radio.on = true;
-      addToList(list, radio);
-    });
+    floors.forEach(list=> switchDevice(addToList(list, itemFromRegistry({ id:"portable_radio", qty:1 })), true));
     state.vitals.energy = BENCH_ENERGY;
     state.vitals.fatigue = BENCH_FATIGUE;
     refreshPower();
+    // The clock was set, and heat and timers written, by hand: the schedule
+    // is rebuilt from them, as a new game's is.
+    rebuildSchedule();
     return { buildings:touched.length, rowsRolled };
   }
   // One timing: BENCH_WARMUP_RUNS runs, discarded, then BENCH_RUNS measured,
@@ -10120,22 +10309,253 @@ x_sn_9 m_sn_sn_sn sn p
       log("The benchmark failed: " + window.ashfallBenchResults.error, "warn");
     }
   }
+  // The replay (#372): a fixed scenario, played step by step through the
+  // game's own actions, on a page opened with `?replay` (replayMode). It runs
+  // after the boot's first paint, as the benchmark does, and leaves
+  // window.ashfallReplayResult = { version, seed, steps:[{ label, log,
+  // digest, problems }] }: the lines each step logged, in order
+  // (replayLog), the game state after it (replayDigest()), and what the
+  // consistency check found (replayProblems()). A throw leaves { error,
+  // steps } instead. .github/scripts/replay_compare.py loads it on two
+  // commits and reports every difference, which is how a change to the time
+  // loop proves what it changed. It writes game state throughout, so it is
+  // not on the dev seam, and Save refuses on its page (doSaveLocal()).
+  //   The scenario's rooms, items and figures are judgment calls, chosen for
+  // what each step exercises, and retunable; a retune changes every digest,
+  // so compare only commits that share them. REPLAY_SEED rolls something in
+  // the home's freezer, which step 2 needs. The run starts
+  // REPLAY_START_BEFORE_FAIL_MIN before the grid fails (doRestart()), so the
+  // failure falls in step 6 without a day of play before it; step 6 then
+  // advances to REPLAY_DRAW_BEFORE_FAIL_MIN before it. The tank is drawn
+  // to REPLAY_TANK_MARGIN_L above its float's start level in code and then
+  // below it by a real fill, and REPLAY_POT_FILLS more fills leave the pump
+  // refilling as the grid goes, and still called for when it comes back.
+  const REPLAY_SEED = 372;
+  const REPLAY_START_BEFORE_FAIL_MIN = 6 * 60;
+  const REPLAY_WALK = [HOME_STOP, "x_c117_c90b", "x_c117_c90", "x_c117_c90b", HOME_STOP];
+  const REPLAY_FIRE_MIN = 6.3;
+  const REPLAY_FIRE_AWAY = "x_c117_c90b";
+  const REPLAY_FIRE_MAX_MOVES = 50;
+  const REPLAY_RADIO_MIN = { carried:5.5, here:12.25, elsewhere:20.7 };
+  const REPLAY_RADIO_ELSEWHERE = "home_bedroom";
+  const REPLAY_RADIO_WAIT_MIN = 30;
+  const REPLAY_DRAW_BEFORE_FAIL_MIN = 8;
+  const REPLAY_TANK_MARGIN_L = 0.25;
+  const REPLAY_POT_FILLS = 200;
+  const REPLAY_SLEEP_ENERGY = 25;
+  const REPLAY_AFTER_SLEEP_MIN = 180;
+  // A move to the neighbouring room `to`, by the exit the player would take.
+  function replayMove(to){
+    const exit = getExitsForRoom(world[state.currentRoom], state.currentRoom).find(e=> e.to === to);
+    if(!exit) throw new Error(`replay: no exit from ${state.currentRoom} to ${to}`);
+    doMove(exit);
+  }
+  // A new item, put where the scenario wants it without an action: in `list`
+  // as addToList() puts it, returning the row it became.
+  function replayPlace(list, ref, fields){
+    return addToList(list, Object.assign(asNewlyMade(itemFromRegistry(ref)), fields || {}));
+  }
+  // The minutes on the player's clock (state.totalMinutes) at which the
+  // grid fails.
+  function replayFailClock(){ return POWER_FAILS_MIN - START_DAYS_AFTER_COLLAPSE * MINUTES_PER_DAY; }
+  const REPLAY_STEPS = [
+    { label:"A new game, and a walk at Walk", run(){
+      doRestart(REPLAY_SEED, replayFailClock() - REPLAY_START_BEFORE_FAIL_MIN);
+      doToggleLock("home-front");
+      REPLAY_WALK.forEach(replayMove);
+    } },
+    { label:"At home: the fridge and the freezer", run(){
+      replayMove("home_living");
+      replayMove("home_kitchen");
+      const room = world.home_kitchen;
+      const byId = (id)=> room.containers.find(c=> c.id === id);
+      doOpenContainer(room, byId("fridge"));
+      const leftovers = byId("fridge").items.findIndex(it=> it.itemId === "leftovers");
+      if(leftovers < 0) throw new Error("replay: the home fridge holds no leftovers");
+      doTake(leftovers);
+      doOpenContainer(room, byId("freezer"));
+      if(!byId("freezer").items.length) throw new Error(`replay: seed ${REPLAY_SEED} rolls nothing in the home freezer`);
+      doTake(0);
+      worldTab = "floor";
+      doStore(state.inventory.items.findIndex(it=> it.itemId === "leftovers"));
+    } },
+    { label:"Cooking on the stove, a timer, the wait, and a rest", run(){
+      const room = world.home_kitchen;
+      const stove = roomStove(room);
+      replayPlace(stove.items, { id:"fish", qty:1 });
+      const pot = itemFromRegistry({ id:"cooking_pot", qty:1 });
+      pot.water = { kind:"tainted" };
+      pot.contents = [asNewlyMade(itemFromRegistry({ id:"meat", qty:1 })), asNewlyMade(itemFromRegistry({ id:"vegetables", qty:1 }))];
+      addToList(stove.items, pot);
+      doLightStove();
+      doAddStoveTimer(10);
+      for(let n = 0; waitForCookingTarget(room); n++){
+        if(n > 20) throw new Error("replay: the cooking never finishes");
+        doWaitForCooking();
+      }
+      doRest();
+    } },
+    { label:"A campfire that burns out between moves", run(){
+      replayMove("home_living");
+      replayMove(HOME_STOP);
+      giveItem(itemFromRegistry({ id:"campfire_kit", qty:1 }));
+      giveItem(itemFromRegistry({ id:"box_of_matches", qty:1 }));
+      doBuildFire();
+      const room = world[HOME_STOP];
+      room.fireMinutesLeft = REPLAY_FIRE_MIN;
+      replayPlace(room.containers.find(c=> c.id === "campfire").items, { id:"fish", qty:1 });
+      for(let n = 0; room.heatActive; n++){
+        if(n >= REPLAY_FIRE_MAX_MOVES) throw new Error("replay: the campfire never goes out");
+        replayMove(REPLAY_FIRE_AWAY);
+        replayMove(HOME_STOP);
+      }
+    } },
+    { label:"Three radios run down", run(){
+      const radio = (list, minutes)=>{
+        const r = addToList(list, itemFromRegistry({ id:"portable_radio", qty:1 }));
+        r.durability.current = r.drainRate * minutes;
+        batteryActions(r).find(a=> a.label === "Turn on").onClick();
+      };
+      radio(state.inventory.items, REPLAY_RADIO_MIN.carried);
+      radio(world[state.currentRoom].floor, REPLAY_RADIO_MIN.here);
+      radio(world[REPLAY_RADIO_ELSEWHERE].floor, REPLAY_RADIO_MIN.elsewhere);
+      advanceTime(REPLAY_RADIO_WAIT_MIN);
+    } },
+    { label:"The tank drawn, the grid failing during a sleep, the siren, the recovery", run(){
+      replayMove("home_living");
+      replayMove("home_kitchen");
+      const wait = replayFailClock() - REPLAY_DRAW_BEFORE_FAIL_MIN - state.totalMinutes;
+      if(!(wait > 0)) throw new Error("replay: the grid has failed before step 6");
+      advanceTime(wait);
+      state.tankDrawn.home = BUILDING_INFO.home.tankL * (1 - TANK_FLOAT_START) - REPLAY_TANK_MARGIN_L;
+      invTab = "inventory";
+      const items = state.inventory.items;
+      const bottle = replayPlace(items, { id:"plastic_bottle", qty:1 });
+      const pot = replayPlace(items, { id:"cooking_pot", qty:1 });
+      doFillAtSink("inv", items.indexOf(bottle));
+      for(let n = 0; n < REPLAY_POT_FILLS; n++){
+        doFillAtSink("inv", items.indexOf(pot));
+        doPourOutWater(pot);
+      }
+      replayMove("home_living");
+      state.vitals.energy = REPLAY_SLEEP_ENERGY;
+      doSleep();
+      advanceTime(REPLAY_AFTER_SLEEP_MIN);
+    } },
+    { label:"A blackout", run(){
+      if(state.collapseCount) throw new Error("replay: a collapse came before step 7");
+      state.collapseCount = COLLAPSE_BLACKOUT_EVERY - 1;
+      state.vitals.energy = 0;
+      advanceTime(1);
+    } }
+  ];
+  // The game state after a step, as canonical JSON: `state`, and the rooms',
+  // doors' and windows' saved state (savedRoomState(), which holds every
+  // room's item lists), every object's keys sorted and every _uid left out,
+  // since a _uid is minted by looking. Every list is settled to now first,
+  // on this page only, so food nobody has reached reads as it would if
+  // someone had: what a per-minute world would hold.
+  function replayDigest(){
+    const now = minutesSinceCollapse();
+    forEachItemList((list, roomId, container)=> settleList(list, roomId, container, now));
+    const canon = (v)=>{
+      if(Array.isArray(v)) return v.map(canon);
+      if(!v || typeof v !== "object") return v;
+      const out = {};
+      Object.keys(v).sort().forEach(k=>{ if(k !== "_uid" && v[k] !== undefined) out[k] = canon(v[k]); });
+      return out;
+    };
+    return JSON.stringify(canon({ state, rooms:savedRoomState(), doors:savedDoorState(), windows:savedWindowState() }));
+  }
+  // The consistency check, run after every step: what the time loop keeps
+  // for itself, set against a full scan of the world. A disagreement is a
+  // problem string, and fails the step. It catches a writer that forgot to
+  // keep a list (scheduleHeat(), scheduleTimer()): the rooms whose heat is
+  // on and the stoves whose timer runs, against heatRooms and timerStoves;
+  // a settle that was missed: settledAt, against now; and a power change
+  // that was not resolved: every busy building (busyBuildings()) against the
+  // looks powerNow holds, and the grid it holds against gridUp(); and a
+  // device switched on without its running out scheduled, or a reachable
+  // list left unsettled.
+  function replayProblems(){
+    const problems = [];
+    const now = minutesSinceCollapse();
+    forEachItemList((list, roomId)=> list.forEach(it=>{
+      if(!it.durability || it.durability.mode !== "time") return;
+      const where = `${it.name} in ${roomId === null ? "the inventory" : roomId}`;
+      if(!it.on){ if(it.durability.asOf !== undefined) problems.push(`${where} is off but has asOf`); return; }
+      const dies = it.durability.asOf + it.durability.current / it.drainRate;
+      if(!batteryDeaths.some(t=> Math.abs(t - dies) <= TICK_EPSILON)) problems.push(`${where} runs out at minute ${dies}, which batteryDeaths lacks`);
+    }));
+    const room = world[state.currentRoom];
+    invPools().concat([room.floor], room.containers.concat(room.carContainers || []).map(c=> c.items)).forEach(list=>{
+      list.forEach(it=>{
+        if(isPerishable(it) && !(Math.abs(it.agedAt - now) <= TICK_EPSILON)) problems.push(`${it.name}, within reach, is settled to ${it.agedAt}, not ${now}`);
+      });
+    });
+    busyBuildings(POWER_INDEX, state.power, state.electricalRules, state.seed, tankFloatsNow()).forEach(b=>{
+      if(!powerNow.looks.has(b)) problems.push(`building ${b} is busy, but no resolve has looked at it`);
+    });
+    if(powerNow.gridLive !== gridUp()) problems.push(`powerNow has the grid ${powerNow.gridLive ? "up" : "down"}, but it is ${gridUp() ? "up" : "down"}`);
+    const heat = new Set(), timers = new Map();
+    roomIds().forEach(id=>{
+      if(world[id].heatActive) heat.add(id);
+      world[id].containers.forEach(c=>{ if(c.timerMinutes > 0) timers.set(id + KEY_SEP + c.id, c); });
+    });
+    heat.forEach(id=>{ if(!heatRooms.has(id)) problems.push(`heat on in ${id}, which heatRooms lacks`); });
+    heatRooms.forEach(id=>{ if(!heat.has(id)) problems.push(`heatRooms lists ${id}, whose heat is off`); });
+    timers.forEach((c, key)=>{
+      const kept = timerStoves.get(key);
+      if(!kept || kept.container !== c) problems.push(`a timer runs at ${key.replace(KEY_SEP, "/")}, which timerStoves lacks`);
+    });
+    timerStoves.forEach((t, key)=>{ if(!timers.has(key)) problems.push(`timerStoves lists ${key.replace(KEY_SEP, "/")}, which runs no timer`); });
+    if(Math.abs(settledAt - minutesSinceCollapse()) > TICK_EPSILON)
+      problems.push(`settled at minute ${settledAt}, but it is minute ${minutesSinceCollapse()}`);
+    return problems;
+  }
+  function runReplay(){
+    const steps = [];
+    try{
+      REPLAY_STEPS.forEach(step=>{
+        replayLog = [];
+        try{ step.run(); }
+        finally{
+          const lines = replayLog;
+          replayLog = null;
+          steps.push({ label:step.label, log:lines, digest:null, problems:[] });
+        }
+        const last = steps[steps.length - 1];
+        last.digest = replayDigest();
+        last.problems = replayProblems();
+      });
+      render();
+      window.ashfallReplayResult = { version:GAME_CONFIG.VERSION, seed:REPLAY_SEED, steps };
+    }catch(e){
+      window.ashfallReplayResult = { error: String(e && e.stack || e), steps };
+      log("The replay failed: " + (e && e.message || e), "warn");
+    }
+  }
   // `seed` is optional: undefined starts a fresh world, a uint32 replays that
   // one (see seedFromInput()). Callers wired straight to a click must wrap
   // this in an arrow — a bare doRestart handler would receive the click event
-  // as its seed.
-  function doRestart(seed){
+  // as its seed. `totalMinutes`, also optional, starts the new run's clock
+  // there rather than at 0, before its world is aged and its network
+  // resolved, so the world is as old as the clock says: the replay page's
+  // way to begin near the grid's failure (runReplay()).
+  function doRestart(seed, totalMinutes){
     gameOver = false;
     // The rules Options chose for this run, read before the old run goes.
     const rules = nextElectricalRules();
     state = makeDefaultState(seed);
     state.electricalRules = rules;
+    if(totalMinutes !== undefined) state.totalMinutes = totalMinutes;
     nextRulesChoice = null;
     world = makeDefaultWorld();
     doors = buildDoors(null);
     windows = buildWindows(null);
     refreshPower();
     stampMissingAges();
+    rebuildSchedule();
     detailItem = null;
     deviceTarget = null;
     invTab = "inventory";
@@ -10156,7 +10576,7 @@ x_sn_9 m_sn_sn_sn sn p
     try{ localStorage.setItem(ELECTRICAL_VIEW_KEY, on ? "on" : "off"); }catch(e){ /* kept in memory only */ }
   }
   function doSaveLocal(){
-    if(benchMode){ log("The benchmark page doesn't save.", "warn"); return; }
+    if(benchMode || replayMode){ log(`The ${benchMode ? "benchmark" : "replay"} page doesn't save.`, "warn"); return; }
     try{ localStorage.setItem(SAVE_KEY, serializeGame()); log("Progress saved to this browser.", "sys", "save"); }
     catch(e){ log("Couldn't save to browser storage here — use Export instead.", "warn"); }
   }
@@ -11353,7 +11773,7 @@ x_sn_9 m_sn_sn_sn sn p
     if(it.durability.mode === "uses") return `${Math.round(it.durability.current)}/${it.durability.max} uses`;
     return it.hasBatteries === false
       ? "No batteries installed"
-      : `${Math.round(100*it.durability.current/it.durability.max)}% charge${it.on ? " — On" : " — Off"}`;
+      : `${Math.round(100*batteryCharge(it)/it.durability.max)}% charge${it.on ? " — On" : " — Off"}`;
   }
   // The item detail view: a pop-up at the tapped item's row. It shows what
   // the view always has (name, category and weight, durability, sealed
@@ -11771,8 +12191,8 @@ x_sn_9 m_sn_sn_sn sn p
   function stoveTimerText(stove){ return "Timer: " + Math.ceil(stove.timerMinutes || 0); }
   // A switchable load's readout, shared by its pop-up's status line and the
   // Here strip: what shows with the door open, its light, and when that is
-  // dark, where its own switch sits. Read from loadLookNow(), so a hand
-  // on the switch shows at once. Functional UI text, retunable.
+  // dark, where its own switch sits. A hand on the switch resolves at once
+  // (changePower()), so it shows at once. Functional UI text, retunable.
   // An appliance's nameplate as the Electrical view prints it (POWER
   // SCHEMA). Functional UI text, retunable.
   function nameplateText(a){
@@ -11794,11 +12214,11 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // A switchable load's readout, in its appliance's own words (`readout`,
   // APPLIANCES): while it is powered, `idle` if it has one and isn't
-  // drawing, else `on`; unpowered, `off` and its switch's position.
+  // running (loadRunningNow()), else `on`; unpowered, `off` and its switch's
+  // position.
   function loadStatusText(loadId){
     const a = APPLIANCES[POWER_NET.loads[loadId].appliance];
-    const now = loadLookNow(loadId);
-    if(now.powered) return a.readout.idle && !now.drawing ? a.readout.idle : a.readout.on;
+    if(isPowered(loadId)) return a.readout.idle && !loadRunningNow(loadId) ? a.readout.idle : a.readout.on;
     return a.readout.off + " · " + (switchOnIn(state.power, state.seed, loadId, a) ? "switched on" : "switched off");
   }
   // The device pop-up: a room fixture's controls, styled as the item pop-up
@@ -12056,10 +12476,10 @@ x_sn_9 m_sn_sn_sn sn p
   // keyed by `reads.kind`: each entry's `states` are the variant keys it
   // returns, and `read(reads)` which one holds now. Render-safe: each reads a
   // predicate and writes nothing. A cycling fridge between runs is powered,
-  // not drawing, so the kitchen still hums then (a simplification,
-  // retunable).
+  // not running (loadRunningAt()), so the kitchen still hums then (a
+  // simplification, retunable).
   const DESC_READERS = {
-    load:     { states:["on", "off"], read:(r)=> loadPoweredNow(r.id) ? "on" : "off" },
+    load:     { states:["on", "off"], read:(r)=> isPowered(r.id) ? "on" : "off" },
     grid:     { states:["on", "off"], read:()=> gridUp() ? "on" : "off" }
   };
   // A room's description as it reads now.
@@ -12629,6 +13049,7 @@ x_sn_9 m_sn_sn_sn sn p
   // state exists, and its network resolved.
   refreshPower();
   stampMissingAges();
+  rebuildSchedule();
   log("You wake up at home. Everything's exactly where you left it — for now.");
   mapSetZoomSpan(mapZoomSpan);
   render();
@@ -12646,6 +13067,7 @@ x_sn_9 m_sn_sn_sn sn p
   // After the boot's first paint, so the bench page shows something while
   // the benchmark runs.
   if(benchMode) setTimeout(runBenchmark, 0);
+  if(replayMode) setTimeout(runReplay, 0);
 })();
 </script>
 </body>
