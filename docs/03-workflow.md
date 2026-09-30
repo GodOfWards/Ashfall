@@ -219,6 +219,13 @@ Every pull request that changes `ashfall.html` carries all six:
    the pull request): Tom pushes tags by hand, and the merge commit doesn't
    exist until he merges.
 
+**Performance.** The Performance check fails a pull request that makes the
+sleep, the action, `render()` or `serializeGame()` slower than `main` beyond
+its tolerance. Only Tom applies the `perf-accepted` label, which waives it,
+judging the slowdown against the handoff's Costs section; a session never
+applies it. A coding session whose pull request trips the check says, in the
+pull request, what the handoff's Costs predicted and what was measured.
+
 A pass that leaves `ashfall.html` untouched carries 3, 4 and 5 only: the
 archive move, if there is a handoff; `Closes #NN`; and the deferred issues,
 listed in the pull request, or a line saying nothing was deferred.

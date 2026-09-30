@@ -20,6 +20,147 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 <!-- New entries go directly below this line. -->
 
+## v0.10.11 — Performance benchmark and budget
+
+Implements: handoffs/performance-benchmark.md
+
+Implements #371 in full, per `handoffs/performance-benchmark.md`. A benchmark
+page, `ashfall.html?bench`, builds a fixed, busy late-game town and times the
+costs a player feels on it, and a CI job runs it on every pull request that
+changes the game: it fails a slowdown against `main` beyond tolerance and
+warns when a timing is over its budget. Nothing changes in play. The bench
+flag is UI-only and never saved, so there is no new persistent state and no
+`SAVE_KEY` change: **PATCH**.
+
+**New**
+- *Bench mode* (`benchMode`, PLAYER STATE's UI-only flags): true when the
+  page's URL has a `bench` query parameter, read once at boot. In bench mode
+  `doSaveLocal()` logs `The benchmark page doesn't save.` (`"warn"`) and
+  writes nothing; Load, Export and Import are untouched.
+- *The scenario* (`benchScenario()`, PERSISTENCE), on a fresh
+  `doRestart(BENCH_SEED)`, in this order: `state.electricalRules` set to
+  `"detailed"`; the clock at `BENCH_DAY` (20) × `MINUTES_PER_DAY` minutes
+  since the collapse, 08:00, grid up, 38 hours before `POWER_FAILS_MIN`; the
+  first `BENCH_BUILDINGS` (200) of `POWER_INDEX.buildings` each with its first
+  switched load flipped from its rolled default through `setSwitchIn()` and
+  marked entered; every rolling container in their rooms rolled as
+  `doOpenContainer()` rolls one, by the container's own room id
+  (`rolledLootFor()`, `stampAges()`, `addToList()`, `spawnRolled`,
+  `lastRolledMinute`); the first `BENCH_STOVES` (2) stoves among those rooms,
+  in `roomIds()` order, lit with no fuel limit and `timerMinutes`
+  `BENCH_STOVE_TIMER_MIN` (600); `BENCH_RADIOS` (3) portable radios switched
+  on, one carried and two on the first two rooms' floors; Energy
+  `BENCH_ENERGY` (20), Fatigue `BENCH_FATIGUE` (0); `refreshPower()`. It
+  returns `{ buildings, rowsRolled }`: 200 and 4,257 at seed 371.
+- *The timings* (`benchTiming()`): `BENCH_WARMUP_RUNS` (1) run discarded, then
+  `BENCH_RUNS` (5) measured with `performance.now()`, and their median. `sleep`
+  times `doSleep()`, the tap and its `render()`, on a fresh scenario per run;
+  `action` times `advanceTime(BENCH_ACTION_MIN)` (10) then `render()`, fresh
+  per run; `render` and `save` time `render()` and `serializeGame()` alone,
+  repeated on one shared scenario. `boot` is one `performance.now()` sample
+  taken right after the boot's `render()` (`benchBootMs`). The builds are never
+  timed.
+- *The sleep checks itself* (`benchCheckSleep()`): a sleep that never started,
+  one a waking event cut short (a complete sleep sets `lastWakeMinute`), or
+  one that did not run `BENCH_SLEEP_MIN` (480) within `TICK_EPSILON` stops the
+  benchmark with an error naming the cause.
+- *The result* (`runBenchmark()`), scheduled with `setTimeout(runBenchmark, 0)`
+  after the dev seam, once the boot has rendered: one `"sys"` log line each for
+  the scenario counts, boot and the four timings (`Sleep 480 min: median
+  4473.2 ms (5 runs)`), then `window.ashfallBenchResults = { version, seed,
+  scenario, boot, sleep, action, render, save }`, each timing `{ median, runs }`
+  in milliseconds, set once. A throw sets `{ error }` instead and logs it.
+- *The Performance job*: `.github/workflows/performance.yml`, named
+  Performance, on pull requests into `main` (opened, synchronize, reopened,
+  labeled, unlabeled). It skips everything when `ashfall.html` didn't change,
+  by the test `version-changelog.yml` uses; otherwise it installs Python
+  3.12 and Playwright **1.63.0** (pinned, the latest on PyPI at
+  implementation) with its Chromium, and runs
+  `.github/scripts/perf_check.py`. Job timeout 30 minutes.
+- *The check* (`perf_check.py`): the base's `ashfall.html` from `git show`,
+  the head from the checkout, each opened as a `file://` URL with `?bench`,
+  `PAGE_LOADS` (3) times per side, interleaved, each load waited on for up to
+  `PAGE_TIMEOUT_S` (600); a timeout or an `error` result fails the job. Each
+  timing's runs are pooled per side (15) and medians compared. A regression
+  is head > base × (1 + `REGRESSION_TOLERANCE` 0.25) **and** head − base >
+  `REGRESSION_FLOOR_MS` (2): `::error::` and exit 1, or `::warning::` when the
+  `perf-accepted` label is on (`PERF_ACCEPTED`). A head median over
+  `BUDGET_MS` (`sleep` 200, `action` 30, `render` 16) warns, never fails.
+  `boot` is reported, never compared. A base without the
+  `ashfallBenchResults` string is not timed: the head is reported against
+  the budgets alone, as this pull request's own run is. The report is a
+  Markdown table in the job summary (base, head, change, budget, verdict per
+  timing), then each side's boot and scenario counts.
+
+**UI**
+- Only on a page opened with `?bench`: the log fills with the benchmark's
+  lines, and Save refuses. The page is busy while the benchmark runs, about
+  30 seconds in this session's container. Normal play is unchanged.
+
+**Documentation**
+- The dev seam's comment says the benchmark writes state, and so runs only on
+  a `?bench` page, never from the seam.
+- `docs/02-code-practices.md`, Performance, principle 3: costs are measured by
+  the benchmark (`ashfall.html?bench`, or the Performance job's summary), and
+  its budgets and tolerance live in `.github/scripts/perf_check.py`.
+- `docs/03-workflow.md`, The wrap: a paragraph on the Performance check, the
+  `perf-accepted` label (Tom's alone to apply, against the handoff's Costs),
+  and what a session whose pull request trips it reports.
+- No systems doc: the benchmark isn't a game system.
+- Nothing was deferred.
+
+**Sections touched**
+- PLAYER STATE: the `benchMode` flag.
+- PERSISTENCE: the bench code after `simulatePower()` (constants,
+  `benchBootMs`, `benchScenario()`, `benchTiming()`, `benchCheckSleep()`,
+  `runBenchmark()`), and the refusal in `doSaveLocal()`.
+- The end of the IIFE: the boot sample after `render()`, the dev seam's
+  comment, and the `?bench` scheduling.
+- Outside the game: `.github/workflows/performance.yml`,
+  `.github/scripts/perf_check.py`, `docs/02-code-practices.md`,
+  `docs/03-workflow.md`.
+
+**Open questions / decisions resolved**
+- Where the bench code sits: beside `simulatePower()` in PERSISTENCE, as
+  recommended, grouped under one comment rather than a named sub-block, so the
+  ARCHITECTURE comment is unchanged. The flag is read with PLAYER STATE's
+  UI-only flags; the scheduling is at the end of the IIFE, after the dev seam.
+- Playwright pinned at 1.63.0.
+- `BENCH_SEED` is 371, the issue's number.
+
+**Notes / assumptions**
+- Retunable judgment calls: every `BENCH_` constant, and in `perf_check.py`
+  `BUDGET_MS`, `REGRESSION_TOLERANCE`, `REGRESSION_FLOOR_MS`, `PAGE_LOADS` and
+  `PAGE_TIMEOUT_S`.
+- `render()` and `serializeGame()` share one built scenario, which saves a
+  build; neither changes state.
+- `BENCH_SLEEP_MIN` is stated, not derived, so a retune of the sleep rate stops
+  the benchmark rather than silently timing a different sleep.
+- `rowsRolled` counts every stack the rolls yield, before any merges into a row
+  already there.
+- The job's gate is a step whose output skips the rest, rather than an
+  `exit 0` in the script: an unchanged game installs nothing.
+- `perf_check.py` reads an optional `PERF_CHROMIUM`, a Chromium to launch
+  instead of Playwright's own, so the check can run outside CI. It opens each
+  page with `wait_until="commit"`, since the benchmark's long task holds back
+  the page's load event, and fails the job if a side's scenario counts
+  differ between its loads.
+- A side's boot is reported as the median of its three samples.
+- Measured in this session's container (headless Chromium 1194, three loads,
+  head only): sleep 4,004.6 ms, action 106.6 ms, `render()` 3.0 ms,
+  `serializeGame()` 121.9 ms, boot 416.7 ms. The sleep and the action are
+  over budget, so every run warns until #372, #373 and #369 land (#376 makes
+  budgets fail).
+- A scratch 20 ms busy-wait in `render()` was run against a base with the
+  benchmark: the job failed on `render()` (+671%), and passed with the
+  regression marked accepted when `PERF_ACCEPTED` was true. A scratch clock
+  placing the siren inside the sleep window stopped the benchmark with "the
+  sleep was woken after 300 min, by a clock event inside its window".
+
+**Version**: `GAME_CONFIG.VERSION` `"0.10.10"` → `"0.10.11"`
+
+---
+
 ## v0.10.10 — Old fuse boards in Lima's casas
 
 Implements: handoffs/old-fuse-boards.md

@@ -465,7 +465,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.10.10" };
+  const GAME_CONFIG = { VERSION: "0.10.11" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -5130,6 +5130,11 @@ x_sn_9 m_sn_sn_sn sn p
   }
   let state = makeDefaultState();
   let gameOver = false; // UI-only: never saved — a loaded save always resumes alive
+  // Whether this is the benchmark's page, opened with a `bench` query
+  // parameter (runBenchmark() in PERSISTENCE). Read once, at boot. UI-only
+  // and never saved: the benchmark plays a fabricated town, so Save refuses
+  // on this page (doSaveLocal()).
+  const benchMode = new URLSearchParams(location.search).has("bench");
   let detailItem = null; // UI-only: { uid, side } — resolved fresh via findItemByUid(), safe against list mutation
   // What the device pop-up is open on, or null when it is closed:
   // { kind:"container", id }, a room fixture tagged `device`, or
@@ -9988,6 +9993,133 @@ x_sn_9 m_sn_sn_sn sn p
     }
     return { problems:net.problems, steps, power, tanks:drawn };
   }
+  // The benchmark (#371): a fixed, busy late-game town built by code, and
+  // the costs a player feels, timed on it. It runs only on a page opened
+  // with `?bench` (benchMode), after the boot's first paint, and leaves its
+  // result on window.ashfallBenchResults, where the Performance job in CI
+  // reads it (.github/scripts/perf_check.py, which holds the budgets). It
+  // writes game state throughout, which is why it is not on the dev seam.
+  //   The scenario's figures are judgment calls, retunable. BENCH_DAY puts
+  // the clock on a morning before the grid fails, with no clock event inside
+  // the timed windows. BENCH_SLEEP_MIN is the sleep BENCH_ENERGY and
+  // BENCH_FATIGUE are chosen to give at SLEEP_ENERGY_RATE, and every timed
+  // sleep is checked against it (benchCheckSleep()), so a retune that
+  // changes the sleep stops the benchmark rather than timing another one.
+  const BENCH_SEED = 371;
+  const BENCH_DAY = 20;
+  const BENCH_BUILDINGS = 200;
+  const BENCH_STOVES = 2;
+  const BENCH_STOVE_TIMER_MIN = 600;
+  const BENCH_RADIOS = 3;
+  const BENCH_ENERGY = 20;
+  const BENCH_FATIGUE = 0;
+  const BENCH_SLEEP_MIN = 480;
+  const BENCH_ACTION_MIN = 10;
+  const BENCH_WARMUP_RUNS = 1;
+  const BENCH_RUNS = 5;
+  // The boot's cost, read once, right after its first render() (end of the
+  // script); null outside bench mode.
+  let benchBootMs = null;
+  // Builds the scenario on a fresh restart and returns its counts, {
+  // buildings, rowsRolled }. Each building touched gets one switch flipped
+  // from its rolled default, so the power run resolves it every step (POWER
+  // RUNS), and is marked entered. Every container in it is rolled as
+  // doOpenContainer() rolls one, but by its own room's id rather than the
+  // player's. Two stoves burn with long timers, and radios play in the
+  // inventory and on two floors. The player stays in the start room.
+  function benchScenario(){
+    doRestart(BENCH_SEED);
+    state.electricalRules = "detailed";
+    state.totalMinutes = (BENCH_DAY - START_DAYS_AFTER_COLLAPSE) * MINUTES_PER_DAY;
+    const touched = POWER_INDEX.buildings.slice(0, BENCH_BUILDINGS);
+    touched.forEach(b=>{
+      const load = Object.values(POWER_INDEX.sub[b].loads).find(l=> !APPLIANCES[l.appliance].switchless);
+      if(load){
+        const a = APPLIANCES[load.appliance];
+        setSwitchIn(state.power, state.seed, load.id, a, !switchOnIn(state.power, state.seed, load.id, a));
+      }
+      if(!state.enteredBuildings.includes(b)) state.enteredBuildings.push(b);
+    });
+    const inTouched = new Set(touched);
+    const rooms = roomIds().filter(id=> inTouched.has(world[id].buildingId));
+    let rowsRolled = 0;
+    rooms.forEach(roomId=>{
+      const room = world[roomId];
+      (room.containers || []).concat(room.carContainers || []).forEach(c=>{
+        if(!c.spawnPools || c.spawnRolled) return;
+        rolledLootFor(state.seed, roomId, c).forEach(it=>{ stampAges(it, c, roomId); addToList(c.items, it); rowsRolled += 1; });
+        c.spawnRolled = true;
+        c.lastRolledMinute = state.totalMinutes;
+      });
+    });
+    rooms.filter(id=> roomStove(world[id])).slice(0, BENCH_STOVES).forEach(id=>{
+      world[id].heatActive = true;
+      roomStove(world[id]).timerMinutes = BENCH_STOVE_TIMER_MIN;
+    });
+    const floors = [state.inventory.items].concat(rooms.slice(0, BENCH_RADIOS - 1).map(id=> world[id].floor));
+    floors.forEach(list=>{
+      const radio = itemFromRegistry({ id:"portable_radio", qty:1 });
+      radio.on = true;
+      addToList(list, radio);
+    });
+    state.vitals.energy = BENCH_ENERGY;
+    state.vitals.fatigue = BENCH_FATIGUE;
+    refreshPower();
+    return { buildings:touched.length, rowsRolled };
+  }
+  // One timing: BENCH_WARMUP_RUNS runs, discarded, then BENCH_RUNS measured,
+  // in milliseconds, with their median. `prepare` runs before each, untimed,
+  // and what it returns is handed to `check`, which runs after each, untimed
+  // too, and throws if the run was not what it should have been.
+  function benchTiming(prepare, timed, check){
+    const runs = [];
+    for(let i = 0; i < BENCH_WARMUP_RUNS + BENCH_RUNS; i++){
+      const before = prepare ? prepare() : null;
+      const t0 = performance.now();
+      timed();
+      const ms = performance.now() - t0;
+      if(check) check(before);
+      if(i >= BENCH_WARMUP_RUNS) runs.push(ms);
+    }
+    const sorted = runs.slice().sort((x, y)=> x - y), mid = sorted.length >> 1;
+    const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    return { median, runs };
+  }
+  // A sleep that fell short must not pass as a fast one: one that never
+  // started, one a waking event cut off (a complete sleep sets
+  // lastWakeMinute), and one of any other length each stop the benchmark.
+  function benchCheckSleep(startMinute){
+    const ran = state.totalMinutes - startMinute;
+    if(!(ran > 0)) throw new Error("the sleep never started: Sleep wasn't available");
+    if(state.lastWakeMinute !== state.totalMinutes) throw new Error(`the sleep was woken after ${ran} min, by a clock event inside its window`);
+    if(Math.abs(ran - BENCH_SLEEP_MIN) > TICK_EPSILON) throw new Error(`the sleep ran ${ran} min, not ${BENCH_SLEEP_MIN}`);
+  }
+  // Runs every timing, logs one line each, and sets
+  // window.ashfallBenchResults, once: the result's shape is perf_check.py's
+  // to read. A throw sets { error } instead, and logs it. The sleep and the
+  // action each get a fresh scenario per run; render() and serializeGame()
+  // share one. The lines are functional, retunable.
+  function runBenchmark(){
+    try{
+      const sleep = benchTiming(()=>{ benchScenario(); return state.totalMinutes; }, doSleep, benchCheckSleep);
+      const action = benchTiming(benchScenario, ()=>{ advanceTime(BENCH_ACTION_MIN); render(); });
+      const scenario = benchScenario();
+      const drawn = benchTiming(null, render);
+      const save = benchTiming(null, ()=>{ serializeGame(); });
+      const ms = (t)=> `median ${t.median.toFixed(1)} ms (${t.runs.length} runs)`;
+      log(`Benchmark, seed ${BENCH_SEED}: ${scenario.buildings} buildings touched, ${scenario.rowsRolled} item rows rolled.`, "sys");
+      log(`Boot: ${benchBootMs.toFixed(1)} ms.`, "sys");
+      log(`Sleep ${BENCH_SLEEP_MIN} min: ${ms(sleep)}`, "sys");
+      log(`Action ${BENCH_ACTION_MIN} min and redraw: ${ms(action)}`, "sys");
+      log(`render(): ${ms(drawn)}`, "sys");
+      log(`serializeGame(): ${ms(save)}`, "sys");
+      window.ashfallBenchResults = { version:GAME_CONFIG.VERSION, seed:BENCH_SEED, scenario, boot:benchBootMs,
+        sleep, action, render:drawn, save };
+    }catch(e){
+      window.ashfallBenchResults = { error: String(e && e.message || e) };
+      log("The benchmark failed: " + window.ashfallBenchResults.error, "warn");
+    }
+  }
   // `seed` is optional: undefined starts a fresh world, a uint32 replays that
   // one (see seedFromInput()). Callers wired straight to a click must wrap
   // this in an arrow — a bare doRestart handler would receive the click event
@@ -10024,6 +10156,7 @@ x_sn_9 m_sn_sn_sn sn p
     try{ localStorage.setItem(ELECTRICAL_VIEW_KEY, on ? "on" : "off"); }catch(e){ /* kept in memory only */ }
   }
   function doSaveLocal(){
+    if(benchMode){ log("The benchmark page doesn't save.", "warn"); return; }
     try{ localStorage.setItem(SAVE_KEY, serializeGame()); log("Progress saved to this browser.", "sys", "save"); }
     catch(e){ log("Couldn't save to browser storage here — use Export instead.", "warn"); }
   }
@@ -12499,14 +12632,20 @@ x_sn_9 m_sn_sn_sn sn p
   log("You wake up at home. Everything's exactly where you left it — for now.");
   mapSetZoomSpan(mapZoomSpan);
   render();
+  if(benchMode) benchBootMs = performance.now();
 
   // Dev seam. The six validators, the two seed reports and the power
   // simulation above are local bindings inside this IIFE, so
   // `validateReachability()` typed into devtools is a ReferenceError. This is
   // the one deliberate hole in the closure: read-only reporting helpers,
-  // nothing that writes game state, and nothing else belongs on it.
+  // nothing that writes game state, and nothing else belongs on it. The
+  // benchmark writes game state, and so runs only on a `?bench` page
+  // (runBenchmark()), never from here.
   window.ashfallDev = { validateItemRegistry, validateLocations, validateRoomSchema, validateReachability,
     validateWiring, validateBuildings, simulateSeed, sampleSeeds, simulatePower };
+  // After the boot's first paint, so the bench page shows something while
+  // the benchmark runs.
+  if(benchMode) setTimeout(runBenchmark, 0);
 })();
 </script>
 </body>
