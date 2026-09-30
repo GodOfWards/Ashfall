@@ -465,7 +465,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.10.8" };
+  const GAME_CONFIG = { VERSION: "0.10.9" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -4506,11 +4506,17 @@ x_sn_9 m_sn_sn_sn sn p
   //   switchless   true: it has no user switch. It is always on, and no
   //                control is offered for it. Every entry carries exactly
   //                one of leftOnChance and switchless (validateWiring()).
-  //   readout      { on, off }: the words for its state (loadStatusText()),
-  //                `on` while it is powered and running, `off` otherwise,
-  //                with its switch's position after it. Present exactly when
-  //                leftOnChance is (validateWiring()): a switchless load's
-  //                readout is never shown. Functional UI text, retunable.
+  //   readout      { on, idle?, off }: the words for its state
+  //                (loadStatusText()): `off` while it has no power, with its
+  //                switch's position after it; `idle` while it has power but
+  //                isn't drawing (between a cycle's on parts, or while a
+  //                pump's float isn't calling); `on` otherwise. Without
+  //                `idle`, `on` shows whenever it has power. `idle` is only
+  //                for a load that can stand powered and idle, one with
+  //                dutyCycle or flowLph (validateWiring()). The readout is
+  //                present exactly when leftOnChance is (validateWiring()):
+  //                a switchless load's readout is never shown. Functional
+  //                UI text, retunable.
   //   startWatts   the total draw at a start; present on a motor load
   //   dutyCycle, cycleMinutes  present on a cycling load: it draws for
   //                dutyCycle × cycleMinutes of every cycleMinutes
@@ -4631,9 +4637,9 @@ x_sn_9 m_sn_sn_sn sn p
       readout:{ on:"Running", off:"Stopped" } },
     water_heater:   { name:"Water heater",   watts:WATER_HEATER_WATTS, volts:220, leftOnChance:0.95,
       dutyCycle:WATER_HEATER_LOSS_KWH_DAY * 1000 / (WATER_HEATER_WATTS * MINUTES_PER_DAY / 60), cycleMinutes:120,
-      nameplate:{ printsWatts:true }, readout:{ on:"Running", off:"Stopped" } },
+      nameplate:{ printsWatts:true }, readout:{ on:"Running", idle:"Standing by", off:"Stopped" } },
     house_pump:     { name:"Water pump",     watts:370,  startWatts:3300, volts:220, flowLph:HOUSE_PUMP_FLOW_LPH, leftOnChance:0.99,
-      nameplate:{ amps:2.7 }, readout:{ on:"Running", off:"Stopped" } }
+      nameplate:{ amps:2.7 }, readout:{ on:"Running", idle:"Standing by", off:"Stopped" } }
   };
   // What an appliance's nameplate is rated at, in watts, or null when it has
   // no usable one. The one reading of `nameplate`'s three forms besides the
@@ -7996,18 +8002,23 @@ x_sn_9 m_sn_sn_sn sn p
     if(!powerNow) refreshPower();
     return !!powerRead(powerNow, "powered", loadId);
   }
-  // Whether a load has power on state.power as it stands, before the next
-  // step resolves it: a hand on the load's own switch shows at once in the
-  // load's own readout, where isPowered() and spoilage see it from the next
-  // step, as they see a breaker. A fresh look, stored nowhere and starting
-  // nothing, so it is render-safe. Buildings share nothing but the grid, so
-  // the look is the load's own building's.
-  function loadPoweredNow(loadId){
+  // Whether a load has power, and whether it is drawing, on state.power as
+  // it stands, before the next step resolves it: a hand on the load's own
+  // switch shows at once in the load's own readout, where isPowered() and
+  // spoilage see it from the next step, as they see a breaker. A fresh look,
+  // stored nowhere and starting nothing, so it is render-safe. Buildings
+  // share nothing but the grid, so the look is the load's own building's.
+  // Its step before is the last step's (powerNow, priorDrawing()), so a pump
+  // that started below its float's start level keeps drawing until its tank
+  // is full, as the resolver has it. Before the first step there is none.
+  function loadLookNow(loadId){
     const b = POWER_INDEX.of[loadId];
-    if(b === undefined) return false;
-    return !!powerSnapshot(POWER_INDEX.sub[b], APPLIANCES, state.power, state.electricalRules, gridUp(),
-      minutesSinceCollapse(), null, state.seed, tankFloatsNow()).powered[loadId];
+    if(b === undefined) return { powered:false, drawing:false };
+    const snap = powerSnapshot(POWER_INDEX.sub[b], APPLIANCES, state.power, state.electricalRules, gridUp(),
+      minutesSinceCollapse(), priorDrawing(POWER_INDEX, priorOf(powerNow), b), state.seed, tankFloatsNow());
+    return { powered:!!snap.powered[loadId], drawing:!!snap.drawing[loadId] };
   }
+  function loadPoweredNow(loadId){ return loadLookNow(loadId).powered; }
   // What a meter reads, from the last step (powerNow). They add no rule to
   // the resolver: each is a look at what it already worked out (#249).
   //   A load's supply, up to its own switch: its circuit's volts while the
@@ -9277,7 +9288,9 @@ x_sn_9 m_sn_sn_sn sn p
   //     fixture names is in its room;
   //   every appliance id is in APPLIANCES, every APPLIANCES entry carries
   //     exactly one of leftOnChance and switchless, a readout with non-empty
-  //     on and off words unless it is switchless, and a nameplate in exactly
+  //     on and off words unless it is switchless, an `idle` word only when
+  //     it is non-empty and the appliance can stand powered and idle
+  //     (dutyCycle or flowLph), and a nameplate in exactly
   //     one of its forms, rated at no less than its own watts
   //     (nameplateWatts()), every circuit's volts is 220, and every
   //     circuit's roles are in its panel's rooms;
@@ -9310,6 +9323,11 @@ x_sn_9 m_sn_sn_sn sn p
       const worded = w=> typeof w === "string" && w.length > 0;
       if(!a.switchless && !(a.readout && worded(a.readout.on) && worded(a.readout.off)))
         problems.push(`appliance ${id}: needs a readout with non-empty on and off`);
+      if(a.readout && "idle" in a.readout){
+        if(!worded(a.readout.idle)) problems.push(`appliance ${id}: readout's idle is not a non-empty string`);
+        if(a.dutyCycle === undefined && a.flowLph === undefined)
+          problems.push(`appliance ${id}: readout has an idle word, but it never stands powered and idle (no dutyCycle or flowLph)`);
+      }
       const rated = nameplateWatts(a);
       if(rated === null) problems.push(`appliance ${id}: no nameplate`);
       else if(rated < a.watts) problems.push(`appliance ${id}: nameplate rated ${rated} W, below its own ${a.watts} W`);
@@ -11398,7 +11416,7 @@ x_sn_9 m_sn_sn_sn sn p
   function stoveTimerText(stove){ return "Timer: " + Math.ceil(stove.timerMinutes || 0); }
   // A switchable load's readout, shared by its pop-up's status line and the
   // Here strip: what shows with the door open, its light, and when that is
-  // dark, where its own switch sits. Read from loadPoweredNow(), so a hand
+  // dark, where its own switch sits. Read from loadLookNow(), so a hand
   // on the switch shows at once. Functional UI text, retunable.
   // An appliance's nameplate as the Electrical view prints it (POWER
   // SCHEMA). Functional UI text, retunable.
@@ -11420,11 +11438,12 @@ x_sn_9 m_sn_sn_sn sn p
     return out;
   }
   // A switchable load's readout, in its appliance's own words (`readout`,
-  // APPLIANCES): `on` while it is powered, else `off` and its switch's
-  // position.
+  // APPLIANCES): while it is powered, `idle` if it has one and isn't
+  // drawing, else `on`; unpowered, `off` and its switch's position.
   function loadStatusText(loadId){
     const a = APPLIANCES[POWER_NET.loads[loadId].appliance];
-    if(loadPoweredNow(loadId)) return a.readout.on;
+    const now = loadLookNow(loadId);
+    if(now.powered) return a.readout.idle && !now.drawing ? a.readout.idle : a.readout.on;
     return a.readout.off + " · " + (switchOnIn(state.power, state.seed, loadId, a) ? "switched on" : "switched off");
   }
   // The device pop-up: a room fixture's controls, styled as the item pop-up

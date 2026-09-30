@@ -18,6 +18,154 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.10.9 — The siren in a blackout, idle readouts, `buildingId`
+
+Implements: handoffs/blackout-siren-readouts-buildingid.md
+
+Implements #356, #337 and #89 in full, per
+`handoffs/blackout-siren-readouts-buildingid.md`: three independent
+`tier-0` fixes. No new persistent state and no `SAVE_KEY` change: **PATCH**.
+
+**Fixed**
+- *The siren during a blackout (#356).* A blackout ran through the awake
+  path (`runAwakeStep()`), so `fireClockEvents()` saw the player as awake:
+  the siren's awake line was logged and the blackout was never cut short.
+  The blackout now sets `asleep` for its whole length (cleared, with
+  `wokenUp`, in a `finally`), so the siren picks its asleep line
+  ("A siren wakes you. …") and ends the blackout after that step.
+  - Woken early, Energy is **set to**
+    `clamp(COLLAPSE_BLACKOUT_ENERGY * taken / COLLAPSE_BLACKOUT_MIN)`
+    (120 of 300 minutes gives 36). A waking event in the last step leaves
+    the blackout complete, as for sleep: full `COLLAPSE_BLACKOUT_ENERGY`.
+  - `collapseCount` still increments once per collapse; no Fatigue,
+    cooldown or `lastExertionMinute` change. The stumble is unchanged: it
+    stays awake, hears the awake line, and isn't cut short.
+- *Idle readouts (#337).* `loadStatusText()` showed `readout.on` whenever a
+  load was powered, so an idle water heater or a pump whose float wasn't
+  calling read "Running" while a clamp read 0 A. A powered load that has an
+  `idle` word and isn't drawing now shows it.
+- *`building` meant two things (#89).* Every field named `building` that
+  held a building **id** is renamed `buildingId`: door definitions (both
+  builders: `buildBuilding()` and the wired-layout builder in
+  `expandOpenings()`), a master key's field, and expanded boards and
+  panels (`expandWiring()`). Readers updated: `findKeyForDoor()`, the
+  master key's lock/unlock actions, `powerIndex()`'s per-building index,
+  and `deviceNamesFor()`. `room.building` (the name) is unchanged.
+
+**New content**
+- `readout` gains an optional third word, `idle`. `water_heater` and
+  `house_pump`: `{ on:"Running", idle:"Standing by", off:"Stopped" }`.
+  Every other appliance, `fridge_freezer` included (its readout is its door
+  light), is unchanged. Functional UI text, retunable.
+
+**Changed / Reworked**
+- `runAwakeStep(min, untilWoken)`: an optional stop after the step in which
+  `wokenUp` is set, and it returns the minutes left unrun (0 when it ran
+  them all). Without `untilWoken` it behaves as before.
+- `advanceTime()`'s blackout: its log line is split. "Your body gives out
+  completely. You black out." at the start; "Hours pass before you come to,
+  disoriented and vulnerable." only after a completed blackout. Woken
+  early, the siren's own line is the record.
+- `loadLookNow(loadId)` (new, POWER): one fresh `powerSnapshot()` of the
+  load's building on `state.power`, returning `{ powered, drawing }`. Its
+  `prevDrawing` is the last step's drawing for that building
+  (`priorDrawing(POWER_INDEX, priorOf(powerNow), b)`), so the pump's latch
+  holds: one started below `TANK_FLOAT_START` reads "Running" until its
+  tank is full. `loadPoweredNow()` now returns `loadLookNow().powered`
+  (`powered` never depended on `prevDrawing`, so it is unchanged).
+- `validateWiring()`: an `idle` that is present must be a non-empty string,
+  and one on an appliance with neither `dutyCycle` nor `flowLph` is
+  reported, since it would never show.
+
+**UI**
+- When the siren falls inside a blackout: "…You black out." then "A siren
+  wakes you. …", and you come to early with less Energy.
+- The water heater and the pump read "Standing by" while powered and idle,
+  "Running" only while drawing. A switch flipped by hand still shows at
+  once.
+- Nothing visible from #89.
+
+**Documentation**
+- `asleep`/`wokenUp`'s comment says a blackout sets them too;
+  `CLOCK_EVENTS`' comment says a `wakes` event ends a sleep or a blackout,
+  and that `line`'s "asleep" includes one. The collapse constants' comment
+  describes the blackout's early end and its prorated Energy.
+- POWER SCHEMA's `readout` entry states the three words and when each
+  shows; `validateWiring()`'s comment lists the `idle` check.
+- DOOR SCHEMA's field is `buildingId`; ITEM DATA SCHEMA's pair is
+  `masterKey`/`buildingId`; `expandWiring()`'s shape comment lists
+  `buildingId` on boards and panels. ROOM SCHEMA's collision note is reduced
+  to "The id is `buildingId`." The stove timer's comment now says it is
+  heard when the player's room has the stove's room's `buildingId`.
+- Filed #363: an orphaned comment above `nameplateText()` that describes
+  `loadStatusText()` (only its function name was updated here). Nothing
+  else was deferred.
+
+**Open questions / decisions resolved**
+- *The blackout's early exit:* an optional `untilWoken` stop on
+  `runAwakeStep()`, not a blackout-specific loop, so the per-step calls
+  stay the one copy.
+- *The `asleep` flag's name:* kept, with its comment updated (the
+  handoff's recommended default).
+- *"Drawing now" for the readout:* `loadLookNow()`, a sibling that
+  `loadPoweredNow()` delegates to: one snapshot per readout, with the last
+  step's drawing as `prevDrawing`. Before the first step (`powerNow` null)
+  there is no step before, so no latch.
+
+**Notes / assumptions**
+- The woken blackout's Energy share is derived from the two existing
+  constants, with no new one; still a balance choice, retunable (Tom,
+  2026-09-30).
+
+**Validation performed**
+- Headless Chromium, the page loaded with a scratch test hook (not
+  committed): a blackout with the siren 120 minutes in took 120 minutes,
+  set Energy to 36 and logged the two expected lines; with the siren at
+  minute 299, 299 minutes and 89.7; in the last step (minute 300), or
+  after it, or not at all, 300 minutes, Energy 90 and the completion line;
+  a stumble over the siren logged its awake line and took its 20 minutes.
+  `asleep` and `wokenUp` were false after every case.
+- Over 360 minutes, the heater's readout matched the resolver's `drawing`
+  for the same minute every time (18 "Running", 342 "Standing by", the 0.05
+  duty cycle); switching it off read "Stopped · switched off" at once. The
+  pump read "Standing by" with a full tank, "Running" below the start
+  level, kept "Running" above it up to full, then "Standing by". The
+  fridge still read "Light on".
+- `ashfallDev.validateWiring()` reports no problems; with an `idle` added to
+  the kettle and an empty one to the toaster, it reported all three
+  problems. Its existing unwired-rooms warning is unchanged.
+- Every door (1,732), board and panel carries `buildingId` and none
+  `building`; a master key with a door's `buildingId` is found by
+  `findKeyForDoor()`; `deviceNamesFor()` still disambiguates two meter
+  boxes on one stop ("Meter box (Home)", "Meter box (Row house)").
+- The #89 proof grep,
+  `grep -nE "\.building\b|\bbuilding\s*:" ashfall.html | grep -v "^[0-9]*:\s*//"`,
+  finds only the three room-name uses: `building:name` in
+  `buildBuilding()`, `room.building` in the locator bar, and
+  `doorNamesFor()`'s `b.building`.
+- `git diff origin/main...HEAD -- ashfall.html` is the full change.
+
+**Sections touched**
+- SURVIVAL/TIME SIMULATION: `advanceTime()`, `runAwakeStep()`, the
+  `asleep`/`wokenUp` and `CLOCK_EVENTS` comments; POWER within it:
+  `expandWiring()`, `expandOpenings()`, `powerIndex()`, `loadLookNow()`,
+  `loadPoweredNow()`, `validateWiring()`.
+- WORLD DATA: APPLIANCES' `water_heater` and `house_pump` readouts;
+  `buildBuilding()`'s door definitions; ROOM, DOOR and ITEM DATA SCHEMA
+  comments.
+- ACTIONS: `findKeyForDoor()`, the master key's lock/unlock actions in
+  `getItemActions()` (INVENTORY/ITEM SYSTEM), the stove timer comment.
+- RENDERING: `loadStatusText()`, `deviceNamesFor()`.
+
+**Explicitly out of scope**
+- #344 (the Atucha gate text), #333, #258, #222. Any new clock event,
+  siren wording, or change to sleep itself. The fridge-freezer's readout,
+  or an `idle` word for any other appliance. Renaming `room.building`.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.10.8"` → `"0.10.9"`
+
+---
+
 ## v0.10.8 — Wire the casa, and a power resolver that scales to it
 
 Implements: handoffs/casa-wiring.md
