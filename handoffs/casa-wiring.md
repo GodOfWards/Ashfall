@@ -248,7 +248,11 @@ Record each choice in the changelog's Notes/assumptions.
    building's values are computed on demand, from its own nodes, when
    something reads them (`isPowered()`, a meter, a readout). When a building
    becomes active mid-run, its `prevDrawing` is the pure snapshot of the
-   minute before. Any other scheme is fine if rule 1 holds.
+   minute before. Any other scheme is fine if rule 1 holds. **Not by
+   distance from the player** (Tom, 2026-09-30): a far building nobody has
+   touched already costs nothing this way, and a far building someone has
+   touched must still run exactly. Nor by spreading the step over frames or
+   showing progress, which hides the cost without cutting it.
 2. **Where the per-building index lives**: on the expanded network
    (`expandWiring()`'s output), or built beside it. Either way it's built
    once.
@@ -348,7 +352,7 @@ row house already uses. Nothing new to render.
 - If Phase 1 can't meet the budget while keeping results identical, stop
   after Phase 1. Ship what it gained, file what's left, and don't commit
   Phase 2. A game where an hour's rest takes seconds is worse than casas that
-  still read the grid directly.
+  still read the grid directly (Tom, 2026-09-30).
 - Anything else deferred is filed at the wrap.
 
 ## Open questions for Tom
