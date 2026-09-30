@@ -63,8 +63,5 @@ Each doc is listed here as it is written.
 - [Time](time.md): the clock, the scheduler, settling, and batteries.
 - [Power](power.md): the network, the resolve, and when power resolves.
 - [Spoilage](spoilage.md): food's ages, worked out when read.
-
-One is overdue:
-
-- **Survival**: the Stamina & Fatigue rules are recorded only in the
-  v0.2.1 entry of `CHANGELOG.md`, which a comment in the code still points to.
+- [Survival](survival.md): Exertion, Stamina, Fatigue, Energy, rest, sleep
+  and the gait lock.

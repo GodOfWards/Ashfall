@@ -91,7 +91,10 @@ Knowledge about the code lives in one of four places, chosen by what it is:
 **Comments carry intent, not history.** A comment never records when
 something arrived, which version or issue changed it, or which handoff asked
 for it: the changelog and git already hold that, and a comment is where
-nothing catches it going stale. The goal is fewer comments, not none. Before
+nothing catches it going stale. A reference to an open issue is the exception:
+it marks a known gap and where its plan lives ("deferred to #217"), so it is
+intent. The pass that closes an issue removes or rewrites every reference to
+it. The goal is fewer comments, not none. Before
 removing one, say what a reader loses; if the answer is anything, it stays.
 
 **Rules for every document**, so none goes stale:
