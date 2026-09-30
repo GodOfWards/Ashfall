@@ -261,6 +261,40 @@ These are not exclusive: case 3 happens alongside 1 or 2 unless someone keeps
 the pool cooled. **Which happened is Tom's decision in the canon** (#329). The
 game only shows what the road shows.
 
+## How long until it becomes a hazard once cooling stops (2026-09-30)
+
+- **A typical spent-fuel pool:** about **12 m deep**, fuel racks in the
+  bottom **4.3 m**; one PWR example **12.2 × 9.9 × 11.8 m**, about
+  **1,345 m³** of water. Fukushima Daiichi 4's pool, holding a whole core
+  offloaded about three and a half months earlier, would boil off **about
+  70 tonnes a day** once boiling. Secondary, 2026-09-30:
+  [Wikipedia, "Spent fuel pool"](https://en.wikipedia.org/wiki/Spent_fuel_pool),
+  [Union of Concerned Scientists](https://blog.ucs.org/david-wright/where-did-the-water-in-the-spent-fuel-pools-go/),
+  [OECD-NEA, pools under loss of cooling (2015)](https://www.oecd-nea.org/upload/docs/application/pdf/2021-02/csni-r2015-2.pdf)
+  (search summaries). **Atucha's pool dimensions and Atucha II's
+  heavy-water inventory are unconfirmed** (#350).
+
+**Estimate — not a fact.** Taking the lights going out at **about two
+months after Atucha II's shutdown** (some weeks after day 21):
+- **Atucha II's core** then gives about **2 MW** (Way–Wigner, with the
+  fuel's roughly year-long residence in the core; derived), boiling off
+  about **75 tonnes a day** once hot. With a heavy-water inventory of some
+  hundreds of tonnes (assumed), its fuel would be **uncovered within about
+  one to three weeks**. The damage starts **inside the pressure vessel and
+  the containment**, which are built to hold it; a release needs them to
+  fail or vent.
+- **Atucha I's pool**, holding its whole core about six months out of the
+  reactor, gives **roughly 0.5 MW** (derived). In a pool like the one
+  above, it would take **about 9 days to reach boiling** and **about 10
+  more** to lose the first metre and a half, when **radiation near the
+  pool starts to rise** — so **about three weeks**; the fuel would be
+  **uncovered after about two months**. A fresher, hotter load (Fukushima
+  4's) would halve those times; the older fuel sharing the pools, and more
+  water, would stretch them.
+- **So the grace period after the lights go out is about one to three
+  weeks** before any hazard appears, and a release, if any, comes **weeks
+  to a couple of months** after that.
+
 ## How far a release reaches: the real benchmarks (2026-09-30)
 
 For scale only; neither was a plant months after shutdown.
