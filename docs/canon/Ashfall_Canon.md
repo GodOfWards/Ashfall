@@ -168,8 +168,9 @@ real-world facts behind each part.
   grid's centre held. But repair crews can't be sealed, so **every fault out
   on the lines stayed unrepaired**, and the grid lost pieces as it went
   (`reference/Grid_AR.md`).
-- **On day 21 it failed** (the game's `POWER_FAILS_DAY`; the lore makes the
-  day plausible, not exact): *weeks of unrepaired losses left it weakened
+- **On day 21 it failed, at about ten at night** (the game's
+  `POWER_FAILS_DAY`; the lore makes the day plausible, not exact; the hour
+  is Tom's, 2026-09-30, #347): *weeks of unrepaired losses left it weakened
   and run hard, with its automatic protections set for a grid that no
   longer existed and nothing left to shed. An ordinary fault cascaded
   through the whole system in seconds, as it had on 16 June 2019, and there
