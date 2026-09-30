@@ -356,6 +356,35 @@ Convention on Nuclear Safety, cited above, read in full text 2026-09-30.
 - The ARN's Emergency Control Centre is at its headquarters in Buenos
   Aires.
 
+### How long the diesel fuel could last (2026-09-30)
+
+- **The US standard is a week of fuel per diesel.** NRC Regulatory Guide
+  1.137 (rev. 2), endorsing ANSI/ANS-59.51-1997: each emergency diesel
+  train should have **its own 7-day fuel supply** on site, sized for its
+  load after an accident, "assuming that the supply cannot be interrupted
+  by off-site circumstances". Secondary, 2026-09-30:
+  [NRC RG 1.137 rev. 2](https://www.nrc.gov/docs/ml1230/ml12300a122.pdf),
+  [Federal Register, 2013-06-17](https://www.federalregister.gov/documents/2013/06/17/2013-14309/fuel-oil-systems-for-emergency-power-supplies)
+  (search summaries). Atucha II's German-designed "weekly tanks" suggest the
+  same week per diesel; **unconfirmed**.
+- **What a large diesel burns:** about **0.25–0.3 litres per kWh**; a 1 MW
+  set about **269 L/h at full load, 138 at half, 82 at a quarter** (less
+  efficient per kWh at low load). Secondary (generator manufacturers'
+  charts), 2026-09-30:
+  [Generator Source](https://generatorsource.com/tools-info/fuel-consumption-charts/),
+  [Walt Power](https://waltpower.com/diesel-generator-fuel-consumption-chart/).
+- Atucha II's diesels' ratings and tank volumes weren't found (#350).
+
+**Estimate — not a fact.** A week per diesel is sized for the heavy loads
+of an accident. A reactor shut down for weeks needs much less: a
+residual-heat train, the pool cooling, instruments, lighting, the control
+room's air. A crew running **one diesel at a time at part load**, working
+through **four** diesels' weekly tanks, then Atucha I's diesels (which can
+feed Unit II), the mobile diesel and the auxiliary boiler's fuel tank, could
+plausibly stretch the site's fuel to **weeks, perhaps one to two months**.
+Diesel in the Atucha I overhaul's work vehicles and yard would stretch it
+further, for a crew willing to go out for it.
+
 ## Not yet researched
 
 - **How long the emergency diesels run** on their own tanks. The reports give
