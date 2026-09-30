@@ -219,7 +219,7 @@
     padding:4px 8px; min-height:24px; border-radius:3px; cursor:pointer; flex:none; white-space:nowrap; }
   .tabs button.active{ border-color:var(--accent); color:var(--accent); }
   /* An item panel's header holds its title and its weight, and nothing
-     else, so the tabs under it never move when the tab changes (#229). The
+     else, so the tabs under it never move when the tab changes. The
      weight never breaks inside itself; on a narrow panel it wraps whole onto
      a second line. The header is always two lines tall, so a weight that
      wraps on one tab and fits on the next moves nothing: one line sits
@@ -261,13 +261,13 @@
   /* One column when the viewport is portrait, the way a phone is held: the
      text on top, the two panels side by side under it. Landscape keeps the
      base rules' three columns. A desktop window taller than it is wide takes
-     the one column too, by design (#159). The second clause is a floor:
+     the one column too, by design. The second clause is a floor:
      below 480px the three landscape columns get too narrow, so a landscape
      window narrower than that takes the one column as well. 480 and the
      14px 16px padding, which fits two action buttons to a line on a ~390px
      screen, are judgment calls and retunable.
      The rows are auto 1fr, and that is what keeps the panels directly under
-     the actions (#186): #left takes only the height it needs, and the panel
+     the actions: #left takes only the height it needs, and the panel
      row takes the rest and stretches to the bottom of the screen. A long
      list grows the page instead, and the page scrolls. Left to the default,
      the rows stretch and #left absorbs the spare height, which opens a gap
@@ -551,7 +551,7 @@
   const START_DAYS_AFTER_COLLAPSE = 2;
   const POWER_FAILS_DAY = 21;
   const POWER_FAILS_HOUR = 22;
-  // The night the grid fails (#347, #352), counted from the failure: Atucha's
+  // The night the grid fails, counted from the failure: Atucha's
   // siren sounds once SIREN_AFTER_FAIL_MIN later, and the power comes back
   // GRID_RECOVERY_AFTER_MIN later for GRID_RECOVERY_MIN, once, then fails for
   // good (GRID_UP_SPANS). The siren is heard close by within SIREN_NEAR_M of
@@ -563,7 +563,7 @@
   const SIREN_SOURCE_STOP = "atucha_gate";
   const SIREN_NEAR_M = 1000;
   // The power network's figures (see POWER in SURVIVAL / TIME SIMULATION).
-  // Electricity is a gameplay system, not a realistic one (#369): a breaker
+  // Electricity is a gameplay system, not a realistic one: a breaker
   // or a fuse trips at once when its running current passes its rating, with
   // no time to trip and no heat (resolvePower()).
   // The instant (magnetic) trip, as a multiple of the rating, per IEC 60898-1
@@ -586,7 +586,7 @@
   // complete). The Argentine market shows 6–40 A. validateWiring() checks
   // every breaker against it.
   const STANDARD_BREAKER_RATINGS = [6, 8, 10, 13, 16, 20, 25, 32, 40, 50, 63, 80, 100, 125];
-  // Old fuse boards (#358). The share of generated casas off the barrio that
+  // Old fuse boards. The share of generated casas off the barrio that
   // have one, in percent, by a stable roll of the building's id (generatedHomes()):
   // Tom's "at least half", retunable.
   const OLD_BOARD_PCT = 50;
@@ -636,7 +636,7 @@
   // ==================================================
   // STAMINA / FATIGUE SYSTEM CONSTANTS
   // ==================================================
-  // See the v0.2.1 entry in CHANGELOG.md for the full rules.
+  // docs/systems/survival.md has the model.
   // Tasks declare Exertion; this system alone decides how Exertion affects
   // Stamina/Fatigue. Do not duplicate this logic inside tasks.
   // Each task's own Exertion figure is declared beside that task, not here —
@@ -890,7 +890,7 @@
   //                   roomHasHeat() reads it too, but its only caller is
   //                   canCraft()'s needsHeat branch, which no recipe sets.
   //                   `electrical` puts an item in the Electrical view's
-  //                   Inventory (#242). `voltage-test` offers Test on a
+  //                   Inventory. `voltage-test` offers Test on a
   //                   load or a breaker there, and `current-clamp` Clamp on
   //                   a breaker (doMeterTest(), doMeterClamp()).
   //                   `prying` forces a locked latch door from outside
@@ -1091,12 +1091,12 @@
     box_cutter: { name:"Box cutter", category:"Tool", unitWeight:0.1, tags:["blade","can-opening"] },
     screwdriver: { name:"Screwdriver", category:"Tool", unitWeight:0.15, tags:["can-opening","screwdriving"] },
     // Calibrated fuse wire, sold by the metre at hardware shops (secondary,
-    // from search summaries only), to rewire an old board's blown tapón
-    // (#358). One unit is one length. The weight is a judgment call,
+    // from search summaries only), to rewire an old board's blown tapón.
+    // One unit is one length. The weight is a judgment call,
     // retunable.
     fuse_wire: { name:"Fuse wire (" + OLD_BOARD_FUSE_A + " A)", category:"Materials", unitWeight:0.01, tags:["fuse-wire"],
       fuseRating:OLD_BOARD_FUSE_A },
-    // The meters (#249). A Fluke 115 weighs 550 g and a Fluke 323 265 g.
+    // The meters. A Fluke 115 weighs 550 g and a Fluke 323 265 g.
     // The multimeter only tests voltage: it reads current up to 10 A, and
     // only by breaking into the circuit, so it can't safely read a household
     // one and the game doesn't offer it. The clamp meter clamps current
@@ -1349,12 +1349,12 @@
   //              41% of containers, not 55%. `qtyMin`/`qtyMax` decides how
   //              many of that item spawn once the entry hits.
   // Every `chance` below is derived, not chosen, with the exceptions listed
-  // after this paragraph. The v0.5.1 conversion computed each one from the
-  // weight/rollCount lottery it replaced, so that P(appears) carried across
-  // entry by entry; that is why they read 0.245069 rather than 0.25. An ugly
-  // six-decimal number here is still the signal that nobody has picked it —
-  // it is a derived figure, not a judgment. See the v0.5.1 entry in
-  // CHANGELOG.md for the model and the formula.
+  // after this paragraph. The conversion to per-entry chances computed each
+  // one from the weight/rollCount lottery it replaced, so that P(appears)
+  // carried across entry by entry; that is why they read 0.245069 rather
+  // than 0.25. An ugly six-decimal number here is still the signal that
+  // nobody has picked it: it is a derived figure, not a judgment, and not a
+  // balance knob.
   //   The first exceptions are the two `screwdriver` entries, in `tools_workshop`
   //   (0.20) and `hardware_store` (0.23). The screwdriver postdates the
   //   conversion and has no lottery weight to carry across, so both were
@@ -1374,7 +1374,7 @@
   //   `kitchen_tools` (0.30), the ID card in `documents_lore` (0.25) and
   //   `residential_personal` (0.15), the US dollars in `valuables` (0.15), and
   //   the whole `car_boot` and `car_glovebox` pools. Retunable.
-  //   So are the fuse wire's (#358): the whole `old_board_spares` pool, and
+  //   So are the fuse wire's: the whole `old_board_spares` pool, and
   //   its `hardware_store` entry (0.25, 1–3; the quantity a judgment call).
   //   Retunable.
   //   Replacing an item id keeps its entry's derived chance: the retired
@@ -1646,7 +1646,7 @@
   // when they're added). The coordinates come already rotated into this frame
   // (LIMA_STOPS), so "north" in an exit label is the grid's.
   //   Stop Locations: id = the stop's room id, z:0, (x,y) = its (u, v) from
-  //   LIMA_STOPS, registered at startup from the appendix data below.
+  //   LIMA_STOPS, registered at startup from the street data below.
   //   Building-floor Locations: one per floor, shared by every room on it;
   //   a type-built building's is <id>_f0, at its site stop's (x,y) unless it
   //   gives its own (registerBuildingLocations()).
@@ -1660,8 +1660,8 @@
   const GRID_BEARING_DEG = 14;
   const LOCATIONS = {};
 
-  // LIMA'S STREETS. Appendix A of handoffs/lima-release.md, transcribed in
-  // its own line format and read once at startup (readLimaData()).
+  // LIMA'S STREETS, in the line format below, read once at startup
+  // (readLimaData()).
   // Generated from OpenStreetMap (© OpenStreetMap contributors, ODbL; read
   // 2026-09-26/27) and Esri World Imagery. Secondary. Coordinates are
   // grid-frame metres (u, v), rounded: origin 34.0447 S, 59.1961 W, +v the
@@ -3547,7 +3547,7 @@ x_sn_9 m_sn_sn_sn sn p
 -900,9273 -1004,9313 -1203,9313 -1368,9263 -1367,9232 -1648,9088 -1669,9114 -2316,8669 -2679,8572 -2724,8531 -2754,8347 -2760,8552 -2817,8534 -2847,8388 -2846,8548 -2920,8537 -2962,8388 -3005,8376 -2962,8531 -3139,8515 -3311,8550 -3473,8657 -3730,9033 -4004,9287 -4673,9202 -5371,8991 -6501,9038 -6830,9026 -7165,8945
 -842,9225 -900,9273
 `;
-  // The hand-written stops' text (Appendix B), by stop id: the plaza, the
+  // The hand-written stops' text, by stop id: the plaza, the
   // level crossings, the landmarks' and named scenery's blocks, the road
   // north, the railway and the station. Each was checked against its source
   // when written (OSM, imagery, directories, Tom first-hand); the game names
@@ -3633,7 +3633,7 @@ x_sn_9 m_sn_sn_sn sn p
   // PARKED_CAR_EVERY is 0 has one, about one stop in ten, and it is locked
   // when the hash's next digit is even. Retunable.
   const PARKED_CAR_EVERY = 10;
-  // The appendix's four blocks, read once: { codes: code → name | null,
+  // The four street-data blocks, read once: { codes: code → name | null,
   // stops: [{ id, x, y, type, kind, street, cross, streets, flags }], links:
   // [{ a, b, code, surface }], river: [[[x, y]]] }. `streets` is every code a
   // stop is on; `street` and `cross` a mid's own and its two ends'. A name of
@@ -3809,7 +3809,7 @@ x_sn_9 m_sn_sn_sn sn p
   const RIVER_LINES = LIMA.river;
 
   // Named scenery: the town's real institutions and landmarks that the map
-  // names but the player can't enter yet (#250, #285, #252–#257), each a
+  // names but the player can't enter yet (#250, #285), each a
   // player-visible name and the stop its marker hangs off. State
   // institutions keep their real names; a private business is named by what
   // it is. BUILDINGS merges these with the enterable landmarks.
@@ -3928,13 +3928,13 @@ x_sn_9 m_sn_sn_sn sn p
     { id:"underbasin", name:"Under-basin cupboard", capacityKg:10, spawnPools:["hygiene","cleaning_supplies"] }
   ];
   const SHED_BOX = { id:"shedbox", name:"Shed box", capacityKg:15, spawnPools:["fuel_fire","tools_general"] };
-  // A home's own water tank, in litres (#294). Many Lima homes have a tank
+  // A home's own water tank, in litres. Many Lima homes have a tank
   // and a pump of their own (Tom, first-hand); the figure is a guideline, at
   // least 800 L per dwelling and about 1,000 L for a family of four at 250 L
   // per person per day (Río Negro's water authority, secondary). The
   // Barrio Atucha's own tanks are unconfirmed. Retunable.
   const HOUSE_TANK_L = 1000;
-  // A house pump's flow, in L/h (#317): a 0.5 hp peripheral pump for a roof
+  // A house pump's flow, in L/h: a 0.5 hp peripheral pump for a roof
   // tank moves 1,800–2,400 L/h (Czerweny's QB60-L1, 40 L/min, and Rowa's
   // RW-PR60; secondary). 2,400 is Tom's pick, which refills a 1,000 L tank
   // from empty in 25 minutes. The house_pump appliance's `flowLph`, and the
@@ -3942,12 +3942,12 @@ x_sn_9 m_sn_sn_sn sn p
   const HOUSE_PUMP_FLOW_LPH = 2400;
   // The tank's float switch starts its pump when the tank holds less than
   // this fraction of it, and the pump then fills it to full (powerSnapshot(),
-  // tankFloat()). Tom's figure (#317), not researched. Retunable.
+  // tankFloat()). Tom's figure, not researched. Retunable.
   const TANK_FLOAT_START = 0.8;
   const BUILDING_TYPES = {
-    // The Barrio Atucha's terraced row house (#284): one storey, about 11 ×
+    // The Barrio Atucha's terraced row house: one storey, about 11 ×
     // 10.5 m inside, entered from its courtyard. Wired as Tom describes the
-    // real one (#305): each house's meter and main in the row's shared
+    // real one: each house's meter and main in the row's shared
     // meter box on the courtyard, and a modern breaker panel in the living
     // room, headed by a diferencial (WIRING_TEMPLATES' `row_house`). The
     // board holds only its main: a real tablero principal has no feeder
@@ -4010,13 +4010,13 @@ x_sn_9 m_sn_sn_sn sn p
         { role:"bedroom2", label:"barred window", breakTag:"blunt" },
         { role:"bathroom", label:"small window", breakTag:"blunt" }
       ] },
-    // The plain Lima house (#291). Designed: its layout is not sourced. The
+    // The plain Lima house. Designed: its layout is not sourced. The
     // living room's containers are none, as designed; the distances are
-    // judgment calls, retunable. Wired as the row house is (#306): its meter
+    // judgment calls, retunable. Wired as the row house is: its meter
     // and main in a meter box at the street, and a modern breaker panel in
     // the living room, headed by a diferencial (WIRING_TEMPLATES' `casa`).
     // Or, in about half the casas off the barrio, an old fuse board in its
-    // place (#358): a cut-off switch and two tapones, laid over by the
+    // place: a cut-off switch and two tapones, laid over by the
     // instance (WIRING_TEMPLATES' `casa_fuses`, generatedHomes()).
     casa: { label:"house", entry:"living", water:{ tankL:HOUSE_TANK_L },
       wiring:{ board:{ name:"Meter box", role:"street", rating:32, direct:true },
@@ -4095,14 +4095,14 @@ x_sn_9 m_sn_sn_sn sn p
   // Every building instance (see BUILDING TYPES). A function, as the old
   // hand-written builders were, so each world build takes fresh placement
   // objects. The landmarks come first: the real counterparts of the game's
-  // first buildings (Tom's list on #237), each carrying over the containers
+  // first buildings (Tom's list), each carrying over the containers
   // and hand-placed contents of the building it replaces, room by room, so
   // the start's balance doesn't shift. `marker` puts one on the map
   // (BUILDINGS). Then one enterable house on every mid stop but the home
   // stop (generatedHomes()).
   //   The corner store's site is designed: no grocery in Lima was verified, and
-  //   this corner in the Nueve de Julio neighbourhood was chosen for play
-  //   (#237). Every other site is real (LIMA_STOP_TEXT's sources).
+  //   this corner in the Nueve de Julio neighbourhood was chosen for play.
+  //   Every other site is real (LIMA_STOP_TEXT's sources).
   function buildingInstances(){
     return landmarkInstances().concat(generatedHomes());
   }
@@ -4287,7 +4287,7 @@ x_sn_9 m_sn_sn_sn sn p
         seed:stableHash(s.id), enter:"Enter a house", overrides };
     });
   }
-  // What an old-board casa lays over the type's (#358), fresh for each.
+  // What an old-board casa lays over the type's, fresh for each.
   function oldBoardOverrides(){
     return {
       wiring:{ panels:{ house:{ name:"Fuse box", template:"casa_fuses" } } },
@@ -4597,7 +4597,7 @@ x_sn_9 m_sn_sn_sn sn p
   //   flowLph      a pump's flow in L/h; present on a load that fills its
   //                building's tank, drawing only while the tank's float calls
   //                (powerSnapshot(), settleTanks())
-  //   nameplate    what its rating label prints (#249), in one of three
+  //   nameplate    what its rating label prints, in one of three
   //                forms: { amps }, printed as "<volts> V · <amps> A" at the
   //                entry's own `volts`; { printsWatts:true }, printed as its
   //                own `watts` ("10 W"), as a bulb's base is; or { watts },
@@ -4610,7 +4610,7 @@ x_sn_9 m_sn_sn_sn sn p
   //                view's circuit tabs (nameplateText()). Picking one real
   //                model per appliance is a judgment call, retunable; each
   //                figure's source is given below.
-  //   No watts are shown anywhere, but on a nameplate (#242, #249).
+  //   No watts are shown anywhere, but on a nameplate.
   // Every figure is a pick inside a sourced range, and retunable.
   //   fridge_freezer  the appliance behind every kitchen's Fridge and Freezer
   //                   pair. Running 100 W: at the 0.35 duty cycle that is
@@ -4631,7 +4631,7 @@ x_sn_9 m_sn_sn_sn sn p
   //   range_hood      200 W: an extractor hood draws 130–250 W at most
   //                   (Longvie, primary: "Potencia máxima 200 Watt").
   //   gas_range       0 W: a basic cooker has no clock or display, so
-  //                   nothing draws while it is idle (#327). Its maximum
+  //                   nothing draws while it is idle. Its maximum
   //                   electrical power at 220 V, 50 Hz is 15 W with an oven
   //                   light, 16 W with light and ignition, 1 W for a hob
   //                   with ignition only (Domec's manual, Tabla 3, primary
@@ -4640,7 +4640,7 @@ x_sn_9 m_sn_sn_sn sn p
   //                   motor's start, so no `startWatts`. Switchless: it is
   //                   plugged in and has no power switch. The oven and its
   //                   lamp (15–25 W while lit; Orbis's C9500 lists 25 W,
-  //                   primary) aren't modelled (#259).
+  //                   primary) aren't modelled.
   //   kettle          2,200 W: a 1.7 L kettle's most common figure (the
   //                   range is 1,850–2,200 W; secondary).
   //   toaster         700 W: a two-slot toaster (Atma's TO8020i and TO2180;
@@ -4749,8 +4749,8 @@ x_sn_9 m_sn_sn_sn sn p
   //   circuits  in panel order: { key, label, rating, volts, curve?, fuse?,
   //             roles:[role] }. `label` is the hand-written one on the panel
   //             door ("KITCHEN"); `roles` are the rooms, by role, it serves.
-  //   fuse      on a circuit, optional: true makes it a fuse, not a breaker
-  //             (#358). It has no curve and no instant trip; it blows when
+  //   fuse      on a circuit, optional: true makes it a fuse, not a breaker.
+  //             It has no curve and no instant trip; it blows when
   //             its running current passes its rating (resolvePower()), and
   //             blown is a breaker's `tripped`. It is never switched or
   //             reset: it is rewired (doRewireFuse()). Unlike every other
@@ -4790,8 +4790,9 @@ x_sn_9 m_sn_sn_sn sn p
   // here they take the default curve, DEFAULT_BREAKER_CURVE. The fridge
   // and the gas range plug into the sockets; the hood is on the lighting
   // circuit, which §770.7.1 c allows for extractors. The 32 A main is the
-  // largest OCEBA allows a Tarifa 1 supply: a test figure, and a real
-  // house's board is #305's. There is no water heater and no pump (#305).
+  // largest OCEBA allows a Tarifa 1 supply: a test figure: a real house's
+  // board is its building type's (BUILDING TYPES' `wiring`). There is no
+  // water heater and no pump.
   // The labels are English, as hand-written on the board: a naming choice,
   // retunable.
   //
@@ -4806,7 +4807,7 @@ x_sn_9 m_sn_sn_sn sn p
   // (at most 16 A and 20 A); WATER's 16 A is a judgment call. No range hood,
   // no garden light. All retunable.
   //
-  // `casa`: the plain Lima house's panel (BUILDING TYPES' `casa`, #306),
+  // `casa`: the plain Lima house's panel (BUILDING TYPES' `casa`),
   // the row house's laid over the casa's rooms. Its figures are the row
   // house's: the 40 A diferencial, the circuits' 10 A and 16 A, and the
   // appliances. The water heater is in the kitchen and the pump on the
@@ -4819,7 +4820,7 @@ x_sn_9 m_sn_sn_sn sn p
   // found, never in a bathroom (AEA 90364-7-770 §770.16.3.2). No patio
   // light, no TV and no washing machine (#333). All retunable.
   //
-  // `casa_fuses`: an old fuse board in place of the casa's panel (#358), for
+  // `casa_fuses`: an old fuse board in place of the casa's panel, for
   // the casas generatedHomes() gives one. A manual bipolar switch, then a
   // fuse on each pole: circuits protected by "interruptor manual y fusibles
   // (en ese orden), en todos los conductores" (Rosario, Ordenanza 3419/83
@@ -5055,7 +5056,7 @@ x_sn_9 m_sn_sn_sn sn p
   // PLAYER STATE
   // ==================================================
   // The electrical rules a run can be played under: "detailed", every
-  // breaker and circuit, or "simplified", one breaker per panel (#243).
+  // breaker and circuit, or "simplified", one breaker per panel.
   const ELECTRICAL_RULES = ["detailed", "simplified"];
   function makeDefaultState(seed){
     const s = {
@@ -5095,7 +5096,7 @@ x_sn_9 m_sn_sn_sn sn p
       //   breakers  { breakerId: { on, tripped } }. Default: on, untripped.
       power:{ switches:{}, breakers:{} },
       // One of ELECTRICAL_RULES, chosen when the run starts and never
-      // changed during it (#243). The Options choice applies at a restart.
+      // changed during it. The Options choice applies at a restart.
       electricalRules:"detailed",
       // lastExertionMinute/lastWakeMinute start far in the past so recovery
       // and Sleep are both available immediately at game start.
@@ -5174,7 +5175,7 @@ x_sn_9 m_sn_sn_sn sn p
   // Floor.
   let invTab = "inventory";
   let worldTab = "floor";
-  // Whether the Electrical view is on (#242): Inventory lists only what is
+  // Whether the Electrical view is on: Inventory lists only what is
   // tagged `electrical`, and the Here panel shows the room's panels, boards
   // and circuits instead of its items. A view, and nothing more: nothing in
   // the simulation reads it. A player preference, kept in localStorage under
@@ -6771,11 +6772,11 @@ x_sn_9 m_sn_sn_sn sn p
     detailItem = null;
     if(!walking) render();
   }
-  // WALK TO… (#292). Travel to a known place along the shortest route, run
+  // WALK TO… Travel to a known place along the shortest route, run
   // exit by exit through doMove(), so time, hunger, thirst, fatigue,
   // spoilage and overload all run as if each step were clicked.
   //
-  // The known places (Tom, #292 option C): every stop, every building the
+  // The known places (Tom's choice): every stop, every building the
   // map names (BUILDINGS: the landmarks and the named scenery), and every
   // building the player has entered (state.enteredBuildings). A place is
   // { key, name, room, buildingId? }: the room a walk ends in — a
@@ -7047,7 +7048,7 @@ x_sn_9 m_sn_sn_sn sn p
     render();
   }
   // A load's own switch, by hand: today from a fridge's or freezer's device
-  // pop-up, and from the electrical view (#242). Instant, and resolved at
+  // pop-up, and from the electrical view. Instant, and resolved at
   // once, as a breaker is: switching a fridge on starts it, surge and all.
   // Nothing else in play writes state.power.switches. The line names the
   // appliance; functional, retunable.
@@ -7060,13 +7061,13 @@ x_sn_9 m_sn_sn_sn sn p
     changePower(POWER_INDEX.of[loadId], p=> setSwitchIn(p, state.seed, loadId, a, on));
     render();
   }
-  // The meters (#249), from the Electrical view. A reading takes
+  // The meters, from the Electrical view. A reading takes
   // METER_READING_MIN, then reads the network as it stands after that minute
   // (loadSupplyVolts(), breakerLoadSideVolts(), breakerCurrent()). Test needs
   // a `voltage-test` tool carried, Clamp a `current-clamp` one. Under
   // simplified rules Test reaches a load and a device's main, and Clamp only
   // the main, as simplified shows only the main, and an old board's fuses,
-  // which it shows too (#358). Opening a panel to clamp a
+  // which it shows too. Opening a panel to clamp a
   // live conductor has no consequence yet (#247). Each reading logs one line
   // and nothing else records it. The figure is a judgment call and the lines
   // are functional; both retunable.
@@ -7097,7 +7098,7 @@ x_sn_9 m_sn_sn_sn sn p
     changePower(POWER_INDEX.of[id], p=> resetBreakerIn(p, id));
     render();
   }
-  // Rewiring a blown fuse (#358), from its device pop-up: offered only while
+  // Rewiring a blown fuse, from its device pop-up: offered only while
   // it is blown, a `screwdriving` tool is carried, and so is fuse wire of its
   // own rating (fuseWireFor()). It spends one length, takes REWIRE_FUSE_MIN,
   // and leaves the fuse unblown (rewireFuseIn()), resolved at once: an
@@ -7472,7 +7473,7 @@ x_sn_9 m_sn_sn_sn sn p
     const stop = stopId && LIMA.stops.find(s=> s.id === stopId);
     return stop && (stop.type === "rural" || stop.type === "rail") ? "outside" : "town";
   }
-  // Atucha's siren (#352), by sirenPlace() and whether it woke you.
+  // Atucha's siren, by sirenPlace() and whether it woke you.
   const SIREN_LINES = {
     town: {
       awake: "Far to the north, a siren starts up. It sounds for a while, then stops, and nothing follows it.",
@@ -7611,8 +7612,8 @@ x_sn_9 m_sn_sn_sn sn p
     batteryDeaths = [];
     forEachItemList(list=> list.forEach(it=>{
       if(!it || !it.on || !it.durability || it.durability.mode !== "time") return;
-      // A device a save from before #373 left on has no `asOf`: its charge
-      // is taken as true now.
+      // A device left on in a save written before `asOf` existed has none:
+      // its charge is taken as true now.
       if(typeof it.durability.asOf !== "number") it.durability.asOf = minutesSinceCollapse();
       scheduleBatteryDeath(it);
     }));
@@ -7955,9 +7956,9 @@ x_sn_9 m_sn_sn_sn sn p
     return b.on && !b.tripped;
   }
   // The breaker layers a run's rules consult. Simplified rules ignore the
-  // circuits, and each panel and the board is one breaker, its main (#243).
+  // circuits, and each panel and the board is one breaker, its main.
   // A fuse is the exception: it is consulted under either rules, so an old
-  // board's panel is live past its fuses only while they are intact (#358).
+  // board's panel is live past its fuses only while they are intact.
   // consultsBreaker() is what the checks read; circuitSkipped() is its other
   // half, for liveness: a circuit the rules pass straight through.
   function consultedLayers(rules){ return rules === "simplified" ? ["panel", "board"] : BREAKER_LAYERS; }
@@ -7990,7 +7991,7 @@ x_sn_9 m_sn_sn_sn sn p
   //             in `prevDrawing` and the tank is not yet full. It never
   //             calls on a full tank. With no `prevDrawing` only the first
   //             test applies, so a tank between the start level and full
-  //             waits after a load (#317's accepted gap: the latch is never
+  //             waits after a load (an accepted gap: the latch is never
   //             saved). A cycling load draws whenever it is powered, at its
   //             average (loadDrawWatts()).
   //   starting  load ids: a motor load (startWatts) drawing now that was not
@@ -8051,7 +8052,7 @@ x_sn_9 m_sn_sn_sn sn p
   // cause, running }] in the order they happened, `running` being the loads
   // the breaker fed that were drawing when it went. Pure, like
   // powerSnapshot(), and with no time in it: electricity is a gameplay
-  // system, not a realistic one (#369), so a breaker has no heat to build.
+  // system, not a realistic one, so a breaker has no heat to build.
   // Each check runs lowest layer first and looks again after every layer,
   // so a trip below is seen above.
   //   Instant: a closed breaker (never a fuse) whose momentary current
@@ -8336,7 +8337,7 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // A trip is heard where its panel or board hangs, and noticed where
   // something it fed was running; anywhere else it passes unremarked. A fuse
-  // blowing is heard as its own line, in place of the panel's (#358). The
+  // blowing is heard as its own line, in place of the panel's. The
   // grid going down or coming back is logGridChange()'s. One line of each
   // kind per resolve. Wording retunable.
   function logTrips(trips){
@@ -8363,7 +8364,7 @@ x_sn_9 m_sn_sn_sn sn p
     return loadRunningAt(powerNow, loadId, minutesSinceCollapse());
   }
   // What a meter reads, from the network as it stands (powerNow). They add no rule to
-  // the resolver: each is a look at what it already worked out (#249).
+  // the resolver: each is a look at what it already worked out.
   //   A load's supply, up to its own switch: its circuit's volts while the
   //   circuit is live (simplified rules: its panel, unless the circuit is a
   //   fuse), else 0.
@@ -8702,8 +8703,8 @@ x_sn_9 m_sn_sn_sn sn p
   // Lights the room's stove, the authored container roomStove() finds. It
   // never creates a container: making one by id is how a kitchen whose
   // stove's id was not the one asked for grew a second, empty "Stove" tab
-  // when lit (#177). With power the stove lights itself and spends nothing
-  // (#234). Without, a burner is lit by hand (#259): the torch first, which
+  // when lit. With power the stove lights itself and spends nothing.
+  // Without, a burner is lit by hand: the torch first, which
   // has no fuel to spend, so a player carrying both keeps their matches, and
   // otherwise one use of a fire-starter.
   function doLightStove(){
@@ -9076,7 +9077,7 @@ x_sn_9 m_sn_sn_sn sn p
   // STOVE_TIMER_STEPS minutes a press, with no clear, no subtract and no cap.
   // It is clockwork, with no battery, so it needs neither the stove on nor
   // power, and turns nothing off. It is not the range's own electronics,
-  // whose electrics are `gas_range` in APPLIANCES (#270). When it
+  // whose electrics are `gas_range` in APPLIANCES. When it
   // runs down it rings, heard anywhere in the stove's building: the player's
   // room must have a `buildingId`, the same as the stove's room's. Otherwise
   // it rings unheard.
@@ -9440,8 +9441,8 @@ x_sn_9 m_sn_sn_sn sn p
   // makeDefaultState()'s spread in applyLoadedData(): an empty power state,
   // so every switch reads its rolled default, and "detailed". This makes
   // sure a present one has the shape the resolver reads, two plain objects
-  // and a known rules value, dropping anything else, a `heat` from before
-  // #369 included. Idempotent.
+  // and a known rules value, dropping anything else, the `heat` an older
+  // save carries included. Idempotent.
   function backfillPowerState(){
     const obj = (v)=> v && typeof v === "object" && !Array.isArray(v) ? v : {};
     const p = obj(state.power);
@@ -10183,7 +10184,7 @@ x_sn_9 m_sn_sn_sn sn p
     }
     return { problems:net.problems, steps, power, tanks:drawn };
   }
-  // The benchmark (#371): a fixed, busy late-game town built by code, and
+  // The benchmark: a fixed, busy late-game town built by code, and
   // the costs a player feels, timed on it. It runs only on a page opened
   // with `?bench` (benchMode), after the boot's first paint, and leaves its
   // result on window.ashfallBenchResults, where the Performance job in CI
@@ -10309,7 +10310,7 @@ x_sn_9 m_sn_sn_sn sn p
       log("The benchmark failed: " + window.ashfallBenchResults.error, "warn");
     }
   }
-  // The replay (#372): a fixed scenario, played step by step through the
+  // The replay: a fixed scenario, played step by step through the
   // game's own actions, on a page opened with `?replay` (replayMode). It runs
   // after the boot's first paint, as the benchmark does, and leaves
   // window.ashfallReplayResult = { version, seed, steps:[{ label, log,
@@ -11315,7 +11316,7 @@ x_sn_9 m_sn_sn_sn sn p
   // The distances along `run` at which its line lies inside `box`, shrunk
   // by `depth` on every side its names reach toward (run.n): [lo, hi], or
   // null when none of it does. A name drawn anywhere in that stretch stays
-  // inside the view (#37). Liang–Barsky, against the run as a segment.
+  // inside the view. Liang–Barsky, against the run as a segment.
   function mapRunVisible(run, box, depth){
     const x0 = box.x + (run.n.x < 0 ? -run.n.x * depth : 0), x1 = box.x + box.w - (run.n.x > 0 ? run.n.x * depth : 0);
     const y0 = box.y + (run.n.y < 0 ? -run.n.y * depth : 0), y1 = box.y + box.h - (run.n.y > 0 ? run.n.y * depth : 0);
@@ -12159,7 +12160,7 @@ x_sn_9 m_sn_sn_sn sn p
     if(POWER_NET.breakers[id].fuse) return b.tripped ? "Blown" : "Intact";
     return b.tripped ? "Tripped" : b.on ? "On" : "Off";
   }
-  // A device's fuses: an old board's (#358), none on any other.
+  // A device's fuses: an old board's, none on any other.
   function deviceFuses(device){ return deviceBreakers(device).filter(id=> POWER_NET.breakers[id].fuse); }
   function deviceFedText(device){
     const fed = device.kind === "board" ? gridUp() : !!(powerNow && powerRead(powerNow, "supplied", device.id));
@@ -12167,7 +12168,7 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // What the Here strip reads while a device's tab is selected: under
   // detailed rules its main (or its RCD) and how many of its breakers have
-  // tripped, under simplified rules just On or Off. An old board's (#358):
+  // tripped, under simplified rules just On or Off. An old board's:
   // under detailed rules its switch and whether its fuses have blown, under
   // simplified rules Off, Blown or On, in that order of precedence.
   function deviceStripText(device){
@@ -12303,7 +12304,7 @@ x_sn_9 m_sn_sn_sn sn p
   // timed action's is.
   function popMeterButton(label, onClick, cost){ return actionButton(label, onClick, { cost }); }
   // A panel's or board's pop-up, drawn into the device pop-up. Watts never
-  // appear (#242, #249). While the Electrical view is on, each breaker row
+  // appear. While the Electrical view is on, each breaker row
   // it lists also offers Test and Clamp, each while its meter is carried
   // (meterButtons()). Detailed rules: the name, whether power reaches it,
   // then one row per breaker (deviceBreakers()), each its hand-written
@@ -12312,7 +12313,7 @@ x_sn_9 m_sn_sn_sn sn p
   // and one Switch on / Switch off; a tripped main reads Off, and switching
   // it on is its reset. Every control is instant and logs its own line
   // (doSwitchBreaker(), doResetBreaker()).
-  //   An old board (#358), one whose circuits hold a fuse, shows breaker rows
+  //   An old board, one whose circuits hold a fuse, shows breaker rows
   // under either rules: under simplified rules its cut-off switch's and its
   // fuses', in place of the rating, the On/Off line and the one button. A
   // cut-off switch's row shows no rating. A fuse's row reads Intact or Blown
@@ -12858,7 +12859,7 @@ x_sn_9 m_sn_sn_sn sn p
     }));
     return out;
   }
-  // The Here panel in the Electrical view (#242). Its tabs run upstream
+  // The Here panel in the Electrical view. Its tabs run upstream
   // first: the panels and boards hanging here (powerDevicesIn()), each with
   // the strip and Device Options it has in the normal view, then the circuits
   // serving the room (circuitsServing()), by their hand-written labels. No
@@ -12975,7 +12976,7 @@ x_sn_9 m_sn_sn_sn sn p
   // returns early, and the seed is exactly what a player wants after dying.
   function renderOptionsPanel(){
     document.getElementById("seedValue").textContent = state.seed;
-    // The current run's rules never change mid-run (#243): this line only
+    // The current run's rules never change mid-run: this line only
     // reads them. The toggle below it is the next run's.
     document.getElementById("rulesNow").textContent = "Electrical rules: " + ELECTRICAL_RULES_LABELS[state.electricalRules];
     document.querySelectorAll("#rulesNext button[data-rules]").forEach(b=>{
