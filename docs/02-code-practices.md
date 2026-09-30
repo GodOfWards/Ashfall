@@ -72,7 +72,10 @@ The game must stay fast as systems are added. Three principles:
 2. **Detail depends on distance.** Full simulation where the player is,
    summary state elsewhere, filled in when the player arrives.
 3. **Costs are measured, and stated up front.** Every handoff for a new
-   system says what it adds per game minute and per event.
+   system says what it adds per game minute and per event. The benchmark
+   measures them: open `ashfall.html?bench`, or read the Performance job's
+   summary on a pull request. Its budgets and regression tolerance live in
+   `.github/scripts/perf_check.py`.
 
 ## Comments and documentation
 
