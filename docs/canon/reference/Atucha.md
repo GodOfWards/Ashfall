@@ -261,6 +261,43 @@ These are not exclusive: case 3 happens alongside 1 or 2 unless someone keeps
 the pool cooled. **Which happened is Tom's decision in the canon** (#329). The
 game only shows what the road shows.
 
+## How far a release reaches: the real benchmarks (2026-09-30)
+
+For scale only; neither was a plant months after shutdown.
+- **Chernobyl (1986, a reactor at power):** an **exclusion zone of about
+  4,000 km²**, including a circle of **30 km** radius; **29,400 km²**
+  contaminated above 180 kBq/m² of caesium; about **125,000 km²** in
+  Belarus, Ukraine and Russia above 37 kBq/m², and more than 200,000 km² of
+  Europe. Secondary, 2026-09-30:
+  [OECD-NEA, "Chernobyl", ch. VI](https://www.oecd-nea.org/rp/chernobyl/c06.html)
+  (search summary).
+- **Fukushima Daiichi (2011, three cores melting within days of
+  shutdown):** about **3,000 km²** above 180 kBq/m², **13,000 km²** "under
+  consideration for attention"; evacuation to **20 km**, and contamination
+  reaching **Iitate, 29–49 km** north-west; the government's target for
+  living areas was 20 mSv a year. Secondary, 2026-09-30:
+  [World Nuclear Association](https://world-nuclear.org/information-library/safety-and-security/safety-of-plants/fukushima-daiichi-accident),
+  [Indoor radiocaesium study (PMC4876398)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4876398/)
+  (search summaries).
+- **A spent-fuel pool fire** is the worst case for pools: had one happened
+  at Fukushima and the wind blown towards Tokyo, **up to 35 million people**
+  might have needed relocating (von Hippel and Schoeppner, dense-packed pools
+  with recent fuel). Secondary, 2026-09-30:
+  [Science & Global Security, 2016](https://scienceandglobalsecurity.org/archive/2016/09/reducing_the_danger_from_fires.html)
+  (search summary).
+- **Caesium-137** (half-life about 30 years) is what contaminates land for
+  decades; iodine-131 (about 8 days) is what iodine tablets guard against,
+  and it decays away within weeks to months.
+- **The winds at Atucha**, which decide where a release goes, weren't found.
+
+**Estimate — not a fact.** A release from Atucha after two months of
+shutdown starts from far less heat and far less iodine than either
+benchmark, so it would reach far less: **most plausibly a contaminated
+strip a few to a few tens of kilometres downwind**, heaviest near the
+plant. Lima, 9 km south, lies inside that range **if the wind carries it
+there**. A pool fire of hot fuel is the case that could reach further, and
+Atucha I's core, months out of the reactor, is the fuel it would involve.
+
 ## The people who run it, and the plant in a pandemic (2026-09-30)
 
 Researched for the Atucha part of the lore session (#329). **Primary** where
