@@ -18,6 +18,193 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.10.8 — Wire the casa, and a power resolver that scales to it
+
+Implements: handoffs/casa-wiring.md
+
+Implements #359 and #306 in full, per `handoffs/casa-wiring.md`, in two
+phases. Phase 1 makes a power step cost the buildings someone has touched,
+not the whole network, with results identical to v0.10.7's. Phase 2 wires
+every generated `casa` (427 homes) with the row house's modern board. Wiring
+is a definition and `state.power` keeps its shape, so there is no new state
+field and no `SAVE_KEY` change: **PATCH**.
+
+**New**
+- *Power runs* (SIMULATION → POWER). Buildings share nothing but the grid,
+  so a step resolves only the **busy** ones: those with an entry in
+  `state.power` under one of their ids, a float that is not full (a tank
+  with litres drawn), or default-on loads that could overload a consulted
+  breaker. Every other building is **still**: with no entries and a full
+  tank, its look at any minute is a pure function of the seed, the rules,
+  the grid and the minute, so its values are worked out from its own nodes
+  when something reads them. Nothing is approximated.
+  - `powerIndex(net, appliances)`: built once per expanded network, beside
+    it. Building order, `of` (node id → building), `sub` (each building's
+    own network, in `expandWiring()`'s shape and order), `roomLoads`, and
+    its memos. The game's is `POWER_INDEX`.
+  - `untouchedTrippers(idx, rules, seed)`: once per rules and seed, the
+    buildings whose default-on loads, all drawing at once at the larger of
+    their running and starting watts, would take a consulted breaker over
+    its rating (heat) or its curve's instant multiple (instant). The sums
+    run over a superset of anything that can draw, in the resolver's own
+    order and expressions, so a building not listed cannot trip untouched.
+    No casa or row house is listed.
+  - `busyBuildings()`, `powerLook()`, `powerStep()`: the busy buildings
+    resolve as one network (`subnetOf()`, in the network's order), through
+    the unchanged `powerSnapshot()` / `resolvePowerStep()`, over the full
+    `state.power`. So trips keep their order and `state.power` its key
+    order.
+  - `powerRead(result, field, id)`: the one way to read a result. A still
+    building's `live`, `supplied` and `powered` depend on the grid alone and
+    are kept per rules, seed and grid; its `drawing`, `starting`, `running`
+    and `momentary` are worked out once per result when first read, with the
+    step before's drawing as `prevDrawing` (`priorOf()`, `priorDrawing()`).
+    A result keeps only what the next step needs of the one before, never a
+    chain.
+  - `powerFlat(result)`: every value as the whole network's snapshot would
+    give it, in its key order, for the dev seam.
+- `cycleRoll(seed, loadId)`: a load's cycle-phase roll, memoized for as long
+  as the seed stays the same.
+
+**Changed / Reworked**
+- *The resolver* (`resolvePowerStep()`): its look is kept until a trip and
+  taken again at the next layer, not re-taken for every layer. Heat is not
+  among a look's inputs.
+- *The game's step*: `refreshPower()` and `stepPower()` go through
+  `powerLook()` / `powerStep()` on `POWER_INDEX`. `powerNow` is a run's
+  result, read through `powerRead()` by `isPowered()`, `refillTanks()`,
+  `loadSupplyVolts()`, `breakerLoadSideVolts()`, `breakerCurrent()`, and the
+  device strip's `supplied`. `logGridChange(dt, before, after)` now takes
+  results and checks the current room's loads (`roomLoads`).
+- `loadPoweredNow()` looks at the load's own building (`POWER_INDEX.sub`),
+  not the whole network.
+- `simulatePower()` steps through `powerStep()` on its own index and reports
+  each row from `powerFlat()`, so the dev seam runs the same code as the
+  game. Its rows are unchanged in shape and value.
+
+**New content**
+- `WIRING_TEMPLATES.casa` (POWER SCHEMA): a 40 A diferencial (`rcd:true`)
+  heading `lights` (LIGHTS, 10 A: living, kitchen, bedroom, bathroom),
+  `sockets` (SOCKETS, 16 A: kitchen) and `water` (WATER, 16 A: kitchen,
+  patio), all 220 V, curve C. Fixtures: `light_living`, `light_kitchen`,
+  `light_bedroom`, `light_bath` (`led_light`); `fridge` (`fridge_freezer`,
+  containers `fridge`, `freezer`), `stove` (`gas_range`, container
+  `stove`), `kettle`, `toaster`, `microwave` on SOCKETS; `water_heater` in
+  the kitchen and `pump` (`house_pump`) on the patio, on WATER.
+- `BUILDING_TYPES.casa` gains `wiring`: a **Meter box** at its `street`
+  role (the casa's site stop), 32 A main, `direct:true`, and a **Breaker
+  panel** with id `house` in its `living` room. Ids are
+  `h_<stop>.board`, `h_<stop>.board.main`, `h_<stop>.house`,
+  `h_<stop>.house.main`, `h_<stop>.house.<circuit>` and
+  `h_<stop>.house.<fixture>`. Every casa is wired identically, the Barrio
+  Atucha's included, until #299 gives those a `chalet` type.
+
+**UI**
+- The casa's living room: "A front room that is living room and dining room
+  both. Barred windows onto the street, the blinds half down. The breaker
+  panel hangs on the wall by the front door."
+- Each casa's stop shows its **Meter box** in the Here panel, reachable with
+  the front door locked; its living room shows the **Breaker panel**. Both
+  render as the row house's do.
+- For the player: a casa's tank now refills only while its pump draws, and
+  its fridge and freezer spoil by their own power (grid, breakers, switch),
+  as the row house's already do.
+
+**Documentation**
+- The comment above `stepPower()` is rewritten: a step costs the busy
+  buildings, and what keeps that honest is that nothing is stored for a
+  still building and the busy set is taken afresh each step. A new
+  *POWER RUNS* comment block documents the scheme and the index.
+- `WIRING_TEMPLATES`' comment gains a `casa` paragraph (the row house's
+  figures; heater in the kitchen and pump on the patio, Tom first-hand; the
+  meter's place quoted from OCEBA; the panel's from AEA 90364-7-770
+  §770.16.3.2). `BUILDING_TYPES.casa`'s comment says how it is wired.
+  `refillTanks()`' comment now names only `shop_home` (#307) as unwired.
+- `simulatePower()`'s comment says it steps as the game does.
+- Nothing was deferred: every in-scope item shipped, and the handoff's
+  out-of-scope items already have their issues (#358, #307, #308, #309,
+  #299, #258, #333, #334, #247).
+
+**Explicitly out of scope**
+- Old fuse boards, spare fuses and earthing (#358).
+- Other building types: `shop_home` (#307), `galpon` (#308), the comisaría
+  (#309), `chalet` and PH (#299).
+- Removing the unwired-room fallback (#258).
+- The TV and the washing machine (#333); appliances in use (#334).
+- The RCD's leakage trip, and shock (#247).
+- Any mention of the heater or the pump in room text, and any change to the
+  street stops' text.
+- Any change to `resolvePowerStep()`'s rules: trips, heat, curves, cycles,
+  floats. Phase 1 changes how it is computed, never what.
+- The dev seam's `apartment` template.
+
+**Validation performed**
+- `git diff origin/main...HEAD -- ashfall.html`: POWER, BUILDING TYPES and
+  POWER SCHEMA, plus `refillTanks()`' pump read and comment, the device
+  strip's one read of `supplied`, `simulatePower()`, and the version. The
+  script parses (`new Function` over its body).
+- An equivalence harness (headless Chromium, not shipped): v0.10.7 and this
+  build, each with the Phase 2 casa wiring patched in, run side by side with
+  the same seed and a seeded `Math.random`, compared row by row as JSON (key
+  order included). All identical, under both rules:
+  - `simulatePower()` on a 429-house network built from the casa template:
+    grid down and back up (warm and cold start, with drawn tanks); a
+    SOCKETS overload left on until it heat-trips (1,900 minutes); instant
+    trips from a test motor that makes its houses untouched trippers, with
+    resets and a reset into a standing overload; breakers switched off and
+    on, an RCD off and on, a fridge switched off and back to its default;
+    drawn tanks refilling, the mains failing mid-refill, the grid after.
+  - In game: 40 casas stocked with food in fridge, freezer and cupboards; a
+    fridge switched off, a SOCKETS breaker and an RCD off, kettle,
+    microwave and toaster left on in one casa and the home, three tanks
+    drawn; then four Rests across the grid's failure, its false recovery
+    and the final failure, with switches restored midway, and a Sleep.
+    `state.power`, `state.tankDrawn`, every kitchen's contents, powered
+    counts, the meters' readings, `loadPoweredNow()` and the log's text
+    matched at every checkpoint.
+- `validateWiring()`: no problems; its unwired warning fell from 1,722 rooms
+  to 14, none of them a casa's. `validateRoomSchema()` and
+  `validateBuildings()`: no problems.
+- Timing, headless Chromium, fresh game, median of five (two separate runs;
+  this machine is noisy):
+
+  | Case | v0.10.7 | v0.10.7 + casas wired | v0.10.8 |
+  |---|---|---|---|
+  | Rest (60 steps) | 114 / 124 ms | 3,390 ms | 116 / 191 ms |
+  | Sleep (420 steps) | 595 / 698 ms | 23,005 ms | 750 / 1,015 ms |
+
+  At most 1.54× v0.10.7 for Rest and 1.45× for Sleep, inside the 2× budget.
+
+**Sections touched**
+- SURVIVAL / TIME SIMULATION → POWER (the resolver, power runs, the game's
+  step and readers) and `refillTanks()`; WORLD DATA → BUILDING TYPES and
+  POWER SCHEMA; the device strip's read of `supplied` (RENDERING, one line); `simulatePower()`
+  (dev seam).
+
+**Open questions / decisions resolved**
+- *How untouched buildings stay out of the step* (Design decision 1): per
+  building, busy vs still, as the handoff recommended, with two
+  differences. A building is not made busy for holding the current room:
+  a still building's values are exact when read, so it isn't needed. And no
+  building is kept busy a step longer after it goes still: a still
+  building's `prevDrawing` is read from the step before's result, which
+  holds what it actually drew if it was busy then.
+- *Where the index lives* (Design decision 2): beside the network,
+  `powerIndex()`, built once; `expandWiring()`'s output is unchanged.
+- *The harness* (Design decision 3): as recommended, and not shipped.
+
+**Notes / assumptions**
+- The 2× budget is a judgment call, retunable.
+- Every figure the casa carries is the row house's, retunable: the 32 A
+  main, the 40 A diferencial, the 10 A and 16 A circuits, and the
+  appliances' watts, cycles and `leftOnChance`.
+- The memo caps (16 busy sub-networks, 4 rules/seed/grid keys of still
+  looks) are implementation choices with no effect on results.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.10.7"` → `"0.10.8"`
+
+---
+
 ## v0.10.7 — The night the grid fails
 
 Implements: handoffs/night-the-grid-fails.md
