@@ -893,7 +893,11 @@
   //                   `screwdriving` is the tool a blown fuse is rewired
   //                   with, and `fuse-wire` the wire it is rewired with, of
   //                   the fuse's own `fuseRating` (doRewireFuse()).
-  //     durability    { current, max, mode } — mode is "uses" or "time"
+  //     durability    { current, max, mode, asOf? } — mode is "uses" or
+  //                   "time". A "time" device's `asOf` is present exactly
+  //                   while it is `on`: the minute since the collapse its
+  //                   `current` is true at, its charge worked out when read
+  //                   (batteryCharge())
   //     restores      { hunger, thirst } — consumable effect
   //     verb          display/use verb, e.g. "Eat", "Drink"
   //     sealed        packaged-item state. `true` on a registry entry means
@@ -982,6 +986,11 @@
   //                   through `overrides`; otherwise the world's items are
   //                   aged from the collapse (stampMissingAges()) and an
   //                   action's are new (asNewlyMade()).
+  //     agedAt        instance: the minute since the collapse at which a
+  //                   perishable row's `ages` are true. Every writer of
+  //                   `ages` sets it, and a row read without one is taken as
+  //                   true now. Ageing is worked out when the row's list is
+  //                   next settled (settleList()).
   //     holdsWater    { kg, restores } — the item holds water: `kg` when
   //                   full, and what drinking a full one restores. A bottle.
   //                   Definition data, read by itemId.
@@ -5467,7 +5476,10 @@ x_sn_9 m_sn_sn_sn sn p
   function waterKindOf(it){ return it.water ? it.water.kind : null; }
   // Folds `row` into `target`, an existing row sameStackState() accepts. The
   // one place two rows become one: the units' ages come along, re-sorted
-  // oldest first.
+  // oldest first. Both rows are always settled to the same minute, so their
+  // ages join as they are: anything that moves or merges rows acts on lists
+  // already settled (settleReachable(), settleHeat()), and a settle folds
+  // only rows of its own list.
   function mergeRows(target, row){
     target.qty += row.qty;
     if(Array.isArray(target.ages) || Array.isArray(row.ages))
@@ -5856,7 +5868,10 @@ x_sn_9 m_sn_sn_sn sn p
   // every unit at age 0. What distinguishes it from a world item, which
   // stampMissingAges() ages as if it had sat there since the collapse.
   function asNewlyMade(item){
-    if(isPerishable(item)) item.ages = new Array(item.qty).fill(0);
+    if(isPerishable(item)){
+      item.ages = new Array(item.qty).fill(0);
+      item.agedAt = minutesSinceCollapse();
+    }
     return item;
   }
   // Rationing. A unit can be eaten whole or by the half and the quarter;
@@ -6416,13 +6431,13 @@ x_sn_9 m_sn_sn_sn sn p
     if(!it.durability || it.durability.mode !== "time") return actions;
     if(it.hasBatteries !== false){
       actions.push({ label: it.on ? "Turn off" : "Turn on", onClick:()=>{
-        it.on = !it.on;
+        switchDevice(it, !it.on);
         // Silent: the status line already reads "— On" / "— Off".
         render();
       }});
       actions.push({ label:"Remove batteries", onClick:()=>{
+        if(it.on) switchDevice(it, false);
         it.hasBatteries = false;
-        it.on = false;
         giveItem(itemFromRegistry({ id:"spare_batteries", qty:1 }));
         // Silent: the batteries appear in inventory and the status line
         // reads "No batteries installed".
@@ -6433,6 +6448,11 @@ x_sn_9 m_sn_sn_sn sn p
       consumeByTag("battery", 1);
       it.durability.current = it.durability.max;
       it.hasBatteries = true;
+      // Fresh batteries in a device that is on: its charge is true from now.
+      if(it.on){
+        it.durability.asOf = minutesSinceCollapse();
+        scheduleBatteryDeath(it);
+      }
       // Silent: the status line's charge readout jumps to 100%.
       render();
     }});
@@ -6739,6 +6759,7 @@ x_sn_9 m_sn_sn_sn sn p
       checkGameOver();
     }
     state.currentRoom = exit.to;
+    settleReachable();
     const entered = world[exit.to].buildingId;
     if(entered && !state.enteredBuildings.includes(entered)) state.enteredBuildings.push(entered);
     worldTab = "floor";
@@ -7288,13 +7309,16 @@ x_sn_9 m_sn_sn_sn sn p
     return spoilageRate(container, wasOn) * up + spoilageRate(container, false) * (toM - fromM - up);
   }
   // Gives a perishable without `ages` the age it would have if it had sat in
-  // `container`, in `roomId`, since the collapse. A world item's starting
-  // age; an item an action makes is new instead (asNewlyMade()), and a
-  // placement that sets `ages` itself keeps them.
+  // `container`, in `roomId`, since the collapse, true now (`agedAt`). A
+  // world item's starting age; an item an action makes is new instead
+  // (asNewlyMade()), and a placement that sets `ages` itself keeps them, and
+  // is taken as true now when it says no `agedAt`.
   function stampAges(it, container, roomId){
     (Array.isArray(it.contents) ? it.contents : []).forEach(c=> stampAges(c, container, roomId));
-    if(!isPerishable(it) || Array.isArray(it.ages)) return;
-    it.ages = new Array(it.qty).fill(effectiveAge(container, roomId, 0, minutesSinceCollapse()));
+    if(!isPerishable(it)) return;
+    const now = minutesSinceCollapse();
+    if(!Array.isArray(it.ages)) it.ages = new Array(it.qty).fill(effectiveAge(container, roomId, 0, now));
+    if(typeof it.agedAt !== "number") it.agedAt = now;
   }
   // stampAges() over every item list, each with its container. Run on a new
   // game, once the world is built — not inside makeDefaultWorld(), which
@@ -7322,32 +7346,100 @@ x_sn_9 m_sn_sn_sn sn p
       list.splice(list.indexOf(row), 0, takeUnits(row, n));
     }
   }
-  // One tick of ageing: every perishable unit grows by the step at its
-  // container's rate from the power state now (powerNow). A
-  // row that changes state is split where its units now differ, and any row
-  // that changed folds into a matching row of its list, so each list holds
-  // one row per item and state.
-  function ageFood(dt){
-    forEachItemList((list, roomId, container)=>{
-      let grow = null, changed = false;
-      list.slice().forEach(row=>{
-        if(!isPerishable(row)) return;
-        if(grow === null) grow = container ? spoilageRate(container, containerPowered(roomId, container)) * dt : dt;
-        if(!(grow > 0)) return;
-        normalizeAges(row);
-        const before = rowFreshness(row);
-        row.ages = row.ages.map(a=> a + grow);
-        if(rowFreshness(row) === before) return;
-        splitByFreshness(list, row);
-        changed = true;
+  // AGEING WORKED OUT WHEN READ (#373). Nothing ages food every minute. A
+  // perishable row's `ages` are true at its `agedAt`, a minute since the
+  // collapse, and a list is settled to a minute (settleList()) only when
+  // something is about to read or change it: where the player can reach it
+  // (settleReachable()), before a power change reaches it (commitResolve()),
+  // and before cooking changes it (settleHeat()). docs/systems/spoilage.md
+  // has the model.
+  //   The age a row gains over [from, to), in `container` in `roomId`: 1 a
+  // minute carried, on the floor, or in a container that is neither a
+  // fridge nor a freezer; in a fridge or a freezer, its powered rate while
+  // the grid was up (gridUpMinutes()) if its load would be powered with the
+  // grid up (coldStoreWired()), and its unpowered rate the rest of the time.
+  // Only the grid changes power over a span: every other change is a settle
+  // point. A new source of power (#245) changes this rule.
+  function ageOver(container, roomId, from, to){
+    if(!(to > from)) return 0;
+    if(!hasTag(container, "fridge") && !hasTag(container, "freezer")) return to - from;
+    if(!coldStoreWired(roomId, container)) return spoilageRate(container, false) * (to - from);
+    const up = gridUpMinutes(from, to);
+    return spoilageRate(container, true) * up + spoilageRate(container, false) * (to - from - up);
+  }
+  // Whether a room container's load would be powered with the grid up, as
+  // the power state stands: its switch on and its path closed, a look at its
+  // own building with the grid taken as live (powerSnapshot(): pure, no
+  // trips). A container no load is wired to takes the grid straight.
+  function coldStoreWired(roomId, container){
+    const loadId = POWER_NET.containerLoad[roomId + KEY_SEP + container.id];
+    if(!loadId) return true;
+    const b = POWER_INDEX.of[loadId];
+    return !!powerSnapshot(POWER_INDEX.sub[b], APPLIANCES, state.power, state.electricalRules, true, null, state.seed, null)
+      .powered[loadId];
+  }
+  // One list (not its nested contents) settled to minute `m`: each perishable
+  // row gains ageOver() from its `agedAt` (now, when it has none) for every
+  // unit, and is true at `m`. A row that changes state is split where its
+  // units now differ, and any row that changed folds into a matching row of
+  // its list, so each list holds one row per item and state. Nothing is
+  // logged: a row in a list nobody reaches goes "mixed" silently until it is
+  // next settled.
+  function settleList(list, roomId, container, m){
+    let changed = false;
+    list.slice().forEach(row=>{
+      if(!isPerishable(row)) return;
+      const from = typeof row.agedAt === "number" ? row.agedAt : m;
+      const grow = ageOver(container, roomId, from, m);
+      row.agedAt = m;
+      if(!(grow > 0)) return;
+      normalizeAges(row);
+      const before = rowFreshness(row);
+      row.ages = row.ages.map(a=> a + grow);
+      if(rowFreshness(row) === before) return;
+      splitByFreshness(list, row);
+      changed = true;
+    });
+    if(changed) list.slice().forEach(row=>{ if(list.includes(row) && isPerishable(row)) remergeRow(list, row); });
+  }
+  // A list and every list nested in its items' `contents`, to any depth,
+  // settled to `m`, all in `container` as forEachItemList() has it.
+  function settleListDeep(list, roomId, container, m){
+    if(!Array.isArray(list) || !list.length) return;
+    settleList(list, roomId, container, m);
+    list.forEach(it=>{ if(it && Array.isArray(it.contents)) settleListDeep(it.contents, roomId, container, m); });
+  }
+  // Every list the player can reach, settled to now: what is carried, and
+  // the current room's floor, containers and car containers, with every
+  // list nested in them. Run at the end of every advance of time
+  // (settleToNow()), after every room change (doMove()), and on a new game,
+  // restart and load (rebuildSchedule()), so every reader of ages reads a
+  // settled list.
+  function settleReachable(){
+    const m = minutesSinceCollapse(), room = world[state.currentRoom];
+    invPools().forEach(list=> settleListDeep(list, null, null, m));
+    if(!room) return;
+    settleListDeep(room.floor, state.currentRoom, null, m);
+    room.containers.concat(room.carContainers || []).forEach(c=> settleListDeep(c.items, state.currentRoom, c, m));
+  }
+  // Building `b`'s wired fridges and freezers, settled to minute `m` under
+  // the power state as it stands: before a change to its switches or
+  // breakers is committed (commitResolve()), since ageOver() takes the power
+  // state as constant over a span.
+  function settleColdStores(b, m){
+    Object.values(POWER_INDEX.sub[b].loads).forEach(l=>{
+      const room = world[l.room];
+      if(!room) return;
+      l.containers.forEach(id=>{
+        const c = room.containers.find(x=> x.id === id);
+        if(c && (hasTag(c, "fridge") || hasTag(c, "freezer"))) settleListDeep(c.items, l.room, c, m);
       });
-      if(changed) list.slice().forEach(row=>{ if(list.includes(row) && isPerishable(row)) remergeRow(list, row); });
     });
   }
-  // applyHungerThirst/applyWorldTicking/applyEnergyBaseline are the pieces
-  // applyDecay used to do in one shot. They're split out so Sleep (which
-  // suspends the awake Energy/Stamina/Fatigue system) can run Hunger/Thirst
-  // and world ticking without the awake Energy baseline, and so the
+  // applyHungerThirst/applyEnergyBaseline are the pieces applyDecay used to
+  // do in one shot. They're split out so Sleep (which suspends the awake
+  // Energy/Stamina/Fatigue system) can run Hunger/Thirst and the world's
+  // time (clockStep()) without the awake Energy baseline, and so the
   // Stamina/Fatigue system can drive Energy's *recovery* multiplier without
   // duplicating the baseline-depletion math.
   function applyHungerThirst(min){
@@ -7419,38 +7511,67 @@ x_sn_9 m_sn_sn_sn sn p
     });
     lastClock = Math.max(lastClock, m);
   }
-  // The world work still done every step, before the step's due events
-  // (clockStep()).
-  // A device drains wherever it is: carried, stowed in a bag, or left switched
-  // on anywhere in the world. Where it is decides only who hears it die: a
+  // BATTERIES WORKED OUT WHEN READ (#373). A device on batteries
+  // (durability mode "time": the flashlight, the radio) drains only while it
+  // is on, and nothing drains it every minute: while it is on, its
+  // `durability.asOf` is the minute since the collapse its `current` was
+  // true at, and its charge is worked out when read (batteryCharge()). Its
+  // running out is a scheduled event (batteryDeaths, settleBatteryDeaths()).
+  function batteryCharge(it, m = minutesSinceCollapse()){
+    const d = it.durability;
+    if(!it.on || typeof d.asOf !== "number") return d.current;
+    return Math.max(0, d.current - it.drainRate * (m - d.asOf));
+  }
+  // Turning a device on or off, the one way it is done: on, its charge is
+  // true from now and its running out is scheduled; off, its charge is
+  // written down and `asOf` goes.
+  function switchDevice(it, on){
+    if(on){
+      it.on = true;
+      it.durability.asOf = minutesSinceCollapse();
+      scheduleBatteryDeath(it);
+    } else {
+      it.durability.current = batteryCharge(it);
+      delete it.durability.asOf;
+      it.on = false;
+    }
+  }
+  // The minutes since the collapse at which a device switched on runs out,
+  // runtime only: added to by every switching on (scheduleBatteryDeath()),
+  // rebuilt by one walk on a new game, restart and load (rebuildSchedule()),
+  // and dropped once due. A minute left behind by a device switched off
+  // since finds nothing. Not keyed by _uid, since moving an item strips it.
+  let batteryDeaths = [];
+  function scheduleBatteryDeath(it){
+    if(it.drainRate > 0) batteryDeaths.push(it.durability.asOf + it.durability.current / it.drainRate);
+  }
+  // Every device whose charge is out at minute `m`, when a death is due by
+  // then: one walk switches each off, with its line by where it is. A
   // carried one is "your", one in the room you are in is "the", and one
   // anywhere else shuts off silently, the way a fire elsewhere goes out.
-  function applyWorldTicking(min){
-    ageFood(min);
-    forEachItemList((list, roomId)=>{
-      list.forEach(it=>{
-        if(it.on && it.durability){
-          it.durability.current = Math.max(0, it.durability.current - it.drainRate*min);
-          if(it.durability.current <= 0){
-            it.on = false;
-            const name = it.name.toLowerCase();
-            if(roomId === null) log(`Your ${name} runs out of battery and shuts off.`, "warn");
-            else if(roomId === state.currentRoom) log(`The ${name} runs out of battery and shuts off.`, "warn");
-          }
-        }
-      });
-    });
+  function settleBatteryDeaths(m){
+    if(!batteryDeaths.some(t=> t <= m)) return;
+    forEachItemList((list, roomId)=> list.forEach(it=>{
+      if(!it.on || !it.durability || it.durability.mode !== "time" || batteryCharge(it, m) > TICK_EPSILON) return;
+      it.durability.current = 0;
+      it.on = false;
+      delete it.durability.asOf;
+      const name = it.name.toLowerCase();
+      if(roomId === null) log(`Your ${name} runs out of battery and shuts off.`, "warn");
+      else if(roomId === state.currentRoom) log(`The ${name} runs out of battery and shuts off.`, "warn");
+    }));
+    batteryDeaths = batteryDeaths.filter(t=> t > m);
   }
   // THE CLOCK AND THE SCHEDULER (#372). Time moves in steps of at most a
   // minute (runAwakeStep(), doRest(), doSleep()), and clockStep() is the one
-  // step: the player's vitals, the world work still done every step
-  // (applyWorldTicking()), then whatever is due (processDueEvents()). The
-  // rest of what changes with time is scheduled: it is brought up to a
-  // minute only when that minute is asked for (settleWorld()), and the next
-  // thing it will do on its own (a stove timer running down, cooking
-  // finishing, a fire going out, a tank coming full, the grid failing or
-  // returning, a CLOCK_EVENTS entry) is kept as the next due minute, so a
-  // step with nothing due does no scheduled work at all.
+  // step: the player's vitals, then whatever is due (processDueEvents()).
+  // Everything in the world that changes with time is worked out when read
+  // or scheduled: it is brought up to a minute only when that minute is
+  // asked for (settleWorld(), settleReachable()), and the next thing it will
+  // do on its own (a stove timer running down, cooking finishing, a fire
+  // going out, a tank coming full, a battery running out, the grid failing
+  // or returning, a CLOCK_EVENTS entry) is kept as the next due minute, so a
+  // step with nothing due does no world work at all.
   // The model is docs/systems/time.md's.
   //   settledAt  the minute since the collapse the scheduled systems stand
   //              at. Every advance of time ends by settling to now, so
@@ -7458,6 +7579,7 @@ x_sn_9 m_sn_sn_sn sn p
   //   lastClock  the minute since the collapse CLOCK_EVENTS have been fired
   //              up to.
   //   lastGrid   the same for the grid's changes (GRID_CHANGES).
+  //   batteryDeaths  the minutes devices switched on run out at.
   //   nextDue    the least of every scheduled system's next event: planned
   //              at the start of every advance, since an action may have
   //              changed anything since the last one, and after every event.
@@ -7496,8 +7618,9 @@ x_sn_9 m_sn_sn_sn sn p
     return Array.from(timerStoves.values()).sort((a, b)=> roomOrder(a.roomId) - roomOrder(b.roomId)
       || world[a.roomId].containers.indexOf(a.container) - world[b.roomId].containers.indexOf(b.container));
   }
-  // The runtime lists from one scan of the world, and the schedule settled
-  // at now: on a new game, restart and load, and after the benchmark's setup.
+  // The runtime lists and the battery deaths from one walk of the world, and
+  // the schedule and the reachable lists settled at now: on a new game,
+  // restart and load, and after the benchmark's setup.
   function rebuildSchedule(){
     heatRooms.clear();
     timerStoves.clear();
@@ -7505,14 +7628,25 @@ x_sn_9 m_sn_sn_sn sn p
       scheduleHeat(id);
       world[id].containers.forEach(c=> scheduleTimer(id, c));
     });
+    batteryDeaths = [];
+    forEachItemList(list=> list.forEach(it=>{
+      if(!it || !it.on || !it.durability || it.durability.mode !== "time") return;
+      // A device a save from before #373 left on has no `asOf`: its charge
+      // is taken as true now.
+      if(typeof it.durability.asOf !== "number") it.durability.asOf = minutesSinceCollapse();
+      scheduleBatteryDeath(it);
+    }));
     settledAt = lastClock = lastGrid = minutesSinceCollapse();
+    settleReachable();
     planNextDue();
   }
   // The next due minute, from what is lit or running now: a grid change not
-  // yet made, a tank coming full (tankFullDue()), a timer's end, a lit
-  // room's next event (heatRoomDue()), and every clock event not yet fired.
+  // yet made, a tank coming full (tankFullDue()), a battery running out, a
+  // timer's end, a lit room's next event (heatRoomDue()), and every clock
+  // event not yet fired.
   function planNextDue(){
     let due = settledAt + tankFullDue();
+    batteryDeaths.forEach(t=>{ due = Math.min(due, t); });
     GRID_CHANGES.forEach(g=>{ if(g > lastGrid) due = Math.min(due, g); });
     timerStoves.forEach(({ container })=>{ due = Math.min(due, settledAt + container.timerMinutes); });
     heatRooms.forEach(id=>{ due = Math.min(due, settledAt + heatRoomDue(world[id])); });
@@ -7522,9 +7656,10 @@ x_sn_9 m_sn_sn_sn sn p
   // Brings the scheduled systems to minute `m`, each by the span since
   // settledAt, and does what is due there, in this order: the tanks
   // (settleTanks()), then a grid change at `m` (resolveGrid()), then a
-  // tank come full resolves its building so its pump stops, then every
-  // running timer in world order, then every lit room, its cooking and then
-  // its fire (settleTimer(), settleHeat()). It never runs past an event
+  // tank come full resolves its building so its pump stops, then the
+  // batteries out by `m` (settleBatteryDeaths()), then every running timer
+  // in world order, then every lit room, its cooking and then its fire
+  // (settleTimer(), settleHeat()). It never runs past an event
   // nobody has processed, since it is only ever asked for the next due
   // minute or for now, and TICK_EPSILON absorbs the float left over. A span
   // of 0 still finishes what is due at `m`.
@@ -7535,15 +7670,20 @@ x_sn_9 m_sn_sn_sn sn p
     GRID_CHANGES.forEach(g=>{ if(lastGrid < g && g <= m) resolveGrid(g); });
     lastGrid = Math.max(lastGrid, m);
     filled.forEach(b=>{ if(TANK_PUMPS[b] !== undefined) resolveBuilding(b); });
+    settleBatteryDeaths(m);
     timersInOrder().forEach(({ roomId, container })=> settleTimer(roomId, container, span));
     heatRoomsInOrder().forEach(id=> settleHeat(id, span));
   }
-  // What an advance of time ends with: the world settled to now.
-  function settleToNow(){ settleWorld(minutesSinceCollapse()); }
+  // What an advance of time ends with: the world settled to now, and every
+  // list the player can reach.
+  function settleToNow(){
+    settleWorld(minutesSinceCollapse());
+    settleReachable();
+  }
   // Every event due by now, each at its own minute and in time order: the
   // world settled to it, which does what is due there and logs it, then the
   // clock events up to it. At one minute the order is grid changes, tanks
-  // coming full, timers, cooking, fires, clock events. The cap guards against an event that never clears,
+  // coming full, battery deaths, timers, cooking, fires, clock events. The cap guards against an event that never clears,
   // which would otherwise hang the step: a bug, reported and cut short.
   const SCHEDULER_MAX_EVENTS_PER_STEP = 1000;
   function processDueEvents(){
@@ -7560,12 +7700,11 @@ x_sn_9 m_sn_sn_sn sn p
     }
   }
   // The one step of time, `dt` minutes of at most one: the clock, Hunger
-  // and Thirst, the world work still done every step, then what is due. Its
-  // caller adds its own vitals piece after it, and its own stop condition.
+  // and Thirst, then what is due. Its caller adds its own vitals piece after
+  // it, and its own stop condition.
   function clockStep(dt){
     state.totalMinutes += dt;
     applyHungerThirst(dt);
-    applyWorldTicking(dt);
     processDueEvents();
   }
   function applyEnergyBaseline(min, multiplier){
@@ -8147,10 +8286,26 @@ x_sn_9 m_sn_sn_sn sn p
     return resolvePower(POWER_INDEX.sub[b], APPLIANCES, power, state.electricalRules, gridLive,
       before ? lookOf(before, b).drawing : null, state.seed, tankFloatsNow());
   }
-  // A resolve's result committed: its power state becomes the game's, and
-  // its look the building's in powerNow.
-  function commitResolve(b, r){
+  // Whether building `b`'s switches or breakers differ between two power
+  // states.
+  function buildingPowerChanged(b, from, to){
+    return ["switches", "breakers"].some(k=>{
+      const ids = new Set(Object.keys(from[k]).concat(Object.keys(to[k])));
+      return Array.from(ids).some(id=> POWER_INDEX.of[id] === b && JSON.stringify(from[k][id]) !== JSON.stringify(to[k][id]));
+    });
+  }
+  // A resolve's result for building `b` made the game's at minute `m`: when
+  // it changes the building's switches or breakers, its fridges and freezers
+  // are first settled under the power state as it stood
+  // (settleColdStores()), then its power state becomes the game's.
+  function adoptPower(b, r, m){
+    if(buildingPowerChanged(b, state.power, r.power)) settleColdStores(b, m);
     state.power = r.power;
+  }
+  // A resolve's result committed now (adoptPower()), and its look made the
+  // building's in powerNow.
+  function commitResolve(b, r){
+    adoptPower(b, r, minutesSinceCollapse());
     const looks = new Map(powerNow.looks);
     const { power, trips, ...look } = r;
     looks.set(b, look);
@@ -8164,7 +8319,7 @@ x_sn_9 m_sn_sn_sn sn p
     powerNow = powerResult(POWER_INDEX, state.electricalRules, state.seed, gridLive, looks);
     busyBuildings(POWER_INDEX, state.power, state.electricalRules, state.seed, tankFloatsNow()).forEach(b=>{
       const r = resolveBuildingOn(b, state.power, gridLive, null);
-      state.power = r.power;
+      adoptPower(b, r, minutesSinceCollapse());
       const { power, trips, ...look } = r;
       looks.set(b, look);
     });
@@ -8193,7 +8348,7 @@ x_sn_9 m_sn_sn_sn sn p
     const before = powerNow, gridLive = gridUp(m), looks = new Map(), trips = [];
     busyBuildings(POWER_INDEX, state.power, state.electricalRules, state.seed, tankFloatsNow()).forEach(b=>{
       const r = resolveBuildingOn(b, state.power, gridLive, before);
-      state.power = r.power;
+      adoptPower(b, r, m);
       const { power, trips:t, ...look } = r;
       looks.set(b, look);
       trips.push(...t);
@@ -8498,6 +8653,7 @@ x_sn_9 m_sn_sn_sn sn p
     if(isPerishable(crafted)){
       const ages = used.filter(isPerishable).map(u=> unitAges(u)[0]);
       crafted.ages = [ages.length ? Math.max(...ages) : 0];
+      crafted.agedAt = minutesSinceCollapse();
     }
     const room = world[state.currentRoom];
     if(room.floorCap && totalWeight(room.floor) + itemWeight(crafted) > room.floorCap) logHeap(crafted);
@@ -8707,11 +8863,14 @@ x_sn_9 m_sn_sn_sn sn p
       });
     });
   }
-  // A lit room settled by `span` minutes (settleWorld()): its cooking, then
-  // its fire, whose last minute still cooks. A fire that runs out goes out
-  // at its own minute, said where the player is.
+  // A lit room settled by `span` minutes (settleWorld()): its heat
+  // containers' food aged to the minute first, since cooking and forming a
+  // dish change it (settleListDeep()), then its cooking, then its fire,
+  // whose last minute still cooks. A fire that runs out goes out at its own
+  // minute, said where the player is.
   function settleHeat(roomId, span){
     const r = world[roomId];
+    heatContainersOf(r).forEach(c=> settleListDeep(c.items, roomId, c, settledAt));
     cookInHeat(r, span);
     if(r.fireMinutesLeft == null) return;
     r.fireMinutesLeft -= span;
@@ -8734,8 +8893,11 @@ x_sn_9 m_sn_sn_sn sn p
     if(it.cookMinutes < cookMinutesOf(it) - TICK_EPSILON) return;
     it.cookState = "cooked";
     delete it.cookMinutes;
-    // Cooked food starts Fresh.
-    if(isPerishable(it)) it.ages = new Array(it.qty).fill(0);
+    // Cooked food starts Fresh, at the minute it is settled to.
+    if(isPerishable(it)){
+      it.ages = new Array(it.qty).fill(0);
+      it.agedAt = settledAt;
+    }
     remergeRow(list, it);
   }
   function cookMinutesOf(it){ return registryEntryOf(it).cooks.minutes; }
@@ -8870,6 +9032,7 @@ x_sn_9 m_sn_sn_sn sn p
   function formDish(v, t){
     const dish = buildDish(t, v.contents || [], t.water ? vesselDefOf(v).waterKg : 0);
     dish.ages = [0];
+    dish.agedAt = settledAt;
     dish.cookState = "raw";
     dish.cookMinutes = 0;
     v.contents = [dish];
@@ -9142,8 +9305,8 @@ x_sn_9 m_sn_sn_sn sn p
   // ignores both.
   // An empty list is skipped: every visitor acts on the items in a list, and
   // the town's thousands of unopened containers are empty, so passing them
-  // over is what keeps a one-minute tick cheap (applyWorldTicking() walks the
-  // lists twice a minute).
+  // over is what keeps a whole-world walk cheap (a battery running out, the
+  // load-time rebuilds).
   // The world's room ids, listed once per world: no room is added or removed
   // after a build (makeDefaultWorld(), buildWorld()), so the list holds until
   // `world` itself is replaced, by a restart or a load. The per-minute scans
@@ -9351,13 +9514,15 @@ x_sn_9 m_sn_sn_sn sn p
     pot_of_spoiled_stew: it=>{
       const dish = dishFrom("stew", "cooking_pot", ["meat", "vegetables"], "cooked");
       dish.ages = [ITEM_REGISTRY[dish.itemId].spoils.rottenAfter];
+      dish.agedAt = minutesSinceCollapse();
       return Object.assign(itemFromRegistry({ id:"cooking_pot", qty:it.qty }), { contents:[dish] });
     },
     bottled_water:       it=> Object.assign(itemFromRegistry({ id:"plastic_bottle", qty:it.qty }), { water:{ kind:"clean", fill:1 } })
   };
   // `qty` units of `id`, every one of them exactly Rotten.
   function rottenItem(id, qty){
-    return Object.assign(itemFromRegistry({ id, qty }), { ages: new Array(qty).fill(ITEM_REGISTRY[id].spoils.rottenAfter) });
+    return Object.assign(itemFromRegistry({ id, qty }), { ages: new Array(qty).fill(ITEM_REGISTRY[id].spoils.rottenAfter),
+      agedAt: minutesSinceCollapse() });
   }
   function migrateCookingRelease(){
     forEachItemList(list=> list.forEach((it, i)=>{
@@ -10120,11 +10285,7 @@ x_sn_9 m_sn_sn_sn sn p
       roomStove(world[id]).timerMinutes = BENCH_STOVE_TIMER_MIN;
     });
     const floors = [state.inventory.items].concat(rooms.slice(0, BENCH_RADIOS - 1).map(id=> world[id].floor));
-    floors.forEach(list=>{
-      const radio = itemFromRegistry({ id:"portable_radio", qty:1 });
-      radio.on = true;
-      addToList(list, radio);
-    });
+    floors.forEach(list=> switchDevice(addToList(list, itemFromRegistry({ id:"portable_radio", qty:1 })), true));
     state.vitals.energy = BENCH_ENERGY;
     state.vitals.fatigue = BENCH_FATIGUE;
     refreshPower();
@@ -10329,8 +10490,12 @@ x_sn_9 m_sn_sn_sn sn p
   // The game state after a step, as canonical JSON: `state`, and the rooms',
   // doors' and windows' saved state (savedRoomState(), which holds every
   // room's item lists), every object's keys sorted and every _uid left out,
-  // since a _uid is minted by looking.
+  // since a _uid is minted by looking. Every list is settled to now first,
+  // on this page only, so food nobody has reached reads as it would if
+  // someone had: what a per-minute world would hold.
   function replayDigest(){
+    const now = minutesSinceCollapse();
+    forEachItemList((list, roomId, container)=> settleList(list, roomId, container, now));
     const canon = (v)=>{
       if(Array.isArray(v)) return v.map(canon);
       if(!v || typeof v !== "object") return v;
@@ -10347,9 +10512,25 @@ x_sn_9 m_sn_sn_sn sn p
   // on and the stoves whose timer runs, against heatRooms and timerStoves;
   // a settle that was missed: settledAt, against now; and a power change
   // that was not resolved: every busy building (busyBuildings()) against the
-  // looks powerNow holds, and the grid it holds against gridUp().
+  // looks powerNow holds, and the grid it holds against gridUp(); and a
+  // device switched on without its running out scheduled, or a reachable
+  // list left unsettled.
   function replayProblems(){
     const problems = [];
+    const now = minutesSinceCollapse();
+    forEachItemList((list, roomId)=> list.forEach(it=>{
+      if(!it.durability || it.durability.mode !== "time") return;
+      const where = `${it.name} in ${roomId === null ? "the inventory" : roomId}`;
+      if(!it.on){ if(it.durability.asOf !== undefined) problems.push(`${where} is off but has asOf`); return; }
+      const dies = it.durability.asOf + it.durability.current / it.drainRate;
+      if(!batteryDeaths.some(t=> Math.abs(t - dies) <= TICK_EPSILON)) problems.push(`${where} runs out at minute ${dies}, which batteryDeaths lacks`);
+    }));
+    const room = world[state.currentRoom];
+    invPools().concat([room.floor], room.containers.concat(room.carContainers || []).map(c=> c.items)).forEach(list=>{
+      list.forEach(it=>{
+        if(isPerishable(it) && !(Math.abs(it.agedAt - now) <= TICK_EPSILON)) problems.push(`${it.name}, within reach, is settled to ${it.agedAt}, not ${now}`);
+      });
+    });
     busyBuildings(POWER_INDEX, state.power, state.electricalRules, state.seed, tankFloatsNow()).forEach(b=>{
       if(!powerNow.looks.has(b)) problems.push(`building ${b} is busy, but no resolve has looked at it`);
     });
@@ -11630,7 +11811,7 @@ x_sn_9 m_sn_sn_sn sn p
     if(it.durability.mode === "uses") return `${Math.round(it.durability.current)}/${it.durability.max} uses`;
     return it.hasBatteries === false
       ? "No batteries installed"
-      : `${Math.round(100*it.durability.current/it.durability.max)}% charge${it.on ? " — On" : " — Off"}`;
+      : `${Math.round(100*batteryCharge(it)/it.durability.max)}% charge${it.on ? " — On" : " — Off"}`;
   }
   // The item detail view: a pop-up at the tapped item's row. It shows what
   // the view always has (name, category and weight, durability, sealed
