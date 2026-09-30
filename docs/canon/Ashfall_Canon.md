@@ -1,7 +1,7 @@
 # Ashfall — Canon
 
 **Private.** Nothing here is ever stated by the game. Room, item and event
-text implies a piece of it at most, per the Project Guide, Part 1. Who reads
+text implies a piece of it at most, per `docs/01-writing.md`. Who reads
 this file, and when, is set in `CLAUDE.md` ("The canon is private").
 
 ## What this file is
@@ -21,8 +21,8 @@ adopts it.
 - **The town is Lima,** in the Partido de Zárate, Buenos Aires province,
   Argentina: a small grid town with the Atucha nuclear complex about 8 km to
   its north and the city of Zárate about 16 km away (#237). The world is as real and accurate as it can be
-  made: real names, facts checked against a source (`CLAUDE.md`, "The world
-  is real"). Chosen 2026-09-26, replacing Henderson, Kentucky. The game's
+  made: real names, facts checked against a source (`docs/01-writing.md`, "A
+  real place"). Chosen 2026-09-26, replacing Henderson, Kentucky. The game's
   world, written for an invented American town, is being rebuilt on it
   (#237).
 - **The collapse comes in February 2025** (Tom, 2026-09-26). The world is
@@ -50,8 +50,8 @@ adopts it.
   **Their home is a row house in the Barrio Complejo Nuclear Atucha** (Tom,
   2026-09-27; #284), the terraced strip on the barrio's western side, north
   of the railway. Why they are still there is under "The player" below.
-- **The game is in English; places keep their Spanish names** (`CLAUDE.md`,
-  "Writing game text").
+- **The game is in English; places keep their Spanish names** (`docs/01-writing.md`,
+  "Language").
 - **The wider setting is a string of towns with a city nearby:** Lima first,
   then others along the same corridor (Zárate, Baradero, San Pedro are the
   candidates in `reference/Lima.md`). Which ones, and when, is open.
@@ -246,8 +246,8 @@ plant's facts, and the estimates behind every timescale here, are in
   respirators, which of them worked).
 - **The player's family:** who they are, and where they were.
 - **Fictional brands and trading names** (Tom, 2026-09-27): no real brand or
-  private business name appears in the game (`CLAUDE.md`, "The world is
-  real"). Inventing fictional ones is lore, for later.
+  private business name appears in the game (`docs/01-writing.md`,
+  "Brands and business names"). Inventing fictional ones is lore, for later.
 - **How old each building is.** Its wiring era decides its panel size, where
   it has residual-current protection, and whether its water heater is gas
   or electric (#237, #251).

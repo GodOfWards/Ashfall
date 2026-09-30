@@ -18,6 +18,8 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+<!-- New entries go directly below this line. -->
+
 ## v0.10.10 — Old fuse boards in Lima's casas
 
 Implements: handoffs/old-fuse-boards.md
