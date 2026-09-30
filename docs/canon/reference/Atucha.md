@@ -25,6 +25,14 @@ does make radioactive material a hazard**. This file answers that: it can
   - **Emergency power: four emergency diesel generators**, a German design
     choice from 1980, against the usual three. Secondary. **How long their
     fuel lasts is unconfirmed.**
+  - **Before the era, the grid did without it for ten months.** Inspections
+    in **October 2022** found one of the reactor's four internal separators
+    detached; it was out of service until **28 August 2023** (the designer
+    had estimated more than four years for the repair). Secondary,
+    2026-09-30:
+    [Argentina.gob.ar](https://www.argentina.gob.ar/noticias/la-central-nuclear-atucha-ii-vuelve-entregar-energia-luego-de-su-exitosa-reparacion),
+    [EconoJournal, 2023-08](https://econojournal.com.ar/2023/08/nucleoelectrica-completo-los-trabajos/)
+    (search summaries).
 - **Atucha I: shut down, and its reactor emptied.**
   - It stopped on **2024-09-29** for its 30-month life extension.
   - **All 241 fuel elements** (5.3 m each) were taken out of the reactor over
@@ -253,11 +261,255 @@ These are not exclusive: case 3 happens alongside 1 or 2 unless someone keeps
 the pool cooled. **Which happened is Tom's decision in the canon** (#329). The
 game only shows what the road shows.
 
+## How long until it becomes a hazard once cooling stops (2026-09-30)
+
+- **A typical spent-fuel pool:** about **12 m deep**, fuel racks in the
+  bottom **4.3 m**; one PWR example **12.2 × 9.9 × 11.8 m**, about
+  **1,345 m³** of water. Fukushima Daiichi 4's pool, holding a whole core
+  offloaded about three and a half months earlier, would boil off **about
+  70 tonnes a day** once boiling. Secondary, 2026-09-30:
+  [Wikipedia, "Spent fuel pool"](https://en.wikipedia.org/wiki/Spent_fuel_pool),
+  [Union of Concerned Scientists](https://blog.ucs.org/david-wright/where-did-the-water-in-the-spent-fuel-pools-go/),
+  [OECD-NEA, pools under loss of cooling (2015)](https://www.oecd-nea.org/upload/docs/application/pdf/2021-02/csni-r2015-2.pdf)
+  (search summaries). **Atucha's pool dimensions and Atucha II's
+  heavy-water inventory are unconfirmed** (#350).
+
+**Estimate — not a fact.** Taking the lights going out at **about two
+months after Atucha II's shutdown** (some weeks after day 21):
+- **Atucha II's core** then gives about **2 MW** (Way–Wigner, with the
+  fuel's roughly year-long residence in the core; derived), boiling off
+  about **75 tonnes a day** once hot. With a heavy-water inventory of some
+  hundreds of tonnes (assumed), its fuel would be **uncovered within about
+  one to three weeks**. The damage starts **inside the pressure vessel and
+  the containment**, which are built to hold it; a release needs them to
+  fail or vent.
+- **Atucha I's pool**, holding its whole core about six months out of the
+  reactor, gives **roughly 0.5 MW** (derived). In a pool like the one
+  above, it would take **about 9 days to reach boiling** and **about 10
+  more** to lose the first metre and a half, when **radiation near the
+  pool starts to rise** — so **about three weeks**; the fuel would be
+  **uncovered after about two months**. A fresher, hotter load (Fukushima
+  4's) would halve those times; the older fuel sharing the pools, and more
+  water, would stretch them.
+- **So the grace period after the lights go out is about one to three
+  weeks** before any hazard appears, and a release, if any, comes **weeks
+  to a couple of months** after that.
+
+## How far a release reaches: the real benchmarks (2026-09-30)
+
+For scale only; neither was a plant months after shutdown.
+- **Chernobyl (1986, a reactor at power):** an **exclusion zone of about
+  4,000 km²**, including a circle of **30 km** radius; **29,400 km²**
+  contaminated above 180 kBq/m² of caesium; about **125,000 km²** in
+  Belarus, Ukraine and Russia above 37 kBq/m², and more than 200,000 km² of
+  Europe. Secondary, 2026-09-30:
+  [OECD-NEA, "Chernobyl", ch. VI](https://www.oecd-nea.org/rp/chernobyl/c06.html)
+  (search summary).
+- **Fukushima Daiichi (2011, three cores melting within days of
+  shutdown):** about **3,000 km²** above 180 kBq/m², **13,000 km²** "under
+  consideration for attention"; evacuation to **20 km**, and contamination
+  reaching **Iitate, 29–49 km** north-west; the government's target for
+  living areas was 20 mSv a year. Secondary, 2026-09-30:
+  [World Nuclear Association](https://world-nuclear.org/information-library/safety-and-security/safety-of-plants/fukushima-daiichi-accident),
+  [Indoor radiocaesium study (PMC4876398)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4876398/)
+  (search summaries).
+- **A spent-fuel pool fire** is the worst case for pools: had one happened
+  at Fukushima and the wind blown towards Tokyo, **up to 35 million people**
+  might have needed relocating (von Hippel and Schoeppner, dense-packed pools
+  with recent fuel). Secondary, 2026-09-30:
+  [Science & Global Security, 2016](https://scienceandglobalsecurity.org/archive/2016/09/reducing_the_danger_from_fires.html)
+  (search summary).
+- **Caesium-137** (half-life about 30 years) is what contaminates land for
+  decades; iodine-131 (about 8 days) is what iodine tablets guard against,
+  and it decays away within weeks to months.
+- **The winds at Atucha**, which decide where a release goes, weren't found.
+
+**Estimate — not a fact.** A release from Atucha after two months of
+shutdown starts from far less heat and far less iodine than either
+benchmark, so it would reach far less: **most plausibly a contaminated
+strip a few to a few tens of kilometres downwind**, heaviest near the
+plant. Lima, 9 km south, lies inside that range **if the wind carries it
+there**. A pool fire of hot fuel is the case that could reach further, and
+Atucha I's core, months out of the reactor, is the fuel it would involve.
+
+## The people who run it, and the plant in a pandemic (2026-09-30)
+
+Researched for the Atucha part of the lore session (#329). **Primary** where
+marked: the ARN's 9th (2022) and 10th (2025) national reports to the
+Convention on Nuclear Safety, cited above, read in full text 2026-09-30.
+
+- **The control room: five people, three shifts.** "The five people in the
+  control room" of Atucha I and II, divided into three shifts; the roles are
+  a turbine operator, a reactor operator, a supervisor and a shift leader
+  (*jefe de turno*), who answers for everything in the room. Secondary,
+  2026-09-30:
+  [Mining Press, 2022-04-18](https://miningpress.com/nota/346454/como-es-atucha-i-y-ii-por-dentro-seguridad-produccion-y-plan-de-ampliacion-con-china).
+  The licensed minimum per shift is unconfirmed.
+- **What Atucha did in 2020 (primary, 9th report, 3.6.5):** "a
+  reorganization of **minimal shifts of operation along with sanitary
+  protection for 14 days**, a strict control over the workplace hygiene,
+  and the adoption of **exclusive means of transportation for the
+  operation personnel**". Outages followed a guide of extra
+  recommendations. The national lockdown decree required "minimum teams"
+  for power generation, oil, gas and fuel (3.8.8). The nuclear emergency
+  response system **stayed active throughout** (3.16.8). Atucha still had
+  COVID-19 cases in December 2020 (above, via `Grid_AR.md`).
+- **Elsewhere in 2020 (for comparison):** US regulators allowed nuclear
+  crews up to 86 hours a week and **12-hour shifts for up to 14 days in a
+  row**; plants explored **sequestering crews on site**, "fed and bunked
+  down at the plants"; and the NRC warned it **could order a plant shut down
+  if it couldn't staff it**. Pre-pandemic plans assumed reduced staffing
+  for about four to six weeks. Secondary, 2026-09-30:
+  [PBS NewsHour, 2020-04-02](https://www.pbs.org/newshour/nation/u-s-allowing-longer-shifts-at-nuclear-plants-in-pandemic),
+  [NEI Pandemic Licensing Plan, 2007](https://www.nrc.gov/docs/ML0704/ML070470653.pdf)
+  (search summary).
+- **NA-SA's workforce shrank 4.47 % from 2022 to 2025**, technicians 7.47 %
+  (10th report, 11.3.2; primary).
+
+### Control rooms built to be lived in
+
+- **Atucha II has a main and an auxiliary control room.** Its Operating
+  Manual carries "Control Room Habitability" actions "to ensure the **long
+  term habitability** of the Control Room in case of release of radioactive
+  material or smoke presence in outdoor air". The design was verified in
+  2016; testing the **tightness of the rooms' envelope** was under way in
+  2025 (envelope defined and ventilation modes evaluated; acceptance
+  criteria and improvements in progress). 10th report; primary. Whether it
+  filters the air as US plants do (`Grid_AR.md`) isn't stated.
+- **Atucha I has a temporary emergency control room** in its Secondary Heat
+  Sink building, from which operators can shut the plant down and keep it
+  safe if the main control room becomes uninhabitable "due to toxic and / or
+  corrosive gases, release of radioactive materials or sabotage"
+  (instruction T-42). 9th report; primary.
+
+### Holding out without the grid
+
+- **The extreme-event procedures cover "at least the initial 72 hours"**
+  of the systems needed (9th report; primary). For a station blackout:
+  manual injection from the secondary heat sink, and isolating the boron
+  system before the **24 V DC batteries run down**; topping up the heat
+  sink's feed water tanks, and **replacing pool water with groundwater**
+  using a potable-water pump.
+- **Atucha II's post-Fukushima improvements** include: **increasing the
+  diesels' autonomy**, an alternative cooling mode for them, **extending
+  the batteries' availability**, an **alternative water reservoir** to keep
+  feeding the steam generators and cooling the pool, a pool top-up system,
+  the mobile diesel (above), and restoring outside power (9th report;
+  primary). **The autonomy they reached isn't stated.**
+- **Atucha II's pools** (9th report; primary): three of 1,512 positions and
+  one of 1,484; decay heat goes into the water and out through a cooling
+  system; one pool keeps room for **all 451 core assemblies**; pool 3 holds
+  1,435 old Atucha I elements; the concrete takes no damage up to
+  60 °C water.
+- **Atucha I's pools:** a 3-D model of losing the pool cooling pumps has
+  been simulated and is updated yearly (10th report); the results aren't
+  published.
+
+### The emergency plan puts Lima in the 10 km zone
+
+**Primary**, 9th report, 3.16.4. The reports place Atucha I and II "some
+9 km from Lima".
+- **Precautionary Action Zone (PAZ): 3 km.** Early evacuation when a
+  **Green Alert** is declared, carried out by a security force with Civil
+  Defence.
+- **Urgent Protective Action Planning Zone (UPZ): 3–10 km** — **Lima is in
+  it.** **Sheltering**: at Green Alert people prepare; at **Red Alarm**
+  (release imminent) they stay inside, close doors and windows, seal gaps
+  and switch off anything that draws outside air. **Iodine tablets** are
+  handed out at Green Alert — "at NPPs and on strategical spots inside the
+  involved towns" — and taken at Red Alarm.
+- **Access control points** stand on the roads beyond 10 km; police
+  prepare to cut access at Green Alert and close it at Red Alarm to all but
+  response groups.
+- The public is told through local media, a **public alert system, sirens
+  and loudspeakers**. Training the population in these measures is "a main
+  topic".
+- The ARN's Emergency Control Centre is at its headquarters in Buenos
+  Aires.
+
+**Who declares it, and how (primary, 9th report, 3.16.2–3.16.3):**
+- Emergencies are classed as an **Alert** (a lowered or unknown level of
+  defence in depth), an **On-site emergency**, or a **General Emergency**
+  (significant risk; off-site protective action needed). **In a General
+  Emergency the plant notifies the local response organisations and the
+  ARN**, and two stages follow: **Green Alert**, "when an unusual situation
+  that may affect the NPP safety is detected", which convenes the
+  municipal emergency operations centre (COEM: fire brigades, civil
+  protection, police, Gendarmería, Prefectura, the armed forces) and sets
+  the automatic protective measures going; and **Red Alarm**, when a
+  release is imminent.
+- **The plant manager acts as the emergency's chief (JOEN)** until the
+  ARN's officer arrives to take over.
+- **Iodine tablets are not handed out in advance.** "Currently, stable
+  iodine tablets are stored in the NPP and at strategic points in the
+  cities involved", to be distributed at Green Alert (9th report, answer to
+  question 92; primary). Which buildings in Lima are the strategic points
+  is unconfirmed.
+
+**The drills** (secondary, 2026-09-30; the 43rd exercise was held on
+2 October 2025, after the era, but they are required by the plants'
+licences and recur):
+- **A first siren** announces the **Green Alert** and **a second siren the
+  Red Alarm**; messages and instructions go out through the **Public Alert
+  System**, **megaphones** and a **local FM radio station**.
+- In the 2025 exercise, people **within 3 km were evacuated by road and by
+  river to the Base Naval Zárate**; those **between 3 and 10 km practised
+  sheltering in schools**, and **iodine tablets were handed out**. Some
+  4,500 pupils in 28 schools were briefed beforehand.
+- [Argentina.gob.ar, 43rd exercise](https://www.argentina.gob.ar/noticias/se-realizo-el-43deg-ejercicio-de-aplicacion-del-plan-de-emergencias-del-complejo-nuclear),
+  [El Debate](https://eldebate.com.ar/atucha-activa-su-protocolo-simulacro-externo-de-emergencia-nuclear-en-zarate-y-lima/)
+  (search summaries).
+
+**Whether the sirens work without the grid is unconfirmed.** In the US,
+the Energy Policy Act of 2005 required backup power for the sirens of
+plants with more than 15 million people within 50 miles; siren backup
+batteries are commonly sized for **72 hours on standby and at least 30
+minutes of sounding**. Secondary, 2026-09-30:
+[NRC, backup means for alert and notification](https://www.nrc.gov/docs/ML0704/ML070440153.pdf),
+[Electronic Sirens, backup power](https://www.electronic-sirens.com/back-up-power-supply/)
+(search summaries). Atucha's own sirens' supply isn't known.
+
+### How long the diesel fuel could last (2026-09-30)
+
+- **The US standard is a week of fuel per diesel.** NRC Regulatory Guide
+  1.137 (rev. 2), endorsing ANSI/ANS-59.51-1997: each emergency diesel
+  train should have **its own 7-day fuel supply** on site, sized for its
+  load after an accident, "assuming that the supply cannot be interrupted
+  by off-site circumstances". Secondary, 2026-09-30:
+  [NRC RG 1.137 rev. 2](https://www.nrc.gov/docs/ml1230/ml12300a122.pdf),
+  [Federal Register, 2013-06-17](https://www.federalregister.gov/documents/2013/06/17/2013-14309/fuel-oil-systems-for-emergency-power-supplies)
+  (search summaries). Atucha II's German-designed "weekly tanks" suggest the
+  same week per diesel; **unconfirmed**.
+- **What a large diesel burns:** about **0.25–0.3 litres per kWh**; a 1 MW
+  set about **269 L/h at full load, 138 at half, 82 at a quarter** (less
+  efficient per kWh at low load). Secondary (generator manufacturers'
+  charts), 2026-09-30:
+  [Generator Source](https://generatorsource.com/tools-info/fuel-consumption-charts/),
+  [Walt Power](https://waltpower.com/diesel-generator-fuel-consumption-chart/).
+- Atucha II's diesels' ratings and tank volumes weren't found (#350).
+- **How far the diesels can be heard** is worked out in `Sound.md`: an open
+  set plainly within about a kilometre on a quiet night, one inside its
+  building within a few hundred metres.
+
+**Estimate — not a fact.** A week per diesel is sized for the heavy loads
+of an accident. A reactor shut down for weeks needs much less: a
+residual-heat train, the pool cooling, instruments, lighting, the control
+room's air. A crew running **one diesel at a time at part load**, working
+through **four** diesels' weekly tanks, then Atucha I's diesels (which can
+feed Unit II), the mobile diesel and the auxiliary boiler's fuel tank, could
+plausibly stretch the site's fuel to **weeks, perhaps one to two months**.
+Diesel in the Atucha I overhaul's work vehicles and yard would stretch it
+further, for a crew willing to go out for it.
+
 ## Not yet researched
 
 - **How long the emergency diesels run** on their own tanks. The reports give
-  only the 12-hour availability commitment and the "weekly tanks"
-  (above).
+  only the 12-hour availability commitment, the "weekly tanks", the 72-hour
+  procedures and an unquantified "increasing DGs autonomy" (above).
+- **The licensed minimum crew per shift**, beyond the five in the control
+  room.
+- **The pools' heat loads and boil-off times**, including Atucha I's
+  unpublished loss-of-cooling simulations.
 - The pools' **water volumes and depths**, and their current heat loads.
 - **How much heavy water** each unit holds.
 

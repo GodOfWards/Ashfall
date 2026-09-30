@@ -41,9 +41,10 @@ adopts it.
   contractors' yard for Atucha I's overhaul and the substation are reachable.
   The reactor buildings stay locked. Atucha I's overhaul (about 2,000 jobs)
   is texture in Lima itself: rented rooms, work trucks, site canteens, PPE.
-- **No radiation mechanic,** unless the research shows that lack of
-  maintenance really makes radioactive material a hazard (Tom, 2026-09-27;
-  #290).
+- **A radiation mechanic, eventually** (Tom, 2026-09-30; #351). The rule
+  was none unless lack of maintenance really makes radioactive material a
+  hazard (Tom, 2026-09-27; #290); the research showed it does, and the
+  hazard is under "Atucha" below.
 - **The player is from Lima** (Tom, 2026-09-27; #292). They know its streets
   and public landmarks as a local does, but not what's inside or what's left.
   **Their home is a row house in the Barrio Complejo Nuclear Atucha** (Tom,
@@ -106,6 +107,8 @@ real-world facts behind each part.
 - **Senses:** hearing first, sight at short range, poor in the dark. **No
   shared sense**: only the one that perceives the player goes for them,
   though others can be drawn by its noise and movement, as by any sound.
+  **Their hearing is no better than a living person's** (how far sounds
+  carry to a human ear: `reference/Sound.md`).
 - **They decay slowly** and wear out over months.
 - **What stops them:** enough head trauma, or enough damage to the body;
   the head takes far less.
@@ -186,15 +189,56 @@ real-world facts behind each part.
   cooker's flame shrinks before it goes out. How many days is a design
   figure for #342 (`reference/Gas_AR.md`).
 
+### Atucha
+
+Decided in the same session's second part, 2026-09-30 (#329). The real
+plant's facts, and the estimates behind every timescale here, are in
+`reference/Atucha.md`.
+
+- **Atucha II was shut down as early as possible**: as soon as the crisis
+  reached Argentina, around the emergency decree, about ten days before day
+  zero, because its staffing couldn't be guaranteed. From then until day 21
+  it drew its cooling power from the grid; the grid did without its ~700 MW,
+  as it had for ten months in 2022–2023.
+- **Atucha I** was already shut down for its life extension, its reactor
+  empty: **its whole core has been in its cooling pool since 2 February
+  2025**. That pool, not a reactor, is its hazard.
+- **The operating crew went into the 2020 protocol** — minimal shifts,
+  isolation, their own transport — and lived on site. Some went in already
+  carrying the airborne strain; around day zero they fell ill, died and rose
+  inside. **A handful survived**, the never-infected and the resistant, and
+  held the part of the plant they could; its control room is built to be
+  lived in.
+- **On day 21 the plant lost every line from outside.** The diesels started
+  and the remnant kept them running. They declared a **Green Alert**, as the
+  procedure says, and **the siren sounded once over the dead town that
+  night**; no one came, and nothing followed it (#352). **The iodine
+  tablets stayed boxed** at the plant and at the strategic points in Lima
+  where the plan keeps them (#353); by then they'd have protected against
+  almost nothing.
+- **Atucha's lights were the only ones on the horizon after the grid
+  failed.** From Lima, someone was plainly alive 8 km north.
+- **How it ended:** *the diesels' noise drew the dead within earshot — a few
+  dozen by the end, gathered along the fence. They made every trip outside
+  for fuel a gamble, then not worth taking, and some weeks after the grid
+  failed the tanks ran dry and the lights went out* (about day 50; plausible,
+  not exact). The contractors' yard shows the fuel runs they made before
+  then: drained tanks, a hose left behind, a truck moved.
+- **The hazard, from then on,** nothing cooling the core or the pools:
+  - **safe for about two months after day zero**;
+  - **one to three weeks' grace** after the lights go out, while the core's
+    fuel is uncovered inside its vessel and containment and Atucha I's pool
+    heats, boils and begins to lose its shielding;
+  - **from about month three, radiation near the pool buildings rises**;
+  - **in months three to four, a release is possible** — the pool's fuel
+    uncovered, a fire if it's still warm enough, or the containment giving
+    way — **a contaminated strip a few to a few tens of kilometres
+    downwind**, mostly caesium-137. Lima, 9 km south, lies in it only if the
+    wind carries it there.
+
 ## Open
 
 - **Day zero's exact date** in mid-to-late February 2025.
-- **What happens to Atucha after the collapse** (#290, #285): Atucha II
-  running and Atucha I mid-overhaul in February 2025, and the grid failing
-  on day 21. Whether its crew sealed themselves in as the grid operators
-  did, and so whether its lights stay on the horizon after the grid fails
-  (Atucha II rode through 2019 on its own auxiliaries), is the question.
-  The game never states it.
 - **What share of people the airborne strain infected.** It sets how many
   dead are in Lima (#12).
 - **How the airborne strain was kept out** by those who did (sealed rooms,

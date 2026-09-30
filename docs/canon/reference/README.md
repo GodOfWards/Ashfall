@@ -55,7 +55,7 @@ rule. A coding session reads neither.
 | File | Covers |
 |---|---|
 | `Lima.md` | **The game's town:** Lima, Partido de Zárate, Buenos Aires. Its grid, rail, the Atucha complex, nearby towns, and the riverside walk; street surfaces by quarter; utilities (CEZ, water, sewers, network gas); the Barrio Atucha's row houses from Street View |
-| `Atucha.md` | **The Atucha complex, abandoned (#290):** the plants' state in February 2025, spent fuel and dry storage, decay heat, a station blackout, the pools' boil-off, and the three outcome cases for the canon |
+| `Atucha.md` | **The Atucha complex, abandoned (#290):** the plants' state in February 2025, spent fuel and dry storage, decay heat, a station blackout, the pools' boil-off, and the three outcome cases for the canon; its crews, its 2020 pandemic measures, habitable control rooms, the 72-hour procedures, and the emergency plan that puts Lima in the 10 km zone |
 | `Henderson.md` | **Retired, 2026-09-26.** The former town: its electricity, water, gas, crossings and plants; downtown's street grid, rail and buildings |
 | `Gas_AR.md` | **Mains gas (#342, #329):** Naturgy BAN, TGN's and TGS's pipelines to Buenos Aires, mechanical regulators that need no power, who uses the gas by season, line pack, plants' automatic shutdowns; marked estimates for gas outlasting the grid |
 | `Grid_AR.md` | **How the national grid runs (#329, #220):** the SADI and CAMMESA's dispatch, Transener's transmission, the generation mix, automatic load relief, the 16 June 2019 blackout and its restoration, the February 2025 demand record; staffing, control rooms split under the 2020 lockdown, how long a grid runs unattended |
@@ -65,4 +65,5 @@ rule. A coding session reads neither.
 | `Fuel_and_Generators.md` | **The US record, no longer the target:** gasoline (grades, shelf life, stations, cars, cans) and portable generators |
 | `Calendar_AR.md` | **Around February 2025 (#329):** summer holidays by quincena, the labour law's leave, Buenos Aires province's school calendar and February's make-up modules for owed subjects, Carnival |
 | `Outbreak_Response.md` | **COVID-19 as the real-world floor (#329):** Argentina's March 2020 timeline, panic buying, towns sealing their accesses (Zárate's checkpoints), ICUs at 97 %, hospital and funeral collapse in Guayaquil and Bergamo, health workers infected, Atucha running through lockdown |
+| `Sound.md` | **How loud things are and how far they carry (#329, #12):** 6 dB per doubling of distance, air absorption, a quiet rural night, diesel generators' noise, and a worked distance table |
 | `Carbon_Monoxide.md` | Exposure effects, the body's level, CO alarms, generator placement |
