@@ -38,7 +38,7 @@ The horror is in the mundane detail: what people left behind.
 | `docs/04-handoff-template.md` | The template a handoff is written from. |
 | `docs/05-changelog-guide.md` | How a changelog entry is written. |
 | `docs/systems/` | One doc per game system, written when the system is next changed. |
-| `docs/canon/` | The world's private lore, and `reference/`: real-world facts researched once. Read only on purpose. |
+| `docs/canon/` | The world's private lore, and `docs/canon/reference/`: real-world facts researched once. Read only on purpose. |
 | `handoffs/` | Feature specs. The top level holds only live ones — usually nothing or one file. |
 | `handoffs/archive/` | Spent and superseded specs. Kept, never deleted; never implemented from. |
 | `.github/` | Issue and pull request templates, and the CI checks. |

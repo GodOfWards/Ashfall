@@ -103,9 +103,9 @@ removing one, say what a reader loses; if the answer is anything, it stays.
 5. **A change to a system updates its systems doc in the same pull request.**
 
 CI checks what it can (`.github/workflows/docs-check.yml`): every function
-named as `name()` and every constant named as `UPPER_CASE` in backticks in
-`docs/` and `CLAUDE.md` must exist in `ashfall.html`, and every repository
-path those files name must resolve.
+(written with its parentheses) and every constant (capitals and underscores)
+named in backticks in `docs/` and `CLAUDE.md` must exist in `ashfall.html`,
+and every repository path those files name must resolve.
 
 **Filenames carry no version.** Git tags mark releases. A doc's number is
 permanent and never reused: a new doc takes the next free number.

@@ -1,0 +1,21 @@
+name: Docs check
+
+# Stale-data guards for the docs (docs/02-code-practices.md, "Comments and
+# documentation"). The checks and their scope are in the script's docstring.
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Docs name only what exists; spent handoffs are archived; the changelog marker holds
+        run: python3 .github/scripts/docs_check.py

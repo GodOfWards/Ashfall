@@ -46,7 +46,7 @@ jobs:
           echo "base=$BASE_VERSION head=$HEAD_VERSION"
 
           if [ "$BASE_VERSION" = "$HEAD_VERSION" ]; then
-            echo "::error::ashfall.html changed but GAME_CONFIG.VERSION is still $HEAD_VERSION. Every game change ships a version bump — see the wrap-time checklist in CLAUDE.md."
+            echo "::error::ashfall.html changed but GAME_CONFIG.VERSION is still $HEAD_VERSION. Every game change ships a version bump — see docs/03-workflow.md, The wrap."
             exit 1
           fi
 
@@ -54,7 +54,7 @@ jobs:
           TOP_ENTRY="${TOP_LINE#\#\# v}"
           TOP_ENTRY="${TOP_ENTRY%% *}"
           if [ "$TOP_ENTRY" != "$HEAD_VERSION" ]; then
-            echo "::error::GAME_CONFIG.VERSION is $HEAD_VERSION but the newest CHANGELOG.md entry is v$TOP_ENTRY. Prepend an entry for v$HEAD_VERSION per docs/CHANGELOG_GUIDE.md."
+            echo "::error::GAME_CONFIG.VERSION is $HEAD_VERSION but the newest CHANGELOG.md entry is v$TOP_ENTRY. Prepend an entry for v$HEAD_VERSION below the marker line, per docs/05-changelog-guide.md."
             exit 1
           fi
 
