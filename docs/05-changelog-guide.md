@@ -9,7 +9,7 @@ else its pull request carries, is `03-workflow.md`'s (The wrap).
 
 The file is long, and nothing in it is needed to add to it.
 
-- **Read only its first 20 lines.** They hold the intro and the marker line
+- **Read only its first 25 lines.** They hold the intro and the marker line
   `<!-- New entries go directly below this line. -->`.
 - **Insert directly below the marker:** the new entry, then a line holding
   only `---`, which separates it from the entry below.

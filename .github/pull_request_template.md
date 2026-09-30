@@ -1,4 +1,4 @@
-<!-- The wrap-time checklist in CLAUDE.md is the rule; this is its layout.
+<!-- The wrap checklist in docs/03-workflow.md is the rule; this is its layout.
      Delete the lines that don't apply. -->
 
 ## What this does
@@ -16,12 +16,17 @@ Closes #
 
 ## Handoff
 
-<!-- `handoffs/<name>.md`, moved to `handoffs/archive/` in this PR, or "None". -->
+<!-- `handoffs/<name>.md`, moved to `handoffs/archive/` in this PR; or "None",
+     with the spec it was built from (e.g. "Built from #NN's body"). -->
 
 ## Version
 
-- [ ] `ashfall.html` changed: `GAME_CONFIG.VERSION` bumped (PATCH / MINOR) and a `CHANGELOG.md` entry added at the top
-- [ ] `ashfall.html` unchanged: documentation only, so no bump, no changelog entry, no tag
+- [ ] `ashfall.html` changed: `GAME_CONFIG.VERSION` bumped (PATCH / MINOR) and a `CHANGELOG.md` entry added below the marker
+- [ ] `ashfall.html` unchanged: no bump, no changelog entry, no tag
+
+## Systems docs
+
+<!-- The `docs/systems/` docs this PR creates or updates, or "None touched". -->
 
 ## Deferred
 

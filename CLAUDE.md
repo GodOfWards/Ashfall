@@ -1,282 +1,102 @@
 # Ashfall
 
-A quiet-apocalypse survival game: one self-contained file, `ashfall.html` — no
+A quiet-apocalypse survival game: one self-contained file, `ashfall.html`, no
 build step, no dependencies. Open it in a browser to run it.
 
-## Start here — which session is this?
+This file is the index: which session you are in, what to read, and one line
+per binding rule. Each rule's home is named; the home wins if they ever differ.
 
-Every version moves through two session types. Identify which one you're in
-**before reading anything else**. They have different inputs, different outputs,
-and each one's inputs are the complete list — for a planning session, the
-up-front list plus what the discussion calls for as it goes. Reading the other
-type's inputs costs context and buys nothing.
+## Which session is this?
 
-### Planning session
+Identify it **before reading anything else**. Each list is complete.
 
-Designs a feature. Never writes game code.
+**Planning session**: designs a change. Never writes game code.
 
-**Read, before starting:** `docs/Ashfall_Project_Guide.md`, and the open issues
-list. Nothing else up front.
+- **Up front:** the open issues list. Nothing else.
+- **As the discussion needs it:**
+  - `ashfall.html`, the sections the change touches, when the discussion
+    reaches them;
+  - individual issues, once one is relevant;
+  - the last few `CHANGELOG.md` entries, when recent work bears on the design;
+  - `docs/01-writing.md` for game text, `docs/02-code-practices.md` for
+    mechanics and structure;
+  - `docs/systems/`, for the systems touched;
+  - `docs/canon/reference/`, whenever a real-world fact is needed;
+  - `docs/canon/Ashfall_Canon.md`, when the discussion is about lore or Tom
+    asks.
+- **At the wrap:** `docs/03-workflow.md` (Handoffs) and
+  `docs/04-handoff-template.md`.
+- **Output:** issues filed as they surface and, only if it concludes, a
+  handoff at `handoffs/<feature-name>.md`, landed on `main`.
 
-**Read as the discussion needs it:**
-- `ashfall.html` — the sections the feature touches, once the discussion reaches
-  them. Claims about what already exists still get checked against the file,
-  never recalled; that check happens when the claim is made, not in advance.
-- Individual issues in full, once one is relevant.
-- Recent `CHANGELOG.md` entries — the last few, not the whole file — when what
-  shipped recently bears on the design.
-- `docs/canon/Ashfall_Canon.md` — when the discussion is about lore, or Tom
-  asks. See "The canon is private" below.
-- `docs/canon/reference/` — whenever the discussion needs a real-world fact.
-  Look there first, and in open `Research:` issues, whose findings may not
-  have merged yet. If it isn't there, don't guess or search on your own: ask
-  Tom for network access, or file a `Research:` issue. See "The canon is
-  private" below.
+**Coding session**: implements one handoff.
 
-**Output:** issues filed as they surface, and — only if the session reaches a
-conclusion — a handoff at `handoffs/<feature-name>.md`, landed on `main` at the
-wrap (directly or by pull request — Project Guide, Part 3). Read
-`docs/Ashfall_Handoff_Guide.md` **at the wrap, when writing the handoff** — it
-is not needed before then.
+- **Up front:** all of `ashfall.html`, the one handoff at the top level of
+  `handoffs/`, and the `docs/systems/` docs it names. Nothing else: not the
+  changelog, the backlog, the canon, or `handoffs/archive/`, which is never
+  implemented from.
+- **At the wrap:** `docs/03-workflow.md` (The wrap) and
+  `docs/05-changelog-guide.md`.
+- **Output:** one pull request from a branch, never a commit to `main`. Phase
+  commits (`Phase N: …`) are pushed as they're made.
 
-### Coding session
-
-Implements one handoff.
-
-**Read, before starting:** `ashfall.html`, and the one file at the top level of
-`handoffs/` that specs this work. **Nothing else** — not the changelog, not the
-backlog, not the guides, not the canon. The top level holds only live handoffs;
-`handoffs/archive/` is where spent and superseded ones are shelved, and nothing
-is ever implemented from it. The rules below are what make that read-list
-sufficient; they're stated here so implementation never has to open a guide to
-find them.
-
-Work on a branch. Never commit directly to `main`. Output is one pull request —
-see the wrap-time checklist. Read `docs/CHANGELOG_GUIDE.md` **at the wrap, when
-writing the entry** — it is not needed before then.
-
-A handoff built in phases is committed per phase (`Phase N: …`) and the branch
-is pushed after every phase commit, so a paused or reclaimed session loses
-nothing. The pull request opens only at the wrap: CI runs on pull requests, so
-earlier pushes trigger nothing. Project Guide, Part 3.
-
-Full detail on both: Project Guide, Part 3.
+A pass Tom asks for directly, from a spec that already exists, follows the
+coding session's wrap without a handoff (`docs/03-workflow.md`).
 
 ## Rules that bind
 
-**Section layout lives in the source.** The `ARCHITECTURE` comment at the top of
-the script is the source of truth. No document restates that list; check the
-comment.
+- **Nothing is edited, committed or pushed without being asked**, in any file.
+  A question is a question: propose and wait. GitHub Issues are the exception:
+  file and edit them as work surfaces. → `docs/03-workflow.md`
+- **Design decisions are Tom's; implementation choices are made and named.**
+  When unsure which it is, ask. → `docs/03-workflow.md`
+- **Flag judgment calls as retunable.** → `docs/02-code-practices.md`
+- **The world is real.** Lima, Partido de Zárate, Buenos Aires: real names,
+  facts checked against a source, never recalled or invented; unconfirmed
+  facts marked so. No real brand or business trading name appears. →
+  `docs/01-writing.md`
+- **Facts are looked up in `docs/canon/reference/` first.** One that isn't
+  there is never guessed or searched for unasked: ask Tom for network access,
+  or file a `research` issue. → `docs/canon/reference/README.md`
+- **The canon is private.** `docs/canon/` is read by path, on purpose, never
+  found by search (`.rgignore`). A coding session reads neither the canon nor
+  the reference folder: its handoff quotes what it needs.
+- **Writing game text:** second person, present tense, plain; understatement;
+  never explain the collapse; one to three sentences. English, except streets,
+  districts and towns. → `docs/01-writing.md`
+- **Section layout lives in the `ARCHITECTURE` comment** at the top of the
+  script. No document restates it.
+- **Content, mechanics and rendering stay separate**; a mechanic may ship its
+  own defining data, never instance data. → `docs/02-code-practices.md`
+- **Mechanics check tags, never names.** → `docs/02-code-practices.md`
+- **Identity is `_uid`, never an array index**; items come from
+  `ITEM_REGISTRY` via `itemFromRegistry()`. → `docs/02-code-practices.md`
+- **One source of truth**; a game rule gets a named constant. →
+  `docs/02-code-practices.md`
+- **Nothing checks the whole world every minute.** → `docs/02-code-practices.md`
+- **Prove "no behavior change"** with
+  `git diff origin/main...HEAD -- ashfall.html`, never a tag diff. →
+  `docs/02-code-practices.md`
+- **Knowledge has one home**: why-comments in code, systems in
+  `docs/systems/`, figures in `docs/canon/reference/`, history in the changelog.
+  A system change updates its systems doc in the same pull request. →
+  `docs/02-code-practices.md`
+- **New persistent state means MINOR**, and rotates the save key. Tiers:
+  `tier-0`/`tier-1` PATCH, `tier-2`/`tier-3` MINOR; the number within a pair
+  is size, never priority. → `docs/03-workflow.md`
+- **Issues** carry a tier, a kind and follow their kind's template; the body
+  is the current truth; closed only by `Closes #NN`. → `docs/03-workflow.md`
+- **Handoffs**: the top level of `handoffs/` holds only live ones; spent and
+  superseded ones move to `handoffs/archive/`, never renamed. →
+  `docs/03-workflow.md`
+- **Filenames carry no version**; a doc's number is permanent.
+- If the issue tracker is unreachable, say so and continue.
 
-**The canon is private.** `docs/canon/Ashfall_Canon.md` holds the world's lore
-as the designers know it: what the collapse was, its timeline, the real places
-behind the town. The game never states it; its text only ever implies a piece
-of it (see Writing game text). A planning session reads it when the discussion
-is about lore, or when Tom asks — never up front.
+## The wrap, in brief
 
-`docs/canon/reference/` holds real-world facts, researched once: the real town,
-codes, equipment, figures, each with its source and the date it was checked.
-A planning session reads it whenever it needs a real-world fact, and looks
-there first, and in open `Research:` issues: sessions run with limited
-internet access. A fact that isn't there is never guessed or searched for
-unasked. The session either asks Tom for network access to research it now,
-or files a `Research:` issue (the fact, why it's needed, what it blocks) and
-carries on with the gap marked unconfirmed. Whatever is researched is added to
-the folder in the same session, with its source, date and status. If it
-answers a `Research:` issue, it is also written into that issue's body at
-once, so other sessions can read it before the merge, and the pull request
-that adds it closes the issue. Other issues point to the folder rather than
-repeating it.
-
-A coding session reads neither: a handoff that depends on a canon fact or a
-reference figure quotes it itself. `.rgignore` keeps the folder out of
-repository searches, so it is read by path, on purpose, or not at all.
-
-**The world is real.** The town is Lima, in the Partido de Zárate, Buenos
-Aires province, Argentina. Streets, places,
-businesses, utilities and infrastructure carry their real names, and what the
-game says about them is accurate — checked against a source when it is written,
-never recalled or invented, and recorded in `docs/canon/reference/` (see "The
-canon is private" for what to do when a fact isn't there yet). A fact that
-can't be confirmed is marked unconfirmed, not filled with a plausible one.
-Adding something the real town lacks is a design decision (see below).
-**Brands and business names are the exception.** No real product brand
-appears ("a sachet of milk", not its maker), and a private business is named by
-what it is ("the pharmacy", "a bank", "the petrol station"), never by its
-trading name. An institution with a proper name keeps it (Correo Argentino,
-Banco Nación, San Isidro Labrador); a government building is named by what it
-is ("the police station", "the municipal hospital"). Fictional brands are lore,
-for later. Project Guide, Part 1.
-
-**Content vs. mechanics stay separated.** A change touches WORLD DATA (content)
-or ACTIONS/SIMULATION (mechanics), and normally not both. Rendering is its own
-concern — a new way of displaying existing state is neither. If a content
-request seems to need a mechanics change, stop and confirm it's genuinely a new
-mechanic.
-
-The one case that legitimately touches both is **data that is the mechanic's own
-definition** — a schema field the new rule reads, the way `restores` and `verb`
-ship on the items eating acts on. A mechanic that does nothing until some item
-carries its property is not two passes; splitting it ships a rule that
-demonstrably does nothing, then the data that switches it on. Data that is an
-*instance* — a room, a placement, a description — never rides along with a
-mechanics change. That bound is the protection worth having: it stops the world
-being rewritten to fit one feature, which is what the rule was always for.
-
-**Mechanics check tags, never names.** A new item that should behave like an
-existing one gets the same tag (`blunt`, `fishing`, `fire-starter`, …). Never
-`it.name === "Something"`.
-
-**Identity is explicit, never positional.** Items resolve by `_uid` at runtime,
-never by array index. Item definitions come from `ITEM_REGISTRY` via
-`itemFromRegistry()` / `itemsFromRegistry()`.
-
-**One source of truth.** A constant, threshold, or item property is defined
-once. If the same fact must hold in two places, it belongs in a shared
-definition.
-
-**New persistent state rotates the save key.** `SAVE_KEY` derives from
-`MAJOR.MINOR` (see `versionCompat()`). A PATCH bump keeps existing browser saves
-loading; a MINOR bump breaks them. So: new state fields mean MINOR, and MINOR is
-a real seam — never a formality.
-
-**Tier maps to version bump.** Issues are labelled `tier-0` through `tier-3`.
-`tier-0`/`tier-1` maps to PATCH, `tier-2`/`tier-3` to MINOR. Within each pair
-the number is size (lower is smaller), never priority — Project Guide, Part 3,
-"Choosing a tier".
-
-**Flag judgment calls.** A threshold, balance number, or naming choice with no
-prior convention gets called out as retunable, not left to read as settled.
-
-**Design decisions are consulted, never assumed.** A choice that changes scope,
-player-facing behavior, tone, or the versioning tier is Tom's — ask, and wait
-for the answer. A choice that is purely technical or implementational (a
-data-structure shape, a helper's name, which of two equivalent renderings to
-use) gets made on the spot so the work keeps moving, and named in the changelog
-or the pull request rather than made silently. When it isn't obvious which kind
-a choice is, it is a design decision. The Handoff Guide's split between "Design
-decisions to make during implementation" and "Open questions for Tom" is this
-same rule at handoff time. (Project Guide, Part 2.)
-
-**Nothing is edited or pushed without being asked.** A question about a file —
-"how could we clarify this?", "does this rule cover X?" — is a question, not an
-instruction to go change it. Propose the wording and wait for the word. This
-covers every file in the repo, `ashfall.html`, `docs/` and this file alike, and
-every commit, push, tag and pull request. **GitHub Issues are the one
-exception**: filing, labelling and editing them as work surfaces is standing
-authorization, per the Project Guide's Workflow — a session that holds an issue
-back to ask about it has broken a different rule.
-
-Once a change *is* asked for, it is asked for. A coding session told to
-implement a handoff does not re-ask per edit — the approval covers the scope
-that was approved, and the work stops at that boundary.
-
-**Prove "no behavior change".** A diff is the proof; assertion is not. Use
-`git diff origin/main...HEAD -- ashfall.html` — everything this branch changed
-and nothing else. Don't diff against a tag: tags through `v0.4.3` carry the game
-at a versioned path, so `git diff v0.4.3..HEAD -- ashfall.html` matches nothing
-on the left and reports the whole file as new. It looks like a diff and is not
-one. (Project Guide, Part 3 → Validation, if you need the tag-form workaround.)
-
-## Wrap-time checklist (coding sessions)
-
-Every PR that changes `ashfall.html` carries all six:
-
-1. `ashfall.html` with `GAME_CONFIG.VERSION` bumped.
-2. A new `CHANGELOG.md` entry at the top, per `docs/CHANGELOG_GUIDE.md` — read it
-   now, at the wrap. The entry names the handoff by the path it was read at.
-3. The handoff moved to `handoffs/archive/` in this same PR — `git mv`, filename
-   unchanged. It is spent the moment this merges, and the top level is reserved
-   for handoffs a session should still implement.
-4. `Closes #NN` in the PR description for the issue this fulfils. Never close an
-   issue by hand.
-5. New issues for anything deferred — cut scope, follow-ups this pass surfaced.
-   If nothing was deferred, say so in the changelog's Documentation section.
-6. The tag commands, as the last thing in the session's final message. Tom
-   pushes tags by hand, and the merge commit doesn't exist until he merges, so
-   the session doesn't tag — it hands him this block, filled in with the PR
-   number (`NN`) and the version (`X.Y.Z`), in its final message and not the
-   PR description:
-
-   ```sh
-   git fetch origin main
-   C=$(git log origin/main --merges -1 --format=%H --grep="^Merge pull request #NN from")
-   if [ -n "$C" ] && git show "$C:ashfall.html" | grep -qF 'VERSION: "X.Y.Z"'; then
-     git tag vX.Y.Z "$C" && git push origin vX.Y.Z
-   else
-     echo "Not tagged: PR #NN has no merge commit on main, or it isn't X.Y.Z"
-   fi
-   ```
-
-   **The block resolves the commit instead of using `HEAD`.** A bare
-   `git tag vX.Y.Z` tags whatever `HEAD` happens to be, which is how `v0.4.4`
-   and `v0.4.5` ended up on the same commit as `v0.4.7` (#32, since
-   corrected). So it finds the merge commit by PR number, and checks that the
-   commit carries the version *before* tagging, so a wrong tag is never
-   created. Its safeguards stay as written: `[ -n "$C" ]`, because with an
-   empty `$C` the `git show` reads the index and could pass; the trailing
-   ` from`, which keeps `#12` from matching `#123`. A squash or rebase merge
-   finds no merge commit and falls through to the `else`. It assumes a POSIX
-   shell (bash, zsh, Git Bash).
-
-The merge ships the version; the tag is what makes it reachable afterwards. A
-version that shipped as a commit inside someone else's PR still gets its own tag,
-on the commit carrying its `GAME_CONFIG.VERSION`.
-
-**A pass that does not touch `ashfall.html` is the exception.** No version bump,
-no changelog entry, no tag commands — the game did not change, and a tag
-pointing at a commit where nothing shipped is a new way to get tagging wrong.
-Items 3, 4 and 5 still apply — the archive move in the diff, `Closes #NN` and
-the new issues in the PR body rather than the changelog, or a line saying
-nothing was deferred. The archive move carries more weight here than anywhere
-else: a documentation-only pass writes no changelog entry, so its handoff can
-never register as spent by grep, and the folder is the only record that it
-shipped. The diff and the PR are the whole record.
-
-The test is one question — **did `ashfall.html` change?** — and it is
-deliberately not a list of exempt paths. A list has to be maintained, and the
-one that stood here named `CLAUDE.md`, `docs/` and `handoffs/` but not
-`README.md`, so a one-line fix to the README nominally required a version bump
-for a pass that changed no line of the game. The CI check in
-`.github/workflows/version-changelog.yml` has always gated on exactly this
-question and nothing else; the rule now says what the check already enforced.
-
-## Conventions
-
-- **Filenames carry no version.** Git tags mark releases. Never rename a file to
-  add a version number.
-- **The backlog is GitHub Issues**, labelled `tier-0` through `tier-3`.
-- **Handoffs are kept**, not deleted once implemented — but not left where a
-  session will pick them up. The top level of `handoffs/` holds only live
-  ones; a handoff that is no longer live moves to `handoffs/archive/`,
-  filename unchanged. Their commit date still records that the spec predated
-  the code. Which version **shipped** one stays derivable —
-  `grep -l "Implements: handoffs/<name>.md" CHANGELOG.md` — and that grep is
-  still the answer to *which version*; the folder answers only *is this live*,
-  the question a session opening the directory is actually asking. A handoff
-  that is **superseded** (never shipped, and the code moved) is archived *and*
-  bannered on the file's first line, body untouched: the folder says it is not
-  live, the banner says the body is wrong. Never rename a handoff — the name
-  is how the changelog cites it. Changelog entries cite the path a handoff was
-  read at, so an entry whose path no longer resolves resolves under
-  `handoffs/archive/`. Handoff Guide, Part 2.
-- If the issue tracker is unreachable, say so and continue — the repo's files
-  stand alone.
-
-## Writing game text
-
-Second person, present tense, plain sentences. Understatement over drama — the
-horror is in the mundane detail. Tell the story through what people left behind,
-never through exposition, and never explain the collapse itself. One to three
-sentences. Functional UI text is held to clarity instead, not to this tone.
-
-The game is written in English. Streets, districts and towns keep their
-Spanish names, spelled as they are locally, accents included ("Calle 15",
-"Barrio Atucha", "Zárate"), never translated or anglicised. Everything else is
-named in English: a place by what it is ("the police station", "Lima station",
-"the riverside walk"), and an item too ("a pack of biscuits"), unless it has
-no English equivalent ("yerba mate", "dulce de leche"). Institutions with a
-proper name keep it (Correo Argentino, Banco Nación).
-
-The Project Guide, Part 1 has the full checklist and examples. Match the
-existing descriptions; don't invent a new voice.
+Every pull request that changes `ashfall.html` carries: the
+`GAME_CONFIG.VERSION` bump; a `CHANGELOG.md` entry; the handoff archived;
+`Closes #NN`; issues for anything deferred; and the tag block as the last
+thing in the session's final message. A pass that leaves `ashfall.html`
+untouched has no bump, entry or tag. The full checklist and the tag block are
+in `docs/03-workflow.md` (The wrap).
