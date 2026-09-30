@@ -65,4 +65,5 @@ rule. A coding session reads neither.
 | `Fuel_and_Generators.md` | **The US record, no longer the target:** gasoline (grades, shelf life, stations, cars, cans) and portable generators |
 | `Calendar_AR.md` | **Around February 2025 (#329):** summer holidays by quincena, the labour law's leave, Buenos Aires province's school calendar and February's make-up modules for owed subjects, Carnival |
 | `Outbreak_Response.md` | **COVID-19 as the real-world floor (#329):** Argentina's March 2020 timeline, panic buying, towns sealing their accesses (Zárate's checkpoints), ICUs at 97 %, hospital and funeral collapse in Guayaquil and Bergamo, health workers infected, Atucha running through lockdown |
+| `Sound.md` | **How loud things are and how far they carry (#329, #12):** 6 dB per doubling of distance, air absorption, a quiet rural night, diesel generators' noise, and a worked distance table |
 | `Carbon_Monoxide.md` | Exposure effects, the body's level, CO alarms, generator placement |
