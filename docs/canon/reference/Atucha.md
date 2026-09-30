@@ -25,6 +25,14 @@ does make radioactive material a hazard**. This file answers that: it can
   - **Emergency power: four emergency diesel generators**, a German design
     choice from 1980, against the usual three. Secondary. **How long their
     fuel lasts is unconfirmed.**
+- **The grid has done without Atucha II for most of a year.** Routine
+  inspections in **October 2022** found one of the reactor's four internal
+  separators detached; Atucha II was **out of service for about ten months**
+  and returned on **28 August 2023** (the designer had estimated more than
+  four years for the repair). Secondary, 2026-09-30:
+  [Argentina.gob.ar](https://www.argentina.gob.ar/noticias/la-central-nuclear-atucha-ii-vuelve-entregar-energia-luego-de-su-exitosa-reparacion),
+  [EconoJournal, 2023-08](https://econojournal.com.ar/2023/08/nucleoelectrica-completo-los-trabajos/)
+  (search summaries).
 - **Atucha I: shut down, and its reactor emptied.**
   - It stopped on **2024-09-29** for its 30-month life extension.
   - **All 241 fuel elements** (5.3 m each) were taken out of the reactor over
