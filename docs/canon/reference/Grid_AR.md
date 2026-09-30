@@ -71,30 +71,114 @@ how it stops. Lima's own distributor (CEZ) and its feeds are in `Lima.md`,
   [CAMMESA, "Alivio de Cargas"](https://cammesaweb.cammesa.com/alivio-de-cargas/).
 - **Automatic generation disconnection (DAG).** When a line is lost,
   generators are signalled to drop output so they don't flood what's left.
-  Its failure is what made 2019 total (below).
+  Its failing to act is what made 2019 total (below).
 
 ## When it failed: 16 June 2019
 
-- **07:06, Sunday 16 June 2019:** a short circuit on the **500 kV Colonia
-  Elía–Campana line**, while Transener worked on **tower 412**, eroded by
-  the Paraná Guazú. A bypass had been installed but **not entered in the
-  DAG**, so generators never got the signal to reduce: **1,200 MW of excess
-  generation**.
-- **Argentina (all but Tierra del Fuego) and Uruguay went dark in about 30
-  seconds**, more than 50 million people. Only two towns with their own
-  generation (Ticino, Los Toldos) stayed lit.
-- **Restoration took about 13–14 hours**, finishing around 20:30, by
-  coordinated work with **Yacyretá** as the largest contributor; the
-  Litoral came back first; El Chocón and other regional plants were slow to
-  start. Atucha II ran on house load and was generating 250 MW during the
-  recovery (see also `Atucha.md`).
-- ENRE sanctioned Transener in 2021 for "negligent action".
-- Secondary, 2026-09-29:
-  [es.wikipedia](https://es.wikipedia.org/wiki/Apag%C3%B3n_de_Argentina,_Paraguay_y_Uruguay_de_2019),
-  [Infobae, 2023-03-01](https://www.infobae.com/economia/2023/03/01/como-fue-el-apagon-del-siglo-del-dia-del-padre-de-2019-que-dejo-sin-electricidad-a-50-millones-de-personas/).
-- **The failing line ends at Campana**, about 14 km beyond Zárate
-  (`Lima.md`), where Transba runs the 500 kV ET Campana: the fault was in
-  Lima's region. Where exactly tower 412 stands is unconfirmed.
+The whole grid's one total collapse. **Primary for the sequence:** the
+technical study the ENRE commissioned from the Facultad de Ingeniería of the
+Universidad de Buenos Aires (FIUBA), *Estudio del evento ocurrido el 16 de
+junio de 2019* (version 2, rev. 26; 236 pages), read in full text
+2026-09-29:
+[ENRE / FIUBA](http://www.enre.gov.ar/web/bibliotd.nsf/203df3042bad9c40032578f6004ed613/d50f985c66ad65cd032586d9004ccbd1/$FILE/INFORME_FIUBA-version2%20rev26.pdf).
+Times are UTC−3. (Corrects this file's earlier line, from Wikipedia, that
+the fault was on the Colonia Elía–Campana line: that line was out of
+service; the fault was on its neighbour.)
+
+**Before (a weakened configuration, for two months)**
+- **18 April 2019:** the 500 kV **Colonia Elía–Campana** line was taken out
+  to replace **tower 412**, one of the towers at the Paraná Guazú crossing,
+  whose base the river had eroded "with the risk of its collapse". The new
+  tower went up about 100 m back from the bank; the work needed at least 70
+  days, and **the line returned on 2 July 2019**.
+- **The same day, Transener connected the ET Campana into the Colonia
+  Elía–Manuel Belgrano line in a "T" (the bypass)**, adjusting the
+  protections and the automatic generation disconnection (DAG NEA);
+  CAMMESA accepted it. The grid ran for over 70 days one line short on its
+  main corridor from the north-east (Yacyretá, Salto Grande, Brazil) to
+  Buenos Aires.
+- In that period the DAG's selected shedding **exceeded 1,200 MW 45 % of the
+  time**, at moments nearly 3,000 MW: the corridor was run hard.
+- **The night before:** a storm alert from 01:30 for northern Buenos Aires
+  province, Entre Ríos and Santa Fe (50–100 mm of rain), lifted only in
+  part at 03:30.
+
+**07:00, Sunday (Father's Day):** SADI demand **13,200 MW**; thermal 54.2 %,
+hydro 29.4 %, nuclear 5.9 %, renewables 4.1 %, imports 6.4 %. About
+**2,600 MW** was arriving from the north-east at Rincón (970 MW of it from
+Brazil), and **1,662 MW** flowing from Colonia Elía towards Manuel
+Belgrano and Campana.
+
+**The collapse (about 30 seconds)**
+- **07:06:22.177:** a **single-phase fault on the 500 kV Colonia
+  Elía–Mercedes line**, about 21 km from Colonia Elía. Its protections open
+  the faulted phase and start to reclose, correctly.
+- **The same instant:** the T line's protections at **Campana** and Manuel
+  Belgrano also see the fault (set to overreach, to cover the T) and open
+  the same phase to reclose.
+- **About 150 ms later, at Campana:** an overvoltage blocks the reclose and
+  **Campana opens for good**, on all three phases, **without sending a trip
+  signal to the T's other two ends**. The DAG registers it as an event
+  assigned **0 MW**, and that event **locks the DAG for 20 seconds**.
+- **About 0.9 s:** Colonia Elía–Mercedes recloses successfully (the fault
+  was transient). But at **Colonia Elía** the T line trips on ground
+  overcurrent and trips Manuel Belgrano: **the T is now fully open.** This
+  is the event that should have shed **1,200 MW at Yacyretá** — and the
+  DAG is locked. **Nothing is shed.**
+- **About 1.1 s after the T opened:** the 500 kV Rincón–Paso de la Patria
+  line trips. **Yacyretá and Salto Grande lose synchronism**, and the
+  north-east separates: an **island** of Misiones, parts of Corrientes and
+  Entre Ríos, and Uruguay, with too much generation (it too collapses later).
+- **The rest of the SADI loses about 3,200 MW** against 12,800 MW of
+  demand. Frequency falls. Several generators trip **earlier than the rules
+  allow**; the automatic under-frequency load relief falls short — large
+  users shed about **1,300 MW of the 4,840 MW committed**, 98 % of them
+  shedding nothing, and distributors about 80 % of what was needed
+  (Infobae). Generators' under-frequency protections (below 49 Hz for 20 s)
+  time out one after another: **the final collapse**, by frequency
+  instability.
+- **Counterfactuals the study simulated:** had the T's protections acted
+  as intended, the system would have stayed stable; with the actual
+  protections but a working DAG, it would have stabilised, with some
+  overloads.
+
+**Afterwards (about 14 hours)**
+- **07:09:** Transener's control centre (COT) receives CAMMESA's (COC)
+  confirmation of the **total collapse of the SADI**. Plants able to start
+  without outside power (*arranque en negro*) are instructed. One regional
+  transmission company (Transcomahue) got the confirmation only at 07:25:
+  **communications failed for lack of power**, and the control centres
+  disagreed during the restart.
+- **Atucha II stayed in service feeding its own auxiliaries, and Atucha
+  I's** (Atucha I was shut down); the restart **gave Atucha II priority**.
+- **08:07:** all 500 kV stations ready to start restoring. **08:23:**
+  Yacyretá starts two machines; three times they trip while taking load
+  (too little load connected). **08:50:** Ensenada Barragán starts in an
+  island. **09:44:** a 500 kV busbar at Rodríguez is energised from Salto
+  Grande, and Edenor takes load at 09:48–09:49. **10:33:** Ezeiza–Rodríguez
+  energised from Rodríguez, because El Chocón couldn't.
+- **14:15:** the Litoral fully restored; **15:00:** Greater Buenos Aires at
+  92 %, held back by the Litoral–GBA corridor's limit; **16:22:** the NEA
+  fully restored; the whole system **a little over 14 hours** after the
+  fault (CAMMESA, via Infobae), around 20:30.
+- **Many plants struggled to start on their own:** Yacyretá's units
+  couldn't hold on the 500 kV lines; Genneia failed its first start; San
+  Miguel de Tucumán restarted about six hours later; Río Grande took about
+  three and a half hours; El Chocón had breaker and protection trouble;
+  Guillermo Brown started only once it got 500 kV from outside; **Alto
+  Valle didn't start, its batteries too low**; Pilar tripped and cut
+  Embalse nuclear plant's auxiliary supply.
+- **Responsibility** (the study's 0–10 scale): Transener 10 for the first
+  stage; in the slide to collapse, large users 7, distributors 6,
+  generators 5; CAMMESA 5 for the dispatch it adopted. ENRE sanctioned
+  Transener in 2021 for "negligent action" ($31,367,069.25).
+- Secondary for the news detail, 2026-09-29:
+  [Infobae, 2023-03-01](https://www.infobae.com/economia/2023/03/01/como-fue-el-apagon-del-siglo-del-dia-del-padre-de-2019-que-dejo-sin-electricidad-a-50-millones-de-personas/),
+  [es.wikipedia](https://es.wikipedia.org/wiki/Apag%C3%B3n_de_Argentina,_Paraguay_y_Uruguay_de_2019).
+- **Lima's region was at the centre of it:** the T was the ET Campana's
+  connection, about 14 km beyond Zárate (`Lima.md`). Only two towns with
+  their own generation (Ticino, Los Toldos) stayed lit in Argentina, and
+  Tierra del Fuego, which isn't on the SADI.
 
 ## February 2025: the summer peak
 
