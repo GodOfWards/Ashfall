@@ -465,7 +465,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.10.6" };
+  const GAME_CONFIG = { VERSION: "0.10.7" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -533,7 +533,9 @@
   const DECAY = { hunger:100/(3*MINUTES_PER_DAY), thirst:100/MINUTES_PER_DAY, energy:100/MINUTES_PER_DAY };
   const CAMPFIRE_KIT_COST = 3;
   // The collapse clock. A run starts START_DAYS_AFTER_COLLAPSE days after the
-  // collapse; the grid fails on POWER_FAILS_DAY after it. Nothing is stored:
+  // collapse; the grid fails at POWER_FAILS_HOUR on POWER_FAILS_DAY after it,
+  // which is Day 20, 22:00 on the player's clock (POWER_FAILS_MIN, derived
+  // beside gridUp(), since it needs DAY_START_MIN). Nothing is stored:
   // minutesSinceCollapse() derives the clock from state.totalMinutes. Running
   // water has no day of its own: the town's pumps run on the grid, so the
   // mains stop with it (mainsWaterUp()). A house's own tank keeps its taps
@@ -543,6 +545,18 @@
   // Day N clock still counts from the start of the run.
   const START_DAYS_AFTER_COLLAPSE = 2;
   const POWER_FAILS_DAY = 21;
+  const POWER_FAILS_HOUR = 22;
+  // The night the grid fails (#347, #352), counted from the failure: Atucha's
+  // siren sounds once SIREN_AFTER_FAIL_MIN later, and the power comes back
+  // GRID_RECOVERY_AFTER_MIN later for GRID_RECOVERY_MIN, once, then fails for
+  // good (GRID_UP_SPANS). The siren is heard close by within SIREN_NEAR_M of
+  // SIREN_SOURCE_STOP's Location, the stop at the plant's gate, since the
+  // plant itself is no stop (sirenPlace()). All retunable.
+  const SIREN_AFTER_FAIL_MIN = 20;
+  const GRID_RECOVERY_AFTER_MIN = 150;
+  const GRID_RECOVERY_MIN = 5;
+  const SIREN_SOURCE_STOP = "atucha_gate";
+  const SIREN_NEAR_M = 1000;
   // The power network's figures (see POWER in SURVIVAL / TIME SIMULATION).
   // Breakers, per IEC 60898-1 (ABB 2CDC400002D0201; Enel E-BT-004 Table 12;
   // both secondary for the standard). Its thermal points are the same for
@@ -6388,7 +6402,21 @@ x_sn_9 m_sn_sn_sn sn p
   // gridUp() is the grid source's state, the one source the power network
   // has (see POWER in SURVIVAL / TIME SIMULATION).
   function minutesSinceCollapse(){ return START_DAYS_AFTER_COLLAPSE * MINUTES_PER_DAY + state.totalMinutes; }
-  function gridUp(m = minutesSinceCollapse()){ return m < POWER_FAILS_DAY * MINUTES_PER_DAY; }
+  // The minute since the collapse the grid fails at: POWER_FAILS_HOUR on
+  // POWER_FAILS_DAY, where minute 0 is DAY_START_MIN on the collapse day.
+  const POWER_FAILS_MIN = POWER_FAILS_DAY * MINUTES_PER_DAY + (POWER_FAILS_HOUR * 60 - DAY_START_MIN);
+  // The grid's up-time, the one definition gridUp() and gridUpMinutes() read:
+  // half-open [from, to) spans of minutes since the collapse. Up until the
+  // failure, and again for the false recovery, once.
+  const GRID_UP_SPANS = [
+    [-Infinity, POWER_FAILS_MIN],
+    [POWER_FAILS_MIN + GRID_RECOVERY_AFTER_MIN, POWER_FAILS_MIN + GRID_RECOVERY_AFTER_MIN + GRID_RECOVERY_MIN]
+  ];
+  function gridUp(m = minutesSinceCollapse()){ return GRID_UP_SPANS.some(([a, b])=> m >= a && m < b); }
+  // How many minutes of [fromM, toM) the grid was up (effectiveAge()).
+  function gridUpMinutes(fromM, toM){
+    return GRID_UP_SPANS.reduce((sum, [a, b])=> sum + Math.max(0, Math.min(b, toM) - Math.max(a, fromM)), 0);
+  }
   // mainsWaterUp() is whether the town's water network runs: the mains a
   // sink without a tank draws on, and what a house pump draws from to fill
   // its tank (refillTanks()). The town's own pumps run on the grid, so today
@@ -6664,19 +6692,40 @@ x_sn_9 m_sn_sn_sn sn p
     if(!sleepAvailable()) return;
     // Sleep suspends the entire awake Energy/Stamina/Fatigue system.
     // Fatigue is snapshotted at sleep start and caps how much Energy this
-    // Sleep can restore; Fatigue itself always fully clears by the time the
-    // player wakes. `ceiling` is that snapshot — read once, before the
+    // Sleep can restore; Fatigue itself fully clears only on a completed
+    // sleep. `ceiling` is that snapshot — read once, before the
     // loop, and the loop measures against it rather than re-deriving it.
     const ceiling = sleepEnergyCeiling();
     const missingEnergy = Math.max(0, ceiling - state.vitals.energy);
-    let remaining = missingEnergy / SLEEP_ENERGY_RATE;
-    while(remaining > 1e-9){
-      const dt = Math.min(1, remaining);
-      state.totalMinutes += dt;
-      applyHungerThirst(dt);
-      applyWorldTicking(dt);
-      state.vitals.energy = Math.min(ceiling, state.vitals.energy + SLEEP_ENERGY_RATE*dt);
-      remaining -= dt;
+    const planned = missingEnergy / SLEEP_ENERGY_RATE;
+    let remaining = planned;
+    asleep = true;
+    wokenUp = false;
+    try {
+      while(remaining > 1e-9 && !wokenUp){
+        const dt = Math.min(1, remaining);
+        state.totalMinutes += dt;
+        applyHungerThirst(dt);
+        applyWorldTicking(dt);
+        state.vitals.energy = Math.min(ceiling, state.vitals.energy + SLEEP_ENERGY_RATE*dt);
+        remaining -= dt;
+      }
+    } finally {
+      asleep = false;
+    }
+    // Woken before the sleep was done (fireClockEvents()): Energy keeps what
+    // it gained, Fatigue drops by the share of the sleep taken, and no
+    // cooldown starts, so Sleep is offered again at once. The waking event's
+    // own line is the record. A waking event in the last step leaves the
+    // sleep complete.
+    const interrupted = wokenUp && remaining > 1e-9;
+    wokenUp = false;
+    if(interrupted){
+      state.vitals.fatigue = state.vitals.fatigue * (1 - (planned - remaining) / planned);
+      state.lastExertionMinute = state.totalMinutes;
+      checkGameOver();
+      render();
+      return;
     }
     // The loop lands on the ceiling only approximately — it accumulates
     // SLEEP_ENERGY_RATE*dt in <=1-minute steps — so this snaps it exact.
@@ -7025,16 +7074,17 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // The effective age an item gains over [fromM, toM), minutes since the
   // collapse, in `container` in `roomId` if nobody has touched it since the
-  // collapse: at its powered rate until the grid failed, then at 1. Its load's
-  // switch is as it was found, its starting state (switchOnIn() with nothing
-  // stored), and every breaker starts on; a load found switched off has aged
-  // at 1 throughout. An unwired container is on the grid until it fails.
+  // collapse: at its powered rate while the grid was up (gridUpMinutes()),
+  // and at 1 the rest of the time. Its load's switch is as it was found, its
+  // starting state (switchOnIn() with nothing stored), and every breaker
+  // starts on; a load found switched off has aged at 1 throughout. An unwired
+  // container is on the grid while it is up.
   function effectiveAge(container, roomId, fromM, toM){
     if(!(toM > fromM)) return 0;
     const loadId = container && POWER_NET.containerLoad[roomId + KEY_SEP + container.id];
     const wasOn = loadId ? switchOnIn({ switches:{} }, state.seed, loadId, APPLIANCES[POWER_NET.loads[loadId].appliance]) : true;
-    const fail = Math.min(Math.max(POWER_FAILS_DAY * MINUTES_PER_DAY, fromM), toM);
-    return spoilageRate(container, wasOn) * (fail - fromM) + spoilageRate(container, false) * (toM - fail);
+    const up = gridUpMinutes(fromM, toM);
+    return spoilageRate(container, wasOn) * up + spoilageRate(container, false) * (toM - fromM - up);
   }
   // Gives a perishable without `ages` the age it would have if it had sat in
   // `container`, in `roomId`, since the collapse. A world item's starting
@@ -7115,6 +7165,55 @@ x_sn_9 m_sn_sn_sn sn p
       state.illnesses[id] = left - tick;
     });
   }
+  // Sleep's runtime flags, never saved: `asleep` while doSleep()'s loop runs,
+  // so an event picks its asleep line; `wokenUp` set when a waking event
+  // fires during it, which ends the sleep after that step.
+  let asleep = false, wokenUp = false;
+  // Where a room is, for the siren: "near" within SIREN_NEAR_M of
+  // SIREN_SOURCE_STOP, "outside" at a rural or rail stop or in a building
+  // sited on one, and "town" otherwise, including a room whose stop can't be
+  // resolved. A stop's room is its own stop; a building's room is its
+  // building's site.
+  function sirenPlace(roomId){
+    const room = world[roomId];
+    if(!room) return "town";
+    if(LOCATIONS[room.locationId] && LOCATIONS[SIREN_SOURCE_STOP]
+      && locationDistance(room.locationId, SIREN_SOURCE_STOP) <= SIREN_NEAR_M) return "near";
+    const stopId = room.buildingId ? (BUILDING_INFO[room.buildingId] || {}).site
+      : room.locationId === roomId ? roomId : null;
+    const stop = stopId && LIMA.stops.find(s=> s.id === stopId);
+    return stop && (stop.type === "rural" || stop.type === "rail") ? "outside" : "town";
+  }
+  // Atucha's siren (#352), by sirenPlace() and whether it woke you.
+  const SIREN_LINES = {
+    town: {
+      awake: "Far to the north, a siren starts up. It sounds for a while, then stops, and nothing follows it.",
+      asleep: "A siren wakes you. It's far to the north, and after a while it stops. Nothing follows it." },
+    outside: {
+      awake: "Far off, a siren starts up. It sounds for a while, then stops, and nothing follows it.",
+      asleep: "A siren wakes you. It's far off, and after a while it stops. Nothing follows it." },
+    near: {
+      awake: "Close by, a siren starts up. It sounds for a while, then stops, and nothing follows it.",
+      asleep: "A siren wakes you. It's close by, and after a while it stops. Nothing follows it." }
+  };
+  // Events on the collapse clock: { at, wakes, line(roomId, asleep) }. Each
+  // fires once, in the step whose interval crosses `at` (minutes since the
+  // collapse), in every time loop, since all of them run
+  // applyWorldTicking(). Derived, never stored: a save from before one hears
+  // it again. One marked `wakes` ends a sleep (doSleep()); `line` is told
+  // whether the player is asleep, and so being woken.
+  const CLOCK_EVENTS = [
+    { at: POWER_FAILS_MIN + SIREN_AFTER_FAIL_MIN, wakes: true,
+      line: (roomId, sleeping)=> SIREN_LINES[sirenPlace(roomId)][sleeping ? "asleep" : "awake"] }
+  ];
+  function fireClockEvents(dt){
+    const now = minutesSinceCollapse(), before = now - dt;
+    CLOCK_EVENTS.forEach(ev=>{
+      if(!(before < ev.at && now >= ev.at)) return;
+      log(ev.line(state.currentRoom, asleep), "warn");
+      if(ev.wakes && asleep) wokenUp = true;
+    });
+  }
   // A device drains wherever it is: carried, stowed in a bag, or left switched
   // on anywhere in the world. Where it is decides only who hears it die: a
   // carried one is "your", one in the room you are in is "the", and one
@@ -7153,6 +7252,7 @@ x_sn_9 m_sn_sn_sn sn p
         }
       }
     }
+    fireClockEvents(min);
   }
   function applyEnergyBaseline(min, multiplier){
     state.vitals.energy = clamp(state.vitals.energy - DECAY.energy*min*multiplier);
@@ -7571,16 +7671,34 @@ x_sn_9 m_sn_sn_sn sn p
   // the networks are tens of rooms, so there is no cache to keep honest. The
   // floats are read as the step starts, before this step's refill.
   function stepPower(dt){
+    const prevDrawing = powerNow ? powerNow.drawing : null;
     const r = resolvePowerStep(POWER_NET, APPLIANCES, state.power, state.electricalRules, gridUp(),
-      minutesSinceCollapse(), dt, powerNow ? powerNow.drawing : null, state.seed, tankFloatsNow());
+      minutesSinceCollapse(), dt, prevDrawing, state.seed, tankFloatsNow());
     state.power = r.power;
     powerNow = r;
+    logGridChange(dt, prevDrawing, r.drawing);
     logTrips(r.trips);
+  }
+  // What the player notices when something in their room stops or starts:
+  // a trip's quiet (logTrips()) and the grid going down (logGridChange())
+  // share one line.
+  const ROOM_GOES_QUIET = "Everything in here goes quiet.";
+  // The grid itself logs nothing. When it goes down (the failure, and the end
+  // of the recovery), the room goes quiet if a load in it was drawing the
+  // step before; when it comes back, something starts up if a load in it is
+  // drawing this step. Only wired loads count, and neither line wakes a
+  // sleeper. One line per transition at most. Wording retunable.
+  function logGridChange(dt, before, after){
+    const now = minutesSinceCollapse(), up = gridUp(now);
+    if(up === gridUp(now - dt)) return;
+    const drewHere = (drawing)=> !!drawing && Object.keys(drawing).some(id=> drawing[id] && POWER_NET.loads[id].room === state.currentRoom);
+    if(!up && drewHere(before)) log(ROOM_GOES_QUIET, "warn");
+    if(up && drewHere(after)) log("Something in here starts up again.");
   }
   // A trip is heard where its panel or board hangs, and noticed where
   // something it fed was running; anywhere else it passes unremarked. The
-  // grid failing logs nothing: noticing it is deferred (#220). One line of
-  // each kind per step. Wording retunable.
+  // grid going down or coming back is logGridChange()'s. One line of each
+  // kind per step. Wording retunable.
   function logTrips(trips){
     let atPanel = false, quiet = false;
     trips.forEach(t=>{
@@ -7588,7 +7706,7 @@ x_sn_9 m_sn_sn_sn sn p
       else if(t.running.some(id=> POWER_NET.loads[id].room === state.currentRoom)) quiet = true;
     });
     if(atPanel) log("The panel on the wall snaps. A breaker has tripped.", "warn");
-    if(quiet) log("Everything in here goes quiet.", "warn");
+    if(quiet) log(ROOM_GOES_QUIET, "warn");
   }
   // Whether a load has power: its switch is on and its path is live.
   function isPowered(loadId){

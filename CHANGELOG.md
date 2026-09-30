@@ -18,6 +18,145 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.10.7 — The night the grid fails
+
+Implements: handoffs/night-the-grid-fails.md
+
+Implements #347 and #352 in full, per `handoffs/night-the-grid-fails.md`. The
+grid failure stops being a silent boundary at 08:00 and becomes a night: the
+grid goes at 22:00 on day 21 since the collapse (the player's Day 20), Atucha's
+siren sounds once over the town twenty minutes later, and at 00:30 the power
+comes back for five minutes and then fails for good. An event can now be
+marked as waking, and ends a sleep early; the siren is the only one. Every
+event derives from the collapse clock and an interrupted sleep stores nothing,
+so there is no new state field and no `SAVE_KEY` change: **PATCH**.
+
+**New**
+- *The night's figures* (CONFIG / CONSTANTS, beside `POWER_FAILS_DAY`, which
+  stays 21): `POWER_FAILS_HOUR = 22`, `SIREN_AFTER_FAIL_MIN = 20`,
+  `GRID_RECOVERY_AFTER_MIN = 150`, `GRID_RECOVERY_MIN = 5`,
+  `SIREN_SOURCE_STOP = "atucha_gate"`, `SIREN_NEAR_M = 1000`. All retunable.
+- `POWER_FAILS_MIN`, the failure's minute since the collapse:
+  `POWER_FAILS_DAY * MINUTES_PER_DAY + (POWER_FAILS_HOUR * 60 − DAY_START_MIN)`
+  (31080). Derived beside `gridUp()`, below `DAY_START_MIN`.
+- `GRID_UP_SPANS`, the grid's up-time as half-open `[from, to)` spans of
+  minutes since the collapse: `[−∞, POWER_FAILS_MIN)` and the false recovery,
+  `[POWER_FAILS_MIN + 150, POWER_FAILS_MIN + 155)`. `gridUp(m)` is whether `m`
+  falls in a span; the new `gridUpMinutes(fromM, toM)` is how many minutes of
+  an interval overlap them. Once, fixed: no roll, no second flicker.
+  `mainsWaterUp()` still follows `gridUp()`, so the mains (and tank refilling)
+  come back for the five minutes too.
+- *Noticing the grid* (POWER): `logGridChange(dt, before, after)`, called by
+  `stepPower()` before `logTrips()`. On a step where `gridUp()` differs from
+  the step's start: going down, "Everything in here goes quiet." if a load in
+  the current room was `drawing` on the previous step; coming back, "Something
+  in here starts up again." if one is `drawing` on this step. Only wired loads
+  count; one line per transition; neither wakes a sleeper. A breaker that
+  trips as everything starts at once is left to `logTrips()`, as at any
+  power-up.
+- `ROOM_GOES_QUIET`, the one definition of "Everything in here goes quiet.",
+  read by `logGridChange()` and `logTrips()`.
+- *Clock events* (SURVIVAL / TIME SIMULATION): `CLOCK_EVENTS`, each
+  `{ at, wakes, line(roomId, asleep) }`, fired by `fireClockEvents(dt)` at the
+  end of `applyWorldTicking()`, so in every time loop. An event fires in the
+  step whose interval crosses `at` (`before < at ≤ now`), which holds for
+  fractional steps. Derived, never stored: a save from before it hears it
+  again.
+- *The siren*: `CLOCK_EVENTS`' one entry, at `POWER_FAILS_MIN +
+  SIREN_AFTER_FAIL_MIN` (Day 20, 22:20), `wakes: true`, logged `warn`. Its six
+  approved lines are `SIREN_LINES`, by place and by whether it woke you.
+  `sirenPlace(roomId)` picks the place: `near` when the room's Location is
+  within `SIREN_NEAR_M` of `SIREN_SOURCE_STOP`'s (the gate, `r111_7334m`, and
+  just `r111_7180m`); else `outside` when its stop (a stop room's own; a
+  building room's `BUILDING_INFO` site) has type `rural` or `rail`; else
+  `town`, which includes a room whose stop can't be resolved.
+- *Waking*: runtime flags `asleep` (set while `doSleep()`'s loop runs) and
+  `wokenUp` (set by a `wakes` event that fires while `asleep`). Never saved.
+
+**Changed / Reworked**
+- *Sleep* (`doSleep()`): the loop also stops once `wokenUp` is set, after that
+  step. An interrupted sleep keeps the Energy the loop added (no snap to the
+  ceiling), sets Fatigue to `fatigue × (1 − slept / planned)` (`planned` is
+  the length computed at the start), sets `lastExertionMinute` but not
+  `lastWakeMinute`, so no cooldown starts and Sleep is offered again at once,
+  and logs nothing of its own: the siren's line is the record.
+  `checkGameOver()` and `render()` still run. A completed sleep is unchanged.
+- *Spoilage* (`effectiveAge()`): no longer computes the failure minute itself.
+  The powered rate applies to `gridUpMinutes(fromM, toM)`, rate 1 to the rest
+  of the interval.
+- *Rest and walking* aren't interrupted; the siren logs its awake line there.
+
+**UI**
+- The new log lines above. The Sleep button reappears after an interrupted
+  sleep with its estimate for what's left, through `sleepAvailable()`; no
+  rendering code changed.
+
+**Documentation**
+- Comments updated: the collapse clock (CONFIG / CONSTANTS), `effectiveAge()`,
+  `logTrips()` (its "The grid failing logs nothing…" line is gone), and
+  `doSleep()` (Fatigue clears fully only on a completed sleep).
+- Filed #356: a player blacked out by exhaustion hears the siren's awake line,
+  since only `doSleep()` counts as asleep. A design question, so not decided
+  here. Nothing else was deferred.
+
+**Explicitly out of scope**
+- Interrupting anything but sleep (#212); anything else waking the player;
+  outdoor signs of the failure (#285, #344); the gate's text (#344) and the
+  iodine tablets (#353); the siren's duration or pattern (#350); the
+  cycling-load readout (#337); mains gas (#342); seeded variation (#149).
+
+**Sections touched**
+- CONFIG / CONSTANTS; SURVIVAL / TIME SIMULATION (the collapse clock,
+  `effectiveAge()`, `applyWorldTicking()` and the clock events, the POWER
+  sub-block's `stepPower()` / `logTrips()`); ACTIONS (`doSleep()`). No WORLD
+  DATA changed.
+
+**Open questions / decisions resolved**
+- *Constants*: the night's figures sit in CONFIG beside `POWER_FAILS_DAY`;
+  `POWER_FAILS_MIN` and `GRID_UP_SPANS` are derived beside `gridUp()`, where
+  `DAY_START_MIN` is in scope. `DAY_START_MIN` did not move.
+- *Up-time*: a list of spans (`GRID_UP_SPANS`), read by `gridUp()` and by
+  `gridUpMinutes()`, which `effectiveAge()` uses.
+- *Reaching the sleep loop*: the runtime `asleep` / `wokenUp` flags. The loop
+  reads only `wokenUp`, never which event set it.
+- *The siren's source*: `SIREN_SOURCE_STOP`, a constant naming `atucha_gate`,
+  in CONFIG / CONSTANTS.
+- *Room to stop*: a stop room (its `locationId` is its own id) is its own
+  stop; a building room goes through `BUILDING_INFO[room.buildingId].site`.
+  "Near" reads the room's own Location, so the paper mill (sited on
+  `r111_papermill`, drawn at its own `at`) is measured where it stands.
+
+**Notes / assumptions**
+- *A waking event in the sleep's last step* leaves the sleep complete (full
+  snap, cooldown, "You get real sleep…"). The sleep was done anyway, and
+  counting it as interrupted would clear only a sliver of Fatigue and offer a
+  near-zero sleep at once. Implementational; retunable.
+- *Transitions are detected by comparing `gridUp()` at the step's end with its
+  start* (`now − dt`), so nothing is stored. A cycling load (a fridge) in the
+  off part of its cycle on that step isn't `drawing`, and gives no line, as
+  the handoff's rule reads.
+- "Something in here starts up again." is logged unclassed, as a neutral
+  report; the quiet line and the siren are `warn`, as the fire going out and
+  trips are. Retunable.
+- *Validation*: in headless Chromium on a new game, `gridUp()` true at
+  failure − 1, false at failure, true at +150, false at +155;
+  `getClockText()` "Day 20, 22:00" at the failure, "Day 21, 00:30" at the
+  recovery; the siren logged once across 22:20 in whole and fractional
+  steps, and again after winding the clock back; during Rest the awake line,
+  and Rest ran its full hour; a sleep from 22:00 ended at 22:20 with Energy
+  20 → 23.3, Fatigue 30 → 28 and Sleep offered at once; a sleep not crossing
+  22:20 completed as before; in `home_living` with its light on, the quiet
+  line at 22:00 and 00:35 and the start-up line at 00:30;
+  `ashfallDev.simulatePower()` with `start` across the window powered the
+  load for minutes 150–154; `sirenPlace()` gave `near` at `atucha_gate`,
+  `r111_7334m` and `r111_7180m`, `outside` at `r111_papermill`, the paper
+  mill, `atucha_halt` and `fcm_crossing_6km`, `town` in town. All six
+  validators report the same as on `main`.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.10.6"` → `"0.10.7"`
+
+---
+
 ## v0.10.6 — The house pump fills the roof tank
 
 Implements: handoffs/house-pump-tank.md
