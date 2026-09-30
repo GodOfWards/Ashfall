@@ -1,0 +1,54 @@
+name: Performance
+
+# Times the game's benchmark page on the pull request's base and head, and
+# fails a slowdown beyond tolerance (docs/02-code-practices.md, Performance).
+# The figures, what fails and what warns are in the script's docstring.
+# Adding or removing the perf-accepted label re-runs it.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Only game changes are timed, by the test version-changelog.yml uses.
+      - name: Did ashfall.html change?
+        id: gate
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -qx 'ashfall.html'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ashfall.html unchanged — nothing to time."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.changed == 'true'
+        with:
+          python-version: "3.12"
+
+      # Pinned: the version is recorded in the changelog entry that set it.
+      - name: Install Playwright and Chromium
+        if: steps.gate.outputs.changed == 'true'
+        run: |
+          pip install playwright==1.63.0
+          python -m playwright install --with-deps chromium
+
+      - name: Benchmark base and head
+        if: steps.gate.outputs.changed == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PERF_ACCEPTED: ${{ contains(github.event.pull_request.labels.*.name, 'perf-accepted') }}
+        run: python .github/scripts/perf_check.py
