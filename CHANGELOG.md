@@ -20,6 +20,91 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 <!-- New entries go directly below this line. -->
 
+## v0.11.1 — Code health: history out of the comments, containers placed by id
+
+Implements: handoffs/code-health-comments-and-containers.md
+
+Implements #363, #374 and #128 in full, per
+`handoffs/code-health-comments-and-containers.md`, in three phases. No
+behaviour change and no saved state.
+
+**Organization / Structural**
+- RENDERING: the orphaned comment block above `nameplateText()` is gone. Its
+  facts moved into `loadStatusText()`'s comment: the readout is shared by the
+  load's pop-up status line, the Here strip and the Electrical view's circuit
+  tab, and is functional UI text, retunable. The circuit tab is named too,
+  since it is the readout's third reader (#363).
+- Comments throughout, CSS included: every reference to a closed issue is
+  gone, its why kept in words where the comment didn't already say it ("Tom's
+  figure (#317)" → "Tom's figure"; "(Tom, #292 option C)" → "(Tom's
+  choice)"; a device "a save from before #373 left on" → "left on in a save
+  written before `asOf` existed"; `row_house`'s test main now points to the
+  building types for a real house's board, where it named #305). References
+  to open issues stay (#374).
+- The two changelog pointers went: the STAMINA / FATIGUE SYSTEM CONSTANTS now
+  point to `docs/systems/survival.md`; the SPAWN POOLS `chance` paragraph
+  keeps its why (derived from the lottery it replaced, six decimals as the
+  mark of a derived figure, not a balance knob) without the version. LIMA'S
+  STREETS no longer names `handoffs/lima-release.md`'s Appendix A, and the
+  three comments that said "the appendix" or "Appendix B" now say "the street
+  data" (#374).
+- BUILDING TYPES: a room override's new `items` field, `{ containerId:
+  [placement refs] }`, places refs into the room's resolved containers by id,
+  after `containers` and after each container's own `items`, under the same
+  `spawnRolled` rule; an id the room has no container for is pushed onto
+  `buildBuilding()`'s `problems`, and `validateBuildings()` reports it.
+  `containers` still replaces the list. Documented in the schema comment
+  (#128).
+- `landmarkInstances()`: the home's `living`, `kitchen`, `bathroom`,
+  `bedroom` and `garden` overrides use `items` and no longer restate their 13
+  containers. Their `desc` and `floor` overrides are unchanged.
+- `HEAT_CONTAINER_CAPACITY_KG` moved from FIRE / COOKING into WORLD DATA,
+  directly above `KITCHEN_CONTAINERS`, whose stove now reads it; the campfire
+  still does.
+
+**Explicitly NOT changed**
+- The built world, every balance constant, every function body but
+  `buildBuilding()`'s container step, the save format and `SAVE_KEY`, and
+  anything rendered.
+- `validateWiring()`'s runtime string naming #258.
+- Figure sources in comments: they stay where they are.
+
+**Validation performed**
+- Phases 1 and 2: `git diff origin/main...HEAD -- ashfall.html` at each showed
+  comment lines only, JavaScript and CSS.
+- Phase 3: scratch copies of `main`'s and the branch's `ashfall.html`, with
+  `makeDefaultWorld` added to `window.ashfallDev`, loaded in headless
+  Chromium: `JSON.stringify(makeDefaultWorld())` with every `_uid` stripped
+  and keys sorted was identical (2,073,276 bytes each). `validateRoomSchema()`,
+  `validateBuildings()` and `validateWiring()` reported nothing on either.
+  A copy with an unknown container id in the garden's `items` reported it.
+- `.github/scripts/replay_compare.py origin/main .`: all seven steps
+  identical.
+- `.github/scripts/docs_check.py` passes.
+
+**Documentation**
+- New `docs/systems/survival.md`: Exertion, Stamina, Fatigue, Energy, rest,
+  sleep, the gait lock and collapse, written from the code.
+  `docs/systems/README.md` lists it, and its "One is overdue" block is gone.
+- `docs/02-code-practices.md`, "Comments carry intent, not history": a
+  reference to an open issue is the exception, and the pass that closes an
+  issue removes or rewrites its references.
+- Nothing was deferred.
+
+**Sections touched**
+- RENDERING (comments), comments throughout the script, WORLD DATA (BUILDING
+  TYPES, `landmarkInstances()`, `buildBuilding()`), FIRE / COOKING (the
+  constant's old line).
+
+**Open questions / decisions resolved**
+- The override field is named `items`, matching the container spec's own.
+- `HEAT_CONTAINER_CAPACITY_KG` sits directly above `KITCHEN_CONTAINERS`.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.11.0"` → `"0.11.1"`
+
+---
+
+
 ## v0.11.0 — Event scheduler, power on events, ageing worked out when read
 
 Implements: handoffs/event-scheduler.md
