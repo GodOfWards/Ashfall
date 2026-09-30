@@ -374,6 +374,9 @@ Convention on Nuclear Safety, cited above, read in full text 2026-09-30.
   [Generator Source](https://generatorsource.com/tools-info/fuel-consumption-charts/),
   [Walt Power](https://waltpower.com/diesel-generator-fuel-consumption-chart/).
 - Atucha II's diesels' ratings and tank volumes weren't found (#350).
+- **How far the diesels can be heard** is worked out in `Sound.md`: an open
+  set plainly within about a kilometre on a quiet night, one inside its
+  building within a few hundred metres.
 
 **Estimate — not a fact.** A week per diesel is sized for the heavy loads
 of an accident. A reactor shut down for weeks needs much less: a
