@@ -13,7 +13,7 @@ never holds:
 
 - **data shapes**, which stay in the code's schema comments, edited in the
   same diff as the shape; the doc names the schema block;
-- **values**: it names the constant (`HEAT_COOL_MIN`), never copies its value;
+- **values**: it names the constant (`FRIDGE_RATE_POWERED`), never copies its value;
 - **real-world figures or their sources**, which live in
   `docs/canon/reference/`;
 - **history**: what shipped when is the changelog's.
@@ -58,9 +58,13 @@ whole world every minute (`02-code-practices.md`, Performance).
 
 ## Index
 
-Each doc is listed here as it is written. None are written yet. Two are
-overdue:
+Each doc is listed here as it is written.
+
+- [Time](time.md): the clock, the scheduler, settling, and batteries.
+- [Power](power.md): the network, the resolve, and when power resolves.
+- [Spoilage](spoilage.md): food's ages, worked out when read.
+
+One is overdue:
 
 - **Survival**: the Stamina & Fatigue rules are recorded only in the
   v0.2.1 entry of `CHANGELOG.md`, which a comment in the code still points to.
-- **Power**: to be written with #369, which replaces its time behaviour.

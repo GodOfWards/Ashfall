@@ -402,13 +402,17 @@
   //                time, and progression.
   //   UTILITIES    provide small reusable operations (formatting, lookup).
   //   SIMULATION   owns time-dependent consequences (decay, fire burn-down,
-  //                collapse from exhaustion, game-over checks). STAMINA/FATIGUE
-  //                is a sub-section living inside SURVIVAL/TIME SIMULATION, not
-  //                a separate top-level section. So is POWER: the network's
-  //                expansion and resolver (expandWiring(), resolvePower(),
-  //                isPowered()). Its definitions (APPLIANCES, WIRING_TEMPLATES,
-  //                WIRING, GAME_WIRING, and BUILDING TYPES' `wiring`) are WORLD
-  //                DATA, and state.power is PLAYER STATE.
+  //                collapse from exhaustion, game-over checks). Time moves
+  //                through one step, clockStep(), and the world changes on
+  //                scheduled events or when read, never every minute: the
+  //                scheduler (settleWorld(), planNextDue()) lives in
+  //                SURVIVAL/TIME SIMULATION, beside spoilage and batteries.
+  //                STAMINA/FATIGUE is a sub-section living inside SURVIVAL/TIME
+  //                SIMULATION, not a separate top-level section. So is POWER:
+  //                the network's expansion and resolve (expandWiring(),
+  //                resolvePower(), isPowered()). Its definitions (APPLIANCES,
+  //                WIRING_TEMPLATES, WIRING, GAME_WIRING, and BUILDING TYPES'
+  //                `wiring`) are WORLD DATA, and state.power is PLAYER STATE.
   //   ACTIONS      perform gameplay operations (move, take, craft, etc.)
   //                and are grouped by the system they belong to:
   //                INVENTORY/ITEM SYSTEM, WORLD INTERACTION, CRAFTING,
@@ -429,7 +433,8 @@
   //     movement/inventory/simulation code unless the content genuinely
   //     introduces a new mechanic.
   //   MECHANICS PASS: modify the smallest relevant function/section —
-  //     survival/time -> advanceTime()/runAwakeStep()/recoveryStep(); inventory transfer ->
+  //     survival/time -> advanceTime()/runAwakeStep()/recoveryStep(), and
+  //     the world's time -> clockStep()/settleWorld(); inventory transfer ->
   //     the INVENTORY/ITEM SYSTEM section (doTake/doStore/getItemAt/etc.);
   //     tools -> hasTool()/tags; fire -> FIRE/COOKING; crafting ->
   //     CRAFTING; persistence -> PERSISTENCE. UI changes are separate from
@@ -7231,13 +7236,8 @@ x_sn_9 m_sn_sn_sn sn p
   // Two independent chances of food poisoning as one: the chance that either
   // strikes.
   function combinePoisoning(a, b){ return 1 - (1 - a) * (1 - b); }
-  // SPOILAGE. A perishable item is one whose registry entry carries `spoils`
-  // and that is not sealed: a sealed item does not age. A perishable row
-  // keeps one effective age per unit in `ages`, in minutes, oldest first,
-  // ages.length === qty. A unit is Fresh below `spoils.staleAfter`, Stale
-  // below `spoils.rottenAfter`, and Rotten from there. Effective age grows at
-  // spoilageRate() of the container the item is in or under, so a fridge
-  // slows it and a working freezer stops it.
+  // SPOILAGE: docs/systems/spoilage.md has the model. A perishable item is
+  // one whose registry entry carries `spoils` and that is not sealed.
   function isPerishable(it){
     const def = registryEntryOf(it);
     return !!(def && def.spoils) && it.sealed !== true;
@@ -7346,13 +7346,7 @@ x_sn_9 m_sn_sn_sn sn p
       list.splice(list.indexOf(row), 0, takeUnits(row, n));
     }
   }
-  // AGEING WORKED OUT WHEN READ (#373). Nothing ages food every minute. A
-  // perishable row's `ages` are true at its `agedAt`, a minute since the
-  // collapse, and a list is settled to a minute (settleList()) only when
-  // something is about to read or change it: where the player can reach it
-  // (settleReachable()), before a power change reaches it (commitResolve()),
-  // and before cooking changes it (settleHeat()). docs/systems/spoilage.md
-  // has the model.
+  // AGEING, worked out when read: docs/systems/spoilage.md has the model.
   //   The age a row gains over [from, to), in `container` in `roomId`: 1 a
   // minute carried, on the floor, or in a container that is neither a
   // fridge nor a freezer; in a fridge or a freezer, its powered rate while
@@ -7511,12 +7505,9 @@ x_sn_9 m_sn_sn_sn sn p
     });
     lastClock = Math.max(lastClock, m);
   }
-  // BATTERIES WORKED OUT WHEN READ (#373). A device on batteries
-  // (durability mode "time": the flashlight, the radio) drains only while it
-  // is on, and nothing drains it every minute: while it is on, its
-  // `durability.asOf` is the minute since the collapse its `current` was
-  // true at, and its charge is worked out when read (batteryCharge()). Its
-  // running out is a scheduled event (batteryDeaths, settleBatteryDeaths()).
+  // BATTERIES, worked out when read: docs/systems/time.md has the model. A
+  // device on batteries' charge at minute `m`: its `current`, less its drain
+  // since `durability.asOf` while it is on.
   function batteryCharge(it, m = minutesSinceCollapse()){
     const d = it.durability;
     if(!it.on || typeof d.asOf !== "number") return d.current;
@@ -7562,17 +7553,8 @@ x_sn_9 m_sn_sn_sn sn p
     }));
     batteryDeaths = batteryDeaths.filter(t=> t > m);
   }
-  // THE CLOCK AND THE SCHEDULER (#372). Time moves in steps of at most a
-  // minute (runAwakeStep(), doRest(), doSleep()), and clockStep() is the one
-  // step: the player's vitals, then whatever is due (processDueEvents()).
-  // Everything in the world that changes with time is worked out when read
-  // or scheduled: it is brought up to a minute only when that minute is
-  // asked for (settleWorld(), settleReachable()), and the next thing it will
-  // do on its own (a stove timer running down, cooking finishing, a fire
-  // going out, a tank coming full, a battery running out, the grid failing
-  // or returning, a CLOCK_EVENTS entry) is kept as the next due minute, so a
-  // step with nothing due does no world work at all.
-  // The model is docs/systems/time.md's.
+  // THE CLOCK AND THE SCHEDULER: docs/systems/time.md has the model. The
+  // runtime state, none of it saved (rebuildSchedule()):
   //   settledAt  the minute since the collapse the scheduled systems stand
   //              at. Every advance of time ends by settling to now, so
   //              between two advances it is now.
@@ -7586,9 +7568,7 @@ x_sn_9 m_sn_sn_sn sn p
   // The runtime lists are the rooms whose heat is on (heatRooms) and the
   // stoves whose timer runs (timerStoves), each a set walked in world order
   // (roomOrder()). Every writer of heatActive or timerMinutes keeps them
-  // (scheduleHeat(), scheduleTimer()). All of it is runtime only, never
-  // saved: rebuildSchedule() scans the world for it on a new game, restart
-  // and load.
+  // (scheduleHeat(), scheduleTimer()).
   let settledAt = 0, lastClock = 0, lastGrid = 0, nextDue = Infinity;
   // Every minute since the collapse at which the grid fails or returns: the
   // bounds of GRID_UP_SPANS, each a scheduled event.
@@ -7719,13 +7699,9 @@ x_sn_9 m_sn_sn_sn sn p
   // ==================================================
   // POWER
   // ==================================================
-  // The power network: sources (the grid, for now), distribution (a
-  // complex's main board, a unit's panel, branch circuits, each protected by
-  // a breaker) and loads (fixtures and appliances). The rest of the game asks
-  // it one question, isPowered(loadId), and spoilage is its first reader.
-  // Definitions live in WORLD DATA (POWER SCHEMA); what changes in play is
-  // state.power (PLAYER STATE). A sub-section of SURVIVAL / TIME SIMULATION,
-  // the way STAMINA / FATIGUE is.
+  // The power network: docs/systems/power.md has the model. Definitions
+  // live in WORLD DATA (POWER SCHEMA); what changes in play is state.power
+  // (PLAYER STATE).
   //
   // The layers a breaker sits in, lowest first: the order every check runs
   // in.
@@ -8120,22 +8096,8 @@ x_sn_9 m_sn_sn_sn sn p
     });
     return Object.assign({}, look(), { power:p, trips });
   }
-  // POWER RUNS. Buildings share nothing but the grid, so each resolves on its
-  // own, and one nobody has touched needs no resolving at all: with no entry
-  // in the power state its breakers are closed and its switches at their
-  // rolled defaults, and with a full tank its pump never draws, so its look
-  // is a pure function of the seed, the rules and the grid. Power resolves
-  // only when something changes it (#369): an action on a building's
-  // switches or breakers, a water draw that moves a tank's float, a tank
-  // coming full (resolveBuilding()), and the grid failing or returning
-  // (resolveGrid()), which resolves the busy buildings: an entry in the
-  // power state under one of their ids, a float that is not full, or
-  // default-on loads that could overload one of their breakers
-  // (untouchedTrippers()). What each resolve found is kept, per building, in
-  // powerNow; every other building is still, and its values are worked out
-  // when something reads them (powerRead()), from its own nodes, never from
-  // anything stored. Nothing is approximated: a still building's look is
-  // exactly what a resolve would give it.
+  // POWER RUNS: each building resolves on its own, and a still one not at
+  // all (docs/systems/power.md).
   //
   // The index the game reads, built once per expanded network and its
   // appliances, beside it (expandWiring()'s output is left as it is):
