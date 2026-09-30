@@ -465,7 +465,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.10.7" };
+  const GAME_CONFIG = { VERSION: "0.10.8" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -3978,11 +3978,15 @@ x_sn_9 m_sn_sn_sn sn p
       ] },
     // The plain Lima house (#291). Designed: its layout is not sourced. The
     // living room's containers are none, as designed; the distances are
-    // judgment calls, retunable.
+    // judgment calls, retunable. Wired as the row house is (#306): its meter
+    // and main in a meter box at the street, and a modern breaker panel in
+    // the living room, headed by a diferencial (WIRING_TEMPLATES' `casa`).
     casa: { label:"house", entry:"living", water:{ tankL:HOUSE_TANK_L },
+      wiring:{ board:{ name:"Meter box", role:"street", rating:32, direct:true },
+        panels:[ { id:"house", name:"Breaker panel", role:"living", template:"casa" } ] },
       rooms: [
         { role:"living", room:"Living room", shelter:"full", sleepSpot:"couch", cannotHaveFire:true, floorCap:80,
-          desc:"A front room that is living room and dining room both. Barred windows onto the street, the blinds half down.",
+          desc:"A front room that is living room and dining room both. Barred windows onto the street, the blinds half down. The breaker panel hangs on the wall by the front door.",
           containers:[] },
         { role:"kitchen", room:"Kitchen", shelter:"full", sink:true, cannotHaveFire:true, floorCap:50,
           desc:"A kitchen with a gas cooker fed from a bottle, and a table with two chairs.",
@@ -4705,6 +4709,19 @@ x_sn_9 m_sn_sn_sn sn p
   // circuits' 10 A and 16 A are AEA's example's lighting and sockets figures
   // (at most 16 A and 20 A); WATER's 16 A is a judgment call. No range hood,
   // no garden light. All retunable.
+  //
+  // `casa`: the plain Lima house's panel (BUILDING TYPES' `casa`, #306),
+  // the row house's laid over the casa's rooms. Its figures are the row
+  // house's: the 40 A diferencial, the circuits' 10 A and 16 A, and the
+  // appliances. The water heater is in the kitchen and the pump on the
+  // patio: a Lima home heats its water with an electric tank heater, and an
+  // electric pump lifts its water to the roof tank (Tom, first-hand). The
+  // meter box is at the street, since the meter is on the property line,
+  // reachable from the street at any hour, with the main board within 1 m of
+  // it and a bipolar main of at most 32 A on a Tarifa 1 supply (OCEBA,
+  // Reglamento de Acometidas T1). The panel is indoors where it is easily
+  // found, never in a bathroom (AEA 90364-7-770 §770.16.3.2). No patio
+  // light, no TV and no washing machine (#333). All retunable.
   const WIRING_TEMPLATES = {
     apartment: {
       main: { rating:32 },
@@ -4745,6 +4762,27 @@ x_sn_9 m_sn_sn_sn sn p
         { key:"microwave",      appliance:"microwave",      circuit:"sockets", role:"kitchen" },
         { key:"water_heater",   appliance:"water_heater",   circuit:"water",   role:"laundry" },
         { key:"pump",           appliance:"house_pump",     circuit:"water",   role:"laundry" }
+      ]
+    },
+    casa: {
+      main: { rating:40, rcd:true },
+      circuits: [
+        { key:"lights",  label:"LIGHTS",  rating:10, volts:220, roles:["living", "kitchen", "bedroom", "bathroom"] },
+        { key:"sockets", label:"SOCKETS", rating:16, volts:220, roles:["kitchen"] },
+        { key:"water",   label:"WATER",   rating:16, volts:220, roles:["kitchen", "patio"] }
+      ],
+      fixtures: [
+        { key:"light_living",  appliance:"led_light",      circuit:"lights",  role:"living" },
+        { key:"light_kitchen", appliance:"led_light",      circuit:"lights",  role:"kitchen" },
+        { key:"light_bedroom", appliance:"led_light",      circuit:"lights",  role:"bedroom" },
+        { key:"light_bath",    appliance:"led_light",      circuit:"lights",  role:"bathroom" },
+        { key:"fridge",        appliance:"fridge_freezer", circuit:"sockets", role:"kitchen", containers:["fridge", "freezer"] },
+        { key:"stove",         appliance:"gas_range",      circuit:"sockets", role:"kitchen", containers:["stove"] },
+        { key:"kettle",        appliance:"kettle",         circuit:"sockets", role:"kitchen" },
+        { key:"toaster",       appliance:"toaster",        circuit:"sockets", role:"kitchen" },
+        { key:"microwave",     appliance:"microwave",      circuit:"sockets", role:"kitchen" },
+        { key:"water_heater",  appliance:"water_heater",   circuit:"water",   role:"kitchen" },
+        { key:"pump",          appliance:"house_pump",     circuit:"water",   role:"patio" }
       ]
     }
   };
@@ -6457,9 +6495,9 @@ x_sn_9 m_sn_sn_sn sn p
   // Refilling, after each step's power (applyWorldTicking()), and only while
   // the mains run: a tank whose pump drew this step (powerNow) gains the
   // pump's flow for the step. A tank in a building with no pump load
-  // (TANK_PUMPS; today casa and shop_home) is the unwired fallback: it has
-  // no float and no latch, and refills at HOUSE_PUMP_FLOW_LPH whenever it is
-  // below full, until #306 and #307 wire those types (#258). Only a tank
+  // (TANK_PUMPS; today shop_home) is the unwired fallback: it has no float
+  // and no latch, and refills at HOUSE_PUMP_FLOW_LPH whenever it is below
+  // full, until #307 wires that type (#258). Only a tank
   // below full has an entry, and one refilled to full loses it.
   function refillTanks(dt){
     if(!mainsWaterUp()) return;
@@ -6469,7 +6507,7 @@ x_sn_9 m_sn_sn_sn sn p
       const pump = TANK_PUMPS[b];
       let flow = HOUSE_PUMP_FLOW_LPH;
       if(pump !== undefined){
-        if(!(powerNow && powerNow.drawing[pump])) return;
+        if(!(powerNow && powerRead(powerNow, "drawing", pump))) return;
         flow = APPLIANCES[POWER_NET.loads[pump].appliance].flowLph;
       }
       const left = refilledDrawn(state.tankDrawn[b], flow, dt);
@@ -7567,6 +7605,15 @@ x_sn_9 m_sn_sn_sn sn p
   //   running, momentary  breaker ids: the current through it in amps, from
   //             the watts of the loads it feeds that are drawing; momentary
   //             counts a starting load at its startWatts.
+  // A cycle's phase roll is a pure function of the seed and the load id, so
+  // cycleRoll() keeps each one for as long as the seed stays the same.
+  let cycleRolls = { seed:null, byLoad:new Map() };
+  function cycleRoll(seed, loadId){
+    if(cycleRolls.seed !== seed) cycleRolls = { seed, byLoad:new Map() };
+    let r = cycleRolls.byLoad.get(loadId);
+    if(r === undefined){ r = rollValueFor(seed, ["power", "cycle", loadId]); cycleRolls.byLoad.set(loadId, r); }
+    return r;
+  }
   function powerSnapshot(net, appliances, power, rules, gridLive, minute, prevDrawing, seed, floats){
     const simple = rules === "simplified";
     const closed = (id)=> breakerClosedIn(power, id);
@@ -7587,7 +7634,7 @@ x_sn_9 m_sn_sn_sn sn p
         if(!f || f.full || !(f.low || (prevDrawing && prevDrawing[l.id]))) return;
       }
       if(a.dutyCycle !== undefined && a.cycleMinutes > 0){
-        const phase = rollValueFor(seed, ["power", "cycle", l.id]) * a.cycleMinutes;
+        const phase = cycleRoll(seed, l.id) * a.cycleMinutes;
         if(!((minute + phase) % a.cycleMinutes < a.dutyCycle * a.cycleMinutes)) return;
       }
       drawing[l.id] = true;
@@ -7625,14 +7672,18 @@ x_sn_9 m_sn_sn_sn sn p
   // A breaker the rules don't consult is left exactly as it is, and so is an
   // RCD (`rcd`), which neither check touches under either rules: it never
   // trips on overcurrent and holds no heat.
+  // Only a trip changes what a look sees (heat is not among its inputs), so
+  // a look is kept until one happens, and taken again at the next layer.
   function resolvePowerStep(net, appliances, power, rules, gridLive, minute, dt, prevDrawing, seed, floats){
     const p = { switches:Object.assign({}, power.switches), heat:Object.assign({}, power.heat), breakers:{} };
     Object.keys(power.breakers).forEach(id=>{ p.breakers[id] = Object.assign({}, power.breakers[id]); });
     const trips = [];
-    const look = ()=> powerSnapshot(net, appliances, p, rules, gridLive, minute, prevDrawing, seed, floats);
+    let kept = null;
+    const look = ()=> kept || (kept = powerSnapshot(net, appliances, p, rules, gridLive, minute, prevDrawing, seed, floats));
     const trip = (id, cause, snap)=>{
       setBreakerIn(p, id, breakerStateIn(p, id).on, true);
       trips.push({ id, cause, running: net.breakers[id].loads.filter(l=> snap.drawing[l]) });
+      kept = null;
     };
     const layers = consultedLayers(rules);
     const tripsOnOvercurrent = (id)=> !net.breakers[id].rcd;
@@ -7657,26 +7708,257 @@ x_sn_9 m_sn_sn_sn sn p
     });
     return Object.assign(look(), { power:p, trips });
   }
-  // The game's network, now: the last step's result, kept for render and for
-  // isPowered(). Runtime only, never saved. refreshPower() rebuilds it
-  // without a step, and without starting anything, on boot, restart and
-  // load; a switch or breaker changed from its device pop-up shows in the
-  // next step.
+  // POWER RUNS. Buildings share nothing but the grid, so each resolves on its
+  // own, and one nobody has touched needs no resolving at all: with no entry
+  // in the power state its breakers are closed, its switches at their rolled
+  // defaults and its heat nil, and with a full tank its pump never draws, so
+  // its look at any minute is a pure function of the seed, the rules, the
+  // grid and that minute. A run resolves, each step, only the buildings that
+  // are busy: an entry in the power state under one of its ids, a float
+  // that is not full, or default-on loads that could overload one of its
+  // breakers (untouchedTrippers()). Every other building is still, and its
+  // values are worked out when something reads them (powerRead()), from its
+  // own nodes, never from anything a step stored. Nothing is approximated: a still
+  // building's look is exactly what the whole network's resolver would give
+  // it, so the results are the same as resolving everything, trips and their
+  // order included (the busy buildings resolve as one network, in the
+  // network's own order).
+  //
+  // The index a run reads, built once per expanded network and its
+  // appliances, beside it (expandWiring()'s output is left as it is):
+  //   buildings  building ids, in the network's order; `order` { b: n }
+  //   of         { nodeId: buildingId }, for every board, panel, breaker
+  //              and load
+  //   sub        { buildingId: a network of that building's nodes alone }, of
+  //              expandWiring()'s shape (boards, panels, breakers, loads,
+  //              byLayer), in the network's order
+  //   roomLoads  { roomId: [loadId] }
+  //   memo       what the run keeps: busy sub-networks, the trippers and the
+  //              still looks, each a pure function of its keys
+  function powerIndex(net, appliances){
+    const idx = { net, appliances, buildings:[], order:{}, of:{}, sub:{}, roomLoads:{},
+      memo:{ subnets:new Map(), trippers:{}, still:{} } };
+    const subOf = (b)=>{
+      if(!idx.sub[b]){
+        idx.sub[b] = { boards:{}, panels:{}, breakers:{}, loads:{}, byLayer:{} };
+        BREAKER_LAYERS.forEach(layer=>{ idx.sub[b].byLayer[layer] = []; });
+        idx.order[b] = idx.buildings.length;
+        idx.buildings.push(b);
+      }
+      return idx.sub[b];
+    };
+    Object.values(net.boards).forEach(bd=>{ subOf(bd.building).boards[bd.id] = bd; idx.of[bd.id] = bd.building; });
+    Object.values(net.panels).forEach(pn=>{ subOf(pn.building).panels[pn.id] = pn; idx.of[pn.id] = pn.building; });
+    Object.values(net.breakers).forEach(br=>{
+      const b = idx.of[br.device];
+      subOf(b).breakers[br.id] = br;
+      idx.of[br.id] = b;
+    });
+    Object.values(net.loads).forEach(l=>{
+      const b = idx.of[l.panel];
+      subOf(b).loads[l.id] = l;
+      idx.of[l.id] = b;
+      if(l.room) (idx.roomLoads[l.room] = idx.roomLoads[l.room] || []).push(l.id);
+    });
+    BREAKER_LAYERS.forEach(layer=> (net.byLayer[layer] || []).forEach(id=> idx.sub[idx.of[id]].byLayer[layer].push(id)));
+    return idx;
+  }
+  // The power state of a building nobody has touched: no entries at all.
+  const UNTOUCHED_POWER = Object.freeze({ switches:Object.freeze({}), breakers:Object.freeze({}), heat:Object.freeze({}) });
+  // One network of the buildings `list` (in the index's order), in the
+  // network's order: one building's own, or a merge kept for the next step,
+  // since the busy set seldom changes.
+  function subnetOf(idx, list){
+    if(list.length === 1) return idx.sub[list[0]];
+    const key = list.join("\n");
+    let net = idx.memo.subnets.get(key);
+    if(net) return net;
+    net = { boards:{}, panels:{}, breakers:{}, loads:{}, byLayer:{} };
+    list.forEach(b=> ["boards", "panels", "breakers", "loads"].forEach(k=> Object.assign(net[k], idx.sub[b][k])));
+    BREAKER_LAYERS.forEach(layer=>{ net.byLayer[layer] = [].concat(...list.map(b=> idx.sub[b].byLayer[layer])); });
+    if(idx.memo.subnets.size >= 16) idx.memo.subnets.clear();
+    idx.memo.subnets.set(key, net);
+    return net;
+  }
+  // The buildings that could trip untouched, once per rules and seed: those
+  // with a consulted breaker that its default-on loads would overload if
+  // they all drew at once, each at the larger of its running and starting
+  // watts, as after the grid returns. Their sums are taken as
+  // resolvePowerStep() takes its own, over a superset of any loads that can
+  // be drawing, so a building not listed here cannot trip while untouched.
+  function untouchedTrippers(idx, rules, seed){
+    const key = rules + "|" + seed;
+    if(idx.memo.trippers[key]) return idx.memo.trippers[key];
+    const out = [];
+    const layers = consultedLayers(rules);
+    idx.buildings.forEach(b=>{
+      const s = idx.sub[b];
+      const on = (id)=>{
+        const a = idx.appliances[s.loads[id].appliance];
+        return !!a && switchOnIn(UNTOUCHED_POWER, seed, id, a);
+      };
+      const overloads = layers.some(layer=> s.byLayer[layer].some(id=>{
+        const br = s.breakers[id];
+        if(br.rcd) return false;
+        let run = 0, mom = 0;
+        br.loads.forEach(lid=>{
+          if(!on(lid)) return;
+          const a = idx.appliances[s.loads[lid].appliance];
+          run += a.watts;
+          mom += a.startWatts !== undefined ? Math.max(a.watts, a.startWatts) : a.watts;
+        });
+        const curve = BREAKER_CURVES[br.curve];
+        return (run / br.volts) / br.rating > 1 || !!(curve && mom / br.volts > curve.instant * br.rating);
+      }));
+      if(overloads) out.push(b);
+    });
+    return (idx.memo.trippers[key] = out);
+  }
+  // The busy buildings, in the index's order, for a power state and floats
+  // as a step starts. An entry under an id the network lacks is nobody's.
+  function busyBuildings(idx, power, rules, seed, floats){
+    const busy = new Set(untouchedTrippers(idx, rules, seed));
+    ["switches", "breakers", "heat"].forEach(k=> Object.keys(power[k] || {}).forEach(id=>{
+      const b = idx.of[id];
+      if(b !== undefined) busy.add(b);
+    }));
+    Object.keys(floats || {}).forEach(id=>{
+      const b = idx.of[id];
+      if(b !== undefined && floats[id] && !floats[id].full) busy.add(b);
+    });
+    return Array.from(busy).sort((x, y)=> idx.order[x] - idx.order[y]);
+  }
+  // What the next step needs of a run's result: which buildings were busy,
+  // what they drew, and enough to work out what a still one drew. `null` is
+  // no step before (nothing starts), and NOTHING_DREW a step before in which
+  // nothing drew (everything drawing starts: the dev seam's default).
+  const NOTHING_DREW = Object.freeze({ busy:new Set(), drawing:Object.freeze({}), nothing:true });
+  function priorOf(result){
+    if(!result || result === NOTHING_DREW) return result || null;
+    return { busy:result.busy, drawing:result.snap.drawing, rules:result.rules, seed:result.seed,
+      gridLive:result.gridLive, minute:result.minute };
+  }
+  // A still building's look, with nothing stored: its own nodes at the
+  // untouched power state, with no floats (every one of its tanks is full).
+  function stillLook(idx, b, rules, gridLive, minute, prevDrawing, seed){
+    return powerSnapshot(idx.sub[b], idx.appliances, UNTOUCHED_POWER, rules, gridLive, minute, prevDrawing, seed, null);
+  }
+  // What building `b` drew in the step before, from `prior` (priorOf()). A
+  // still building's drawing never depends on the step before its own: only
+  // a pump's does, and a still building's pump never draws.
+  function priorDrawing(idx, prior, b){
+    if(!prior) return null;
+    if(prior.nothing || prior.busy.has(b)) return prior.drawing;
+    return stillLook(idx, b, prior.rules, prior.gridLive, prior.minute, null, prior.seed).drawing;
+  }
+  // The step before's drawing, for the busy buildings `list`.
+  function priorDrawingFor(idx, prior, list){
+    if(!prior) return null;
+    if(prior.nothing || list.every(b=> prior.busy.has(b))) return prior.drawing;
+    const out = {};
+    list.forEach(b=>{
+      const d = priorDrawing(idx, prior, b);
+      Object.keys(idx.sub[b].loads).forEach(id=>{ if(d[id]) out[id] = true; });
+    });
+    return out;
+  }
+  function powerResult(idx, busy, snap, rules, gridLive, minute, prior, seed){
+    return { idx, busy:new Set(busy), snap, rules, gridLive, minute, prior, seed, lazy:{} };
+  }
+  // A look at the whole network, changing nothing, as powerSnapshot() gives
+  // one, read through powerRead(). `prev` is the result before it (a run's
+  // result, NOTHING_DREW or null), in the role powerSnapshot()'s prevDrawing
+  // plays.
+  function powerLook(idx, power, rules, gridLive, minute, prev, seed, floats){
+    const busy = busyBuildings(idx, power, rules, seed, floats);
+    const prior = priorOf(prev);
+    const snap = powerSnapshot(subnetOf(idx, busy), idx.appliances, power, rules, gridLive, minute,
+      priorDrawingFor(idx, prior, busy), seed, floats);
+    return powerResult(idx, busy, snap, rules, gridLive, minute, prior, seed);
+  }
+  // One step, as resolvePowerStep() takes one over the whole network: the
+  // look after it, plus `power` and `trips`.
+  function powerStep(idx, power, rules, gridLive, minute, dt, prev, seed, floats){
+    const busy = busyBuildings(idx, power, rules, seed, floats);
+    const prior = priorOf(prev);
+    const r = resolvePowerStep(subnetOf(idx, busy), idx.appliances, power, rules, gridLive, minute, dt,
+      priorDrawingFor(idx, prior, busy), seed, floats);
+    return Object.assign(powerResult(idx, busy, r, rules, gridLive, minute, prior, seed), { power:r.power, trips:r.trips });
+  }
+  // One value of a result: `field` is one of powerSnapshot()'s (live,
+  // supplied, powered, drawing, starting, running, momentary) and `id` a node
+  // of it. A still building's live, supplied and powered depend on the grid
+  // alone, so they are kept per rules, seed and grid; its drawing, starting,
+  // running and momentary are worked out once per result, when first read.
+  const STILL_FIELDS = ["live", "supplied", "powered"];
+  function powerRead(result, field, id){
+    const idx = result.idx, b = idx.of[id];
+    if(b === undefined) return undefined;
+    if(result.busy.has(b)) return result.snap[field][id];
+    if(STILL_FIELDS.includes(field)){
+      const key = result.rules + "|" + result.seed + "|" + !!result.gridLive;
+      if(!idx.memo.still[key]){
+        if(Object.keys(idx.memo.still).length >= 4) idx.memo.still = {};
+        idx.memo.still[key] = {};
+      }
+      const kept = idx.memo.still[key];
+      if(!kept[b]) kept[b] = stillLook(idx, b, result.rules, result.gridLive, 0, null, result.seed);
+      return kept[b][field][id];
+    }
+    if(!result.lazy[b]) result.lazy[b] = stillLook(idx, b, result.rules, result.gridLive, result.minute,
+      priorDrawing(idx, result.prior, b), result.seed);
+    return result.lazy[b][field][id];
+  }
+  // Every value of a result, as the whole network's powerSnapshot() would
+  // give them, in its key order. For the dev seam, which reports whole maps;
+  // the game reads through powerRead().
+  function powerFlat(result){
+    const net = result.idx.net, rd = (field, id)=> powerRead(result, field, id);
+    const out = { live:{}, supplied:{}, powered:{}, drawing:{}, starting:{}, running:{}, momentary:{} };
+    Object.values(net.boards).forEach(b=>{ out.live[b.id] = rd("live", b.id); });
+    Object.values(net.panels).forEach(p=>{
+      out.supplied[p.id] = rd("supplied", p.id);
+      out.live[p.id] = rd("live", p.id);
+      p.circuits.forEach(c=>{ out.live[c] = rd("live", c); });
+    });
+    Object.keys(net.loads).forEach(id=>{
+      out.powered[id] = rd("powered", id);
+      if(rd("drawing", id)) out.drawing[id] = true;
+      if(rd("starting", id)) out.starting[id] = true;
+    });
+    Object.keys(net.breakers).forEach(id=>{
+      out.running[id] = rd("running", id);
+      out.momentary[id] = rd("momentary", id);
+    });
+    return out;
+  }
+  // The game's run over its network, and the network now: the last step's
+  // result, kept for render and for isPowered(). Runtime only, never saved.
+  // refreshPower() rebuilds it without a step, and without starting
+  // anything, on boot, restart and load; a switch or breaker changed from its
+  // device pop-up shows in the next step.
+  const POWER_INDEX = powerIndex(POWER_NET, APPLIANCES);
   let powerNow = null;
   function refreshPower(){
-    powerNow = powerSnapshot(POWER_NET, APPLIANCES, state.power, state.electricalRules, gridUp(),
+    powerNow = powerLook(POWER_INDEX, state.power, state.electricalRules, gridUp(),
       minutesSinceCollapse(), null, state.seed, tankFloatsNow());
   }
-  // Resolved every step, from applyWorldTicking(), before anything reads it:
-  // the networks are tens of rooms, so there is no cache to keep honest. The
-  // floats are read as the step starts, before this step's refill.
+  // Resolved every step, from applyWorldTicking(), before anything reads it.
+  // A step costs the busy buildings, not the network: Lima's hundreds of
+  // wired homes sit still until someone touches one (POWER RUNS). What keeps
+  // that honest is that nothing is stored for a still building: its values
+  // are worked out from its own nodes when read, and the busy set is taken
+  // afresh from the power state and the floats at every step, so a building
+  // is resolved from the first step after anything touches it. The trippers
+  // are kept per rules and seed, the network being fixed. The floats are
+  // read as the step starts, before this step's refill.
   function stepPower(dt){
-    const prevDrawing = powerNow ? powerNow.drawing : null;
-    const r = resolvePowerStep(POWER_NET, APPLIANCES, state.power, state.electricalRules, gridUp(),
-      minutesSinceCollapse(), dt, prevDrawing, state.seed, tankFloatsNow());
+    const before = powerNow;
+    const r = powerStep(POWER_INDEX, state.power, state.electricalRules, gridUp(),
+      minutesSinceCollapse(), dt, before, state.seed, tankFloatsNow());
     state.power = r.power;
     powerNow = r;
-    logGridChange(dt, prevDrawing, r.drawing);
+    logGridChange(dt, before, r);
     logTrips(r.trips);
   }
   // What the player notices when something in their room stops or starts:
@@ -7691,7 +7973,7 @@ x_sn_9 m_sn_sn_sn sn p
   function logGridChange(dt, before, after){
     const now = minutesSinceCollapse(), up = gridUp(now);
     if(up === gridUp(now - dt)) return;
-    const drewHere = (drawing)=> !!drawing && Object.keys(drawing).some(id=> drawing[id] && POWER_NET.loads[id].room === state.currentRoom);
+    const drewHere = (r)=> !!r && (POWER_INDEX.roomLoads[state.currentRoom] || []).some(id=> powerRead(r, "drawing", id));
     if(!up && drewHere(before)) log(ROOM_GOES_QUIET, "warn");
     if(up && drewHere(after)) log("Something in here starts up again.");
   }
@@ -7711,15 +7993,18 @@ x_sn_9 m_sn_sn_sn sn p
   // Whether a load has power: its switch is on and its path is live.
   function isPowered(loadId){
     if(!powerNow) refreshPower();
-    return !!powerNow.powered[loadId];
+    return !!powerRead(powerNow, "powered", loadId);
   }
   // Whether a load has power on state.power as it stands, before the next
   // step resolves it: a hand on the load's own switch shows at once in the
   // load's own readout, where isPowered() and spoilage see it from the next
   // step, as they see a breaker. A fresh look, stored nowhere and starting
-  // nothing, so it is render-safe.
+  // nothing, so it is render-safe. Buildings share nothing but the grid, so
+  // the look is the load's own building's.
   function loadPoweredNow(loadId){
-    return !!powerSnapshot(POWER_NET, APPLIANCES, state.power, state.electricalRules, gridUp(),
+    const b = POWER_INDEX.of[loadId];
+    if(b === undefined) return false;
+    return !!powerSnapshot(POWER_INDEX.sub[b], APPLIANCES, state.power, state.electricalRules, gridUp(),
       minutesSinceCollapse(), null, state.seed, tankFloatsNow()).powered[loadId];
   }
   // What a meter reads, from the last step (powerNow). They add no rule to
@@ -7729,7 +8014,7 @@ x_sn_9 m_sn_sn_sn sn p
   function loadSupplyVolts(loadId){
     if(!powerNow) refreshPower();
     const l = POWER_NET.loads[loadId];
-    const live = state.electricalRules === "simplified" ? powerNow.live[l.panel] : powerNow.live[l.circuit];
+    const live = powerRead(powerNow, "live", state.electricalRules === "simplified" ? l.panel : l.circuit);
     return live ? POWER_NET.breakers[l.circuit].volts : 0;
   }
   //   A breaker's load side, at its volts: a circuit's own liveness, a panel
@@ -7738,10 +8023,10 @@ x_sn_9 m_sn_sn_sn sn p
   function breakerLoadSideVolts(id){
     if(!powerNow) refreshPower();
     const br = POWER_NET.breakers[id];
-    const live = br.layer === "circuit" ? powerNow.live[id]
-      : br.layer === "panel" ? powerNow.live[br.device]
-      : br.layer === "feeder" ? powerNow.supplied[Object.values(POWER_NET.panels).find(p=> p.feeder === id).id]
-      : powerNow.live[br.device];
+    const live = br.layer === "circuit" ? powerRead(powerNow, "live", id)
+      : br.layer === "panel" ? powerRead(powerNow, "live", br.device)
+      : br.layer === "feeder" ? powerRead(powerNow, "supplied", Object.values(POWER_NET.panels).find(p=> p.feeder === id).id)
+      : powerRead(powerNow, "live", br.device);
     return live ? br.volts : 0;
   }
   //   The current through a breaker, in amps: one conductor clamped at the
@@ -7749,7 +8034,7 @@ x_sn_9 m_sn_sn_sn sn p
   //   single-phase. A cycling load reads whatever it is doing this minute.
   function breakerCurrent(id){
     if(!powerNow) refreshPower();
-    return powerNow.running[id] || 0;
+    return powerRead(powerNow, "running", id) || 0;
   }
   // ==================================================
   // STAMINA / FATIGUE SYSTEM
@@ -9394,7 +9679,9 @@ x_sn_9 m_sn_sn_sn sn p
   // one row per step, { minute, running, momentary, heat, trips:[{ id,
   // cause }], powered, drawing:[loadId], starting:[loadId], tanks:{ loadId:
   // litres held } }, `minute` counting from 1, and the final power state and
-  // litres drawn. Call it as `ashfallDev.simulatePower({ wiring:{ … } }, 120)`.
+  // litres drawn. It steps as the game does (POWER RUNS), and reports the
+  // whole network each step (powerFlat()). Call it as
+  // `ashfallDev.simulatePower({ wiring:{ … } }, 120)`.
   function simulatePower(network, minutes = 60, options = {}){
     const nw = network || {};
     const net = expandWiring(nw.wiring, nw.templates || WIRING_TEMPLATES);
@@ -9413,7 +9700,8 @@ x_sn_9 m_sn_sn_sn sn p
       Object.keys(tankDefs).forEach(id=>{ out[id] = tankFloat(tankDefs[id].tankL, drawn[id]); });
       return out;
     };
-    let prev = options.running ? powerSnapshot(net, appliances, power, rules, grid(start), start, null, seed, floats()).drawing : {};
+    const idx = powerIndex(net, appliances);
+    let prev = options.running ? powerLook(idx, power, rules, grid(start), start, null, seed, floats()) : NOTHING_DREW;
     const script = options.script || {};
     const steps = [];
     for(let t = 0; t < minutes; t++){
@@ -9426,18 +9714,19 @@ x_sn_9 m_sn_sn_sn sn p
         else if("reset" in c) resetBreakerIn(power, c.reset);
       });
       const m = start + t + 1;
-      const r = resolvePowerStep(net, appliances, power, rules, grid(m), m, 1, prev, seed, floats());
+      const r = powerStep(idx, power, rules, grid(m), m, 1, prev, seed, floats());
       power = r.power;
-      prev = r.drawing;
+      prev = r;
+      const flat = powerFlat(r);
       Object.keys(tankDefs).forEach(id=>{
         const a = net.loads[id] && appliances[net.loads[id].appliance];
-        if(r.drawing[id] && mains(m) && a) drawn[id] = refilledDrawn(drawn[id], a.flowLph, 1);
+        if(flat.drawing[id] && mains(m) && a) drawn[id] = refilledDrawn(drawn[id], a.flowLph, 1);
       });
       const held = {};
       Object.keys(tankDefs).forEach(id=>{ held[id] = tankDefs[id].tankL - drawn[id]; });
-      steps.push({ minute:t + 1, running:r.running, momentary:r.momentary, heat:Object.assign({}, power.heat),
-        trips:r.trips.map(x=> ({ id:x.id, cause:x.cause })), powered:r.powered, drawing:Object.keys(r.drawing),
-        starting:Object.keys(r.starting), tanks:held });
+      steps.push({ minute:t + 1, running:flat.running, momentary:flat.momentary, heat:Object.assign({}, power.heat),
+        trips:r.trips.map(x=> ({ id:x.id, cause:x.cause })), powered:flat.powered, drawing:Object.keys(flat.drawing),
+        starting:Object.keys(flat.starting), tanks:held });
     }
     return { problems:net.problems, steps, power, tanks:drawn };
   }
@@ -11059,7 +11348,7 @@ x_sn_9 m_sn_sn_sn sn p
     return b.tripped ? "Tripped" : b.on ? "On" : "Off";
   }
   function deviceFedText(device){
-    const fed = device.kind === "board" ? gridUp() : !!(powerNow && powerNow.supplied[device.id]);
+    const fed = device.kind === "board" ? gridUp() : !!(powerNow && powerRead(powerNow, "supplied", device.id));
     return fed ? "Fed by the grid" : "No power";
   }
   // What the Here strip reads while a device's tab is selected: under
