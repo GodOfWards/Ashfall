@@ -12189,10 +12189,6 @@ x_sn_9 m_sn_sn_sn sn p
   // minute ("Timer: 0" when unset).
   function stoveOnText(room){ return room.heatActive ? "On" : "Off"; }
   function stoveTimerText(stove){ return "Timer: " + Math.ceil(stove.timerMinutes || 0); }
-  // A switchable load's readout, shared by its pop-up's status line and the
-  // Here strip: what shows with the door open, its light, and when that is
-  // dark, where its own switch sits. A hand on the switch resolves at once
-  // (changePower()), so it shows at once. Functional UI text, retunable.
   // An appliance's nameplate as the Electrical view prints it (POWER
   // SCHEMA). Functional UI text, retunable.
   function nameplateText(a){
@@ -12212,10 +12208,11 @@ x_sn_9 m_sn_sn_sn sn p
     if(target.breaker && hasTool("current-clamp")) out.push(make("Clamp", ()=> doMeterClamp(target.breaker), cost));
     return out;
   }
-  // A switchable load's readout, in its appliance's own words (`readout`,
-  // APPLIANCES): while it is powered, `idle` if it has one and isn't
-  // running (loadRunningNow()), else `on`; unpowered, `off` and its switch's
-  // position.
+  // A switchable load's readout, shared by its pop-up's status line, the
+  // Here strip and the Electrical view's circuit tab, in its appliance's own
+  // words (`readout`, APPLIANCES): while it is powered, `idle` if it has one
+  // and isn't running (loadRunningNow()), else `on`; unpowered, `off` and its
+  // switch's position. Functional UI text, retunable.
   function loadStatusText(loadId){
     const a = APPLIANCES[POWER_NET.loads[loadId].appliance];
     if(isPowered(loadId)) return a.readout.idle && !loadRunningNow(loadId) ? a.readout.idle : a.readout.on;
