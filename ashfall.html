@@ -5135,6 +5135,13 @@ x_sn_9 m_sn_sn_sn sn p
   // and never saved: the benchmark plays a fabricated town, so Save refuses
   // on this page (doSaveLocal()).
   const benchMode = new URLSearchParams(location.search).has("bench");
+  // Whether this is the replay page, opened with a `replay` query parameter
+  // (runReplay() in PERSISTENCE). Read once, at boot, UI-only and never
+  // saved, as benchMode is: the replay plays a scripted run, so Save refuses
+  // on this page too. While a replay step runs, `replayLog` collects every
+  // line log() is given, in order; null otherwise.
+  const replayMode = new URLSearchParams(location.search).has("replay");
+  let replayLog = null;
   let detailItem = null; // UI-only: { uid, side } — resolved fresh via findItemByUid(), safe against list mutation
   // What the device pop-up is open on, or null when it is closed:
   // { kind:"container", id }, a room fixture tagged `device`, or
@@ -5387,6 +5394,7 @@ x_sn_9 m_sn_sn_sn sn p
   // DOM-only and unserialized.
   const LOG_MAX_ENTRIES = 50;   // oldest lines are dropped past this
   function log(text, cls, key, outcome){
+    if(replayLog) replayLog.push(text);
     const logDiv = document.getElementById("log");
     const last = logDiv.lastElementChild;
     let p;
@@ -10120,16 +10128,200 @@ x_sn_9 m_sn_sn_sn sn p
       log("The benchmark failed: " + window.ashfallBenchResults.error, "warn");
     }
   }
+  // The replay (#372): a fixed scenario, played step by step through the
+  // game's own actions, on a page opened with `?replay` (replayMode). It runs
+  // after the boot's first paint, as the benchmark does, and leaves
+  // window.ashfallReplayResult = { version, seed, steps:[{ label, log,
+  // digest, problems }] }: the lines each step logged, in order
+  // (replayLog), the game state after it (replayDigest()), and what the
+  // consistency check found (replayProblems()). A throw leaves { error,
+  // steps } instead. .github/scripts/replay_compare.py loads it on two
+  // commits and reports every difference, which is how a change to the time
+  // loop proves what it changed. It writes game state throughout, so it is
+  // not on the dev seam, and Save refuses on its page (doSaveLocal()).
+  //   The scenario's rooms, items and figures are judgment calls, chosen for
+  // what each step exercises, and retunable; a retune changes every digest,
+  // so compare only commits that share them. REPLAY_SEED rolls something in
+  // the home's freezer, which step 2 needs. The run starts
+  // REPLAY_START_BEFORE_FAIL_MIN before the grid fails (doRestart()), so the
+  // failure falls in step 6 without a day of play before it; step 6 then
+  // advances to REPLAY_DRAW_BEFORE_FAIL_MIN before it. The tank is drawn
+  // to REPLAY_TANK_MARGIN_L above its float's start level in code and then
+  // below it by a real fill, and REPLAY_POT_FILLS more fills leave the pump
+  // refilling as the grid goes, and still called for when it comes back.
+  const REPLAY_SEED = 372;
+  const REPLAY_START_BEFORE_FAIL_MIN = 6 * 60;
+  const REPLAY_WALK = [HOME_STOP, "x_c117_c90b", "x_c117_c90", "x_c117_c90b", HOME_STOP];
+  const REPLAY_FIRE_MIN = 6.3;
+  const REPLAY_FIRE_AWAY = "x_c117_c90b";
+  const REPLAY_FIRE_MAX_MOVES = 50;
+  const REPLAY_RADIO_MIN = { carried:5.5, here:12.25, elsewhere:20.7 };
+  const REPLAY_RADIO_ELSEWHERE = "home_bedroom";
+  const REPLAY_RADIO_WAIT_MIN = 30;
+  const REPLAY_DRAW_BEFORE_FAIL_MIN = 8;
+  const REPLAY_TANK_MARGIN_L = 0.25;
+  const REPLAY_POT_FILLS = 200;
+  const REPLAY_SLEEP_ENERGY = 25;
+  const REPLAY_AFTER_SLEEP_MIN = 180;
+  // A move to the neighbouring room `to`, by the exit the player would take.
+  function replayMove(to){
+    const exit = getExitsForRoom(world[state.currentRoom], state.currentRoom).find(e=> e.to === to);
+    if(!exit) throw new Error(`replay: no exit from ${state.currentRoom} to ${to}`);
+    doMove(exit);
+  }
+  // A new item, put where the scenario wants it without an action: in `list`
+  // as addToList() puts it, returning the row it became.
+  function replayPlace(list, ref, fields){
+    return addToList(list, Object.assign(asNewlyMade(itemFromRegistry(ref)), fields || {}));
+  }
+  // The minutes on the player's clock (state.totalMinutes) at which the
+  // grid fails.
+  function replayFailClock(){ return POWER_FAILS_MIN - START_DAYS_AFTER_COLLAPSE * MINUTES_PER_DAY; }
+  const REPLAY_STEPS = [
+    { label:"A new game, and a walk at Walk", run(){
+      doRestart(REPLAY_SEED, replayFailClock() - REPLAY_START_BEFORE_FAIL_MIN);
+      doToggleLock("home-front");
+      REPLAY_WALK.forEach(replayMove);
+    } },
+    { label:"At home: the fridge and the freezer", run(){
+      replayMove("home_living");
+      replayMove("home_kitchen");
+      const room = world.home_kitchen;
+      const byId = (id)=> room.containers.find(c=> c.id === id);
+      doOpenContainer(room, byId("fridge"));
+      const leftovers = byId("fridge").items.findIndex(it=> it.itemId === "leftovers");
+      if(leftovers < 0) throw new Error("replay: the home fridge holds no leftovers");
+      doTake(leftovers);
+      doOpenContainer(room, byId("freezer"));
+      if(!byId("freezer").items.length) throw new Error(`replay: seed ${REPLAY_SEED} rolls nothing in the home freezer`);
+      doTake(0);
+      worldTab = "floor";
+      doStore(state.inventory.items.findIndex(it=> it.itemId === "leftovers"));
+    } },
+    { label:"Cooking on the stove, a timer, the wait, and a rest", run(){
+      const room = world.home_kitchen;
+      const stove = roomStove(room);
+      replayPlace(stove.items, { id:"fish", qty:1 });
+      const pot = itemFromRegistry({ id:"cooking_pot", qty:1 });
+      pot.water = { kind:"tainted" };
+      pot.contents = [asNewlyMade(itemFromRegistry({ id:"meat", qty:1 })), asNewlyMade(itemFromRegistry({ id:"vegetables", qty:1 }))];
+      addToList(stove.items, pot);
+      doLightStove();
+      doAddStoveTimer(10);
+      for(let n = 0; waitForCookingTarget(room); n++){
+        if(n > 20) throw new Error("replay: the cooking never finishes");
+        doWaitForCooking();
+      }
+      doRest();
+    } },
+    { label:"A campfire that burns out between moves", run(){
+      replayMove("home_living");
+      replayMove(HOME_STOP);
+      giveItem(itemFromRegistry({ id:"campfire_kit", qty:1 }));
+      giveItem(itemFromRegistry({ id:"box_of_matches", qty:1 }));
+      doBuildFire();
+      const room = world[HOME_STOP];
+      room.fireMinutesLeft = REPLAY_FIRE_MIN;
+      replayPlace(room.containers.find(c=> c.id === "campfire").items, { id:"fish", qty:1 });
+      for(let n = 0; room.heatActive; n++){
+        if(n >= REPLAY_FIRE_MAX_MOVES) throw new Error("replay: the campfire never goes out");
+        replayMove(REPLAY_FIRE_AWAY);
+        replayMove(HOME_STOP);
+      }
+    } },
+    { label:"Three radios run down", run(){
+      const radio = (list, minutes)=>{
+        const r = addToList(list, itemFromRegistry({ id:"portable_radio", qty:1 }));
+        r.durability.current = r.drainRate * minutes;
+        batteryActions(r).find(a=> a.label === "Turn on").onClick();
+      };
+      radio(state.inventory.items, REPLAY_RADIO_MIN.carried);
+      radio(world[state.currentRoom].floor, REPLAY_RADIO_MIN.here);
+      radio(world[REPLAY_RADIO_ELSEWHERE].floor, REPLAY_RADIO_MIN.elsewhere);
+      advanceTime(REPLAY_RADIO_WAIT_MIN);
+    } },
+    { label:"The tank drawn, the grid failing during a sleep, the siren, the recovery", run(){
+      replayMove("home_living");
+      replayMove("home_kitchen");
+      const wait = replayFailClock() - REPLAY_DRAW_BEFORE_FAIL_MIN - state.totalMinutes;
+      if(!(wait > 0)) throw new Error("replay: the grid has failed before step 6");
+      advanceTime(wait);
+      state.tankDrawn.home = BUILDING_INFO.home.tankL * (1 - TANK_FLOAT_START) - REPLAY_TANK_MARGIN_L;
+      invTab = "inventory";
+      const items = state.inventory.items;
+      const bottle = replayPlace(items, { id:"plastic_bottle", qty:1 });
+      const pot = replayPlace(items, { id:"cooking_pot", qty:1 });
+      doFillAtSink("inv", items.indexOf(bottle));
+      for(let n = 0; n < REPLAY_POT_FILLS; n++){
+        doFillAtSink("inv", items.indexOf(pot));
+        doPourOutWater(pot);
+      }
+      replayMove("home_living");
+      state.vitals.energy = REPLAY_SLEEP_ENERGY;
+      doSleep();
+      advanceTime(REPLAY_AFTER_SLEEP_MIN);
+    } },
+    { label:"A blackout", run(){
+      if(state.collapseCount) throw new Error("replay: a collapse came before step 7");
+      state.collapseCount = COLLAPSE_BLACKOUT_EVERY - 1;
+      state.vitals.energy = 0;
+      advanceTime(1);
+    } }
+  ];
+  // The game state after a step, as canonical JSON: `state`, and the rooms',
+  // doors' and windows' saved state (savedRoomState(), which holds every
+  // room's item lists), every object's keys sorted and every _uid left out,
+  // since a _uid is minted by looking.
+  function replayDigest(){
+    const canon = (v)=>{
+      if(Array.isArray(v)) return v.map(canon);
+      if(!v || typeof v !== "object") return v;
+      const out = {};
+      Object.keys(v).sort().forEach(k=>{ if(k !== "_uid" && v[k] !== undefined) out[k] = canon(v[k]); });
+      return out;
+    };
+    return JSON.stringify(canon({ state, rooms:savedRoomState(), doors:savedDoorState(), windows:savedWindowState() }));
+  }
+  // The consistency check, run after every step: what the time loop keeps
+  // for itself, set against a full scan of the world. A disagreement is a
+  // problem string, and fails the step. The per-minute loop keeps nothing.
+  function replayProblems(){ return []; }
+  function runReplay(){
+    const steps = [];
+    try{
+      REPLAY_STEPS.forEach(step=>{
+        replayLog = [];
+        try{ step.run(); }
+        finally{
+          const lines = replayLog;
+          replayLog = null;
+          steps.push({ label:step.label, log:lines, digest:null, problems:[] });
+        }
+        const last = steps[steps.length - 1];
+        last.digest = replayDigest();
+        last.problems = replayProblems();
+      });
+      render();
+      window.ashfallReplayResult = { version:GAME_CONFIG.VERSION, seed:REPLAY_SEED, steps };
+    }catch(e){
+      window.ashfallReplayResult = { error: String(e && e.stack || e), steps };
+      log("The replay failed: " + (e && e.message || e), "warn");
+    }
+  }
   // `seed` is optional: undefined starts a fresh world, a uint32 replays that
   // one (see seedFromInput()). Callers wired straight to a click must wrap
   // this in an arrow — a bare doRestart handler would receive the click event
-  // as its seed.
-  function doRestart(seed){
+  // as its seed. `totalMinutes`, also optional, starts the new run's clock
+  // there rather than at 0, before its world is aged and its network
+  // resolved, so the world is as old as the clock says: the replay page's
+  // way to begin near the grid's failure (runReplay()).
+  function doRestart(seed, totalMinutes){
     gameOver = false;
     // The rules Options chose for this run, read before the old run goes.
     const rules = nextElectricalRules();
     state = makeDefaultState(seed);
     state.electricalRules = rules;
+    if(totalMinutes !== undefined) state.totalMinutes = totalMinutes;
     nextRulesChoice = null;
     world = makeDefaultWorld();
     doors = buildDoors(null);
@@ -10156,7 +10348,7 @@ x_sn_9 m_sn_sn_sn sn p
     try{ localStorage.setItem(ELECTRICAL_VIEW_KEY, on ? "on" : "off"); }catch(e){ /* kept in memory only */ }
   }
   function doSaveLocal(){
-    if(benchMode){ log("The benchmark page doesn't save.", "warn"); return; }
+    if(benchMode || replayMode){ log(`The ${benchMode ? "benchmark" : "replay"} page doesn't save.`, "warn"); return; }
     try{ localStorage.setItem(SAVE_KEY, serializeGame()); log("Progress saved to this browser.", "sys", "save"); }
     catch(e){ log("Couldn't save to browser storage here — use Export instead.", "warn"); }
   }
@@ -12646,6 +12838,7 @@ x_sn_9 m_sn_sn_sn sn p
   // After the boot's first paint, so the bench page shows something while
   // the benchmark runs.
   if(benchMode) setTimeout(runBenchmark, 0);
+  if(replayMode) setTimeout(runReplay, 0);
 })();
 </script>
 </body>
