@@ -847,8 +847,8 @@
   //     (roomStove()).
   //   Optional: timerMinutes — a stove's wind-up timer, minutes left (absent
   //     = 0). It needs neither power nor a battery. Set from its device
-  //     pop-up, counted down by tickStoveTimers() whether or not the stove
-  //     is on or has power.
+  //     pop-up, run down by the scheduler (settleTimer()) whether or not
+  //     the stove is on or has power.
   //     Authored containers carry their tags in WORLD DATA. The campfire's
   //     container is created by doBuildFire(), which gives it `heat`.
   //   Optional (spawn pools — see SPAWN_POOLS below):
@@ -6865,14 +6865,14 @@ x_sn_9 m_sn_sn_sn sn p
     // but baseline awake Energy consumption still applies and Rest does not
     // restore Energy itself.
     let remaining = REST_DURATION_MIN;
+    planNextDue();
     while(remaining > 1e-9){
       const dt = Math.min(1, remaining);
-      state.totalMinutes += dt;
-      applyHungerThirst(dt);
-      applyWorldTicking(dt);
+      clockStep(dt);
       recoveryStep(dt, "rest");
       remaining -= dt;
     }
+    settleToNow();
     checkGameOver();
     log("You take an hour to rest and catch your breath.", null, "rest");
     render();
@@ -6890,19 +6890,19 @@ x_sn_9 m_sn_sn_sn sn p
     let remaining = planned;
     asleep = true;
     wokenUp = false;
+    planNextDue();
     try {
       while(remaining > 1e-9 && !wokenUp){
         const dt = Math.min(1, remaining);
-        state.totalMinutes += dt;
-        applyHungerThirst(dt);
-        applyWorldTicking(dt);
+        clockStep(dt);
         state.vitals.energy = Math.min(ceiling, state.vitals.energy + SLEEP_ENERGY_RATE*dt);
         remaining -= dt;
       }
     } finally {
       asleep = false;
     }
-    // Woken before the sleep was done (fireClockEvents()): Energy keeps what
+    settleToNow();
+    // Woken before the sleep was done (a waking clock event): Energy keeps what
     // it gained, Fatigue drops by the share of the sleep taken, and no
     // cooldown starts, so Sleep is offered again at once. The waking event's
     // own line is the record. A waking event in the last step leaves the
@@ -7410,24 +7410,28 @@ x_sn_9 m_sn_sn_sn sn p
       asleep: "A siren wakes you. It's close by, and after a while it stops. Nothing follows it." }
   };
   // Events on the collapse clock: { at, wakes, line(roomId, asleep) }. Each
-  // fires once, in the step whose interval crosses `at` (minutes since the
-  // collapse), in every time loop, since all of them run
-  // applyWorldTicking(). Derived, never stored: a save from before one hears
-  // it again. One marked `wakes` ends a sleep (doSleep()) or a blackout
-  // (advanceTime()); `line` is told whether the player is asleep, a blackout
-  // included, and so being woken.
+  // fires once, at its minute `at` (minutes since the collapse), as a
+  // scheduled event (fireClockEvents()), in every time loop. Derived, never
+  // stored: a save from before one hears it again. One marked `wakes` ends a
+  // sleep (doSleep()) or a blackout (advanceTime()) after the step it fires
+  // in; `line` is told whether the player is asleep, a blackout included,
+  // and so being woken.
   const CLOCK_EVENTS = [
     { at: POWER_FAILS_MIN + SIREN_AFTER_FAIL_MIN, wakes: true,
       line: (roomId, sleeping)=> SIREN_LINES[sirenPlace(roomId)][sleeping ? "asleep" : "awake"] }
   ];
-  function fireClockEvents(dt){
-    const now = minutesSinceCollapse(), before = now - dt;
+  // Fires every CLOCK_EVENTS entry not yet fired whose minute is `m` or
+  // before (lastClock < at ≤ m), then marks the clock fired up to `m`.
+  function fireClockEvents(m){
     CLOCK_EVENTS.forEach(ev=>{
-      if(!(before < ev.at && now >= ev.at)) return;
+      if(!(lastClock < ev.at && ev.at <= m)) return;
       log(ev.line(state.currentRoom, asleep), "warn");
       if(ev.wakes && asleep) wokenUp = true;
     });
+    lastClock = Math.max(lastClock, m);
   }
+  // The world work still done every step, before the step's due events
+  // (clockStep()).
   // A device drains wherever it is: carried, stowed in a bag, or left switched
   // on anywhere in the world. Where it is decides only who hears it die: a
   // carried one is "your", one in the room you are in is "the", and one
@@ -7451,22 +7455,120 @@ x_sn_9 m_sn_sn_sn sn p
         }
       });
     });
-    tickStoveTimers(min);
-    for(const id of roomIds()){
-      const r = world[id];
-      if(!r.heatActive) continue;
-      // Before the fire burns down, so a step the heat was on for counts.
-      cookInHeat(r, min);
-      if(r.heatActive && r.fireMinutesLeft != null){
-        r.fireMinutesLeft -= min;
-        if(r.fireMinutesLeft <= 0){
-          r.heatActive = false;
-          r.fireMinutesLeft = null;
-          if(id === state.currentRoom) log("The fire burns down and goes out.", "warn");
-        }
+  }
+  // THE CLOCK AND THE SCHEDULER (#372). Time moves in steps of at most a
+  // minute (runAwakeStep(), doRest(), doSleep()), and clockStep() is the one
+  // step: the player's vitals, the world work still done every step
+  // (applyWorldTicking()), then whatever is due (processDueEvents()). The
+  // rest of what changes with time is scheduled: it is brought up to a
+  // minute only when that minute is asked for (settleWorld()), and the next
+  // thing it will do on its own (a stove timer running down, cooking
+  // finishing, a fire going out, a CLOCK_EVENTS entry) is kept as the next
+  // due minute, so a step with nothing due does no scheduled work at all.
+  // The model is docs/systems/time.md's.
+  //   settledAt  the minute since the collapse the scheduled systems stand
+  //              at. Every advance of time ends by settling to now, so
+  //              between two advances it is now.
+  //   lastClock  the minute since the collapse CLOCK_EVENTS have been fired
+  //              up to.
+  //   nextDue    the least of every scheduled system's next event: planned
+  //              at the start of every advance, since an action may have
+  //              changed anything since the last one, and after every event.
+  // The runtime lists are the rooms whose heat is on (heatRooms) and the
+  // stoves whose timer runs (timerStoves), each a set walked in world order
+  // (roomOrder()). Every writer of heatActive or timerMinutes keeps them
+  // (scheduleHeat(), scheduleTimer()). All of it is runtime only, never
+  // saved: rebuildSchedule() scans the world for it on a new game, restart
+  // and load.
+  let settledAt = 0, lastClock = 0, nextDue = Infinity;
+  const heatRooms = new Set();
+  const timerStoves = new Map();
+  // A room's place in world order (roomIds()), from an index built once per
+  // world, so a list kept as a set can be walked in that order.
+  let roomOrderWorld = null, roomOrderIndex = new Map();
+  function roomOrder(id){
+    if(roomOrderWorld !== world){ roomOrderWorld = world; roomOrderIndex = new Map(roomIds().map((r, i)=> [r, i])); }
+    return roomOrderIndex.get(id);
+  }
+  // A room's heat, or a stove's timer, just written: listed while it is on,
+  // or running, and dropped once it isn't.
+  function scheduleHeat(roomId){
+    if(world[roomId] && world[roomId].heatActive) heatRooms.add(roomId);
+    else heatRooms.delete(roomId);
+  }
+  function scheduleTimer(roomId, container){
+    const key = roomId + KEY_SEP + container.id;
+    if(container.timerMinutes > 0) timerStoves.set(key, { roomId, container });
+    else timerStoves.delete(key);
+  }
+  function heatRoomsInOrder(){ return Array.from(heatRooms).sort((a, b)=> roomOrder(a) - roomOrder(b)); }
+  function timersInOrder(){
+    return Array.from(timerStoves.values()).sort((a, b)=> roomOrder(a.roomId) - roomOrder(b.roomId)
+      || world[a.roomId].containers.indexOf(a.container) - world[b.roomId].containers.indexOf(b.container));
+  }
+  // The runtime lists from one scan of the world, and the schedule settled
+  // at now: on a new game, restart and load, and after the benchmark's setup.
+  function rebuildSchedule(){
+    heatRooms.clear();
+    timerStoves.clear();
+    roomIds().forEach(id=>{
+      scheduleHeat(id);
+      world[id].containers.forEach(c=> scheduleTimer(id, c));
+    });
+    settledAt = lastClock = minutesSinceCollapse();
+    planNextDue();
+  }
+  // The next due minute, from what is lit or running now: a timer's end, a
+  // lit room's next event (heatRoomDue()), and every clock event not yet
+  // fired.
+  function planNextDue(){
+    let due = Infinity;
+    timerStoves.forEach(({ container })=>{ due = Math.min(due, settledAt + container.timerMinutes); });
+    heatRooms.forEach(id=>{ due = Math.min(due, settledAt + heatRoomDue(world[id])); });
+    CLOCK_EVENTS.forEach(ev=>{ if(ev.at > lastClock) due = Math.min(due, ev.at); });
+    nextDue = due;
+  }
+  // Brings the scheduled systems to minute `m`: every running timer, in
+  // world order, then every lit room, its cooking and then its fire
+  // (settleTimer(), settleHeat()), each by the span since settledAt. It
+  // never runs past an event nobody has processed, since it is only ever
+  // asked for the next due minute or for now, and TICK_EPSILON absorbs the
+  // float left over. A span of 0 still finishes what is due at `m`.
+  function settleWorld(m){
+    const span = Math.max(0, m - settledAt);
+    settledAt = Math.max(settledAt, m);
+    timersInOrder().forEach(({ roomId, container })=> settleTimer(roomId, container, span));
+    heatRoomsInOrder().forEach(id=> settleHeat(id, span));
+  }
+  // What an advance of time ends with: the world settled to now.
+  function settleToNow(){ settleWorld(minutesSinceCollapse()); }
+  // Every event due by now, each at its own minute and in time order: the
+  // world settled to it, which does what is due there and logs it, then the
+  // clock events up to it. At one minute the order is timers, cooking,
+  // fires, clock events. The cap guards against an event that never clears,
+  // which would otherwise hang the step: a bug, reported and cut short.
+  const SCHEDULER_MAX_EVENTS_PER_STEP = 1000;
+  function processDueEvents(){
+    const now = minutesSinceCollapse();
+    for(let n = 0; nextDue <= now + TICK_EPSILON; n++){
+      if(n >= SCHEDULER_MAX_EVENTS_PER_STEP){
+        console.warn(`processDueEvents: more than ${SCHEDULER_MAX_EVENTS_PER_STEP} events due at minute ${nextDue}; the rest wait`);
+        return;
       }
+      const m = nextDue;
+      settleWorld(m);
+      fireClockEvents(m);
+      planNextDue();
     }
-    fireClockEvents(min);
+  }
+  // The one step of time, `dt` minutes of at most one: the clock, Hunger
+  // and Thirst, the world work still done every step, then what is due. Its
+  // caller adds its own vitals piece after it, and its own stop condition.
+  function clockStep(dt){
+    state.totalMinutes += dt;
+    applyHungerThirst(dt);
+    applyWorldTicking(dt);
+    processDueEvents();
   }
   function applyEnergyBaseline(min, multiplier){
     state.vitals.energy = clamp(state.vitals.energy - DECAY.energy*min*multiplier);
@@ -8363,9 +8465,7 @@ x_sn_9 m_sn_sn_sn sn p
     let remaining = min;
     while(remaining > 1e-9 && !(untilWoken && wokenUp)){
       const dt = Math.min(1, remaining);
-      state.totalMinutes += dt;
-      applyHungerThirst(dt);
-      applyWorldTicking(dt);
+      clockStep(dt);
       recoveryStep(dt, "normal");
       remaining -= dt;
     }
@@ -8386,6 +8486,7 @@ x_sn_9 m_sn_sn_sn sn p
   const COLLAPSE_STUMBLE_MIN = 20;
   const COLLAPSE_STUMBLE_ENERGY = 30;     // Energy added, not set
   function advanceTime(min){
+    planNextDue();
     runAwakeStep(min);
     if(state.vitals.energy <= 0){
       state.collapseCount += 1;
@@ -8413,6 +8514,7 @@ x_sn_9 m_sn_sn_sn sn p
         runAwakeStep(COLLAPSE_STUMBLE_MIN); state.vitals.energy = clamp(state.vitals.energy + COLLAPSE_STUMBLE_ENERGY);
       }
     }
+    settleToNow();
     checkGameOver();
   }
   // ==================================================
@@ -8580,6 +8682,7 @@ x_sn_9 m_sn_sn_sn sn p
     if(!how) return;
     if(how === "hand" && !hasTool("heat")) consumeMatchUse();
     room.heatActive = true;
+    scheduleHeat(state.currentRoom);
     advanceTime(LIGHT_STOVE_MIN);
     log(how === "self" ? "You light the stove." : "You light a burner by hand.", "good");
     render();
@@ -8610,6 +8713,7 @@ x_sn_9 m_sn_sn_sn sn p
     }
     ensureHeatContainer(room, "campfire", "Campfire", HEAT_CONTAINER_CAPACITY_KG, ["heat"]);
     room.heatActive = true;
+    scheduleHeat(state.currentRoom);
     advanceTime(BUILD_FIRE_MIN);
     log(firstTime ? "You set up the campfire kit and get a fire going."
       : (banked ? "You relight the fire from what's left of the wood." : "You get a fire going."), "good");
@@ -8626,6 +8730,7 @@ x_sn_9 m_sn_sn_sn sn p
   function doExtinguish(){
     const room = world[state.currentRoom];
     room.heatActive = false;
+    scheduleHeat(state.currentRoom);
     log("You put it out.");
     render();
   }
@@ -8659,11 +8764,14 @@ x_sn_9 m_sn_sn_sn sn p
   function roomStove(room){
     return room.containers.find(c=> hasTag(c, "device") && hasTag(c, "heat")) || null;
   }
-  // Cooking is passive: nothing is cooked by a button. Every tick the heat
-  // is on, each raw cookable row lying directly in the room's heat
+  // Cooking is passive: nothing is cooked by a button. For as long as the
+  // heat is on, each raw cookable row lying directly in the room's heat
   // containers — or in a vessel there — gains `cookMinutes`, and at its
   // entry's `cooks.minutes` it turns Cooked, drops its progress and folds
-  // into any matching cooked row.
+  // into any matching cooked row. It is settled, not ticked: a lit room's
+  // cooking is brought up to a minute when that minute is asked for
+  // (settleHeat()), and each completion is a scheduled event at its own
+  // minute (soonestIn(), heatRoomDue()).
   // The counter stops there in this release; burning (#179) will extend it.
   // Progress lives on the item, so it holds when the heat stops, and an item
   // taken out and put back continues from where it was. Nothing is logged,
@@ -8673,13 +8781,38 @@ x_sn_9 m_sn_sn_sn sn p
   // fractional minutes, so a wait of exactly the remaining time finishes the
   // cooking, or runs a timer down, that it was sized for.
   const TICK_EPSILON = 1e-9;
+  // Every container of a room tagged `heat`, in the room's order: a stove's
+  // or a campfire's.
+  function heatContainersOf(room){ return room.containers.filter(c=> hasTag(c, "heat")); }
+  // `dt` minutes of a lit room's cooking, everything in its heat containers.
   function cookInHeat(room, dt){
-    room.containers.filter(c=> hasTag(c, "heat")).forEach(c=>{
+    heatContainersOf(room).forEach(c=>{
       c.items.slice().forEach(it=>{
-        if(vesselDefOf(it)) cookVessel(it, dt);
+        if(vesselDefOf(it)) settleVessel(it, dt);
         else cookItem(c.items, it, dt);
       });
     });
+  }
+  // A lit room settled by `span` minutes (settleWorld()): its cooking, then
+  // its fire, whose last minute still cooks. A fire that runs out goes out
+  // at its own minute, said where the player is.
+  function settleHeat(roomId, span){
+    const r = world[roomId];
+    cookInHeat(r, span);
+    if(r.fireMinutesLeft == null) return;
+    r.fireMinutesLeft -= span;
+    if(r.fireMinutesLeft > TICK_EPSILON) return;
+    r.heatActive = false;
+    r.fireMinutesLeft = null;
+    scheduleHeat(roomId);
+    if(roomId === state.currentRoom) log("The fire burns down and goes out.", "warn");
+  }
+  // Minutes from settledAt to a lit room's next event: its fire going out,
+  // or the soonest cooking to finish in any of its heat containers.
+  function heatRoomDue(room){
+    const next = soonestIn(heatContainersOf(room));
+    const cooking = next ? next.remaining : Infinity;
+    return room.fireMinutesLeft != null ? Math.min(cooking, room.fireMinutesLeft) : cooking;
   }
   function cookItem(list, it, dt){
     if(cookStateOf(it) !== "raw") return;
@@ -8829,38 +8962,48 @@ x_sn_9 m_sn_sn_sn sn p
     delete v.water;
     delete v.boilMinutes;
   }
-  // One tick of a vessel in a lit heat container. Tainted water boils:
-  // BOIL_MINUTES make it clean, and the count holds when the heat stops. Then
-  // a vessel still without a dish forms one if its contents now match a
-  // template. Then whatever it holds cooks: the dish, or, when nothing
-  // matched, each ingredient by its own `cooks`. Nothing is logged.
-  function cookVessel(v, dt){
+  // `span` minutes of a vessel in a lit heat container, in order:
+  //   1. With no dish, it forms one if its contents and water already make
+  //      one (formDish()).
+  //   2. Still without one, tainted water boils: BOIL_MINUTES make it clean,
+  //      and the count holds when the heat stops. Water that comes clean
+  //      forms the dish it now makes, and the settle stops there: the dish
+  //      cooks from the next span, since the boiling finishing is an event
+  //      and the span ends at it.
+  //   3. Whatever it holds cooks by the span: the dish, or, when nothing
+  //      matched, each ingredient by its own `cooks`.
+  // Nothing is logged.
+  function settleVessel(v, span){
     if(!dishIn(v)){
-      if(waterKindOf(v) === "tainted"){
-        v.boilMinutes = (v.boilMinutes || 0) + dt;
-        if(v.boilMinutes >= BOIL_MINUTES - TICK_EPSILON){ v.water.kind = "clean"; delete v.boilMinutes; }
+      const ready = matchingTemplate(v);
+      if(ready) formDish(v, ready);
+    }
+    if(!dishIn(v) && waterKindOf(v) === "tainted"){
+      v.boilMinutes = (v.boilMinutes || 0) + span;
+      if(v.boilMinutes >= BOIL_MINUTES - TICK_EPSILON){
+        v.water.kind = "clean";
+        delete v.boilMinutes;
+        const t = matchingTemplate(v);
+        if(t){ formDish(v, t); return; }
       }
-      const t = matchingTemplate(v);
-      if(t) formDish(v, t);
     }
     const list = v.contents || [];
-    list.slice().forEach(it=> cookItem(list, it, dt));
+    list.slice().forEach(it=> cookItem(list, it, span));
   }
-  // What the room's heat is cooking that will finish soonest: { name,
-  // remaining, water } for whatever has the least time left among everything
-  // still progressing in its heat container — a raw cookable item, a vessel's
-  // raw dish, one that will form, the ingredients cooking alone in a vessel
-  // no dish matches, or tainted water boiling (`water` true) — or null when
-  // nothing is.
-  function soonestCooking(room){
-    const heat = getHeatContainer(room);
-    if(!heat) return null;
+  // What the heat containers `containers` are cooking that will finish
+  // soonest: { name, remaining, water } for whatever has the least time left
+  // among everything still progressing in them — a raw cookable item, a
+  // vessel's raw dish, one that will form, the ingredients cooking alone in a
+  // vessel no dish matches, or tainted water boiling (`water` true) — or null
+  // when nothing is. On a tie, the first found. The scheduler reads it over
+  // a room's every heat container (heatRoomDue()).
+  function soonestIn(containers){
     let best = null;
     const consider = (name, remaining, water)=>{
       if(!best || remaining < best.remaining) best = { name, remaining, water:!!water };
     };
     const rawRows = (list)=> list.forEach(it=>{ if(cookStateOf(it) === "raw") consider(it.name.toLowerCase(), cookRemaining(it)); });
-    heat.items.forEach(it=>{
+    containers.forEach(heat=> heat.items.forEach(it=>{
       if(!vesselDefOf(it)){ rawRows([it]); return; }
       const dish = dishIn(it);
       if(dish){ rawRows([dish]); return; }
@@ -8870,8 +9013,14 @@ x_sn_9 m_sn_sn_sn sn p
         const water = t.water ? vesselDefOf(it).waterKg : 0;
         consider(buildDish(t, it.contents || [], water).name.toLowerCase(), cookMinutesOf({ itemId:t.item }));
       } else rawRows(it.contents || []);
-    });
+    }));
     return best;
+  }
+  // What the room's heat container is cooking that will finish soonest
+  // (soonestIn()), or null: the Wait button's target.
+  function soonestCooking(room){
+    const heat = getHeatContainer(room);
+    return heat ? soonestIn([heat]) : null;
   }
   // Whether the Wait can be offered: the heat is on, something is cooking,
   // and the heat will outlast it — always for a stove, which never runs out,
@@ -8897,24 +9046,21 @@ x_sn_9 m_sn_sn_sn sn p
     const stove = roomStove(world[state.currentRoom]);
     if(!stove) return;
     stove.timerMinutes = (stove.timerMinutes || 0) + minutes;
+    scheduleTimer(state.currentRoom, stove);
     // Silent: the timer readout shows the new time.
     render();
   }
-  function tickStoveTimers(dt){
+  // A running timer settled by `span` minutes (settleWorld()). Its running
+  // down is a scheduled event at its own minute.
+  function settleTimer(roomId, c, span){
+    c.timerMinutes -= span;
+    if(c.timerMinutes > TICK_EPSILON) return;
+    c.timerMinutes = 0;
+    scheduleTimer(roomId, c);
+    // Heard anywhere in the same building, by id: every generated home is
+    // called "House".
     const here = world[state.currentRoom];
-    // Plain loops: this runs every minute over every room in town.
-    for(const id of roomIds()){
-      const room = world[id];
-      for(const c of room.containers){
-        if(!(c.timerMinutes > 0)) continue;
-        c.timerMinutes -= dt;
-        if(c.timerMinutes > TICK_EPSILON) continue;
-        c.timerMinutes = 0;
-        // Heard anywhere in the same building, by id: every generated home
-        // is called "House".
-        if(here.buildingId && here.buildingId === room.buildingId) log("You hear the ringing sound of the timer.");
-      }
-    }
+    if(here.buildingId && here.buildingId === world[roomId].buildingId) log("You hear the ringing sound of the timer.");
   }
   // Waits out the soonest-finishing item. Not interruptible (#212). The log
   // line's wording is retunable.
@@ -8986,7 +9132,7 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // What a room's saved state is made of: the fields play writes on a room
   // (every write site: doSearch(), doBreakCar(), FIRE / COOKING, the fire's
-  // burn-down in applyWorldTicking(), doChopTree(), every take and drop), and
+  // burn-down in settleHeat(), doChopTree(), every take and drop), and
   // on a container, in `containers` and `carContainers` alike
   // (doOpenContainer(), doUnlockContainer(), the stove timer). Everything
   // else on a room is definition, rebuilt on every load.
@@ -9376,6 +9522,7 @@ x_sn_9 m_sn_sn_sn sn p
     backfillIllnessScale();
     backfillInventoryCap();
     migrateCookingRelease();
+    rebuildSchedule();
     render();
     return true;
   }
@@ -10073,6 +10220,9 @@ x_sn_9 m_sn_sn_sn sn p
     state.vitals.energy = BENCH_ENERGY;
     state.vitals.fatigue = BENCH_FATIGUE;
     refreshPower();
+    // The clock was set, and heat and timers written, by hand: the schedule
+    // is rebuilt from them, as a new game's is.
+    rebuildSchedule();
     return { buildings:touched.length, rowsRolled };
   }
   // One timing: BENCH_WARMUP_RUNS runs, discarded, then BENCH_RUNS measured,
@@ -10284,8 +10434,28 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // The consistency check, run after every step: what the time loop keeps
   // for itself, set against a full scan of the world. A disagreement is a
-  // problem string, and fails the step. The per-minute loop keeps nothing.
-  function replayProblems(){ return []; }
+  // problem string, and fails the step. It catches a writer that forgot to
+  // keep a list (scheduleHeat(), scheduleTimer()): the rooms whose heat is
+  // on and the stoves whose timer runs, against heatRooms and timerStoves;
+  // and a settle that was missed: settledAt, against now.
+  function replayProblems(){
+    const problems = [];
+    const heat = new Set(), timers = new Map();
+    roomIds().forEach(id=>{
+      if(world[id].heatActive) heat.add(id);
+      world[id].containers.forEach(c=>{ if(c.timerMinutes > 0) timers.set(id + KEY_SEP + c.id, c); });
+    });
+    heat.forEach(id=>{ if(!heatRooms.has(id)) problems.push(`heat on in ${id}, which heatRooms lacks`); });
+    heatRooms.forEach(id=>{ if(!heat.has(id)) problems.push(`heatRooms lists ${id}, whose heat is off`); });
+    timers.forEach((c, key)=>{
+      const kept = timerStoves.get(key);
+      if(!kept || kept.container !== c) problems.push(`a timer runs at ${key.replace(KEY_SEP, "/")}, which timerStoves lacks`);
+    });
+    timerStoves.forEach((t, key)=>{ if(!timers.has(key)) problems.push(`timerStoves lists ${key.replace(KEY_SEP, "/")}, which runs no timer`); });
+    if(Math.abs(settledAt - minutesSinceCollapse()) > TICK_EPSILON)
+      problems.push(`settled at minute ${settledAt}, but it is minute ${minutesSinceCollapse()}`);
+    return problems;
+  }
   function runReplay(){
     const steps = [];
     try{
@@ -10328,6 +10498,7 @@ x_sn_9 m_sn_sn_sn sn p
     windows = buildWindows(null);
     refreshPower();
     stampMissingAges();
+    rebuildSchedule();
     detailItem = null;
     deviceTarget = null;
     invTab = "inventory";
@@ -12821,6 +12992,7 @@ x_sn_9 m_sn_sn_sn sn p
   // state exists, and its network resolved.
   refreshPower();
   stampMissingAges();
+  rebuildSchedule();
   log("You wake up at home. Everything's exactly where you left it — for now.");
   mapSetZoomSpan(mapZoomSpan);
   render();
