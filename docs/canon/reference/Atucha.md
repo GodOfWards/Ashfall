@@ -253,11 +253,110 @@ These are not exclusive: case 3 happens alongside 1 or 2 unless someone keeps
 the pool cooled. **Which happened is Tom's decision in the canon** (#329). The
 game only shows what the road shows.
 
+## The people who run it, and the plant in a pandemic (2026-09-30)
+
+Researched for the Atucha part of the lore session (#329). **Primary** where
+marked: the ARN's 9th (2022) and 10th (2025) national reports to the
+Convention on Nuclear Safety, cited above, read in full text 2026-09-30.
+
+- **The control room: five people, three shifts.** "The five people in the
+  control room" of Atucha I and II, divided into three shifts; the roles are
+  a turbine operator, a reactor operator, a supervisor and a shift leader
+  (*jefe de turno*), who answers for everything in the room. Secondary,
+  2026-09-30:
+  [Mining Press, 2022-04-18](https://miningpress.com/nota/346454/como-es-atucha-i-y-ii-por-dentro-seguridad-produccion-y-plan-de-ampliacion-con-china).
+  The licensed minimum per shift is unconfirmed.
+- **What Atucha did in 2020 (primary, 9th report, 3.6.5):** "a
+  reorganization of **minimal shifts of operation along with sanitary
+  protection for 14 days**, a strict control over the workplace hygiene,
+  and the adoption of **exclusive means of transportation for the
+  operation personnel**". Outages followed a guide of extra
+  recommendations. The national lockdown decree required "minimum teams"
+  for power generation, oil, gas and fuel (3.8.8). The nuclear emergency
+  response system **stayed active throughout** (3.16.8). Atucha still had
+  COVID-19 cases in December 2020 (above, via `Grid_AR.md`).
+- **Elsewhere in 2020 (for comparison):** US regulators allowed nuclear
+  crews up to 86 hours a week and **12-hour shifts for up to 14 days in a
+  row**; plants explored **sequestering crews on site**, "fed and bunked
+  down at the plants"; and the NRC warned it **could order a plant shut down
+  if it couldn't staff it**. Pre-pandemic plans assumed reduced staffing
+  for about four to six weeks. Secondary, 2026-09-30:
+  [PBS NewsHour, 2020-04-02](https://www.pbs.org/newshour/nation/u-s-allowing-longer-shifts-at-nuclear-plants-in-pandemic),
+  [NEI Pandemic Licensing Plan, 2007](https://www.nrc.gov/docs/ML0704/ML070470653.pdf)
+  (search summary).
+- **NA-SA's workforce shrank 4.47 % from 2022 to 2025**, technicians 7.47 %
+  (10th report, 11.3.2; primary).
+
+### Control rooms built to be lived in
+
+- **Atucha II has a main and an auxiliary control room.** Its Operating
+  Manual carries "Control Room Habitability" actions "to ensure the **long
+  term habitability** of the Control Room in case of release of radioactive
+  material or smoke presence in outdoor air". The design was verified in
+  2016; testing the **tightness of the rooms' envelope** was under way in
+  2025 (envelope defined and ventilation modes evaluated; acceptance
+  criteria and improvements in progress). 10th report; primary. Whether it
+  filters the air as US plants do (`Grid_AR.md`) isn't stated.
+- **Atucha I has a temporary emergency control room** in its Secondary Heat
+  Sink building, from which operators can shut the plant down and keep it
+  safe if the main control room becomes uninhabitable "due to toxic and / or
+  corrosive gases, release of radioactive materials or sabotage"
+  (instruction T-42). 9th report; primary.
+
+### Holding out without the grid
+
+- **The extreme-event procedures cover "at least the initial 72 hours"**
+  of the systems needed (9th report; primary). For a station blackout:
+  manual injection from the secondary heat sink, and isolating the boron
+  system before the **24 V DC batteries run down**; topping up the heat
+  sink's feed water tanks, and **replacing pool water with groundwater**
+  using a potable-water pump.
+- **Atucha II's post-Fukushima improvements** include: **increasing the
+  diesels' autonomy**, an alternative cooling mode for them, **extending
+  the batteries' availability**, an **alternative water reservoir** to keep
+  feeding the steam generators and cooling the pool, a pool top-up system,
+  the mobile diesel (above), and restoring outside power (9th report;
+  primary). **The autonomy they reached isn't stated.**
+- **Atucha II's pools** (9th report; primary): three of 1,512 positions and
+  one of 1,484; decay heat goes into the water and out through a cooling
+  system; one pool keeps room for **all 451 core assemblies**; pool 3 holds
+  1,435 old Atucha I elements; the concrete takes no damage up to
+  60 °C water.
+- **Atucha I's pools:** a 3-D model of losing the pool cooling pumps has
+  been simulated and is updated yearly (10th report); the results aren't
+  published.
+
+### The emergency plan puts Lima in the 10 km zone
+
+**Primary**, 9th report, 3.16.4. The reports place Atucha I and II "some
+9 km from Lima".
+- **Precautionary Action Zone (PAZ): 3 km.** Early evacuation when a
+  **Green Alert** is declared, carried out by a security force with Civil
+  Defence.
+- **Urgent Protective Action Planning Zone (UPZ): 3–10 km** — **Lima is in
+  it.** **Sheltering**: at Green Alert people prepare; at **Red Alarm**
+  (release imminent) they stay inside, close doors and windows, seal gaps
+  and switch off anything that draws outside air. **Iodine tablets** are
+  handed out at Green Alert — "at NPPs and on strategical spots inside the
+  involved towns" — and taken at Red Alarm.
+- **Access control points** stand on the roads beyond 10 km; police
+  prepare to cut access at Green Alert and close it at Red Alarm to all but
+  response groups.
+- The public is told through local media, a **public alert system, sirens
+  and loudspeakers**. Training the population in these measures is "a main
+  topic".
+- The ARN's Emergency Control Centre is at its headquarters in Buenos
+  Aires.
+
 ## Not yet researched
 
 - **How long the emergency diesels run** on their own tanks. The reports give
-  only the 12-hour availability commitment and the "weekly tanks"
-  (above).
+  only the 12-hour availability commitment, the "weekly tanks", the 72-hour
+  procedures and an unquantified "increasing DGs autonomy" (above).
+- **The licensed minimum crew per shift**, beyond the five in the control
+  room.
+- **The pools' heat loads and boil-off times**, including Atucha I's
+  unpublished loss-of-cooling simulations.
 - The pools' **water volumes and depths**, and their current heat loads.
 - **How much heavy water** each unit holds.
 

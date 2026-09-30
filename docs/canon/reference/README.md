@@ -55,7 +55,7 @@ rule. A coding session reads neither.
 | File | Covers |
 |---|---|
 | `Lima.md` | **The game's town:** Lima, Partido de Zárate, Buenos Aires. Its grid, rail, the Atucha complex, nearby towns, and the riverside walk; street surfaces by quarter; utilities (CEZ, water, sewers, network gas); the Barrio Atucha's row houses from Street View |
-| `Atucha.md` | **The Atucha complex, abandoned (#290):** the plants' state in February 2025, spent fuel and dry storage, decay heat, a station blackout, the pools' boil-off, and the three outcome cases for the canon |
+| `Atucha.md` | **The Atucha complex, abandoned (#290):** the plants' state in February 2025, spent fuel and dry storage, decay heat, a station blackout, the pools' boil-off, and the three outcome cases for the canon; its crews, its 2020 pandemic measures, habitable control rooms, the 72-hour procedures, and the emergency plan that puts Lima in the 10 km zone |
 | `Henderson.md` | **Retired, 2026-09-26.** The former town: its electricity, water, gas, crossings and plants; downtown's street grid, rail and buildings |
 | `Gas_AR.md` | **Mains gas (#342, #329):** Naturgy BAN, TGN's and TGS's pipelines to Buenos Aires, mechanical regulators that need no power, who uses the gas by season, line pack, plants' automatic shutdowns; marked estimates for gas outlasting the grid |
 | `Grid_AR.md` | **How the national grid runs (#329, #220):** the SADI and CAMMESA's dispatch, Transener's transmission, the generation mix, automatic load relief, the 16 June 2019 blackout and its restoration, the February 2025 demand record; staffing, control rooms split under the 2020 lockdown, how long a grid runs unattended |
