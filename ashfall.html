@@ -465,7 +465,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.10.9" };
+  const GAME_CONFIG = { VERSION: "0.10.10" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -599,6 +599,36 @@
   // complete). The Argentine market shows 6–40 A. validateWiring() checks
   // every breaker against it.
   const STANDARD_BREAKER_RATINGS = [6, 8, 10, 13, 16, 20, 25, 32, 40, 50, 63, 80, 100, 125];
+  // Old fuse boards (#358). The share of generated casas off the barrio that
+  // have one, in percent, by a stable roll of the building's id (generatedHomes()):
+  // Tom's "at least half", retunable.
+  const OLD_BOARD_PCT = 50;
+  // An old board's fuse, in A: a dwelling's general-use circuit, lights and
+  // sockets together, is protected at "no greater than 15 A" (Rosario,
+  // Ordenanza 3419/83 §2.8.1.a; primary for Rosario). Lima's own rating is
+  // unconfirmed. Retunable.
+  const OLD_BOARD_FUSE_A = 15;
+  // Edison-thread plug fuses go up to 30 A (Rosario 3419/83 §8.2.7):
+  // validateWiring() holds every fuse's rating to it.
+  const EDISON_FUSE_MAX_A = 30;
+  // How a fuse blows, per IEC 60269's gG class (Mersen's EduPack TM-104;
+  // secondary for the standard): it must not blow at FUSE_F_NO_BLOW × In
+  // within FUSE_NO_BLOW_MIN, the low end of its 1–4 h conventional time, and
+  // must blow at FUSE_F_LOW × In within it; a 25 A fuse blows in at most 5 s
+  // at 110 A. fuseBlowMinutes() passes through (FUSE_F_LOW, FUSE_T_LOW_MIN)
+  // and (FUSE_F_HIGH, FUSE_T_HIGH_MIN) as tripMinutes() does through a
+  // breaker's anchors. A fuse has no instant band. A rewired tapón's fuse
+  // wire is not a gG cartridge, so these stand in for it: unconfirmed, and
+  // retunable.
+  const FUSE_F_NO_BLOW = 1.25;
+  const FUSE_NO_BLOW_MIN = 60;
+  const FUSE_F_LOW = 1.6;
+  const FUSE_T_LOW_MIN = 60;
+  const FUSE_F_HIGH = 110 / 25;
+  const FUSE_T_HIGH_MIN = 5 / 60;
+  // How long rewiring a blown fuse takes, in minutes (doRewireFuse()). A
+  // judgment call, retunable.
+  const REWIRE_FUSE_MIN = 5;
   // The spoilage rate in a powered fridge, as a multiple of the rate food
   // ages at room temperature (see spoilageRate()). A powered freezer stops
   // ageing; anything unpowered ages at 1 at once. Balance value, retunable.
@@ -893,6 +923,9 @@
   //                   a breaker (doMeterTest(), doMeterClamp()).
   //                   `prying` forces a locked latch door from outside
   //                   (doForceDoor()).
+  //                   `screwdriving` is the tool a blown fuse is rewired
+  //                   with, and `fuse-wire` the wire it is rewired with, of
+  //                   the fuse's own `fuseRating` (doRewireFuse()).
   //     durability    { current, max, mode } — mode is "uses" or "time"
   //     restores      { hunger, thirst } — consumable effect
   //     verb          display/use verb, e.g. "Eat", "Drink"
@@ -996,6 +1029,9 @@
   //                   item, with {qty} standing for the first recipe
   //                   input's quantity. Definition data, read from the
   //                   registry by itemId.
+  //     fuseRating    on `fuse-wire`, the fuse rating in A it is calibrated
+  //                   for: it rewires only a fuse of that rating
+  //                   (fuseWireFor()). Definition data, read by itemId.
   //   Prefer data/capabilities (tags, `use` strings) over hard-coded item
   //   names in mechanics code; the existing tag system is the primary
   //   mechanism for tool checks (see hasTool()).
@@ -1072,7 +1108,13 @@
     potato_chips: { name:"Potato chips", category:"Food", unitWeight:0.15, restores:{hunger:10}, verb:"Eat" },
     loose_change: { name:"Loose change", category:"Misc", unitWeight:0.3 },
     box_cutter: { name:"Box cutter", category:"Tool", unitWeight:0.1, tags:["blade","can-opening"] },
-    screwdriver: { name:"Screwdriver", category:"Tool", unitWeight:0.15, tags:["can-opening"] },
+    screwdriver: { name:"Screwdriver", category:"Tool", unitWeight:0.15, tags:["can-opening","screwdriving"] },
+    // Calibrated fuse wire, sold by the metre at hardware shops (secondary,
+    // from search summaries only), to rewire an old board's blown tapón
+    // (#358). One unit is one length. The weight is a judgment call,
+    // retunable.
+    fuse_wire: { name:"Fuse wire (" + OLD_BOARD_FUSE_A + " A)", category:"Materials", unitWeight:0.01, tags:["fuse-wire"],
+      fuseRating:OLD_BOARD_FUSE_A },
     // The meters (#249). A Fluke 115 weighs 550 g and a Fluke 323 265 g.
     // The multimeter only tests voltage: it reads current up to 10 A, and
     // only by breaking into the circuit, so it can't safely read a household
@@ -1265,7 +1307,7 @@
   // leaves them off the instance. A retune then reaches every save, and no
   // stale copy on an instance is there to be read by mistake.
   const REGISTRY_ONLY_FIELDS = ["carryFactor", "foodPoisoningChance", "disassembleLog", "cooks", "spoils", "holdsWater",
-    "vessel", "ingredient", "dish"];
+    "vessel", "ingredient", "dish", "fuseRating"];
   // An item's (or a slot's) registry entry, by its itemId, or null for
   // anything without one: the keychain, an item from a save the registry no
   // longer knows. The one lookup every registry-read field goes through.
@@ -1351,6 +1393,9 @@
   //   `kitchen_tools` (0.30), the ID card in `documents_lore` (0.25) and
   //   `residential_personal` (0.15), the US dollars in `valuables` (0.15), and
   //   the whole `car_boot` and `car_glovebox` pools. Retunable.
+  //   So are the fuse wire's (#358): the whole `old_board_spares` pool, and
+  //   its `hardware_store` entry (0.25, 1–3; the quantity a judgment call).
+  //   Retunable.
   //   Replacing an item id keeps its entry's derived chance: the retired
   //   spoiled foods' entries now name the fresh food they were
   //   (rotten_leftovers → leftovers, and so on; the pot of spoiled stew is
@@ -1523,7 +1568,12 @@
       { itemId:"crowbar", chance:0.119873, qtyMin:1, qtyMax:1 },
       { itemId:"bolt_cutters", chance:0.081043, qtyMin:1, qtyMax:1 },
       { itemId:"hand_axe", chance:0.081043, qtyMin:1, qtyMax:1 },
-      { itemId:"propane_torch", chance:0.081043, qtyMin:1, qtyMax:1 } ]},
+      { itemId:"propane_torch", chance:0.081043, qtyMin:1, qtyMax:1 },
+      { itemId:"fuse_wire", chance:0.25, qtyMin:1, qtyMax:3 } ]},
+    // The spare lengths of fuse wire kept by an old fuse board: only the
+    // kitchen drawers of a casa that has one draw from it (generatedHomes()).
+    old_board_spares: { emptyChance:0, entries:[
+      { itemId:"fuse_wire", chance:0.40, qtyMin:2, qtyMax:4 } ]},
     outdoor_camping: { emptyChance:0.2, entries:[
       { itemId:"sleeping_bag", chance:0.267574, qtyMin:1, qtyMax:1 },
       { itemId:"tackle_box", chance:0.267574, qtyMin:1, qtyMax:1 },
@@ -3861,10 +3911,13 @@ x_sn_9 m_sn_sn_sn sn p
   //   enter, leave  the street exit's labels, in and out. Defaults:
   //            "Enter the <label>" and "Go out to the street".
   //   overrides { rooms:{ role:{ …fields } }, addRooms:[…], links:[…],
-  //            doors:{ key:{ …fields } | null } }, merged over the type's: a
-  //            room's fields replace the type's field by field (so
-  //            `containers` replaces the whole list), a door's likewise, and
-  //            null removes a door, leaving its link an open passage.
+  //            doors:{ key:{ …fields } | null }, wiring?:{ panels:{ id:{
+  //            …fields } } } }, merged over the type's: a room's fields
+  //            replace the type's field by field (so `containers` replaces
+  //            the whole list), a door's likewise, and null removes a door,
+  //            leaving its link an open passage. `wiring` lays fields over
+  //            the type's wiring's panel of that id (an old board's name
+  //            and template), before the wiring is built (mergeWiring()).
   // Ids, which saves key on and so must never change: rooms `<id>_<role>`,
   // doors `<id>-<key>`, windows `<id>-<role>-window`. Every room gets
   // `buildingId` (the instance id), `building` (its name), `address`,
@@ -3981,6 +4034,9 @@ x_sn_9 m_sn_sn_sn sn p
     // judgment calls, retunable. Wired as the row house is (#306): its meter
     // and main in a meter box at the street, and a modern breaker panel in
     // the living room, headed by a diferencial (WIRING_TEMPLATES' `casa`).
+    // Or, in about half the casas off the barrio, an old fuse board in its
+    // place (#358): a cut-off switch and two tapones, laid over by the
+    // instance (WIRING_TEMPLATES' `casa_fuses`, generatedHomes()).
     casa: { label:"house", entry:"living", water:{ tankL:HOUSE_TANK_L },
       wiring:{ board:{ name:"Meter box", role:"street", rating:32, direct:true },
         panels:[ { id:"house", name:"Breaker panel", role:"living", template:"casa" } ] },
@@ -4232,13 +4288,32 @@ x_sn_9 m_sn_sn_sn sn p
   // `chalet` type is researched (Tom, 2026-09-27). Its id is h_<stop id>, its
   // address the stop's street, and its street door starts locked by
   // HOME_LOCKED_PCT. Retunable, all of it.
+  //   A casa off the barrio has an old fuse board when a stable roll of its
+  // id is under OLD_BOARD_PCT (hasOldBoard()): its panel is the fuse box
+  // (WIRING_TEMPLATES' `casa_fuses`), its living room says so, and its
+  // kitchen drawers also draw from `old_board_spares`. The roll's key is the
+  // id and "board", never the bare id, whose hash already decides the door:
+  // the two rolls stay independent.
+  function hasOldBoard(stop, id){
+    return stop.type !== "barrio" && stableHash(id + KEY_SEP + "board") % 100 < OLD_BOARD_PCT;
+  }
   function generatedHomes(){
     return LIMA.stops.filter(s=> s.kind === "m" && s.id !== HOME_STOP).map(s=>{
       const id = "h_" + s.id;
+      const overrides = { doors:{ front:{ locked: stableHash(id) % 100 < HOME_LOCKED_PCT } } };
+      if(hasOldBoard(s, id)) Object.assign(overrides, oldBoardOverrides());
       return { id, type:"casa", site:s.id, name:"House", address:streetName(s.street) || UNNAMED_STREET,
-        seed:stableHash(s.id), enter:"Enter a house",
-        overrides:{ doors:{ front:{ locked: stableHash(id) % 100 < HOME_LOCKED_PCT } } } };
+        seed:stableHash(s.id), enter:"Enter a house", overrides };
     });
+  }
+  // What an old-board casa lays over the type's (#358), fresh for each.
+  function oldBoardOverrides(){
+    return {
+      wiring:{ panels:{ house:{ name:"Fuse box", template:"casa_fuses" } } },
+      rooms:{
+        living:{ desc:"A front room that is living room and dining room both. Barred windows onto the street, the blinds half down. A small fuse box hangs by the front door, two porcelain plugs screwed into it." },
+        kitchen:{ containers:KITCHEN_CONTAINERS.map(c=> c.id === "drawers"
+          ? Object.assign({}, c, { spawnPools:c.spawnPools.concat("old_board_spares") }) : c) } } };
   }
   // One instance expanded: { rooms, doors, windows, streetExit, problems }.
   // `streetExit` is the exit makeDefaultWorld() hangs on the site stop.
@@ -4309,7 +4384,21 @@ x_sn_9 m_sn_sn_sn sn p
       if(!rooms[roomId(w.role)]){ problems.push(`building ${inst.id}: window in role "${w.role}", which has no room`); return; }
       windows[`${inst.id}-${w.role}-window`] = { state:"closed", rooms:[roomId(w.role)], breakTag:w.breakTag, label:w.label };
     });
-    return { rooms, doors, windows, streetExit, wiring:buildWiring(type.wiring, roomId, specs.map(r=> r.role)), problems };
+    const wiring = mergeWiring(type.wiring, ov.wiring, inst.id, problems);
+    return { rooms, doors, windows, streetExit, wiring:buildWiring(wiring, roomId, specs.map(r=> r.role)), problems };
+  }
+  // A type's `wiring` with an instance's `overrides.wiring` laid over it:
+  // each panel it names by id takes its fields over the type's. A panel id
+  // the type lacks, or an override on a type with no wiring, is reported in
+  // `problems`, and nothing is laid.
+  function mergeWiring(w, ov, instId, problems){
+    if(!ov) return w;
+    if(!w){ problems.push(`building ${instId}: a wiring override, but its type has no wiring`); return w; }
+    const byId = ov.panels || {};
+    Object.keys(byId).forEach(id=>{
+      if(!(w.panels || []).some(p=> p.id === id)) problems.push(`building ${instId}: wiring override for panel "${id}", which its type does not have`);
+    });
+    return Object.assign({}, w, { panels:(w.panels || []).map(p=> Object.assign({}, p, byId[p.id] || {})) });
   }
   // A type's `wiring` for one instance, as a WIRING entry, or null when the
   // type has none: each device's role becomes the instance's room, and each
@@ -4665,9 +4754,25 @@ x_sn_9 m_sn_sn_sn sn p
   //             touches it (resolvePowerStep()), under either rules, and it
   //             has no curve. Its leakage trip is #247's. Its rating is
   //             still an IEC preferred one (validateWiring()).
-  //   circuits  in panel order: { key, label, rating, volts, curve?,
+  //   cutoff    on a main, optional: true makes the head device an old
+  //             board's bipolar cut-off switch, labelled "Cut-off switch", in
+  //             place of a main breaker. It has no rating and no curve. It is
+  //             switched by hand like a breaker, power passes it only while it
+  //             is closed, and it never trips, under either rules, as an RCD
+  //             never does. A main is never both `rcd` and `cutoff`
+  //             (validateWiring()).
+  //   circuits  in panel order: { key, label, rating, volts, curve?, fuse?,
   //             roles:[role] }. `label` is the hand-written one on the panel
   //             door ("KITCHEN"); `roles` are the rooms, by role, it serves.
+  //   fuse      on a circuit, optional: true makes it a fuse, not a breaker
+  //             (#358). It has no curve and no instant trip; it heats on its
+  //             own curve (fuseBlowMinutes()) and at 1 it blows, which is the
+  //             breaker's `tripped`. It is never switched or reset: it is
+  //             rewired (doRewireFuse()). Unlike every other circuit, it is
+  //             consulted under simplified rules too, for trips and for
+  //             liveness (consultsBreaker(), circuitSkipped()). Its rating is
+  //             any up to EDISON_FUSE_MAX_A, not an IEC breaker's
+  //             (validateWiring()). Only a circuit carries it.
   //   curve     on a main or a circuit, optional: its IEC 60898-1 curve, a
   //             BREAKER_CURVES key (DEFAULT_BREAKER_CURVE when absent)
   //   fixtures  { key, appliance, circuit, role, containers?:[id] }: an
@@ -4727,6 +4832,17 @@ x_sn_9 m_sn_sn_sn sn p
   // Reglamento de Acometidas T1). The panel is indoors where it is easily
   // found, never in a bathroom (AEA 90364-7-770 §770.16.3.2). No patio
   // light, no TV and no washing machine (#333). All retunable.
+  //
+  // `casa_fuses`: an old fuse board in place of the casa's panel (#358), for
+  // the casas generatedHomes() gives one. A manual bipolar switch, then a
+  // fuse on each pole: circuits protected by "interruptor manual y fusibles
+  // (en ese orden), en todos los conductores" (Rosario, Ordenanza 3419/83
+  // §2.8; primary for Rosario). One circuit, serving every room the casa
+  // has, is Tom's account of a Lima home (unconfirmed elsewhere). Its two
+  // tapones are one device here, `fuses`, at OLD_BOARD_FUSE_A: when it blows,
+  // one tapón's wire has burnt, and nothing records which pole. Its fixtures
+  // are the casa's, with the casa's keys, so their load ids are the same as a
+  // modern casa's; it is built from them below the table, never repeated.
   const WIRING_TEMPLATES = {
     apartment: {
       main: { rating:32 },
@@ -4790,6 +4906,13 @@ x_sn_9 m_sn_sn_sn sn p
         { key:"pump",          appliance:"house_pump",     circuit:"water",   role:"patio" }
       ]
     }
+  };
+  WIRING_TEMPLATES.casa_fuses = {
+    main: { cutoff:true },
+    circuits: [
+      { key:"fuses", label:"Fuses", rating:OLD_BOARD_FUSE_A, volts:220, fuse:true, roles:BUILDING_TYPES.casa.rooms.map(r=> r.role) }
+    ],
+    fixtures: WIRING_TEMPLATES.casa.fixtures.map(fx=> Object.assign({}, fx, { circuit:"fuses" }))
   };
   // WIRING, keyed by building id: one building's network.
   //   board    { name, room, rating, volts?, curve?, direct?, feeders:[{
@@ -5493,15 +5616,27 @@ x_sn_9 m_sn_sn_sn sn p
   function countByTag(tag){
     return invPools().reduce((sum,list)=> sum + list.filter(it=>hasTag(it, tag)).reduce((s,it)=>s+it.qty,0), 0);
   }
-  function consumeByTag(tag, qty){
+  function consumeByTag(tag, qty){ consumeMatching(it=> hasTag(it, tag), qty); }
+  // Spends `qty` units of whatever carried item `match` accepts, as
+  // consumeByTag() spends a tag's.
+  function consumeMatching(match, qty){
     let remaining = qty;
     invPools().forEach(list=>{
       for(let i=list.length-1; i>=0 && remaining>0; i--){
-        if(!hasTag(list[i], tag)) continue;
+        if(!match(list[i])) continue;
         const take = Math.min(list[i].qty, remaining);
         dropUnits(list, i, take); remaining -= take;
       }
     });
+  }
+  function carriesMatching(match){ return invPools().some(list=> list.some(match)); }
+  // The fuse wire that rewires a fuse of `rating` A: tagged `fuse-wire`, with
+  // that `fuseRating` (ITEM DATA SCHEMA), read by itemId.
+  function fuseWireFor(rating){
+    return (it)=>{
+      const def = registryEntryOf(it);
+      return hasTag(it, "fuse-wire") && !!def && def.fuseRating === rating;
+    };
   }
   // Returns the list and index alongside the item, the shape findItemByUid()
   // already uses, because consumeMatchUse() below has to be able to splice it.
@@ -5627,9 +5762,7 @@ x_sn_9 m_sn_sn_sn sn p
     if(!c && room.carContainers) c = room.carContainers.find(x=>x.id===tab);
     return c ? { items:c.items, capacityKg:c.capacityKg } : null;
   }
-  function hasTool(tag){
-    return invPools().some(list => list.some(it => hasTag(it, tag)));
-  }
+  function hasTool(tag){ return carriesMatching(it=> hasTag(it, tag)); }
   function hasWatch(){
     return invPools().some(list => list.some(it => it.isWatch));
   }
@@ -6874,13 +7007,15 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // A breaker in a panel or board, by hand, from its device pop-up. Instant,
   // and seen by the next step's resolution (stepPower()). The lines are
-  // functional, named by the breaker's hand-written label, and an RCD as
-  // "the RCD", never "the RCD breaker"; retunable.
+  // functional, named by the breaker's hand-written label, an RCD as "the
+  // RCD", never "the RCD breaker", and a cut-off switch as "the cut-off
+  // switch"; retunable. A fuse is never switched or reset: it is rewired
+  // (doRewireFuse()).
   function doSwitchBreaker(id, on){
     const br = POWER_NET.breakers[id];
-    if(!br) return;
+    if(!br || br.fuse) return;
     switchBreakerIn(state.power, id, on);
-    log(`You switch the ${br.rcd ? "RCD" : br.label + " breaker"} ${on ? "on" : "off"}.`);
+    log(`You switch the ${br.rcd ? "RCD" : br.cutoff ? "cut-off switch" : br.label + " breaker"} ${on ? "on" : "off"}.`);
     render();
   }
   // A load's own switch, by hand: today from a fridge's or freezer's device
@@ -6902,13 +7037,15 @@ x_sn_9 m_sn_sn_sn sn p
   // (loadSupplyVolts(), breakerLoadSideVolts(), breakerCurrent()). Test needs
   // a `voltage-test` tool carried, Clamp a `current-clamp` one. Under
   // simplified rules Test reaches a load and a device's main, and Clamp only
-  // the main, as simplified shows only the main. Opening a panel to clamp a
+  // the main, as simplified shows only the main, and an old board's fuses,
+  // which it shows too (#358). Opening a panel to clamp a
   // live conductor has no consequence yet (#247). Each reading logs one line
   // and nothing else records it. The figure is a judgment call and the lines
   // are functional; both retunable.
   const METER_READING_MIN = 1;
   function meterReachesBreaker(id){
-    return state.electricalRules !== "simplified" || ["panel", "board"].includes(POWER_NET.breakers[id].layer);
+    const br = POWER_NET.breakers[id];
+    return state.electricalRules !== "simplified" || br.fuse || ["panel", "board"].includes(br.layer);
   }
   function doMeterTest(target){
     if(!hasTool("voltage-test")) return;
@@ -6927,9 +7064,28 @@ x_sn_9 m_sn_sn_sn sn p
   }
   function doResetBreaker(id){
     const br = POWER_NET.breakers[id];
-    if(!br || !breakerStateIn(state.power, id).tripped) return;
+    if(!br || br.fuse || !breakerStateIn(state.power, id).tripped) return;
     resetBreakerIn(state.power, id);
     log(`You push the tripped ${br.label} breaker back on.`);
+    render();
+  }
+  // Rewiring a blown fuse (#358), from its device pop-up: offered only while
+  // it is blown, a `screwdriving` tool is carried, and so is fuse wire of its
+  // own rating (fuseWireFor()). It spends one length, takes REWIRE_FUSE_MIN,
+  // and leaves the fuse unblown and cold (rewireFuseIn()); an overload still
+  // there blows the new wire on the fuse's own curve. The cut-off switch is
+  // neither required nor checked: rewiring live is #247's.
+  function canRewireFuse(id){
+    const br = POWER_NET.breakers[id];
+    return !!br && !!br.fuse && breakerStateIn(state.power, id).tripped
+      && hasTool("screwdriving") && carriesMatching(fuseWireFor(br.rating));
+  }
+  function doRewireFuse(id){
+    if(!canRewireFuse(id)) return;
+    consumeMatching(fuseWireFor(POWER_NET.breakers[id].rating), 1);
+    advanceTime(REWIRE_FUSE_MIN);
+    rewireFuseIn(state.power, id);
+    log("You unscrew the blown plug, wind a length of fuse wire under its screws and screw it back in.");
     render();
   }
   function doUnlockContainer(containerId){
@@ -7333,13 +7489,19 @@ x_sn_9 m_sn_sn_sn sn p
   //             `feeder` is null on a direct board's panel (POWER SCHEMA's
   //             `direct`): no feeder breaker stands between it and the board.
   //   breakers  { id: { id, layer, label, rating, curve, volts, device, room,
-  //             loads, rcd? } }
+  //             loads, rcd?, cutoff?, fuse? } }
   //             `device` is the panel or board it sits in and `room` the
   //             room that hangs in; `loads` is every load it feeds. `curve`
   //             is its definition's own, or DEFAULT_BREAKER_CURVE
   //             (breakerCurve()). `rcd` is true on a panel's head device
   //             when it is a diferencial (a template main's `rcd`): labelled
-  //             "RCD", with no curve, and never tripped on overcurrent. `volts` divides its watts into amps: a
+  //             "RCD", with no curve, and never tripped on overcurrent.
+  //             `cutoff` is true on a panel's head device when it is an old
+  //             board's cut-off switch (a template main's `cutoff`): labelled
+  //             "Cut-off switch", with no rating and no curve, and never
+  //             tripped. `fuse` is true on a circuit that is a fuse (a
+  //             template circuit's `fuse`): no curve, and its own heat curve
+  //             (POWER SCHEMA). `volts` divides its watts into amps: a
   //             circuit's own, a panel main's and its feeder's the panel's,
   //             the board main's the board's. A panel or board is
   //             single-phase, so its current is its loads' total watts ÷
@@ -7371,6 +7533,7 @@ x_sn_9 m_sn_sn_sn sn p
         volts:board.volts, device:boardId, room:bd.room, loads:[] };
       hang(bd.room, "board", boardId);
       const feeders = bd.feeders || [];
+      if(bd.fuse || feeders.some(f=> f && f.fuse)) net.problems.push(`${boardId}: carries \`fuse\` on its main or a feeder, which only a circuit may`);
       if(bd.direct && feeders.length) net.problems.push(`${boardId}: a direct board has no feeders, but it lists ${feeders.length}`);
       (w.panels || []).concat(w.common ? [w.common] : []).forEach(pd=>{
         if(!pd || !pd.id){ net.problems.push(`${b}: a panel has no id`); return; }
@@ -7382,6 +7545,8 @@ x_sn_9 m_sn_sn_sn sn p
         const feeder = feeders.find(f=> f.panel === pd.id);
         if(feederId && !feeder) net.problems.push(`${panelId}: the board has no feeder for it`);
         const main = layout.main || {};
+        if(main.rcd && main.cutoff) net.problems.push(`${panelId}: its main is both an RCD and a cut-off switch`);
+        if(main.fuse) net.problems.push(`${panelId}: its main carries \`fuse\`, which only a circuit may`);
         const rooms = pd.rooms || {};
         const panel = { id:panelId, buildingId:b, board:boardId, name:pd.name || panelId, room:pd.room,
           volts:main.volts || PANEL_DEFAULT_VOLTS, main:panelMain, feeder:feederId, circuits:[], loads:[],
@@ -7391,6 +7556,9 @@ x_sn_9 m_sn_sn_sn sn p
         net.breakers[panelMain] = main.rcd
           ? { id:panelMain, layer:"panel", label:"RCD", rating:main.rating, curve:null, rcd:true,
             volts:panel.volts, device:panelId, room:pd.room, loads:[] }
+          : main.cutoff
+          ? { id:panelMain, layer:"panel", label:"Cut-off switch", rating:null, curve:null, cutoff:true,
+            volts:panel.volts, device:panelId, room:pd.room, loads:[] }
           : { id:panelMain, layer:"panel", label:"MAIN", rating:main.rating, curve:breakerCurve(main),
             volts:panel.volts, device:panelId, room:pd.room, loads:[] };
         if(feederId) net.breakers[feederId] = { id:feederId, layer:"feeder", label:feeder ? feeder.label : pd.id,
@@ -7398,8 +7566,9 @@ x_sn_9 m_sn_sn_sn sn p
         hang(pd.room, "panel", panelId);
         (layout.circuits || []).forEach(c=>{
           const circuitId = claim(`${panelId}.${c.key}`);
-          net.breakers[circuitId] = { id:circuitId, layer:"circuit", label:c.label, rating:c.rating, curve:breakerCurve(c), volts:c.volts,
+          net.breakers[circuitId] = { id:circuitId, layer:"circuit", label:c.label, rating:c.rating, curve:c.fuse ? null : breakerCurve(c), volts:c.volts,
             roles:c.roles || [], device:panelId, room:pd.room, loads:[] };
+          if(c.fuse) net.breakers[circuitId].fuse = true;
           panel.circuits.push(circuitId);
         });
         (layout.fixtures || []).forEach(fx=>{
@@ -7556,13 +7725,26 @@ x_sn_9 m_sn_sn_sn sn p
   // pop-up and the dev seam's scripts both go through these.
   function switchBreakerIn(power, id, on){ setBreakerIn(power, id, on, breakerStateIn(power, id).tripped); }
   function resetBreakerIn(power, id){ setBreakerIn(power, id, true, false); }
+  // Rewiring a blown fuse: unblown, as a reset leaves a breaker, and its heat
+  // cleared, since new wire starts cold. A breaker's reset keeps its heat;
+  // this difference is deliberate (#358).
+  function rewireFuseIn(power, id){
+    resetBreakerIn(power, id);
+    setHeatIn(power, id, 0);
+  }
   function breakerClosedIn(power, id){
     const b = breakerStateIn(power, id);
     return b.on && !b.tripped;
   }
   // The breaker layers a run's rules consult. Simplified rules ignore the
   // circuits, and each panel and the board is one breaker, its main (#243).
+  // A fuse is the exception: it is consulted under either rules, so an old
+  // board's panel is live past its fuses only while they are intact (#358).
+  // consultsBreaker() is what the checks read; circuitSkipped() is its other
+  // half, for liveness: a circuit the rules pass straight through.
   function consultedLayers(rules){ return rules === "simplified" ? ["panel", "board"] : BREAKER_LAYERS; }
+  function consultsBreaker(br, rules){ return !!br.fuse || consultedLayers(rules).includes(br.layer); }
+  function circuitSkipped(br, rules){ return rules === "simplified" && !(br && br.fuse); }
   // How long a breaker takes to trip at `f` times its rating (f > 1), in
   // minutes, through the two IEC anchor points (see BREAKER_F_LOW):
   //   t(f) = tHigh × ((F_HIGH − 1) ÷ (f − 1))^n,
@@ -7573,13 +7755,19 @@ x_sn_9 m_sn_sn_sn sn p
   // time moves in steps of at most a minute (runAwakeStep()), so the breaker
   // trips at the end of the first step. That is intended: no action is
   // shorter, and nothing resolves seconds.
+  // The formula is anchorMinutes(), once; a fuse's blow runs through it on
+  // its own anchors (fuseBlowMinutes(), FUSE_F_LOW).
   function bandMinutes(bands, rating){ return bands.find(b=> rating <= b.upTo).min; }
+  function anchorMinutes(f, fLow, tLow, fHigh, tHigh){
+    const n = Math.log(tLow / tHigh) / Math.log((fHigh - 1) / (fLow - 1));
+    return tHigh * Math.pow((fHigh - 1) / (f - 1), n);
+  }
   function tripMinutes(rating, f){
     if(!(rating > 0)) return Infinity;
-    const tLow = bandMinutes(BREAKER_T_LOW_MIN, rating), tHigh = bandMinutes(BREAKER_T_HIGH_MIN, rating);
-    const n = Math.log(tLow / tHigh) / Math.log((BREAKER_F_HIGH - 1) / (BREAKER_F_LOW - 1));
-    return tHigh * Math.pow((BREAKER_F_HIGH - 1) / (f - 1), n);
+    return anchorMinutes(f, BREAKER_F_LOW, bandMinutes(BREAKER_T_LOW_MIN, rating),
+      BREAKER_F_HIGH, bandMinutes(BREAKER_T_HIGH_MIN, rating));
   }
+  function fuseBlowMinutes(f){ return anchorMinutes(f, FUSE_F_LOW, FUSE_T_LOW_MIN, FUSE_F_HIGH, FUSE_T_HIGH_MIN); }
   // One look at the network at `minute`, changing nothing. Pure: a function
   // of the expanded network, the appliances, a power state, the rules,
   // whether the grid is live, the minute, the previous step's `drawing`, the
@@ -7591,10 +7779,11 @@ x_sn_9 m_sn_sn_sn sn p
   //             main is closed; a panel when its board is, and its feeder
   //             (on a direct board, none) and its main or RCD are closed; a circuit when its panel is and its
   //             breaker is closed. Simplified rules skip feeders and
-  //             circuits.
+  //             circuits, but never a fuse (circuitSkipped()).
   //   supplied  panel ids: whether power reaches its main (live but for it)
   //   powered   load ids: its switch is on and its circuit (simplified: its
-  //             panel) is live. What spoilage asks, through isPowered().
+  //             panel, unless the circuit is a fuse) is live. What spoilage
+  //             asks, through isPowered().
   //   drawing   load ids: powered, and a cycling load in the on part of its
   //             cycle, ((minute + phase) mod cycleMinutes) < dutyCycle ×
   //             cycleMinutes, its phase fixed per load by a keyed roll so
@@ -7629,12 +7818,13 @@ x_sn_9 m_sn_sn_sn sn p
     Object.values(net.panels).forEach(p=>{
       supplied[p.id] = !!live[p.board] && (simple || !p.feeder || closed(p.feeder));
       live[p.id] = supplied[p.id] && closed(p.main);
-      p.circuits.forEach(c=>{ live[c] = live[p.id] && (simple || closed(c)); });
+      p.circuits.forEach(c=>{ live[c] = live[p.id] && (circuitSkipped(net.breakers[c], rules) || closed(c)); });
     });
     const powered = {}, drawing = {}, starting = {};
     Object.values(net.loads).forEach(l=>{
       const a = appliances[l.appliance];
-      powered[l.id] = !!(simple ? live[l.panel] : live[l.circuit]) && switchOnIn(power, seed, l.id, a);
+      const via = circuitSkipped(net.breakers[l.circuit], rules) ? l.panel : l.circuit;
+      powered[l.id] = !!live[via] && switchOnIn(power, seed, l.id, a);
       if(!powered[l.id] || !a) return;
       if(a.flowLph !== undefined){
         const f = floats && floats[l.id];
@@ -7676,9 +7866,12 @@ x_sn_9 m_sn_sn_sn sn p
   //     otherwise, never below 0. At 1 the breaker trips. Tripped means off
   //     until reset; its heat keeps draining meanwhile, so a reset with the
   //     overload still there trips again quickly, as a real breaker does.
-  // A breaker the rules don't consult is left exactly as it is, and so is an
-  // RCD (`rcd`), which neither check touches under either rules: it never
-  // trips on overcurrent and holds no heat.
+  //   A fuse (`fuse`) has no instant trip. It heats as a breaker does, but at
+  //     dt ÷ fuseBlowMinutes(), and at 1 it blows, which is its `tripped`.
+  // A breaker the rules don't consult (consultsBreaker()) is left exactly as
+  // it is, and so is an RCD (`rcd`) or a cut-off switch (`cutoff`), which
+  // neither check touches under either rules: neither trips on overcurrent,
+  // and neither holds heat.
   // Only a trip changes what a look sees (heat is not among its inputs), so
   // a look is kept until one happens, and taken again at the next layer.
   function resolvePowerStep(net, appliances, power, rules, gridLive, minute, dt, prevDrawing, seed, floats){
@@ -7692,22 +7885,24 @@ x_sn_9 m_sn_sn_sn sn p
       trips.push({ id, cause, running: net.breakers[id].loads.filter(l=> snap.drawing[l]) });
       kept = null;
     };
-    const layers = consultedLayers(rules);
-    const tripsOnOvercurrent = (id)=> !net.breakers[id].rcd;
-    layers.forEach(layer=>{
+    const tripsOnOvercurrent = (id)=>{
+      const br = net.breakers[id];
+      return consultsBreaker(br, rules) && !br.rcd && !br.cutoff;
+    };
+    BREAKER_LAYERS.forEach(layer=>{
       const snap = look();
       net.byLayer[layer].filter(tripsOnOvercurrent).forEach(id=>{
         const br = net.breakers[id], curve = BREAKER_CURVES[br.curve];
-        if(curve && breakerClosedIn(p, id) && snap.momentary[id] > curve.instant * br.rating) trip(id, "instant", snap);
+        if(!br.fuse && curve && breakerClosedIn(p, id) && snap.momentary[id] > curve.instant * br.rating) trip(id, "instant", snap);
       });
     });
-    layers.forEach(layer=>{
+    BREAKER_LAYERS.forEach(layer=>{
       const snap = look();
       net.byLayer[layer].filter(tripsOnOvercurrent).forEach(id=>{
-        const rating = net.breakers[id].rating;
+        const br = net.breakers[id], rating = br.rating;
         const f = snap.running[id] / rating;
         let h = heatIn(p, id);
-        h = f > 1 ? h + dt / tripMinutes(rating, f) : Math.max(0, h - dt / HEAT_COOL_MIN);
+        h = f > 1 ? h + dt / (br.fuse ? fuseBlowMinutes(f) : tripMinutes(rating, f)) : Math.max(0, h - dt / HEAT_COOL_MIN);
         h = Math.min(h, 1);
         if(h >= 1 - TICK_EPSILON && breakerClosedIn(p, id)){ h = 1; trip(id, "heat", snap); }
         setHeatIn(p, id, h);
@@ -7797,16 +7992,15 @@ x_sn_9 m_sn_sn_sn sn p
     const key = rules + "|" + seed;
     if(idx.memo.trippers[key]) return idx.memo.trippers[key];
     const out = [];
-    const layers = consultedLayers(rules);
     idx.buildings.forEach(b=>{
       const s = idx.sub[b];
       const on = (id)=>{
         const a = idx.appliances[s.loads[id].appliance];
         return !!a && switchOnIn(UNTOUCHED_POWER, seed, id, a);
       };
-      const overloads = layers.some(layer=> s.byLayer[layer].some(id=>{
+      const overloads = BREAKER_LAYERS.some(layer=> s.byLayer[layer].some(id=>{
         const br = s.breakers[id];
-        if(br.rcd) return false;
+        if(!consultsBreaker(br, rules) || br.rcd || br.cutoff) return false;
         let run = 0, mom = 0;
         br.loads.forEach(lid=>{
           if(!on(lid)) return;
@@ -7985,16 +8179,19 @@ x_sn_9 m_sn_sn_sn sn p
     if(up && drewHere(after)) log("Something in here starts up again.");
   }
   // A trip is heard where its panel or board hangs, and noticed where
-  // something it fed was running; anywhere else it passes unremarked. The
+  // something it fed was running; anywhere else it passes unremarked. A fuse
+  // blowing is heard as its own line, in place of the panel's (#358). The
   // grid going down or coming back is logGridChange()'s. One line of each
   // kind per step. Wording retunable.
   function logTrips(trips){
-    let atPanel = false, quiet = false;
+    let atPanel = false, atFuse = false, quiet = false;
     trips.forEach(t=>{
-      if(POWER_NET.breakers[t.id].room === state.currentRoom) atPanel = true;
+      const br = POWER_NET.breakers[t.id];
+      if(br.room === state.currentRoom){ if(br.fuse) atFuse = true; else atPanel = true; }
       else if(t.running.some(id=> POWER_NET.loads[id].room === state.currentRoom)) quiet = true;
     });
     if(atPanel) log("The panel on the wall snaps. A breaker has tripped.", "warn");
+    if(atFuse) log("Something pops in the fuse box.", "warn");
     if(quiet) log(ROOM_GOES_QUIET, "warn");
   }
   // Whether a load has power: its switch is on and its path is live.
@@ -8022,11 +8219,12 @@ x_sn_9 m_sn_sn_sn sn p
   // What a meter reads, from the last step (powerNow). They add no rule to
   // the resolver: each is a look at what it already worked out (#249).
   //   A load's supply, up to its own switch: its circuit's volts while the
-  //   circuit is live (simplified rules: its panel), else 0.
+  //   circuit is live (simplified rules: its panel, unless the circuit is a
+  //   fuse), else 0.
   function loadSupplyVolts(loadId){
     if(!powerNow) refreshPower();
     const l = POWER_NET.loads[loadId];
-    const live = powerRead(powerNow, "live", state.electricalRules === "simplified" ? l.panel : l.circuit);
+    const live = powerRead(powerNow, "live", circuitSkipped(POWER_NET.breakers[l.circuit], state.electricalRules) ? l.panel : l.circuit);
     return live ? POWER_NET.breakers[l.circuit].volts : 0;
   }
   //   A breaker's load side, at its volts: a circuit's own liveness, a panel
@@ -9280,7 +9478,8 @@ x_sn_9 m_sn_sn_sn sn p
   //   the expansion's own problems (expandWiring()): unknown templates,
   //     circuits and roles, a panel without a feeder (but on a direct
   //     board), a direct board listing feeders, a feeder without a panel,
-  //     clashing ids;
+  //     clashing ids, a main both `rcd` and `cutoff`, and `fuse` anywhere
+  //     but a template circuit;
   //   the templates' doors and windows (expandOpenings()): a role with no
   //     room, an override key the template lacks, and an id that clashes with
   //     another template one or with an authored one;
@@ -9299,7 +9498,10 @@ x_sn_9 m_sn_sn_sn sn p
   //     does not trip at BREAKER_F_NO_TRIP × its rating within
   //     BREAKER_NO_TRIP_MIN (tripMinutes()), a guard for a later retune. An
   //     RCD has no curve and never trips on overcurrent, so only its rating
-  //     is checked;
+  //     is checked. A cut-off switch has neither rating nor curve, so
+  //     nothing is. A fuse's rating is over 0 and at most EDISON_FUSE_MAX_A,
+  //     not an IEC breaker rating, and its curve (fuseBlowMinutes()) does
+  //     not blow at FUSE_F_NO_BLOW × its rating within FUSE_NO_BLOW_MIN;
   //   every tank has one pump (tankPumpsOf()): a wired building with a tank
   //     (BUILDING_INFO's tankL) and no `flowLph` load, or with two, and a
   //     `flowLph` load in a building with no tank, which never draws.
@@ -9339,14 +9541,20 @@ x_sn_9 m_sn_sn_sn sn p
       roomExists(p.room, p.id);
       p.rooms.forEach(id=> roomExists(id, `${p.id} rooms`));
     });
+    if(fuseBlowMinutes(FUSE_F_NO_BLOW) < FUSE_NO_BLOW_MIN)
+      problems.push(`fuses blow at ${FUSE_F_NO_BLOW} × their rating within ${FUSE_NO_BLOW_MIN} min`);
     Object.values(net.breakers).forEach(br=>{
-      if(!STANDARD_BREAKER_RATINGS.includes(br.rating))
+      if(br.fuse){
+        if(!(br.rating > 0 && br.rating <= EDISON_FUSE_MAX_A))
+          problems.push(`${br.id}: fuse rating ${br.rating} A is not over 0 and at most ${EDISON_FUSE_MAX_A} A`);
+      } else if(!br.cutoff && !STANDARD_BREAKER_RATINGS.includes(br.rating))
         problems.push(`${br.id}: rating ${br.rating} A is not an IEC 60898-1 preferred rating`);
-      if(br.rcd) return;
-      if(!Object.prototype.hasOwnProperty.call(BREAKER_CURVES, br.curve))
-        problems.push(`${br.id}: curve "${br.curve}" is not in BREAKER_CURVES`);
-      if(tripMinutes(br.rating, BREAKER_F_NO_TRIP) < BREAKER_NO_TRIP_MIN)
-        problems.push(`${br.id}: trips at ${BREAKER_F_NO_TRIP} × ${br.rating} A within ${BREAKER_NO_TRIP_MIN} min`);
+      if(!br.rcd && !br.cutoff && !br.fuse){
+        if(!Object.prototype.hasOwnProperty.call(BREAKER_CURVES, br.curve))
+          problems.push(`${br.id}: curve "${br.curve}" is not in BREAKER_CURVES`);
+        if(tripMinutes(br.rating, BREAKER_F_NO_TRIP) < BREAKER_NO_TRIP_MIN)
+          problems.push(`${br.id}: trips at ${BREAKER_F_NO_TRIP} × ${br.rating} A within ${BREAKER_NO_TRIP_MIN} min`);
+      }
       if(br.layer !== "circuit") return;
       if(br.volts !== 220) problems.push(`${br.id}: volts ${br.volts} is not 220`);
       const roles = net.panels[br.device].roles;
@@ -9420,14 +9628,15 @@ x_sn_9 m_sn_sn_sn sn p
   // an action on, and they include the `breakTag` values windows (blunt) and
   // locked storage units (cutting) carry, the `tool` a recipe asks for
   // (blade), `heat`, which lights an unpowered stove by hand
-  // (stoveLighting()), the meters' two (doMeterTest(), doMeterClamp()), and
-  // `prying`, which gates forcing a locked latch door (doForceDoor()).
+  // (stoveLighting()), the meters' two (doMeterTest(), doMeterClamp()),
+  // `prying`, which gates forcing a locked latch door (doForceDoor()), and
+  // `screwdriving`, which gates rewiring a blown fuse (doRewireFuse()).
   // Forcing a vehicle is still deliberately not gated on it, because one
   // item carries it (renderHereActionsPanel()), and #111 is the standing
   // question of whether to gate that too once that stops being true. The
   // count is the evidence that question wants.
   const REPORTED_TOOL_TAGS = ["fire-starter", "fishing", "tackle", "chopping",
-    "cutting", "blunt", "can-opening", "blade", "heat", "voltage-test", "current-clamp", "prying"];
+    "cutting", "blunt", "can-opening", "blade", "heat", "voltage-test", "current-clamp", "prying", "screwdriving"];
   // Whether the registry entry for `id` carries `tag`, the test every tag
   // count on the dev seam applies.
   function registryCarriesTag(id, tag){ return hasTag(ITEM_REGISTRY[id], tag); }
@@ -9710,7 +9919,8 @@ x_sn_9 m_sn_sn_sn sn p
   //                     false: everything drawing then starts.
   //            script   { t: [change] } applied before step t + 1, t counting
   //                     from 0: { switch: loadId, on }, { breaker: id, on },
-  //                     { reset: id }. A switch goes through setSwitchIn(),
+  //                     { reset: id }, { rewire: id } (a fuse, rewired as
+  //                     doRewireFuse() does, wire and time aside). A switch goes through setSwitchIn(),
   //                     as the game's does, so one for a switchless or an
   //                     unknown load is ignored.
   //            tanks    { loadId: { tankL, drawn? } }: the tank each pump
@@ -9759,6 +9969,7 @@ x_sn_9 m_sn_sn_sn sn p
         }
         else if("breaker" in c) switchBreakerIn(power, c.breaker, !!c.on);
         else if("reset" in c) resetBreakerIn(power, c.reset);
+        else if("rewire" in c) rewireFuseIn(power, c.rewire);
       });
       const m = start + t + 1;
       const r = powerStep(idx, power, rules, grid(m), m, 1, prev, seed, floats());
@@ -11389,21 +11600,32 @@ x_sn_9 m_sn_sn_sn sn p
     };
   }
   // A breaker's state as its row reads it, and whether power reaches the
-  // device, both functional UI text, retunable.
+  // device, both functional UI text, retunable. A fuse reads Intact or Blown.
   function breakerStateText(id){
     const b = breakerStateIn(state.power, id);
+    if(POWER_NET.breakers[id].fuse) return b.tripped ? "Blown" : "Intact";
     return b.tripped ? "Tripped" : b.on ? "On" : "Off";
   }
+  // A device's fuses: an old board's (#358), none on any other.
+  function deviceFuses(device){ return deviceBreakers(device).filter(id=> POWER_NET.breakers[id].fuse); }
   function deviceFedText(device){
     const fed = device.kind === "board" ? gridUp() : !!(powerNow && powerRead(powerNow, "supplied", device.id));
     return fed ? "Fed by the grid" : "No power";
   }
   // What the Here strip reads while a device's tab is selected: under
   // detailed rules its main (or its RCD) and how many of its breakers have
-  // tripped, under simplified rules just On or Off.
+  // tripped, under simplified rules just On or Off. An old board's (#358):
+  // under detailed rules its switch and whether its fuses have blown, under
+  // simplified rules Off, Blown or On, in that order of precedence.
   function deviceStripText(device){
     const head = powerNode(device).main;
     const main = breakerClosedIn(state.power, head);
+    const fuses = deviceFuses(device);
+    if(fuses.length){
+      const blown = fuses.some(id=> breakerStateIn(state.power, id).tripped);
+      if(state.electricalRules === "simplified") return !main ? "Off" : blown ? "Blown" : "On";
+      return `Switch ${main ? "on" : "off"}` + (blown ? " · fuses blown" : "");
+    }
     if(state.electricalRules === "simplified") return main ? "On" : "Off";
     const tripped = deviceBreakers(device).filter(id=> breakerStateIn(state.power, id).tripped).length;
     const word = POWER_NET.breakers[head].rcd ? "RCD" : "Main";
@@ -11429,7 +11651,7 @@ x_sn_9 m_sn_sn_sn sn p
   // The meter buttons the Electrical view offers, each only while its tool
   // is carried: Test on a load row and a breaker row, Clamp on a breaker row
   // (doMeterTest(), doMeterClamp()). Under simplified rules a breaker row is
-  // only ever a main. Each costs METER_READING_MIN.
+  // only ever a main, or an old board's fuses. Each costs METER_READING_MIN.
   function meterButtons(target, make){
     const out = [];
     const cost = fmtDuration(METER_READING_MIN);
@@ -11540,6 +11762,12 @@ x_sn_9 m_sn_sn_sn sn p
   // and one Switch on / Switch off; a tripped main reads Off, and switching
   // it on is its reset. Every control is instant and logs its own line
   // (doSwitchBreaker(), doResetBreaker()).
+  //   An old board (#358), one whose circuits hold a fuse, shows breaker rows
+  // under either rules: under simplified rules its cut-off switch's and its
+  // fuses', in place of the rating, the On/Off line and the one button. A
+  // cut-off switch's row shows no rating. A fuse's row reads Intact or Blown
+  // and has no button but Rewire, offered while it is blown and can be
+  // rewired (canRewireFuse(), doRewireFuse()), with its time.
   function renderPowerDevicePop(device){
     const node = powerNode(device);
     const box = document.createElement("div");
@@ -11553,7 +11781,29 @@ x_sn_9 m_sn_sn_sn sn p
     const line = (text)=>{ const div = document.createElement("div"); div.textContent = text; box.appendChild(div); };
     const controls = document.createElement("div");
     controls.className = "pop-actions";
-    if(state.electricalRules === "simplified"){
+    const breakerRow = (id)=>{
+      const br = POWER_NET.breakers[id];
+      const st = breakerStateIn(state.power, id);
+      const row = document.createElement("div");
+      row.className = "breaker-row";
+      const text = document.createElement("span");
+      text.textContent = br.cutoff ? `${br.label} · ${breakerStateText(id)}` : `${br.label} · ${br.rating} A · ${breakerStateText(id)}`;
+      row.appendChild(text);
+      const buttons = document.createElement("span");
+      buttons.className = "breaker-buttons";
+      if(br.fuse){
+        if(canRewireFuse(id)) buttons.appendChild(actionButton("Rewire", ()=> doRewireFuse(id), { cost:fmtDuration(REWIRE_FUSE_MIN) }));
+      } else buttons.appendChild(st.tripped ? actionButton("Reset", ()=> doResetBreaker(id))
+        : st.on ? actionButton("Switch off", ()=> doSwitchBreaker(id, false))
+        : actionButton("Switch on", ()=> doSwitchBreaker(id, true)));
+      if(electricalView) meterButtons({ breaker:id }, popMeterButton).forEach(b=> buttons.appendChild(b));
+      row.appendChild(buttons);
+      controls.appendChild(row);
+    };
+    const fuses = deviceFuses(device);
+    if(state.electricalRules === "simplified" && fuses.length){
+      [node.main].concat(fuses).forEach(breakerRow);
+    } else if(state.electricalRules === "simplified"){
       const main = POWER_NET.breakers[node.main];
       const closed = breakerClosedIn(state.power, node.main);
       line(`Rating: ${main.rating} A`);
@@ -11565,23 +11815,7 @@ x_sn_9 m_sn_sn_sn sn p
       if(electricalView) meterButtons({ breaker:node.main }, popMeterButton).forEach(b=> controls.appendChild(b));
     } else {
       line(deviceFedText(device));
-      deviceBreakers(device).forEach(id=>{
-        const br = POWER_NET.breakers[id];
-        const st = breakerStateIn(state.power, id);
-        const row = document.createElement("div");
-        row.className = "breaker-row";
-        const text = document.createElement("span");
-        text.textContent = `${br.label} · ${br.rating} A · ${breakerStateText(id)}`;
-        row.appendChild(text);
-        const buttons = document.createElement("span");
-        buttons.className = "breaker-buttons";
-        buttons.appendChild(st.tripped ? actionButton("Reset", ()=> doResetBreaker(id))
-          : st.on ? actionButton("Switch off", ()=> doSwitchBreaker(id, false))
-          : actionButton("Switch on", ()=> doSwitchBreaker(id, true)));
-        if(electricalView) meterButtons({ breaker:id }, popMeterButton).forEach(b=> buttons.appendChild(b));
-        row.appendChild(buttons);
-        controls.appendChild(row);
-      });
+      deviceBreakers(device).forEach(breakerRow);
     }
     devicePop.appendChild(controls);
   }

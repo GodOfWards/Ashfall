@@ -18,6 +18,212 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 ---
 
+## v0.10.10 — Old fuse boards in Lima's casas
+
+Implements: handoffs/old-fuse-boards.md
+
+Implements #358 in full, per `handoffs/old-fuse-boards.md`. About half of
+the generated casas off the barrio now have an old fuse board in place of
+the modern breaker panel: a bipolar cut-off switch and two porcelain plug
+fuses (*tapones*) on a single circuit. A blown fuse is rewired with fuse
+wire of its own rating and a screwdriver. A blown fuse reuses a breaker's
+saved `tripped` and `heat`, and wiring isn't saved, so there is no new
+persistent state and no `SAVE_KEY` change: **PATCH**.
+
+**New**
+- *Cut-off switch* (a template main's `cutoff`). `expandWiring()` makes it
+  `{ layer:"panel", label:"Cut-off switch", rating:null, curve:null,
+  cutoff:true }`. It is switched by hand like a breaker, and power passes it
+  only while it is closed. It never trips: the instant and heat checks skip
+  it under both rules, as they skip an RCD.
+- *Fuse* (a template circuit's `fuse`). No curve and no instant trip. Its
+  heat rises by `dt / fuseBlowMinutes(f)` while f > 1 and drains by
+  `dt / HEAT_COOL_MIN` otherwise. At 1 it blows, which is the saved
+  `tripped: true`. `fuseBlowMinutes(f)` runs through
+  `(FUSE_F_LOW 1.6, FUSE_T_LOW_MIN 60)` and
+  `(FUSE_F_HIGH 110/25, FUSE_T_HIGH_MIN 5/60)`, the gG anchors (IEC 60269,
+  via Mersen; secondary). They stand in for fuse wire: unconfirmed, and
+  retunable. At 15 A: everything on at once (29.8 A) blows in 9.3 minutes;
+  kettle, heater, fridge and pump (21.2 A) in about 4 hours; 1.25 × takes
+  27.7 hours.
+- *Fuses under simplified rules.* A fuse is consulted under both rules
+  (`consultsBreaker()`), for trips and for liveness. A circuit the rules
+  pass straight through is `circuitSkipped()`: under simplified rules,
+  every circuit but a fuse. So a load behind a blown fuse is unpowered under
+  either rules. Every other circuit breaker is still skipped under
+  simplified rules, exactly as before.
+- *Rewiring* (`doRewireFuse(id)`, ACTIONS). It is offered only while the
+  fuse is blown, an item tagged `screwdriving` is carried, and so is fuse
+  wire whose `fuseRating` equals the fuse's rating (`canRewireFuse()`). It
+  spends one length, takes `REWIRE_FUSE_MIN` (5), and leaves the fuse
+  unblown with its heat cleared to 0 (`rewireFuseIn()`), since new wire
+  starts cold. A breaker's reset keeps its heat; the difference is
+  deliberate. An overload still there blows the new wire on the fuse's own
+  curve. The cut-off switch is neither required nor checked.
+- `doResetBreaker()` and `doSwitchBreaker()` refuse a fuse id.
+- Constants (CONFIG, beside the breaker constants): `OLD_BOARD_PCT` 50,
+  `OLD_BOARD_FUSE_A` 15, `EDISON_FUSE_MAX_A` 30, `FUSE_F_NO_BLOW` 1.25,
+  `FUSE_NO_BLOW_MIN` 60, the four anchors above, `REWIRE_FUSE_MIN` 5. Each
+  carries its source, and is marked retunable, and unconfirmed where it is.
+
+**New content**
+- `WIRING_TEMPLATES.casa_fuses`: `main:{ cutoff:true }`; one circuit,
+  `fuses`, "Fuses", `OLD_BOARD_FUSE_A`, 220 V, `fuse:true`, serving every
+  role the casa has (derived from `BUILDING_TYPES.casa.rooms`). Its fixtures
+  are the casa's with their `circuit` set to `fuses`, derived from
+  `WIRING_TEMPLATES.casa`, so every load id (`h_x.house.fridge` and the
+  rest) matches a modern casa's.
+- Which casas: `hasOldBoard()`. A casa has an old board when its site stop
+  isn't `barrio` and `stableHash(id + KEY_SEP + "board") % 100 <
+  OLD_BOARD_PCT`. The key isn't the bare id, whose hash decides the locked
+  door, so the two rolls stay independent. **199** of Lima's 406
+  non-barrio casas have one (49%), and none of the 21 barrio casas. Of the
+  199, 116 have a locked door (58%, against 60% across all 406). The same
+  homes have old boards in every run.
+- An old-board casa (`oldBoardOverrides()`): its panel is named "Fuse box"
+  and uses `casa_fuses`; its living room reads "…A small fuse box hangs by
+  the front door, two porcelain plugs screwed into it."; its kitchen
+  drawers draw from `old_board_spares` after `kitchen_tools`. The meter box
+  at the street is unchanged: 32 A, direct.
+- `fuse_wire`, "Fuse wire (15 A)": `Materials`, tag `fuse-wire`,
+  `fuseRating: OLD_BOARD_FUSE_A`, `unitWeight` 0.01 (a judgment call). One
+  unit is one length.
+- The screwdriver gains `screwdriving`, and keeps `can-opening`.
+- `SPAWN_POOLS.old_board_spares`:
+  `{ emptyChance:0, entries:[ fuse_wire 0.40, 2–4 ] }`. `hardware_store`
+  gains `fuse_wire` 0.25, 1–3. All retunable; the hardware store's quantity
+  is a judgment call.
+
+**Changed / Reworked**
+- *Resolver.* `resolvePowerStep()` and `untouchedTrippers()` walk
+  `BREAKER_LAYERS` and filter each breaker by `consultsBreaker()` and not
+  `rcd`/`cutoff`, instead of walking `consultedLayers(rules)`. The order and
+  the checks are the same for every existing breaker.
+- `powerSnapshot()` gives a circuit's liveness and a load's `powered`
+  through `circuitSkipped()`. `loadSupplyVolts()` does the same.
+- `tripMinutes()`'s formula moved into `anchorMinutes(f, fLow, tLow, fHigh,
+  tHigh)`, which `tripMinutes()` and `fuseBlowMinutes()` both call.
+- `logTrips()`: a fuse blowing where its fuse box hangs logs "Something
+  pops in the fuse box." (`warn`) in place of the panel line. Elsewhere,
+  `ROOM_GOES_QUIET` where a load it fed was running, as before.
+- `doSwitchBreaker()` names a cut-off switch "the cut-off switch".
+- `meterReachesBreaker()`: under simplified rules the meters also reach a
+  fuse, since the pop-up shows it.
+- `buildBuilding()` lays an instance's `overrides.wiring` over its type's
+  before `buildWiring()` (`mergeWiring()`). A panel id the type lacks, or an
+  override on an unwired type, is reported in its `problems`.
+- `consumeByTag()` and `hasTool()` now go through `consumeMatching(match,
+  qty)` and `carriesMatching(match)`, which the rewire uses with
+  `fuseWireFor(rating)`. Behaviour is unchanged for both.
+- `validateWiring()`: a fuse's rating must be over 0 and at most
+  `EDISON_FUSE_MAX_A`, not an IEC breaker rating, and it has no curve check;
+  `fuseBlowMinutes(FUSE_F_NO_BLOW)` must be at least `FUSE_NO_BLOW_MIN`. A
+  cut-off switch has no rating or curve check. `expandWiring()` reports a
+  main that is both `rcd` and `cutoff`, and `fuse` on a main, a board or a
+  feeder.
+- `REPORTED_TOOL_TAGS` gains `screwdriving`. `simulatePower()`'s script
+  takes `{ rewire: id }` (`rewireFuseIn()`).
+
+**UI**
+- An old board's pop-up shows, under both rules, "Cut-off switch · On" /
+  "Off" with Switch off / Switch on (no rating), and "Fuses · 15 A ·
+  Intact" / "Blown". The fuse row has no button but **Rewire (0:05)**, shown
+  only while it is blown and can be rewired. Under simplified rules these
+  two rows replace the `Rating:` line, the On/Off line and the single
+  button. A modern board's pop-up is unchanged under both rules.
+- The Here strip for an old board: detailed rules, "Switch on" / "Switch
+  off", plus " · fuses blown" while blown; simplified rules, "Off" when
+  switched off, else "Blown" while blown, else "On". Worded as the handoff
+  gave it.
+- The rewire line: "You unscrew the blown plug, wind a length of fuse wire
+  under its screws and screw it back in."
+
+**Documentation**
+- POWER SCHEMA / `WIRING_TEMPLATES`: a main's `cutoff`, a circuit's `fuse`,
+  and the `casa_fuses` paragraph (the Rosario figures, and the single
+  circuit as Tom's account). `expandWiring()`'s shape comment:
+  `cutoff?`/`fuse?`. `powerSnapshot()`'s and `resolvePowerStep()`'s
+  comments cover fuses.
+- ITEM DATA SCHEMA: `fuseRating` (definition data, in
+  `REGISTRY_ONLY_FIELDS`, read by itemId), and the `screwdriving` and
+  `fuse-wire` tags. `SPAWN_POOLS`' chosen-chances list names the fuse
+  wire's.
+- BUILDING TYPES: the casa's comment names both boards; the instance schema
+  gains `overrides.wiring`; `generatedHomes()` explains the independent
+  roll.
+- Filed #367: rewiring needs a screwdriver, and the only live pool with one
+  is `tools_workshop`, since `hardware_store` never rolls (#133). The fuse
+  wire's `hardware_store` entry is inert for the same reason, noted on
+  #133. Nothing else was deferred.
+
+**Open questions / decisions resolved**
+- *How an old-board casa gets its wiring and text:* option (a), an instance
+  `overrides.wiring` merged by panel id in `buildBuilding()`, documented in
+  the instance schema. The living-room text and the drawers' pools are
+  `overrides.rooms`.
+- *How fuses enter the resolver:* a `fuse` flag on the breaker entry, read
+  by the checks through `consultsBreaker()` and by liveness through
+  `circuitSkipped()`. `BREAKER_LAYERS` is unchanged.
+- *Where `fuseBlowMinutes()` lives:* the formula is generalised into
+  `anchorMinutes()`, so it exists once. `fuseBlowMinutes(f)` takes only `f`,
+  as the handoff wrote it; `validateWiring()` holds the rating above 0.
+- *Which spend helper:* rating-aware. `fuseWireFor(rating)` matches tag
+  `fuse-wire` and a registry `fuseRating` equal to the fuse's, through
+  `consumeMatching()`.
+
+**Notes / assumptions**
+- *Meter reach under simplified rules* now includes fuses. The handoff
+  said the meters work on the fuse "as on any breaker", and simplified
+  rules now show it, so its reach follows. Retunable.
+- *Rewire's cost display:* "Rewire" carries its time in the dim cost style
+  that other timed pop-up buttons use.
+- The pump's start surge doesn't reach a fuse, since a fuse has no instant
+  trip, as specified.
+- *Old saves:* a casa that becomes old keeps its load and head ids, so its
+  switches carry over, and a head switched off stays off. Its saved
+  `.lights`, `.sockets` and `.water` entries are inert. No migration.
+
+**Explicitly out of scope**
+- Earthing on old boards, and any shock from rewiring live (#247);
+  over-fusing (#365); unscrewing a tapón to cut a circuit; the two tapones
+  as separate devices; other building types' boards (#307, #308, #309,
+  #299) and the fallback's removal (#258); appliances switching themselves
+  off (#334); the TV and washing machine (#333); meters on façades and
+  round two-pin sockets; fuse wire in any other pool.
+
+**Validation performed**
+- Headless Chromium, with a scratch test hook (not committed). The page
+  loads with no errors. `validateWiring()` and `validateBuildings()` report
+  no problems; the existing unwired-rooms warning is unchanged.
+  `validateReachability()`: `fuse_wire` is reachable, and
+  `tool tag "screwdriving": 0 hand-placed instances, live pools:
+  tools_workshop`.
+- `simulatePower()` on `casa` and `row_house`, under both rules, everything
+  switched on for 30 minutes and the heavy four for 300: the trips and the
+  final power state are identical to `origin/main`'s.
+- `casa_fuses`, with the heater and the fridge held drawing: everything on
+  blew the fuse at minute 10, under both rules, and powered went false; the
+  heavy four blew it at minute 243. A `reset` (heat kept) blew it again in
+  2 minutes; a `rewire` (heat 0) in 10. With the cut-off switch off,
+  nothing was powered and nothing tripped.
+- In game: the pop-up rows and the strip read as listed under UI, under
+  both rules; a modern panel's were unchanged. Reset and Switch did nothing
+  to a fuse. Rewire was absent without a screwdriver and without the wire,
+  and offered with both. Clicking it took 5 minutes, spent one length (3 →
+  2), cleared the breaker and heat entries, and logged its line. Both
+  `logTrips()` lines, and the modern panel's, logged as specified.
+
+**Sections touched**
+- CONFIG / CONSTANTS; WORLD DATA (ITEM_REGISTRY, SPAWN_POOLS, BUILDING
+  TYPES, WIRING_TEMPLATES / POWER SCHEMA); INVENTORY / ITEM SYSTEM
+  (`consumeMatching()`, `carriesMatching()`, `fuseWireFor()`); SIMULATION →
+  POWER; ACTIONS (WORLD INTERACTION); the dev helpers (`validateWiring()`,
+  `REPORTED_TOOL_TAGS`, `simulatePower()`); UI / RENDERING.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.10.9"` → `"0.10.10"`
+
+---
+
 ## v0.10.9 — The siren in a blackout, idle readouts, `buildingId`
 
 Implements: handoffs/blackout-siren-readouts-buildingid.md
