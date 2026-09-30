@@ -3839,13 +3839,19 @@ x_sn_9 m_sn_sn_sn sn p
   //   entry    the role the street exit leads into.
   //   rooms    { role, room, shelter, desc, floorCap, containers:[…], sink?,
   //            sleepSpot?, cannotHaveFire?, searchLabel?, searchMinutes?,
-  //            floor? }: ROOM SCHEMA's fields, by role. `desc` may be a list
-  //            of variants, one picked by the instance's `seed`. A container
-  //            is { id, name, capacityKg, spawnPools?, tags?, locked?,
-  //            breakTag?, items?, spawnRolled? }; `items` and `floor` are
-  //            placement refs (itemsFromRegistry()), and a container with
+  //            floor?, items? }: ROOM SCHEMA's fields, by role. `desc` may
+  //            be a list of variants, one picked by the instance's `seed`. A
+  //            container is { id, name, capacityKg, spawnPools?, tags?,
+  //            locked?, breakTag?, items?, spawnRolled? }; `items` and `floor`
+  //            are placement refs (itemsFromRegistry()), and a container with
   //            items starts spawnRolled unless it says otherwise, the rule
-  //            CONTAINER SCHEMA gives for hand-placed contents.
+  //            CONTAINER SCHEMA gives for hand-placed contents. A room's
+  //            `items`, { containerId:[placement refs] }, adds refs to its
+  //            containers by id, after `containers` is resolved and after
+  //            each container's own `items`, under the same spawnRolled
+  //            rule; an id the room has no container for is a build
+  //            problem. It is how an instance fills its type's containers
+  //            without restating them.
   //   links    { between:[role, role], label:[a→b, b→a], distanceM, door? }:
   //            a same-Location exit each way, gated by the door whose `key`
   //            is `door`, if any.
@@ -3895,8 +3901,9 @@ x_sn_9 m_sn_sn_sn sn p
   //            doors:{ key:{ …fields } | null }, wiring?:{ panels:{ id:{
   //            …fields } } } }, merged over the type's: a room's fields
   //            replace the type's field by field (so `containers` replaces
-  //            the whole list), a door's likewise, and null removes a door,
-  //            leaving its link an open passage. `wiring` lays fields over
+  //            the whole list, and `items` fills whichever list results), a
+  //            door's likewise, and null removes a door, leaving its link an
+  //            open passage. `wiring` lays fields over
   //            the type's wiring's panel of that id (an old board's name
   //            and template), before the wiring is built (mergeWiring()).
   // Ids, which saves key on and so must never change: rooms `<id>_<role>`,
@@ -3911,8 +3918,9 @@ x_sn_9 m_sn_sn_sn sn p
   // Containers shared by the home types. Names, capacities and pools follow
   // the flats the types replace; the capacities are judgment calls,
   // retunable.
+  const HEAT_CONTAINER_CAPACITY_KG = 8;   // stove and campfire alike
   const KITCHEN_CONTAINERS = [
-    { id:"stove", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"] },
+    { id:"stove", name:"Stove", capacityKg:HEAT_CONTAINER_CAPACITY_KG, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"] },
     { id:"cupboards", name:"Cupboards", capacityKg:15, spawnPools:["kitchen_nonperishable","kitchen_tools"] },
     { id:"drawers", name:"Drawers", capacityKg:10, spawnPools:["kitchen_tools"] },
     { id:"fridge", name:"Fridge", capacityKg:30, tags:["fridge"], spawnPools:["kitchen_perishable"] },
@@ -4117,40 +4125,27 @@ x_sn_9 m_sn_sn_sn sn p
         overrides:{ doors:{ front:{ locked:true } }, rooms:{
           living:{ desc:"Your living room, as you left it. The television is dark, and your mate is still on the table where you set it down. The breaker panel is on the wall by the door.",
             floor:[ { id:"mate_bombilla", qty:1 } ],
-            containers:[
-              { id:"sideboard", name:"Sideboard", capacityKg:10, spawnPools:["recreation","residential_personal"], items:[
-                { id:"tv_remote", qty:1 }, { id:"paperback_novel", qty:1 } ] },
-              { id:"bookshelf", name:"Bookshelf", capacityKg:20, spawnPools:["recreation","documents_lore"], items:[
-                { id:"box_of_matches", qty:1 }, { id:"photo_album", qty:1 } ] } ] },
+            items:{
+              sideboard:[ { id:"tv_remote", qty:1 }, { id:"paperback_novel", qty:1 } ],
+              bookshelf:[ { id:"box_of_matches", qty:1 }, { id:"photo_album", qty:1 } ] } },
           kitchen:{ desc:"Your kitchen. The gas bottle under the cooker is the one you changed last week.",
-            containers:[
-              { id:"stove", name:"Stove", capacityKg:8, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"], items:[
-                { id:"cooking_pot", qty:1, overrides:{ contents:[ dishFrom("stew", "cooking_pot", ["meat", "vegetables"], "cooked") ] } } ] },
-              { id:"cupboards", name:"Cupboards", capacityKg:15, spawnPools:["kitchen_nonperishable","kitchen_tools"], items:[
-                { id:"canned_soup", qty:3 }, { id:"pasta", qty:2 }, { id:"frying_pan", qty:1 },
-                { id:"plastic_bottle", qty:4, overrides:{ water:{ kind:"clean", fill:1 } } }, { id:"granola_bars", qty:3 } ] },
-              { id:"drawers", name:"Drawers", capacityKg:10, spawnPools:["kitchen_tools"], items:[
-                { id:"kitchen_knife", qty:1 }, { id:"can_opener", qty:1 } ] },
-              { id:"fridge", name:"Fridge", capacityKg:30, tags:["fridge"], spawnPools:["kitchen_perishable"], items:[
-                { id:"leftovers", qty:1, overrides:{ ages:[5*MINUTES_PER_DAY] } } ] },
-              { id:"freezer", name:"Freezer", capacityKg:10, tags:["freezer"], spawnPools:["kitchen_frozen"] } ] },
-          bathroom:{ containers:[
-            { id:"cabinet", name:"Bathroom cabinet", capacityKg:5, spawnPools:["medical_otc","hygiene"], items:[
-              { id:"bandage", qty:4 }, { id:"painkillers", qty:1 } ] },
-            { id:"underbasin", name:"Under-basin cupboard", capacityKg:10, spawnPools:["hygiene","cleaning_supplies"], items:[
-              { id:"toilet_paper", qty:3 }, { id:"bleach", qty:1 } ] } ] },
+            items:{
+              stove:[ { id:"cooking_pot", qty:1, overrides:{ contents:[ dishFrom("stew", "cooking_pot", ["meat", "vegetables"], "cooked") ] } } ],
+              cupboards:[ { id:"canned_soup", qty:3 }, { id:"pasta", qty:2 }, { id:"frying_pan", qty:1 },
+                { id:"plastic_bottle", qty:4, overrides:{ water:{ kind:"clean", fill:1 } } }, { id:"granola_bars", qty:3 } ],
+              drawers:[ { id:"kitchen_knife", qty:1 }, { id:"can_opener", qty:1 } ],
+              fridge:[ { id:"leftovers", qty:1, overrides:{ ages:[5*MINUTES_PER_DAY] } } ] } },
+          bathroom:{ items:{
+            cabinet:[ { id:"bandage", qty:4 }, { id:"painkillers", qty:1 } ],
+            underbasin:[ { id:"toilet_paper", qty:3 }, { id:"bleach", qty:1 } ] } },
           bedroom:{ desc:"Your bedroom. The bed's unmade from whatever morning this all started.",
             floor:[ { id:"dirty_laundry", qty:1 } ],
-            containers:[
-              { id:"wardrobe", name:"Wardrobe", capacityKg:25, spawnPools:["clothing"], items:[
-                { id:"winter_jacket", qty:1 }, { id:"sturdy_boots", qty:1 }, { id:"worn_backpack", qty:1 } ] },
-              { id:"bedside", name:"Bedside table", capacityKg:5, spawnPools:["residential_personal","documents_lore","self_defense","electronics"], items:[
-                { id:"flashlight", qty:1 }, { id:"spare_batteries", qty:2 }, { id:"wristwatch", qty:1 } ] },
-              { id:"chest", name:"Chest of drawers", capacityKg:15, spawnPools:["clothing","residential_personal"], items:[
-                { id:"folded_clothes", qty:1 }, { id:"crumpled_cash", qty:1 }, { id:"cloth", qty:3 } ] } ] },
+            items:{
+              wardrobe:[ { id:"winter_jacket", qty:1 }, { id:"sturdy_boots", qty:1 }, { id:"worn_backpack", qty:1 } ],
+              bedside:[ { id:"flashlight", qty:1 }, { id:"spare_batteries", qty:2 }, { id:"wristwatch", qty:1 } ],
+              chest:[ { id:"folded_clothes", qty:1 }, { id:"crumpled_cash", qty:1 }, { id:"cloth", qty:3 } ] } },
           garden:{ desc:"Your back garden. The grill is still greasy from the last asado.",
-            containers:[ { id:"shedbox", name:"Shed box", capacityKg:15, spawnPools:["fuel_fire","tools_general"], items:[
-              { id:"duct_tape", qty:1 }, { id:"rope", qty:1 } ] } ] } } } },
+            items:{ shedbox:[ { id:"duct_tape", qty:1 }, { id:"rope", qty:1 } ] } } } } },
       // The neighbours' row house on the same courtyard: pools only. A home,
       // so its door starts locked or not by HOME_LOCKED_PCT.
       { id:"row_neighbour", type:"row_house", site:HOME_STOP, name:"Row house", address:"Calle 90 Bis", marker:true,
@@ -4310,13 +4305,21 @@ x_sn_9 m_sn_sn_sn sn p
     const rooms = {};
     specs.forEach(r=>{
       const desc = Array.isArray(r.desc) ? r.desc[(inst.seed || 0) % r.desc.length] : r.desc;
+      // `items` places refs into the resolved containers by id, after each
+      // one's own `items`. An id the room has no container for is reported.
+      const placed = r.items || {};
+      Object.keys(placed).forEach(id=>{
+        if(!(r.containers || []).some(c=> c.id === id))
+          problems.push(`building ${inst.id}: items for container "${id}", which role "${r.role}" does not have`);
+      });
       const room = { locationId, address:inst.address, building:name, buildingId:inst.id, area:null, room:r.room || null,
         shelter:r.shelter, desc, floorCap:r.floorCap, floor:itemsFromRegistry(r.floor || []),
         containers:(r.containers || []).map(c=>{
-          const out = Object.assign({}, c, { items:itemsFromRegistry(c.items || []) });
+          const refs = (c.items || []).concat(placed[c.id] || []);
+          const out = Object.assign({}, c, { items:itemsFromRegistry(refs) });
           if(c.tags) out.tags = c.tags.slice();
           if(c.spawnPools) out.spawnPools = c.spawnPools.slice();
-          if(c.spawnRolled === undefined && c.items && c.items.length) out.spawnRolled = true;
+          if(c.spawnRolled === undefined && refs.length) out.spawnRolled = true;
           return out;
         }),
         exits:[] };
@@ -8663,7 +8666,6 @@ x_sn_9 m_sn_sn_sn sn p
   // fuel. Raising it, or making the build free, turns the cycle into a
   // firewood source.
   const CAMPFIRE_DISMANTLE_BASE_WOOD = 1;
-  const HEAT_CONTAINER_CAPACITY_KG = 8;   // stove and campfire alike
   const CHOP_TREE_FIREWOOD = 6;
   const FISH_BITE_CHANCE = 0.55;          // balance value, retunable
   function doFish(){
