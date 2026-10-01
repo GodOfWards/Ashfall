@@ -248,6 +248,8 @@ Belgrano and Campana.
   [Straight Dope](https://www.straightdope.com/21343298/when-the-zombies-take-over-how-long-till-the-electricity-fails).
   **Unconfirmed**: a North American estimate by an anonymous columnist, not
   a study; it is the only one found.
+  Its "1–3 days" for gas pipelines fits normal demand with no injection;
+  `Gas_AR.md`'s estimate for the collapse's small load is weeks (#348).
 
 ## Who operates each layer (#346, 2026-09-29 and 2026-10-01)
 
@@ -450,11 +452,9 @@ the airborne strain can be protected against.
   output if refuelling stops is unconfirmed. Secondary, 2026-09-29:
   [Petrotecnia, "Atucha II"](https://www.petrotecnia.com.ar/petro_08/AtuchaII_SP.pdf)
   (search summary).
-- **The gas pipelines' own reserve (line pack)** in hours: not found. TGS
-  runs about 9,248 km of pipeline, TGN about 40 % of the gas injected into
-  the trunk lines. Secondary:
-  [TGS](https://en.wikipedia.org/wiki/Transportadora_de_Gas_del_Sur),
-  [TGN](https://www.tgn.com.ar/en/operations-and-services/tgn-system/).
+- **The gas pipelines' own reserve (line pack)**: about 330–345 MMm³ in
+  February 2025, against 124–138 MMm³/d of demand; figures and sources in
+  `Gas_AR.md` (#348).
 
 ## Anchors for the estimates below (2026-09-29)
 
