@@ -55,24 +55,24 @@ gather under one header, and what is left of a unit shows as a meter.
   part-way like bottles; off a tank, to `min(space, tank left)` floored to the
   millilitre (`tankLeftMl()`), drawn by `drawFromTank()`.
 - *Drinking.* Any holder with fluid and no dish (`drinkable()`), a vessel with
-  ingredients included, offers Drink (`MEASURE_ML` = 250) and, below full
-  Thirst, Drink all (`drinkAllMl()`: `ceil((VITAL_MAX − Thirst) /
-  WATER_THIRST_PER_L × 1000)`), each or what is left when less, from the unit
-  `drinkTarget()` picks. `drinkFrom()` is the one drink: Thirst `+= ml / 1000 ×
+  ingredients included, offers Drink: `MEASURE_ML` (250), or what is left when
+  less, from the unit `drinkTarget()` picks. Every drink is by the measure;
+  there is no drink to full Thirst (#398). `drinkFrom()` is the one drink: Thirst `+= ml / 1000 ×
   WATER_THIRST_PER_L` (60, a 500 mL bottle's old 30), the fluid taken, its
   line, and tainted water's food poisoning at `TAINTED_WATER_POISONING_CHANCE ×
   ml / TAINTED_WATER_DOSE_ML` (500). `consumeProfile()` is food's alone again,
   and so is `EAT_PARTS`.
-- *The tap.* `doDrinkAtSink()`: Drink at the sink and Drink your fill at the
-  sink, clean, instant, drawing on the tank as a fill does.
+- *The tap.* `doDrinkAtSink()`: Drink at the sink, `MEASURE_ML`, clean,
+  instant, drawing on the tank as a fill does.
 - *Pouring.* `pourTargets()` lists every holder within reach
   (`nearbyPlaces()`) with room and a fluid that mixes; `pourFluid()` splits
   the source unit off first and moves the least of the three amounts. `doPour()`
   and `doPourOut()` are the actions; Pour out the water is on every holder.
 - *Auto-drink* (SURVIVAL / TIME SIMULATION). `autoDrink()`: awake and below
-  `LOW_THIRST_THRESHOLD`, the player drinks from carried clean water, least
-  left first, each holder as Drink all, until Thirst is full or the water runs
-  out. Checked in `clockStep()` on the step Thirst crosses the threshold, not
+  `LOW_THIRST_THRESHOLD`, the player drinks `MEASURE_ML` in all from carried
+  clean water, least left first, moving to the next holder if one runs dry,
+  until the measure is drunk or the water runs out (#398): +15 Thirst, so a
+  drink at the threshold leaves about 45. Checked in `clockStep()` on the step Thirst crosses the threshold, not
   while `asleep`, and at the end of every action (`afterAction()`).
 - *Dishes* (FIRE / COOKING). A dish that needs water needs at least
   `DISH_WATER_MIN_SHARE` (0.4) of its vessel's capacity in clean water
@@ -124,8 +124,7 @@ gather under one header, and what is left of a unit shows as a meter.
   (`renderPourMenu()`): "Pour the water into…", Back, then one entry per
   target with its labels, its place where two would read alike, its meter,
   Pour and Pour 250 mL; "Nothing here has room for it." when none.
-- The Here actions: Drink at the sink, Drink your fill at the sink, or "The tap
-  is dry."
+- The Here actions: Drink at the sink, or "The tap is dry."
 - Crafting's Dishes: "needs at least 800 mL of water".
 - The item lists are rebuilt keeping focus (`rebuildKeepingFocus()`), which
   now finds a control naming an item or a group (`data-uid`, `data-group`)
@@ -173,7 +172,7 @@ the tap live with the fluids); SURVIVAL / TIME SIMULATION (`clockStep()`,
   render may have removed the button. The drawer is left out: a Load is not an
   action. It renders again only if it drank.
 - *Identifiers:* the handoff's suggestions, plus `drinkable()`,
-  `drinkTarget()`, `drinkAllMl()`, `quench()`, `drawFromTank()`,
+  `drinkTarget()`, `quench()`, `drawFromTank()`,
   `tankLeftMl()`, `canDrinkAtSink()`, `sinkDry()`, `nearbyPlaces()`,
   `pourKeyOf()`, `dishWaterMinMl()`, `groupedNumber()`, `ON_LABEL`,
   `FLUID_LABELS`.
@@ -203,8 +202,10 @@ the tap live with the fluids); SURVIVAL / TIME SIMULATION (`clockStep()`,
   since `tankDrawn` is kept to the millilitre and 0.3 L must not floor to
   299 mL.
 - The game text: "You drink from the …", "You drink the last of the water in
-  the …", "You drink your fill from the …", "You drink from the tap.", "You
-  drink your fill at the tap.", "You pour the water into the …". Retunable.
+  the …", "You drink from the tap.", "You pour the water into the …".
+  Retunable.
+- #398 (drinking only by the measure) was folded into this version after its
+  pull request merged, without a version of its own, at Tom's word.
 - The replay page differs from v0.11.1's only in steps 6 and 7's digests, by
   the carried bottle's `water` becoming `fluid`. The Performance check's
   figures are in the pull request.
