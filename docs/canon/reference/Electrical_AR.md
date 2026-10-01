@@ -534,8 +534,9 @@ them.
   **TV**. **No range hood.** The game's washing machine is instead a
   front-loader, the Longvie L8012 (Tom, 2026-10-01; below).
 
-The game's SOCKETS circuit is **20 A** (Tom, 2026-10-01, #384), the TUG
-maximum, so that the washing machine and the kettle run together.
+The game's SOCKETS circuit is **20 A** in the row house and the casa (Tom,
+2026-10-01, #384), the TUG maximum, so that the row house's washing machine
+and kettle run together.
 
 The main's rating (32 A, OCEBA's Tarifa 1 maximum), the diferencial's
 (30 mA, 2 × 40 A, AEA's worked example) and the circuits' ratings are game
