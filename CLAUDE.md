@@ -85,7 +85,8 @@ coding session's wrap without a handoff (`docs/03-workflow.md`).
   `tier-0`/`tier-1` PATCH, `tier-2`/`tier-3` MINOR; the number within a pair
   is size, never priority. → `docs/03-workflow.md`
 - **Issues** carry a tier, a kind and follow their kind's template; the body
-  is the current truth; closed only by `Closes #NN`. → `docs/03-workflow.md`
+  is the current truth; closed only by `Closes #NN`. `designed` marks one
+  whose design Tom has confirmed done. → `docs/03-workflow.md`
 - **Handoffs**: the top level of `handoffs/` holds only live ones; spent and
   superseded ones move to `handoffs/archive/`, never renamed. →
   `docs/03-workflow.md`

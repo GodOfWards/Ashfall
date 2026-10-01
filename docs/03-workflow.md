@@ -68,7 +68,7 @@ The backlog is GitHub Issues. If the tracker is unreachable, say so and carry
 on; file what surfaced once it's back.
 
 **Labels.** Every issue carries one tier, one kind and, when it applies, one
-state. Status never goes in a title.
+state, and `designed` once it is. Status never goes in a title.
 
 | Kind | For |
 |---|---|
@@ -83,6 +83,15 @@ state. Status never goes in a title.
 
 State: `deferred` (decided later), `parked` (not planned; a comment says what
 would revive it).
+
+Readiness: `designed` means every design decision is Tom's and made, the
+facts it needs are in `docs/canon/reference/` or quoted in the body, and the
+body is the spec: a handoff, or a pass from the spec, can be written from it
+without more discussion. Only implementation choices a coding session names
+are left. A planning session applies it when Tom confirms the design is done,
+and removes it if the scope reopens. It says nothing about whether the work
+can start: what an issue waits on is in GitHub's blocking links, and a
+`designed` issue may still be `deferred`.
 
 **Templates.** Each kind has a template in `.github/ISSUE_TEMPLATE/`, and an
 issue body follows its kind's template, however it is filed. Filing through
