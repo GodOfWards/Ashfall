@@ -4,9 +4,9 @@ ARCHITECTURE sections: SURVIVAL / TIME SIMULATION, its POWER sub-section (the
 network's expansion, the resolve, and the game's reads of it); WORLD DATA
 (POWER SCHEMA: `APPLIANCES`, `WIRING_TEMPLATES`, `WIRING`, `GAME_WIRING`, and
 BUILDING TYPES' `wiring` and `water`); PLAYER STATE (`state.power`,
-`state.tankDrawn`); WORLD INTERACTION (the power actions, the meters,
-`doFillAtSink()`); RENDERING (the device pop-up, the Electrical view, the
-readouts).
+`state.tankDrawn`); WORLD INTERACTION (the power actions, the meters);
+INVENTORY / ITEM SYSTEM (the sink's draw on a tank, `drawFromTank()`);
+RENDERING (the device pop-up, the Electrical view, the readouts).
 
 ## Purpose
 
@@ -68,8 +68,9 @@ with the loads its breaker fed that were drawing.
   `doSwitchLoad()`, `doResetBreaker()`, `doRewireFuse()`) makes its change on
   a copy, resolves that building on it, and commits the result
   (`changePower()`): its trips happen, and are heard, with the action.
-- **A water draw** (`doFillAtSink()`) that moves a pumped tank's float
-  resolves its building at once, so its pump starts or stops calling.
+- **A water draw** (`doFillAtSink()`, `doDrinkAtSink()`, through
+  `drawFromTank()`) that moves a pumped tank's float resolves its building at
+  once, so its pump starts or stops calling.
 - **A tank coming full** is a scheduled event (`docs/systems/time.md`): its
   building resolves, so the pump stops and its latch clears.
 - **The grid failing or returning**, at every bound of `GRID_UP_SPANS`, is a

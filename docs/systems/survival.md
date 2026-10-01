@@ -9,7 +9,8 @@ sub-section).
 Effort costs something, and the cost lingers. Work and hurrying spend
 Stamina, then build Fatigue; staying awake and recovering spend Energy; and
 sleep is what gives Energy back, as far as Fatigue lets it. Low Hunger or
-Thirst slows recovery, so neglecting the body makes every effort dearer.
+Thirst slows recovery, so neglecting the body makes every effort dearer, and
+low Thirst is what makes the player drink on their own.
 
 ## Model
 
@@ -18,6 +19,12 @@ of `state.vitals`, with two marks in `state`: `lastExertionMinute`, the last
 minute anything was spent, and `lastWakeMinute`, the end of the last completed
 sleep. Hunger and Thirst fall in every clock step (`applyHungerThirst()`,
 [Time](time.md)); this system only reads them.
+
+**Auto-drink.** Awake, below `LOW_THIRST_THRESHOLD`, the player drinks on
+their own from the clean water they carry (`autoDrink()`,
+[Fluids](fluids.md)): checked in the clock step at the minute Thirst crosses
+the threshold, and at the end of every action (`afterAction()`); never while
+asleep, during a sleep or a blackout.
 
 **Exertion.** A task never touches Stamina or Fatigue. It declares an
 Exertion figure, beside itself, and hands it to `applyExertion()`: Stamina
@@ -111,6 +118,8 @@ added.
 - `sleepAvailable()`, `sleepOffCooldown()`, `sleepRestoresEnergy()`,
   `estimateSleepMinutes()`: what RENDERING reads to offer Sleep or say why
   not.
+- `autoDrink()`: the player drinking on their own, from `clockStep()` and
+  `afterAction()` ([Fluids](fluids.md)).
 
 ## Constants
 
@@ -123,7 +132,7 @@ added.
 - `SLEEP_ENERGY_RATE`: Energy regained per minute asleep.
 - `SLEEP_COOLDOWN_MIN`: how long after waking before Sleep is offered again.
 - `LOW_HUNGER_THRESHOLD`, `LOW_THIRST_THRESHOLD`: below these, recovery
-  slows.
+  slows; below the second, the player drinks on their own.
 - `FATIGUE_GAIT_LOCK`: the Fatigue at which the pace is held to Sneak.
 - `COLLAPSE_BLACKOUT_EVERY`, `COLLAPSE_BLACKOUT_MIN`,
   `COLLAPSE_BLACKOUT_ENERGY`, `COLLAPSE_STUMBLE_MIN`,

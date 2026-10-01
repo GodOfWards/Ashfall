@@ -65,3 +65,5 @@ Each doc is listed here as it is written.
 - [Spoilage](spoilage.md): food's ages, worked out when read.
 - [Survival](survival.md): Exertion, Stamina, Fatigue, Energy, rest, sleep
   and the gait lock.
+- [Fluids](fluids.md): holders and kinds, the sink and the tap, drinking,
+  auto-drink, pouring, and a dish's water.

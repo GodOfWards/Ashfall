@@ -9,6 +9,7 @@
     --bg:#111315; --panel:#1b1e22; --panel-2:#20242a; --line:#33383f;
     --ink:#e5e5e0; --ink-dim:#9a9fa6; --ink-faint:#888e97;
     --accent:#3b82f6; --accent-dim:#25508f; --warn:#d97b3f; --danger:#c76552; --good:#7a9463;
+    --divider:rgba(51,56,63,.6);
   }
   *{box-sizing:border-box;}
   body{ margin:0; min-height:100vh; background:var(--bg); color:var(--ink);
@@ -96,6 +97,11 @@
   .walk-list{ display:flex; flex-direction:column; gap:6px; }
   .pop-actions{ display:flex; flex-direction:column; align-items:stretch; gap:6px; }
   .pop-actions button.action{ text-align:left; }
+  /* An entry of the item pop-up's transfer submenu (renderPourMenu()): the
+     target and its two buttons on one line, wrapping at phone width, and
+     its meter under them. */
+  .pour-target{ font-size:12px; color:var(--ink); }
+  .pour-line{ display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:4px 8px; }
   /* The stove timer's add buttons, side by side in the device pop-up,
      sharing the row evenly so all three fit it at phone width. */
   .timer-steps{ display:flex; gap:6px; }
@@ -238,9 +244,29 @@
     margin-bottom:9px; font-size:12px; color:var(--ink-dim); }
   .tab-strip > span{ white-space:nowrap; }
   ul.itemlist{ list-style:none; margin:0; padding:0; }
-  ul.itemlist li{ display:flex; justify-content:space-between; align-items:center; gap:6px;
-    padding:6px 0; border-bottom:1px solid rgba(51,56,63,.6); font-size:12px; }
+  ul.itemlist li{ position:relative; display:flex; justify-content:space-between; align-items:center; gap:6px;
+    padding:6px 0; border-bottom:1px solid var(--divider); font-size:12px; }
   ul.itemlist li:last-child{ border-bottom:none; }
+  /* A unit's level (unitLevel()): a bar filled to what is left. Along a row's
+     bottom edge it takes the divider's place (.row-meter), its track the
+     divider's colour, so every meter in a list is the same length and levels
+     compare down it; the item pop-up draws a larger one (.pop-meter). At or
+     below LEVEL_WARN_BELOW the fill takes the warning colour (.low). The 2px
+     and 4px heights and the ink fill are judgment calls, retunable. */
+  .meter{ background:var(--divider); }
+  .meter > div{ height:100%; background:var(--ink-dim); }
+  .meter.low > div{ background:var(--warn); }
+  ul.itemlist li.metered{ border-bottom-color:transparent; }
+  .row-meter{ position:absolute; left:0; right:0; bottom:-1px; height:2px; }
+  .pop-meter{ height:4px; margin:4px 0 2px; }
+  /* An item group (renderItemList()): a header row with its disclosure
+     button, then, while open, its rows indented under the header's name.
+     The indent is the disclosure button's width and the gap after it, so a
+     row's name lines up with the header's; its meter starts there too. */
+  .disclosure{ background:none; border:none; font:inherit; color:var(--ink-dim); cursor:pointer;
+    width:12px; padding:6px 0; margin:-6px 6px -6px 0; text-align:left; }
+  ul.itemlist li.group-row{ padding-left:18px; }
+  ul.itemlist li.group-row .row-meter{ left:18px; }
   ul.itemlist .meta{ color:var(--ink-dim); flex:1; }
   ul.itemlist .cat{ color:var(--ink-faint); font-size:12px; }
   ul.itemlist .state{ color:var(--ink-dim); }
@@ -470,7 +496,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.11.1" };
+  const GAME_CONFIG = { VERSION: "0.12.0" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -609,18 +635,30 @@
   // baseline food-poisoning chance combined with the food's own
   // (combinePoisoning()). POISONING_TRAIT_MULTIPLIER is a placeholder until
   // traits (#9) exist, and multiplies the rotten baseline only. Tainted
-  // water's chance is for a full bottle's worth, scaled by the amount drunk.
-  // Balance values, retunable.
+  // water's chance is for TAINTED_WATER_DOSE_ML of it, scaled by the
+  // millilitres drunk. Balance values, retunable.
   const ROTTEN_RESTORES_FACTOR = 0.35;
   const ROTTEN_POISONING_CHANCE = 0.35;
   const POISONING_TRAIT_MULTIPLIER = 1;
   const TAINTED_WATER_POISONING_CHANCE = 0.35;
-  // Minutes tainted water must sit in a heated vessel to come out clean.
-  // Retunable.
+  const TAINTED_WATER_DOSE_ML = 500;
+  // Thirst restored per litre of water drunk: a 500 mL bottle's 30, the
+  // rate a bottle restored when it was drunk whole. A balance value,
+  // retunable.
+  const WATER_THIRST_PER_L = 60;
+  // What Drink drinks, and Pour by the measure pours, in mL: a glass. The
+  // buttons' labels read it. Retunable.
+  const MEASURE_ML = 250;
+  // Minutes tainted water must sit in a heated vessel to come out clean,
+  // whatever its volume. Retunable.
   const BOIL_MINUTES = 5;
   // A dish restores the sum of its ingredients' contributions times
   // (1 + this). Retunable.
   const DISH_RESTORES_BONUS = 0.25;
+  // A dish that needs water needs at least this share of its vessel's
+  // capacityMl of clean water (dishWaterMinMl()). A balance value,
+  // retunable.
+  const DISH_WATER_MIN_SHARE = 0.4;
   // The stove timer's add buttons, in minutes, in the order they are shown.
   // Retunable.
   const STOVE_TIMER_STEPS = [5, 10, 30];
@@ -681,8 +719,8 @@
   //   item     the dish's registry entry, whose cooks.minutes is how long the
   //            dish takes once formed
   //   vessels  the vessel kinds it forms in
-  //   water    true: the vessel holds clean water (tainted must boil first);
-  //            false: it holds none
+  //   water    true: the vessel holds clean water, at least DISH_WATER_MIN_SHARE
+  //            of its capacity (tainted must boil first); false: it holds none
   //   allowed  what may be in it, by ingredient role or by item id
   //   counts   what counts toward `min` / `exactly`, when narrower than
   //            `allowed` (a stew may hold grain, but needs two meat or
@@ -707,7 +745,10 @@
     { id:"stir_fry", item:"dish_stir_fry", vessels:["frying_pan","saucepan"], water:false,
       allowed:{ roles:["meat","vegetable","grain"] }, min:1, named:true }
   ];
-  function clamp(v){ return Math.max(0, Math.min(100, v)); }
+  // The top of every vital's scale, which clamp() holds them to and Drink
+  // all drinks up to.
+  const VITAL_MAX = 100;
+  function clamp(v){ return Math.max(0, Math.min(VITAL_MAX, v)); }
 
   // ==================================================
   // WORLD DATA
@@ -935,11 +976,11 @@
   //                   the item's weight (itemUnitWeight()), bags may nest to
   //                   any depth, and every load-time scan reaches them
   //                   through forEachItemList()
-  //     vessel        { kind, capacityKg, waterKg } — the item is a pot or
-  //                   pan: `kind` is what DISH_TEMPLATES match on,
-  //                   `capacityKg` bounds its contents' weight, and
-  //                   `waterKg` is the water it holds when full (0 = none).
-  //                   Definition data, read by itemId.
+  //     vessel        { kind, capacityKg } — the item is a pot or pan:
+  //                   `kind` is what DISH_TEMPLATES match on, and
+  //                   `capacityKg` bounds its contents' weight. One that
+  //                   holds water has `holdsFluid` too. Definition data,
+  //                   read by itemId.
   //     ingredient    { role, label, restores?, addPortion? } — the item
   //                   can go in a vessel: `role` is meat, vegetable or grain,
   //                   `label` names a dish ("Fish stew"), `restores` is what
@@ -996,16 +1037,20 @@
   //                   `ages` sets it, and a row read without one is taken as
   //                   true now. Ageing is worked out when the row's list is
   //                   next settled (settleList()).
-  //     holdsWater    { kg, restores } — the item holds water: `kg` when
-  //                   full, and what drinking a full one restores. A bottle.
-  //                   Definition data, read by itemId.
-  //     water         instance: { kind, fill } — the water an item holds,
-  //                   "clean" or "tainted", and a bottle's fill (1, 0.75,
-  //                   0.5 or 0.25); absent when empty. Shown as its kind,
-  //                   never its level; weighs holdsWater.kg × fill.
+  //     holdsFluid    { capacityMl } — the item holds a fluid, up to
+  //                   capacityMl millilitres, part-way at any level: a
+  //                   bottle, a saucepan, the pot. Definition data, read by
+  //                   itemId (capacityMlOf()).
+  //     fluid         instance: { kind, ml } — the fluid a holder holds: its
+  //                   kind ("clean" or "tainted" water today, open-ended)
+  //                   and how much, a positive whole number of millilitres.
+  //                   Absent when empty, never ml 0. Two kinds mix only as
+  //                   mixKinds() says. Shown as its kind and a meter; weighs
+  //                   1 kg a litre (fluidWeightOf()).
   //     portion       instance: how much of one unit of food is left — 1,
   //                   0.75, 0.5 or 0.25, absent = 1 — after Eat 1/2 or 1/4.
-  //                   Never shown; a unit weighs its portion of unitWeight.
+  //                   Shown as a meter and its words ("½ left",
+  //                   unitLevel()); a unit weighs its portion of unitWeight.
   //     disassembleLog the line Disassemble logs for a `disassemble`-tagged
   //                   item, with {qty} standing for the first recipe
   //                   input's quantity. Definition data, read from the
@@ -1031,13 +1076,13 @@
     pasta: { name:"Pasta", category:"Food", unitWeight:0.5,
       ingredient:{ role:"grain", label:"Pasta", restores:{hunger:120}, addPortion:0.25 } },
     frying_pan: { name:"Frying pan", category:"Tool", unitWeight:0.9, tags:["blunt"],
-      vessel:{ kind:"frying_pan", capacityKg:1, waterKg:0 } },
+      vessel:{ kind:"frying_pan", capacityKg:1 } },
     kitchen_knife: { name:"Kitchen knife", category:"Tool", unitWeight:0.15, tags:["blade","can-opening"] },
     can_opener: { name:"Can opener", category:"Tool", unitWeight:0.1, tags:["can-opening"] },
     leftovers: { name:"Leftovers", category:"Food", unitWeight:0.8, restores:{hunger:25}, verb:"Eat",
       spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
     plastic_bottle: { name:"Plastic bottle", category:"Food", unitWeight:0.05, verb:"Drink",
-      holdsWater:{ kg:0.5, restores:{thirst:30} } },
+      holdsFluid:{ capacityMl:500 } },
     granola_bars: { name:"Granola bars", category:"Food", unitWeight:0.1, restores:{hunger:15}, verb:"Eat" },
     painkillers: { name:"Painkillers", category:"Medical", unitWeight:0.1 },
     toilet_paper: { name:"Toilet paper", category:"Materials", unitWeight:0.2 },
@@ -1059,7 +1104,7 @@
       ingredient:{ role:"vegetable", label:"Bean" } },
     board_games: { name:"Board games", category:"Misc", unitWeight:1.0 },
     burnt_saucepan: { name:"Burnt saucepan", category:"Tool", unitWeight:0.6,
-      vessel:{ kind:"saucepan", capacityKg:1.5, waterKg:1.0 } },
+      vessel:{ kind:"saucepan", capacityKg:1.5 }, holdsFluid:{ capacityMl:1000 } },
     canned_corn: { name:"Canned corn", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat", sealed:true, opensWith:"can-opening",
       spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY },
       ingredient:{ role:"vegetable", label:"Corn" } },
@@ -1076,11 +1121,11 @@
     scrap_metal: { name:"Scrap metal", category:"Materials", unitWeight:0.5 },
     metal_pipe: { name:"Metal pipe", category:"Tool", unitWeight:1.3, tags:["blunt"] },
     dented_saucepan: { name:"Dented saucepan", category:"Tool", unitWeight:0.7,
-      vessel:{ kind:"saucepan", capacityKg:1.5, waterKg:1.0 } },
+      vessel:{ kind:"saucepan", capacityKg:1.5 }, holdsFluid:{ capacityMl:1000 } },
     cooking_pot: { name:"Cooking pot", category:"Tool", unitWeight:1.2,
-      vessel:{ kind:"pot", capacityKg:3, waterKg:2.0 } },
+      vessel:{ kind:"pot", capacityKg:3 }, holdsFluid:{ capacityMl:2000 } },
     roasting_pan: { name:"Roasting pan", category:"Tool", unitWeight:1.5,
-      vessel:{ kind:"roasting_pan", capacityKg:3, waterKg:0 } },
+      vessel:{ kind:"roasting_pan", capacityKg:3 } },
     crowbar: { name:"Crowbar", category:"Tool", unitWeight:2.5, tags:["blunt","prying"] },
     wrench: { name:"Wrench", category:"Tool", unitWeight:0.8, tags:["blunt"] },
     portable_radio: { name:"Portable radio", category:"Electronics", unitWeight:0.4, on:false, hasBatteries:true, durability:{ current:100, max:100, mode:"time" }, drainRate:100/2880 },
@@ -1124,7 +1169,9 @@
     tire_iron: { name:"Tire iron", category:"Tool", unitWeight:1.0, tags:["blunt"] },
     // A car's registration card, kept in its glovebox.
     cedula_verde: { name:"Vehicle registration card", category:"Misc", unitWeight:0.02 },
-    thermos: { name:"Thermos", category:"Misc", unitWeight:0.4 },
+    // A stainless mate thermos: 1,000 mL, the most common size sold for mate,
+    // at 0.65 kg (secondary). It holds water; keeping it hot is not modelled.
+    thermos: { name:"Thermos", category:"Misc", unitWeight:0.65, holdsFluid:{ capacityMl:1000 } },
     house_key: { name:"House key", category:"Key", unitWeight:0.03, doorId:"home-front" },
     bandage: { name:"Bandage", category:"Medical", unitWeight:0.05 },
     campfire_kit: { name:"Campfire Kit", category:"Materials", unitWeight:2.4, tags:["disassemble"],
@@ -1287,7 +1334,7 @@
   // up in ITEM_REGISTRY by itemId (registryEntryOf()), so itemFromRegistry()
   // leaves them off the instance. A retune then reaches every save, and no
   // stale copy on an instance is there to be read by mistake.
-  const REGISTRY_ONLY_FIELDS = ["carryFactor", "foodPoisoningChance", "disassembleLog", "cooks", "spoils", "holdsWater",
+  const REGISTRY_ONLY_FIELDS = ["carryFactor", "foodPoisoningChance", "disassembleLog", "cooks", "spoils", "holdsFluid",
     "vessel", "ingredient", "dish", "fuseRating"];
   // An item's (or a slot's) registry entry, by its itemId, or null for
   // anything without one: the keychain, an item from a save the registry no
@@ -1404,7 +1451,7 @@
       { itemId:"fish", key:"fish_cooked", state:{ cookState:"cooked" }, chance:0.016129, qtyMin:1, qtyMax:1 } ]},
     kitchen_nonperishable: { emptyChance:0.1, entries:[
       { itemId:"canned_soup", chance:0.193774, qtyMin:1, qtyMax:2 },
-      { itemId:"plastic_bottle", state:{ water:{ kind:"clean", fill:1 } }, chance:0.193774, qtyMin:1, qtyMax:3 },
+      { itemId:"plastic_bottle", state:{ fluid:{ kind:"clean", ml:500 } }, chance:0.193774, qtyMin:1, qtyMax:3 },
       { itemId:"canned_beans", chance:0.171049, qtyMin:1, qtyMax:2 },
       { itemId:"canned_corn", chance:0.171049, qtyMin:1, qtyMax:2 },
       { itemId:"canned_tuna", chance:0.147906, qtyMin:1, qtyMax:2 },
@@ -1521,7 +1568,7 @@
       { itemId:"walkie_talkie", chance:0.069728, qtyMin:1, qtyMax:1 },
       { itemId:"portable_radio", chance:0.069728, qtyMin:1, qtyMax:1 } ]},
     retail_stock_food: { emptyChance:0.1, entries:[
-      { itemId:"plastic_bottle", state:{ water:{ kind:"clean", fill:1 } }, chance:0.309252, qtyMin:1, qtyMax:3 },
+      { itemId:"plastic_bottle", state:{ fluid:{ kind:"clean", ml:500 } }, chance:0.309252, qtyMin:1, qtyMax:3 },
       { itemId:"candy_bar", chance:0.274647, qtyMin:1, qtyMax:2 },
       { itemId:"potato_chips", chance:0.274647, qtyMin:1, qtyMax:2 },
       { itemId:"canned_corn", chance:0.238925, qtyMin:1, qtyMax:2 },
@@ -4132,7 +4179,7 @@ x_sn_9 m_sn_sn_sn sn p
             items:{
               stove:[ { id:"cooking_pot", qty:1, overrides:{ contents:[ dishFrom("stew", "cooking_pot", ["meat", "vegetables"], "cooked") ] } } ],
               cupboards:[ { id:"canned_soup", qty:3 }, { id:"pasta", qty:2 }, { id:"frying_pan", qty:1 },
-                { id:"plastic_bottle", qty:4, overrides:{ water:{ kind:"clean", fill:1 } } }, { id:"granola_bars", qty:3 } ],
+                { id:"plastic_bottle", qty:4, overrides:{ fluid:{ kind:"clean", ml:500 } } }, { id:"granola_bars", qty:3 } ],
               drawers:[ { id:"kitchen_knife", qty:1 }, { id:"can_opener", qty:1 } ],
               fridge:[ { id:"leftovers", qty:1, overrides:{ ages:[5*MINUTES_PER_DAY] } } ] } },
           bathroom:{ items:{
@@ -4210,7 +4257,7 @@ x_sn_9 m_sn_sn_sn sn p
             containers:[
               { id:"shelves", name:"Shelves", capacityKg:30, spawnPools:["retail_stock_food","retail_stock_general"], items:[
                 { id:"canned_corn", qty:4 }, { id:"potato_chips", qty:3 },
-                { id:"plastic_bottle", qty:5, overrides:{ water:{ kind:"clean", fill:1 } } } ] },
+                { id:"plastic_bottle", qty:5, overrides:{ fluid:{ kind:"clean", ml:500 } } } ] },
               { id:"register", name:"Register Counter", capacityKg:5, spawnPools:["valuables","retail_stock_general"], items:[
                 { id:"loose_change", qty:1 }, { id:"lighter", qty:1 } ] },
               { id:"storage", name:"Storage Room", capacityKg:40, spawnPools:["retail_stock_food","retail_stock_general","cleaning_supplies"], items:[
@@ -5130,7 +5177,14 @@ x_sn_9 m_sn_sn_sn sn p
   // line log() is given, in order; null otherwise.
   const replayMode = new URLSearchParams(location.search).has("replay");
   let replayLog = null;
-  let detailItem = null; // UI-only: { uid, side } — resolved fresh via findItemByUid(), safe against list mutation
+  // UI-only: { uid, side }, an item's pop-up, resolved fresh via
+  // findItemByUid(), safe against list mutation; or { group, side }, a
+  // group's (groupKeyOf()), resolved fresh against the side's current tab.
+  let detailItem = null;
+  // The item groups shown open, each by its side, tab and group key
+  // (groupOpenKey()). UI-only and never saved, like detailItem, and cleared
+  // where it is on load, restart and a new game.
+  const openGroups = new Set();
   // What the device pop-up is open on, or null when it is closed:
   // { kind:"container", id }, a room fixture tagged `device`, or
   // { kind:"panel" | "board", id }, a panel or board by its POWER_NET node
@@ -5332,6 +5386,8 @@ x_sn_9 m_sn_sn_sn sn p
   // game's prose already follows. Used by the collapsed log summaries.
   const NUMBER_WORDS = ["zero","one","two","three","four","five","six","seven","eight","nine","ten"];
   function numberWord(n){ return n >= 0 && n < NUMBER_WORDS.length ? NUMBER_WORDS[n] : String(n); }
+  // A whole number with its thousands grouped by commas: "1,250".
+  function groupedNumber(n){ return Math.round(n).toLocaleString("en-US"); }
   // See MIN_MOVE_MIN for why the floor has two forms and why the flat one
   // must stay. A load over the carry limit slows the pace (see
   // overloadSpeedFactor()) but never scales the floor.
@@ -5433,21 +5489,15 @@ x_sn_9 m_sn_sn_sn sn p
   // The only place an item's weight is computed. A stowed bag weighs itself
   // plus everything in its `contents`, and the recursion runs back through
   // totalWeight(), so bags nested to any depth count in full. A part-eaten
-  // unit weighs its `portion` of a whole one, and water adds its own weight.
-  // An item with no `contents`, portion or water weighs exactly qty ×
-  // unitWeight.
+  // unit weighs its `portion` of a whole one, and a fluid adds its own
+  // weight. An item with no `contents`, portion or fluid weighs exactly qty
+  // × unitWeight.
   function itemUnitWeight(it){
-    return it.unitWeight * portionOf(it) + waterWeightOf(it)
+    return it.unitWeight * portionOf(it) + fluidWeightOf(it)
       + (Array.isArray(it.contents) ? totalWeight(it.contents) : 0);
   }
-  // The weight of the water one unit holds: a bottle's holdsWater.kg at its
-  // fill, a vessel's waterKg when it holds any.
-  function waterWeightOf(it){
-    const def = it.water && registryEntryOf(it);
-    if(!def) return 0;
-    if(def.holdsWater) return def.holdsWater.kg * it.water.fill;
-    return def.vessel ? def.vessel.waterKg : 0;
-  }
+  // The weight of the fluid one unit holds: a litre of water weighs a kg.
+  function fluidWeightOf(it){ return it.fluid ? it.fluid.ml / 1000 : 0; }
   // How much of one unit is left: `portion`, 1 when absent.
   function portionOf(it){ return typeof it.portion === "number" ? it.portion : 1; }
   function itemWeight(it){ return it.qty * itemUnitWeight(it); }
@@ -5469,8 +5519,8 @@ x_sn_9 m_sn_sn_sn sn p
   // only at the same progress, so two fish put in a stove minutes apart stay
   // two rows until both are cooked. A perishable's rows merge only when every
   // unit of both is in the same freshness state. Part-eaten units merge only
-  // with units as eaten as they are, never with whole ones, and bottles only
-  // with bottles holding the same water to the same level.
+  // with units as eaten as they are, never with whole ones, and holders only
+  // with holders holding the same fluid to the same millilitre.
   function sameStackState(a, b){
     return STACKABLE.has(a.category) && a.itemId === b.itemId && a.category === b.category
       && !a.durability && !b.durability && !!a.sealed === !!b.sealed
@@ -5478,11 +5528,8 @@ x_sn_9 m_sn_sn_sn sn p
       && (cookStateOf(a) !== "raw" || (a.cookMinutes || 0) === (b.cookMinutes || 0))
       && rowFreshness(a) === rowFreshness(b) && rowFreshness(a) !== "mixed"
       && portionOf(a) === portionOf(b)
-      && waterKindOf(a) === waterKindOf(b) && (a.water && a.water.fill) === (b.water && b.water.fill);
+      && fluidKindOf(a) === fluidKindOf(b) && (a.fluid ? a.fluid.ml : 0) === (b.fluid ? b.fluid.ml : 0);
   }
-  // The kind of water an item holds, "clean" or "tainted", or null when it
-  // holds none.
-  function waterKindOf(it){ return it.water ? it.water.kind : null; }
   // Folds `row` into `target`, an existing row sameStackState() accepts. The
   // one place two rows become one: the units' ages come along, re-sorted
   // oldest first. Both rows are always settled to the same minute, so their
@@ -5562,6 +5609,74 @@ x_sn_9 m_sn_sn_sn sn p
     if(!target._uid && row._uid) target._uid = row._uid;
     list.splice(list.indexOf(row), 1);
   }
+  // LEVELS AND GROUPS. What is left of one unit, as a share of full
+  // (unitLevel()), and the rows of a list that are one thing told apart only
+  // by what each has left (groupKeyOf()). RENDERING draws the first as a
+  // meter along a row and the second as a group under one header; a group's
+  // moves take its units least left first (rowsLeastLeftFirst()).
+  //   A unit's level is { level, figure }: `level` in [0,1], and `figure`
+  // the exact amount as the item pop-up says it. null for anything whose
+  // level is not shown, a device on batteries included: a device shows its
+  // level only where the device itself does, and neither the flashlight nor
+  // the radio does.
+  const PORTION_WORDS = { 0.75:"¾", 0.5:"½", 0.25:"¼" };
+  function unitLevel(it){
+    const cap = capacityMlOf(it);
+    if(cap > 0) return it.fluid
+      ? { level: it.fluid.ml / cap, figure: `${groupedNumber(it.fluid.ml)} of ${groupedNumber(cap)} mL` } : null;
+    if(it.durability && it.durability.mode === "uses")
+      return { level: it.durability.current / it.durability.max, figure: durabilityText(it) };
+    const p = portionOf(it);
+    return p < 1 ? { level:p, figure: `${PORTION_WORDS[p] || Math.round(p * 100) + "%"} left` } : null;
+  }
+  // Where a unit sorts, least left first: by its level; an empty holder as
+  // empty, and anything else with no level as full.
+  function orderLevel(it){
+    const l = unitLevel(it);
+    if(l) return l.level;
+    return holdsFluidAtAll(it) ? 0 : 1;
+  }
+  // What makes rows one group: the same item, sealed or not, cook state,
+  // fluid kind and freshness (a container's Frozen is every row's), and the
+  // same contents, so a pot of stew never groups with an empty pot. Rows of
+  // a group differ only by their level, raw cookMinutes, or `on`.
+  // `kind` stands for the fluid's kind where it is asked as it would be.
+  function groupKeyOf(it, kind = fluidKindOf(it)){
+    return JSON.stringify([it.itemId || null, it.name, !!it.sealed, cookStateOf(it), kind, rowFreshness(it),
+      Array.isArray(it.contents) ? it.contents.map(c=> [groupKeyOf(c), c.qty]) : null]);
+  }
+  // A list's groups, each key's rows in list order, the groups in the order
+  // their first rows come.
+  function groupsOf(list){
+    const out = new Map();
+    list.forEach(it=>{
+      const k = groupKeyOf(it);
+      if(!out.has(k)) out.set(k, []);
+      out.get(k).push(it);
+    });
+    return out;
+  }
+  function rowsLeastLeftFirst(rows){
+    return rows.map((r, i)=> ({ r, i, l: orderLevel(r) })).sort((a, b)=> a.l - b.l || a.i - b.i).map(x=> x.r);
+  }
+  function unitCount(rows){ return rows.reduce((s, r)=> s + r.qty, 0); }
+  // Whether a group moves by the unit as a row does (All, Half, 1): every
+  // row one a row could split, or a single unit.
+  function groupSplittable(rows){ return rows.every(r=> r.qty === 1 || (STACKABLE.has(r.category) && !r.durability)); }
+  // The units a group move of `qty` takes, least left first across its rows:
+  // [{ row, n }].
+  function groupPicks(rows, qty){
+    const picks = [];
+    let left = qty;
+    rowsLeastLeftFirst(rows).forEach(row=>{
+      if(left <= 0) return;
+      const n = Math.min(row.qty, left);
+      picks.push({ row, n });
+      left -= n;
+    });
+    return picks;
+  }
+  function picksWeight(picks){ return picks.reduce((s, p)=> s + p.n * itemUnitWeight(p.row), 0); }
   function invPools(){
     return [state.inventory.items].concat(
       CONTAINER_SLOTS.map(slot => state[slot] ? state[slot].items : []));
@@ -5661,7 +5776,7 @@ x_sn_9 m_sn_sn_sn sn p
   // never merges a durability-bearing item and every fire-starter placement in
   // the world is qty:1, so the entry is exactly one unit. A placement giving
   // qty > 1 would mean two matchboxes sharing one durability object, which is
-  // already wrong wherever it came from and is #134/#116's to fix, not
+  // already wrong wherever it came from and is #116's to fix, not
   // something to defend against here.
   //
   // Still returns true: the use it just spent was real, so the caller's action
@@ -5683,16 +5798,23 @@ x_sn_9 m_sn_sn_sn sn p
   // loose inventory the hidden caps. Load is what the item adds at the
   // destination's factor.
   function addToDestination(item){
-    const dst = invSlot(invTab);
-    if(!dst) return { ok:false, reason:"no-destination" };
-    if(invTab === "keychain" && !keychainAllows(item)) return { ok:false, reason:"keychain" };
-    const weight = itemWeight(item);
-    if(dst.capacityKg && totalWeight(dst.items) + weight > dst.capacityKg) return { ok:false, reason:"capacity" };
-    if(invTab === "inventory" && (totalWeight(dst.items) + weight > LOOSE_INVENTORY_MAX_KG
-       || dst.items.length >= LOOSE_INVENTORY_MAX_ENTRIES)) return { ok:false, reason:"capacity" };
-    if(playerLoad() + weight * carryFactorOf(dst) > CARRY_HARD_LIMIT_KG) return { ok:false, reason:"load" };
-    addToList(dst.items, item);
+    const reason = destinationRefusal(item, itemWeight(item), 1);
+    if(reason) return { ok:false, reason };
+    addToList(invSlot(invTab).items, item);
     return { ok:true };
+  }
+  // Why the inventory tab can't take `weight` kg of `item`'s kind in
+  // `entries` new rows at most, or null when it can: addToDestination()'s
+  // checks, which a group move (doTakeGroup()) asks once for all it moves.
+  function destinationRefusal(item, weight, entries){
+    const dst = invSlot(invTab);
+    if(!dst) return "no-destination";
+    if(invTab === "keychain" && !keychainAllows(item)) return "keychain";
+    if(dst.capacityKg && totalWeight(dst.items) + weight > dst.capacityKg) return "capacity";
+    if(invTab === "inventory" && (totalWeight(dst.items) + weight > LOOSE_INVENTORY_MAX_KG
+       || dst.items.length + entries > LOOSE_INVENTORY_MAX_ENTRIES)) return "capacity";
+    if(playerLoad() + weight * carryFactorOf(dst) > CARRY_HARD_LIMIT_KG) return "load";
+    return null;
   }
   // Every refusal ends on the floor. Only the keychain's has its own line;
   // room and load alike take the floor lines below.
@@ -5800,15 +5922,46 @@ x_sn_9 m_sn_sn_sn sn p
     const moveQty = normalizeQty(qty, it.qty);
     if(moveQty == null) return;
     const result = addToDestination(unitsOf(it, moveQty));
-    if(!result.ok){
-      if(result.reason === "capacity") log("That won't fit — not enough room there.", "warn");
-      else if(result.reason === "load") log("You can't carry any more.", "warn");
-      return; // no-destination and keychain-restricted stay silent, matching the disabled/hidden button state
-    }
+    if(!result.ok){ logTakeRefusal(result.reason); return; }
     dropUnits(src.items, index, moveQty);
     // No log line: the item visibly moves between the Here and Inventory
     // panels, so the line only repeated what the screen already showed.
     // The capacity warning above still speaks.
+    render();
+  }
+  // no-destination and keychain-restricted stay silent, matching the
+  // disabled/hidden button state.
+  function logTakeRefusal(reason){
+    if(reason === "capacity") log("That won't fit — not enough room there.", "warn");
+    else if(reason === "load") log("You can't carry any more.", "warn");
+  }
+  // A group's Take and Store: `qty` of its units (all when null), least left
+  // first across its rows (groupPicks()). All or nothing: when the whole
+  // amount won't fit, nothing moves and the row's warning speaks.
+  function doTakeGroup(rows, qty){
+    const src = worldSlot(world[state.currentRoom], worldTab);
+    if(!src || !rows.length || rows.some(r=> !src.items.includes(r))) return;
+    const moveQty = normalizeQty(qty, unitCount(rows));
+    if(moveQty == null) return;
+    const picks = groupPicks(rows, moveQty);
+    const reason = destinationRefusal(rows[0], picksWeight(picks), picks.length);
+    if(reason){ logTakeRefusal(reason); return; }
+    const dst = invSlot(invTab);
+    picks.forEach(p=> addToList(dst.items, dropUnits(src.items, src.items.indexOf(p.row), p.n)));
+    render();
+  }
+  function doStoreGroup(rows, qty){
+    const dst = worldSlot(world[state.currentRoom], worldTab);
+    const src = invSlot(invTab);
+    if(!dst || !src || !rows.length || rows.some(r=> !src.items.includes(r))) return;
+    const moveQty = normalizeQty(qty, unitCount(rows));
+    if(moveQty == null) return;
+    const picks = groupPicks(rows, moveQty);
+    if(dst.capacityKg && totalWeight(dst.items) + picksWeight(picks) > dst.capacityKg){
+      log("That won't fit there.", "warn");
+      return;
+    }
+    picks.forEach(p=> addToList(dst.items, dropUnits(src.items, src.items.indexOf(p.row), p.n)));
     render();
   }
   function doStore(index, qty){
@@ -5892,38 +6045,27 @@ x_sn_9 m_sn_sn_sn sn p
   // the same food — itemId, cook state and freshness — the one with the
   // least left, and among equals the oldest. So a half-eaten can is finished
   // before a new one is started, whichever row was clicked.
-  // For a bottle, the water plays the food's part: which kind it is joins
-  // the match, and its fill is what is left.
   function eatTarget(list, it){
     return leastLeftRow(list, it, r=>{ const p = consumeProfile(r); return p ? p.left : null; });
   }
   // Among the rows of `list` holding the same thing as `it` — itemId, cook
-  // state, freshness and water kind — the one whose `leftOf` is least, and
+  // state, freshness and fluid kind — the one whose `leftOf` is least, and
   // among equals the oldest; `it` itself when none qualifies. A row whose
   // `leftOf` is null does not qualify. Eating and adding an ingredient by
   // the part both pick their unit here.
   function leastLeftRow(list, it, leftOf){
     const same = list.filter(r=> r.itemId === it.itemId && leftOf(r) != null
       && cookStateOf(r) === cookStateOf(it) && rowFreshness(r) === rowFreshness(it)
-      && waterKindOf(r) === waterKindOf(it));
+      && fluidKindOf(r) === fluidKindOf(it));
     return same.sort((a, b)=> leftOf(a) - leftOf(b) || unitAges(b)[0] - unitAges(a)[0])[0] || it;
   }
-  // What eating or drinking one whole unit of `it` does, or null when it is
-  // nothing to eat or drink: { left, restores, poisoning, water }. Food is
-  // unitFoodEffects() with its portion left. A bottle is drunk from, not
-  // eaten: its holdsWater restores, tainted water carries
-  // TAINTED_WATER_POISONING_CHANCE, and its fill is what is left. This is
-  // the interim Drink rule, until fluid volumes (#47) replace it.
+  // What eating one whole unit of `it` does, or null when it is nothing to
+  // eat: { left, restores, poisoning }, unitFoodEffects() with its portion
+  // left. A holder's fluid is drunk, not eaten (drinkFrom()).
   function consumeProfile(it){
     if(it.sealed) return null;
-    const def = registryEntryOf(it);
-    if(def && def.holdsWater){
-      if(!it.water) return null;
-      return { left: it.water.fill, restores: def.holdsWater.restores, water:true,
-        poisoning: it.water.kind === "tainted" ? TAINTED_WATER_POISONING_CHANCE : 0 };
-    }
     const fx = unitFoodEffects(it);
-    return fx.restores ? { left: portionOf(it), restores: fx.restores, poisoning: fx.poisoning, water:false } : null;
+    return fx.restores ? { left: portionOf(it), restores: fx.restores, poisoning: fx.poisoning } : null;
   }
   // Applies `change` to one unit of `row` rather than to the whole row. A
   // unit split out of a larger row goes back into the list changed; a lone
@@ -5939,119 +6081,195 @@ x_sn_9 m_sn_sn_sn sn p
     remergeRow(list, row);
     return row;
   }
-  // Takes `amount` of one unit off `row`: food's portion, a bottle's fill.
-  // Food eaten to nothing is gone; a bottle drunk dry stays, empty.
+  // Takes `amount` of one unit's portion off `row`. Food eaten to nothing is
+  // gone.
   function eatFromRow(list, row, amount){
-    const water = !!consumeProfile(row).water;
-    const rest = consumeProfile(row).left - amount;
-    if(!water && rest <= 0){ dropUnits(list, list.indexOf(row), 1); return; }
-    changeOneUnit(list, row, unit=>{
-      if(!water) unit.portion = rest;
-      else if(rest > 0) unit.water.fill = rest;
-      else delete unit.water;
-    });
+    const rest = portionOf(row) - amount;
+    if(rest <= 0){ dropUnits(list, list.indexOf(row), 1); return; }
+    changeOneUnit(list, row, unit=>{ unit.portion = rest; });
   }
-  // Sinks. A water-holding item — a bottle — can be filled at the sink of the
-  // room it is in while the water runs (waterRunningIn()), unless it is
-  // already full, of either kind. One unit fills, to full; its water is clean
-  // unless it already held tainted water, since any tainted water taints
-  // everything it mixes with. Instant. After the water fails the sink gives
-  // nothing, and whatever was left in the pipes is #47's.
-  // A vessel fills too, while it holds no dish and no water.
-  // Off a tank, at any time, a fill draws the litres it adds (1 kg of water
-  // is 1 L) and takes only what the tank has left: a bottle fills part way on
-  // the last of it, and a vessel, whose water is all or nothing, needs its
-  // whole waterKg. A sink without a tank draws on the mains, and draws
-  // nothing down. The lines are functional, retunable.
-  function canFillAtSink(it){
-    const room = world[state.currentRoom];
-    if(!room.sink || !waterRunningIn(state.currentRoom) || !canTakeWater(it)) return false;
-    return !tankOf(state.currentRoom) || !vesselDefOf(it) || tankLeft(state.currentRoom) >= sinkLitresFor(it);
-  }
-  // Whether the room's sink is dry for an item that could take water: its
-  // tank drawn too low for it, whether or not the grid is up. What the pop-up
-  // says in the fill action's place.
-  function tapDryFor(it){
-    const room = world[state.currentRoom];
-    return !!room.sink && canTakeWater(it) && tankOf(state.currentRoom) > 0 && !canFillAtSink(it);
-  }
-  // The litres filling one unit of `it` to full would add.
-  function sinkLitresFor(it){
+  // FLUIDS: docs/systems/fluids.md has the model. A holder (registry
+  // `holdsFluid`) holds one fluid, `fluid: { kind, ml }`, from a millilitre
+  // to its capacityMl, and none at all once it holds a dish. Every reader of
+  // a holder's fluid goes through these.
+  function fluidKindOf(it){ return it.fluid ? it.fluid.kind : null; }
+  function capacityMlOf(it){
     const def = registryEntryOf(it);
-    if(def && def.holdsWater) return def.holdsWater.kg * (1 - (it.water ? it.water.fill : 0));
-    return def && def.vessel ? def.vessel.waterKg : 0;
+    return def && def.holdsFluid ? def.holdsFluid.capacityMl : 0;
   }
-  // Whether an item can take more water: a bottle that is not full, or a
-  // vessel holding none, since a vessel's water is all or nothing (#47).
-  // Filling at the sink and pouring in both ask this.
-  function canTakeWater(it){
-    if(!holdsWaterAtAll(it)) return false;
-    return !it.water || (!vesselDefOf(it) && it.water.fill < 1);
+  // Whether an item holds fluid at all right now: a holder with no dish.
+  function holdsFluidAtAll(it){ return capacityMlOf(it) > 0 && !dishIn(it); }
+  // The millilitres an item has room for, 0 for anything that holds none.
+  function fluidSpaceMl(it){ return holdsFluidAtAll(it) ? capacityMlOf(it) - (it.fluid ? it.fluid.ml : 0) : 0; }
+  // What two fluids make together, the one statement of what mixes: nothing
+  // with anything is that thing, a kind with itself is that kind, and clean
+  // water with tainted is tainted. Any other pair is null: they don't mix,
+  // and no action offers it.
+  function mixKinds(a, b){
+    if(a === null) return b;
+    if(b === null || a === b) return a;
+    const pair = [a, b].sort().join("+");
+    return pair === "clean+tainted" ? "tainted" : null;
   }
-  // Whether an item can take water right now: a bottle always, a vessel with
-  // a waterKg while it holds no dish.
-  function holdsWaterAtAll(it){
-    const def = registryEntryOf(it);
-    if(def && def.holdsWater) return true;
-    return !!(def && def.vessel && def.vessel.waterKg > 0 && !dishIn(it));
-  }
-  // Puts water of `kind` into one unit: a bottle full to the top, a vessel
-  // full. Any tainted water already there taints it, and new water in a
-  // vessel starts its boil over.
-  // A bottle can be filled to `fill` short of the top (a tank's last litres).
-  function addWater(unit, kind, fill = 1){
-    const k = waterKindOf(unit) === "tainted" ? "tainted" : kind;
-    unit.water = vesselDefOf(unit) ? { kind:k } : { kind:k, fill };
+  // `ml` of `kind` into one unit, mixed with what it holds (mixKinds()). New
+  // water in a vessel starts its boil over. A caller never adds more than
+  // fluidSpaceMl().
+  function addFluid(unit, kind, ml){
+    unit.fluid = { kind: mixKinds(fluidKindOf(unit), kind), ml: (unit.fluid ? unit.fluid.ml : 0) + ml };
     delete unit.boilMinutes;
   }
+  // `ml` out of one unit; emptied, it holds nothing, and has nothing to boil.
+  function takeFluid(unit, ml){
+    const left = unit.fluid.ml - ml;
+    if(left > 0) unit.fluid.ml = left;
+    else { delete unit.fluid; delete unit.boilMinutes; }
+  }
+  // DRINKING. Any holder with fluid and no dish is drunk from, a vessel with
+  // ingredients in it included: what is drunk is the water, never the food.
+  // Drink takes MEASURE_ML, Drink all what brings Thirst to full
+  // (drinkAllMl()), each or what is left when less. The unit drunk from is
+  // the least-left one holding the same fluid among the rows of the same
+  // item, as Eat picks (drinkTarget()). Drinking is instant.
+  function drinkable(it){ return !!it.fluid && !dishIn(it); }
+  function drinkTarget(list, it){
+    return leastLeftRow(list, it, r=> drinkable(r) ? r.fluid.ml : null);
+  }
+  // The millilitres that bring Thirst to full. The nudge keeps a figure that
+  // is whole but for float noise from rounding a millilitre up.
+  function drinkAllMl(){ return Math.max(0, Math.ceil((VITAL_MAX - state.vitals.thirst) / WATER_THIRST_PER_L * 1000 - 1e-9)); }
+  // Thirst for `ml` of water drunk, from a holder or the tap alike.
+  function quench(ml){ state.vitals.thirst = clamp(state.vitals.thirst + ml / 1000 * WATER_THIRST_PER_L); }
+  // A drink of `ml` from `unit` of `list`, the one way a holder is drunk
+  // from, by hand or on your own (autoDrink()): Thirst, the fluid taken (a
+  // holder drunk dry stays, empty), its line, and, for tainted water, food
+  // poisoning at TAINTED_WATER_POISONING_CHANCE per TAINTED_WATER_DOSE_ML,
+  // after the line so the onset reads as its consequence. `all`: a Drink
+  // all, whose line says when it drank your fill. The lines are game text,
+  // retunable.
+  function drinkFrom(list, unit, ml, all){
+    const kind = unit.fluid.kind, name = unit.name.toLowerCase();
+    quench(ml);
+    const after = changeOneUnit(list, unit, u=> takeFluid(u, ml));
+    const line = !after.fluid ? `You drink the last of the water in the ${name}.`
+      : all && state.vitals.thirst >= VITAL_MAX ? `You drink your fill from the ${name}.`
+      : `You drink from the ${name}.`;
+    log(line, "good", "drink:" + line);
+    if(kind === "tainted") rollFoodPoisoning(TAINTED_WATER_POISONING_CHANCE * ml / TAINTED_WATER_DOSE_ML);
+    return after;
+  }
+  // Drink (or, `all`, Drink all) from row `index` of the side's tab.
+  function doDrink(sourceKind, index, all){
+    const room = world[state.currentRoom];
+    const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
+    const list = src && src.items;
+    const clicked = getItemAt(list, index);
+    if(!clicked || !drinkable(clicked)) return;
+    const unit = drinkTarget(list, clicked);
+    const ml = Math.min(all ? drinkAllMl() : MEASURE_ML, unit.fluid.ml);
+    if(!(ml > 0)) return;
+    drinkFrom(list, unit, ml, all);
+    render();
+  }
+  // Sinks. A holder can be filled at the sink of the room it is in while the
+  // water runs (waterRunningIn()), while it has room, part-way or from
+  // empty alike. One unit fills, as far as it has room; the water is clean,
+  // and mixes with what is there (mixKinds()), so tainted water already in it
+  // taints it. Instant. After the water fails the sink gives nothing, and
+  // whatever was left in the pipes is #300's.
+  // Off a tank, at any time, a fill draws the litres it adds and takes only
+  // what the tank has left, to the millilitre: a holder fills part-way on the
+  // last of it. A sink without a tank draws on the mains, and draws nothing
+  // down. The lines are functional, retunable.
+  function canFillAtSink(it){
+    const room = world[state.currentRoom];
+    return !!room.sink && waterRunningIn(state.currentRoom) && fluidSpaceMl(it) > 0
+      && mixKinds(fluidKindOf(it), "clean") !== null;
+  }
+  // Whether the room's sink is dry for an item with room for water: its
+  // tank drawn dry, whether or not the grid is up. What the pop-up says in
+  // the fill action's place.
+  function tapDryFor(it){ return fluidSpaceMl(it) > 0 && sinkDry(); }
+  // The whole millilitres a tank in the current room has left. Its drawn
+  // litres are kept to the millilitre; the nudge takes back the float noise
+  // that would floor 0.3 L to 299 mL.
+  function tankLeftMl(){ return Math.floor(tankLeft(state.currentRoom) * 1000 + 1e-6); }
   function doFillAtSink(sourceKind, index){
     const room = world[state.currentRoom];
     const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
     const it = getItemAt(src && src.items, index);
     if(!it || !canFillAtSink(it)) return;
-    const need = sinkLitresFor(it);
     const fromTank = tankOf(state.currentRoom) > 0;
-    // Rounded to the millilitre, so a tank's running total and a bottle's
-    // part fill don't carry float noise.
-    const litres = Math.round((fromTank ? Math.min(need, tankLeft(state.currentRoom)) : need) * 1000) / 1000;
-    const def = registryEntryOf(it);
-    const fill = def && def.holdsWater ? Math.round(((it.water ? it.water.fill : 0) + litres / def.holdsWater.kg) * 1000) / 1000 : 1;
-    const filled = changeOneUnit(src.items, it, unit=> addWater(unit, "clean", Math.min(1, fill)));
-    // A draw that moves a pumped tank's float resolves its building at once,
-    // so its pump starts, or stops calling, with the draw.
-    const b = world[state.currentRoom].buildingId;
-    const floatNow = ()=> TANK_PUMPS[b] !== undefined ? JSON.stringify(tankFloat(BUILDING_INFO[b].tankL, state.tankDrawn[b] || 0)) : null;
-    const floatBefore = fromTank ? floatNow() : null;
-    if(fromTank) state.tankDrawn[b] = Math.round(((state.tankDrawn[b] || 0) + litres) * 1000) / 1000;
+    const ml = fromTank ? Math.min(fluidSpaceMl(it), tankLeftMl()) : fluidSpaceMl(it);
+    if(!(ml > 0)) return;
+    const filled = changeOneUnit(src.items, it, unit=> addFluid(unit, "clean", ml));
+    const moved = fromTank ? drawFromTank(ml) : null;
     // The pop-up follows the filled bottle, as doOpen()'s follows the opened can.
     detailItem = { uid: ensureUid(filled), side: sourceKind };
     log(fromTank && tankLeft(state.currentRoom) <= 0 ? "The tap coughs, spits, and runs dry."
       : `You fill the ${it.name.toLowerCase()} at the sink.`);
-    if(fromTank && floatNow() !== floatBefore) resolveBuilding(b);
+    if(moved) resolveBuilding(moved);
     render();
   }
-  // Vessels within reach of an item: every vessel in the lists crafting
-  // reaches (nearbyLists()), and every vessel in the room's heat container,
-  // once each. Each comes as { vessel, place }, the place being where it was
-  // found: "carried" for the inventory pools, else the Here tab's label —
-  // "Floor", or the container's name.
-  function nearbyVessels(){
+  // `ml` drawn from the current room's tank. Returns its building when the
+  // draw moved a pumped tank's float, for the caller to resolve at once,
+  // after its own line, so the pump starts, or stops calling, with the draw;
+  // null otherwise.
+  function drawFromTank(ml){
+    const b = world[state.currentRoom].buildingId;
+    const floatNow = ()=> TANK_PUMPS[b] !== undefined ? JSON.stringify(tankFloat(BUILDING_INFO[b].tankL, state.tankDrawn[b] || 0)) : null;
+    const floatBefore = floatNow();
+    state.tankDrawn[b] = Math.round(((state.tankDrawn[b] || 0) + ml / 1000) * 1000) / 1000;
+    return floatNow() !== floatBefore ? b : null;
+  }
+  // Drinking at the tap, the sink's Drink (MEASURE_ML) and Drink all (to
+  // full Thirst), while the water runs. The water is clean. Instant, as
+  // filling is, and drawn as a fill draws: off a tank, the litres drunk,
+  // only what is left on the last of it; a sink on the mains draws nothing
+  // down. The lines are game text, retunable.
+  function canDrinkAtSink(){ return !!world[state.currentRoom].sink && waterRunningIn(state.currentRoom); }
+  // Whether the room's sink is dry: its tank drawn dry. What the Here panel
+  // says in the tap's place.
+  function sinkDry(){ return !!world[state.currentRoom].sink && tankOf(state.currentRoom) > 0 && !(tankLeft(state.currentRoom) > 0); }
+  function doDrinkAtSink(all){
+    if(!canDrinkAtSink()) return;
+    const fromTank = tankOf(state.currentRoom) > 0;
+    const want = all ? drinkAllMl() : MEASURE_ML;
+    const ml = fromTank ? Math.min(want, tankLeftMl()) : want;
+    if(!(ml > 0)) return;
+    quench(ml);
+    const moved = fromTank ? drawFromTank(ml) : null;
+    log(fromTank && tankLeft(state.currentRoom) <= 0 ? "The tap coughs, spits, and runs dry."
+      : all ? "You drink your fill at the tap." : "You drink from the tap.", "good");
+    if(moved) resolveBuilding(moved);
+    render();
+  }
+  // The item lists within reach of an item, once each: the lists crafting
+  // reaches (nearbyLists()), and the room's heat container. Each comes as
+  // { list, place }, the place being where it is: "carried" for the
+  // inventory pools, else the Here tab's label — "Floor", or the
+  // container's name.
+  function nearbyPlaces(){
     const room = world[state.currentRoom];
     const heat = getHeatContainer(room);
     const pools = invPools();
     const containers = room.containers.concat(room.carContainers || []);
     const placeOf = list=> pools.includes(list) ? "carried"
       : list === room.floor ? "Floor" : containers.find(c=> c.items === list).name;
+    // An empty list holds nothing to find; the pools' unworn slots each
+    // give a fresh one.
+    return nearbyLists().concat(heat ? [heat.items] : [])
+      .filter((list, i, all)=> list.length && all.indexOf(list) === i).map(list=> ({ list, place:placeOf(list) }));
+  }
+  // Vessels within reach of an item, each as { vessel, place }.
+  function nearbyVessels(){
     const out = [];
-    nearbyLists().concat(heat ? [heat.items] : []).forEach(list=> list.forEach(it=>{
-      if(vesselDefOf(it) && !out.some(o=> o.vessel === it)) out.push({ vessel:it, place:placeOf(list) });
-    }));
+    nearbyPlaces().forEach(({ list, place })=> list.forEach(it=>{ if(vesselDefOf(it)) out.push({ vessel:it, place }); }));
     return out;
   }
   // The vessel names one action's buttons show, over the nearbyVessels()
   // entries it is offered on. Vessels sharing a name and a place get one
   // button, on the fullest of them by contents' weight (a tie to the first),
-  // since nothing yet tells them apart (#47). A name still on two or more
+  // since an ingredient needs only one of them. A name still on two or more
   // buttons shows each one's place, so no two buttons read the same. Returns
   // a Map of the vessels given a button to the name their label shows.
   function vesselButtonNames(offered){
@@ -6125,16 +6343,15 @@ x_sn_9 m_sn_sn_sn sn p
   // still missing, nothing ruling the dish out, and one within reach that
   // the vessel can take.
   function canAddMissing(t, vessel){
-    const st = templateStatus(t, vesselDefOf(vessel).kind, vessel.contents || [], waterKindOf(vessel));
+    const st = templateStatus(t, vessel);
     return !st.blocked && st.need > 0 && templateCandidates(t).some(c=> canAddToVessel(c.list, c.row, vessel));
   }
   // Add ingredients: adds what `t` still needs to `vessel` from within reach,
   // one unit at a time, exactly as Add would. Water is never pulled. It
   // never chooses the dish: the contents do, when heated.
   function doAddMissingIngredients(t, vessel){
-    const kind = vesselDefOf(vessel).kind;
     for(;;){
-      const st = templateStatus(t, kind, vessel.contents || [], waterKindOf(vessel));
+      const st = templateStatus(t, vessel);
       if(st.blocked || st.need === 0) break;
       const c = templateCandidates(t).find(x=> canAddToVessel(x.list, x.row, vessel));
       if(!c || !addIngredientTo(c.list, c.row, vessel)) break;
@@ -6149,30 +6366,67 @@ x_sn_9 m_sn_sn_sn sn p
     giveItem(row);
     render();
   }
-  // Whether a bottle's water can go into `vessel`: while the vessel can take
-  // water, and into its clean water when the bottle's is tainted, which only
-  // taints it — kept, by choice, as the one pour into water already there.
-  function canPourInto(bottle, vessel){
-    if(!bottle.water || !holdsWaterAtAll(bottle) || !vesselDefOf(vessel)) return false;
-    return canTakeWater(vessel)
-      || (holdsWaterAtAll(vessel) && waterKindOf(vessel) === "clean" && waterKindOf(bottle) === "tainted");
+  // POURING. Any holder with fluid and no dish pours into any other within
+  // reach (nearbyPlaces()) that has room and whose fluid mixes with it
+  // (mixKinds()). Identical targets are one: the rows of one item in one
+  // place that would hold the same fluid after the pour (pourKeyOf()), an
+  // empty bottle and one of water alike, poured into the fullest unit among
+  // them that is not full, so bottles are topped up rather than water spread
+  // thin. The source unit is split off first, so the other units of its own
+  // row are targets like any other.
+  //   An entry: { place, key, unit, list }, `unit` the row it pours into
+  // now and `list` its list.
+  function pourKeyOf(row, kind){ return groupKeyOf(row, mixKinds(kind, fluidKindOf(row))); }
+  function pourTargets(srcList, src){
+    const kind = fluidKindOf(src);
+    const byKey = new Map();
+    nearbyPlaces().forEach(({ list, place })=> list.forEach(row=>{
+      if((row === src && row.qty === 1) || !(fluidSpaceMl(row) > 0) || mixKinds(kind, fluidKindOf(row)) === null) return;
+      const k = place + KEY_SEP + pourKeyOf(row, kind);
+      const best = byKey.get(k);
+      const ml = row.fluid ? row.fluid.ml : 0;
+      if(!best || ml > (best.unit.fluid ? best.unit.fluid.ml : 0)) byKey.set(k, { place, key:k, unit:row, list });
+    }));
+    return Array.from(byKey.values());
   }
-  // Empties a bottle into a vessel, whatever its fill: the vessel then holds
-  // water, tainted if either was. Volumes are #47's. The line's wording is
-  // retunable.
-  function doPourIntoVessel(list, index, vessel){
-    const bottle = getItemAt(list, index);
-    if(!bottle || !canPourInto(bottle, vessel)) return;
-    addWater(vessel, bottle.water.kind);
-    changeOneUnit(list, bottle, u=>{ delete u.water; });
-    log(`You pour the water into the ${vessel.name.toLowerCase()}.`);
+  // Moves min(`ml`, what the source has, what the target has room for) from
+  // one unit of `src` into one unit of `dst`, each unit split off its row
+  // first (changeOneUnit()). The kind mixes, a vessel target's boil starts
+  // over, and a source keeps its boil. Returns the source unit after.
+  function pourFluid(srcList, src, dstList, dst, ml){
+    const n = Math.min(ml, src.fluid.ml, fluidSpaceMl(dst));
+    const kind = src.fluid.kind;
+    const after = changeOneUnit(srcList, src, u=> takeFluid(u, n));
+    changeOneUnit(dstList, dst, u=> addFluid(u, kind, n));
+    return after;
+  }
+  // Pour (`ml` null: as much as fits) or Pour by the measure from row
+  // `index` of the side's tab into the entry keyed `key`, found again now.
+  // The pop-up follows the source, its submenu open while it still holds
+  // fluid. Pouring tainted water into clean is allowed: the entry's label
+  // says so. The line's wording is retunable.
+  function doPour(sourceKind, index, key, ml){
+    const room = world[state.currentRoom];
+    const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
+    const it = getItemAt(src && src.items, index);
+    if(!it || !drinkable(it)) return;
+    const target = pourTargets(src.items, it).find(e=> e.key === key);
+    if(!target) return;
+    const name = target.unit.name.toLowerCase();
+    const after = pourFluid(src.items, it, target.list, target.unit, ml == null ? Infinity : ml);
+    log(`You pour the water into the ${name}.`);
+    detailItem = { uid: ensureUid(after), side: sourceKind, pour: drinkable(after) };
     render();
   }
-  // Silent: the vessel's label loses its water.
-  function doPourOutWater(vessel){
-    if(dishIn(vessel)) return;
-    delete vessel.water;
-    delete vessel.boilMinutes;
+  // Pour out the water, on any holder with fluid and no dish: one unit is
+  // emptied, and the water is gone. Silent: its label and meter go.
+  function doPourOut(sourceKind, index){
+    const room = world[state.currentRoom];
+    const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
+    const it = getItemAt(src && src.items, index);
+    if(!it || !drinkable(it)) return;
+    const after = changeOneUnit(src.items, it, u=> takeFluid(u, u.fluid.ml));
+    detailItem = { uid: ensureUid(after), side: sourceKind };
     render();
   }
   // A dish never leaves its vessel, so the pot is emptied of it. The line's
@@ -6204,8 +6458,7 @@ x_sn_9 m_sn_sn_sn sn p
     if(fx.restores.hunger) state.vitals.hunger = clamp(state.vitals.hunger + fx.restores.hunger * a);
     if(fx.restores.thirst) state.vitals.thirst = clamp(state.vitals.thirst + fx.restores.thirst * a);
     eatFromRow(list, it, a);
-    // What is drunk from a bottle is the water, not the bottle.
-    const verb = it.verb.toLowerCase(), name = fx.water ? "water" : it.name.toLowerCase();
+    const verb = it.verb.toLowerCase(), name = it.name.toLowerCase();
     log(a === 1 ? `You ${verb} the ${name}.` : `You ${verb} some of the ${name}.`, "good", "consume:" + (it.itemId || it.name));
     // After the eating line, so the onset line reads as its consequence.
     rollFoodPoisoning(fx.poisoning * a);
@@ -6338,25 +6591,22 @@ x_sn_9 m_sn_sn_sn sn p
     // the keychain-blocked Take above and the Crafting panel's recipe list
     // (renderCraftingPanel()), which is a catalogue and would become
     // undiscoverable if filtered.
-    if(consumeProfile(it)){
-      const verb = it.verb || "Use";
-      const left = consumeProfile(eatTarget(list, it)).left;
-      actions.push({ label: verb, onClick:()=>doConsume(side, index) });
-      EAT_PARTS.forEach(part=>{
-        if(part.amount < left) actions.push({ label: verb + " " + part.label, onClick:()=>doConsume(side, index, part.amount) });
-      });
+    consumeActions(list, index, side).forEach(a=> actions.push(a));
+    drinkActions(list, index, side).forEach(a=> actions.push(a));
+    // A holder with fluid and no dish: Pour…, which opens the transfer
+    // submenu in the pop-up (renderPourMenu()), and Pour out the water.
+    if(drinkable(it)){
+      actions.push({ label:"Pour…", onClick:()=>{ detailItem = { uid: ensureUid(it), side, pour:true }; render(); } });
+      actions.push({ label:"Pour out the water", onClick:()=> doPourOut(side, index) });
     }
     vesselActions(it).forEach(a=> actions.push(a));
-    // An ingredient offers every vessel within reach that can take it, and a
-    // bottle with water every one it can pour into, labelled per
-    // vesselButtonNames().
+    // An ingredient offers every vessel within reach that can take it,
+    // labelled per vesselButtonNames().
     if(!vesselDefOf(it)){
       const near = nearbyVessels();
       const add = vesselButtonNames(near.filter(n=> canAddToVessel(list, it, n.vessel)));
-      const pour = vesselButtonNames(near.filter(n=> canPourInto(it, n.vessel)));
       near.forEach(({ vessel:v })=>{
         if(add.has(v)) actions.push({ label:`Add to the ${add.get(v)}`, onClick:()=> doAddToVessel(list, index, v) });
-        if(pour.has(v)) actions.push({ label:`Pour into the ${pour.get(v)}`, onClick:()=> doPourIntoVessel(list, index, v) });
       });
     }
     if(it.sealed && (!it.opensWith || hasTool(it.opensWith)))
@@ -6380,6 +6630,55 @@ x_sn_9 m_sn_sn_sn sn p
     // controls here.
     batteryActions(it).forEach(a=> actions.push(a));
     if(disassemblyRecipe(it)) actions.push({ label:"Disassemble", onClick:()=> doDisassemble(list, index) });
+    return actions;
+  }
+  // Eat, by the whole and the part, on row `index` of `list` (its verb: milk
+  // is drunk by it too): what it eats is the unit eatTarget() picks, so a
+  // group's pop-up offers the same through any of its rows.
+  function consumeActions(list, index, side){
+    const it = getItemAt(list, index);
+    if(!it || !consumeProfile(it)) return [];
+    const verb = it.verb || "Use";
+    const left = consumeProfile(eatTarget(list, it)).left;
+    const actions = [{ label: verb, onClick:()=>doConsume(side, index) }];
+    EAT_PARTS.forEach(part=>{
+      if(part.amount < left) actions.push({ label: verb + " " + part.label, onClick:()=>doConsume(side, index, part.amount) });
+    });
+    return actions;
+  }
+  // Drink and Drink all on row `index` of `list`, a holder with fluid and no
+  // dish. Drink all is not offered at full Thirst.
+  function drinkActions(list, index, side){
+    const it = getItemAt(list, index);
+    if(!it || !drinkable(it)) return [];
+    const actions = [{ label:"Drink", onClick:()=> doDrink(side, index, false) }];
+    if(state.vitals.thirst < VITAL_MAX) actions.push({ label:"Drink all", onClick:()=> doDrink(side, index, true) });
+    return actions;
+  }
+  // A group's pop-up actions (`rows`, a group of `list`): its stack's own,
+  // over the whole group. Take, Store or Place All, Half and 1 over its
+  // units, by a row's rules, least left first (doTakeGroup(),
+  // doStoreGroup()), the Take family disabled for the keychain as a row's
+  // is; then Eat, or Drink and Drink all, as a row's. Nothing else: Open, Fill, Add, Pour,
+  // Equip, Disassemble and the battery controls stay on the rows.
+  function getGroupActions(list, rows, side){
+    const actions = [];
+    const total = unitCount(rows), parts = groupSplittable(rows);
+    if(side === "world"){
+      const keychainBlocked = invTab==="keychain" && !keychainAllows(rows[0]);
+      actions.push({ label:"Take All", disabled: keychainBlocked, onClick:()=>doTakeGroup(rows) });
+      if(parts && total>=3) actions.push({ label:"Take Half", disabled: keychainBlocked, onClick:()=>doTakeGroup(rows, Math.ceil(total/2)) });
+      if(parts && total>1) actions.push({ label:"Take 1", disabled: keychainBlocked, onClick:()=>doTakeGroup(rows, 1) });
+    } else if(worldSlot(world[state.currentRoom], worldTab)){
+      const verb = worldTab==="floor" ? "Place" : "Store";
+      actions.push({ label: verb + " All", onClick:()=>doStoreGroup(rows) });
+      if(parts && total>=3) actions.push({ label: verb + " Half", onClick:()=>doStoreGroup(rows, Math.ceil(total/2)) });
+      if(parts && total>1) actions.push({ label: verb + " 1", onClick:()=>doStoreGroup(rows, 1) });
+    }
+    const eater = rows.find(r=> consumeProfile(r));
+    if(eater) consumeActions(list, list.indexOf(eater), side).forEach(a=> actions.push(a));
+    const drinker = rows.find(drinkable);
+    if(drinker) drinkActions(list, list.indexOf(drinker), side).forEach(a=> actions.push(a));
     return actions;
   }
   // The recipe a `disassemble`-tagged item takes apart by: the RECIPES entry
@@ -6406,9 +6705,9 @@ x_sn_9 m_sn_sn_sn sn p
     render();
   }
   // A vessel's own actions. Holding a dish: eat it from the pot, by the
-  // whole and the part, or pour it out. Otherwise: pour out its water, take
-  // out any ingredient, or open the Crafting panel's Dishes on it. Fill at
-  // the sink is getItemActions()'s, shared with bottles.
+  // whole and the part, or pour it out. Otherwise: take out any ingredient,
+  // or open the Crafting panel's Dishes on it. Drinking, pouring and Fill at
+  // the sink are getItemActions()'s, shared with every holder.
   function vesselActions(v){
     if(!vesselDefOf(v)) return [];
     const actions = [];
@@ -6423,7 +6722,6 @@ x_sn_9 m_sn_sn_sn sn p
       actions.push({ label:"Pour it out", onClick:()=> doPourOutDish(v) });
       return actions;
     }
-    if(v.water) actions.push({ label:"Pour out the water", onClick:()=> doPourOutWater(v) });
     (v.contents || []).forEach(row=>{
       actions.push({ label:`Take out the ${row.name.toLowerCase()}`, onClick:()=> doTakeOutOfVessel(v, row) });
     });
@@ -6441,7 +6739,7 @@ x_sn_9 m_sn_sn_sn sn p
     if(it.hasBatteries !== false){
       actions.push({ label: it.on ? "Turn off" : "Turn on", onClick:()=>{
         switchDevice(it, !it.on);
-        // Silent: the status line already reads "— On" / "— Off".
+        // Silent: the status line already reads "On" / "Off".
         render();
       }});
       actions.push({ label:"Remove batteries", onClick:()=>{
@@ -6462,7 +6760,8 @@ x_sn_9 m_sn_sn_sn sn p
         it.durability.asOf = minutesSinceCollapse();
         scheduleBatteryDeath(it);
       }
-      // Silent: the status line's charge readout jumps to 100%.
+      // Silent: the batteries leave the inventory. Nothing shows a charge:
+      // a device dies without warning, by design.
       render();
     }});
     return actions;
@@ -7456,6 +7755,30 @@ x_sn_9 m_sn_sn_sn sn p
       state.illnesses[id] = left - tick;
     });
   }
+  // AUTO-DRINK: docs/systems/fluids.md has the model. From the clean water
+  // carried (invPools()), the holder with the least left first (unitLevel(),
+  // ties in list order), each as Drink all, until Thirst is full or the
+  // water runs out; one line per holder, drinkFrom()'s. Its callers check
+  // that you are awake and below LOW_THIRST_THRESHOLD. Returns whether it
+  // drank.
+  function autoDrink(){
+    let drank = false;
+    for(;;){
+      if(!(state.vitals.thirst < VITAL_MAX)) break;
+      let next = null;
+      invPools().forEach(list=> list.forEach(row=>{
+        if(!drinkable(row) || row.fluid.kind !== "clean") return;
+        const level = unitLevel(row).level;
+        if(!next || level < next.level) next = { list, row, level };
+      }));
+      if(!next) break;
+      const ml = Math.min(drinkAllMl(), next.row.fluid.ml);
+      if(!(ml > 0)) break;
+      drinkFrom(next.list, next.row, ml, true);
+      drank = true;
+    }
+    return drank;
+  }
   // Sleep's runtime flags, never saved: `asleep` while doSleep()'s loop runs,
   // and while a blackout runs (advanceTime()), so an event picks its asleep
   // line; `wokenUp` set when a waking event fires during either, which ends
@@ -7688,7 +8011,11 @@ x_sn_9 m_sn_sn_sn sn p
   // it, and its own stop condition.
   function clockStep(dt){
     state.totalMinutes += dt;
+    const thirstBefore = state.vitals.thirst;
     applyHungerThirst(dt);
+    // The minute Thirst crosses LOW_THIRST_THRESHOLD, awake, you drink
+    // (autoDrink()). One comparison a step.
+    if(!asleep && thirstBefore >= LOW_THIRST_THRESHOLD && state.vitals.thirst < LOW_THIRST_THRESHOLD) autoDrink();
     processDueEvents();
   }
   function applyEnergyBaseline(min, multiplier){
@@ -8867,10 +9194,12 @@ x_sn_9 m_sn_sn_sn sn p
   }
   function cookMinutesOf(it){ return registryEntryOf(it).cooks.minutes; }
   function cookRemaining(it){ return Math.max(0, cookMinutesOf(it) - (it.cookMinutes || 0)); }
-  // VESSELS AND DISHES. A vessel (registry `vessel`: kind, capacityKg,
-  // waterKg) holds ingredients in its `contents` — or, once a dish has
-  // formed, that one dish — and, when waterKg is above 0, water: `water:
-  // { kind }` while full, absent when not. A vessel has no fill level.
+  // VESSELS AND DISHES. A vessel (registry `vessel`: kind, capacityKg)
+  // holds ingredients in its `contents` — or, once a dish has formed, that
+  // one dish — and, when it is a holder too (`holdsFluid`), water, from a
+  // millilitre to full, as any holder does (FLUIDS). A dish that needs water
+  // needs at least dishWaterMinMl() of it, clean, and takes up all the water
+  // there is.
   function vesselDefOf(it){ const def = registryEntryOf(it); return def && def.vessel || null; }
   function ingredientOf(it){ const def = registryEntryOf(it); return def && def.ingredient || null; }
   function isDish(it){ const def = registryEntryOf(it); return !!(def && def.dish); }
@@ -8892,28 +9221,32 @@ x_sn_9 m_sn_sn_sn sn p
     if(!ing) return false;
     return set.ids ? set.ids.includes(it.itemId) : set.roles.includes(ing.role);
   }
-  // Where a vessel stands against a template: whether the template is for
+  // The water a dish that needs water needs in vessel `v`, in mL.
+  function dishWaterMinMl(v){ return Math.ceil(DISH_WATER_MIN_SHARE * capacityMlOf(v)); }
+  // Where vessel `v` stands against a template: whether the template is for
   // this kind of vessel, whether something in it rules the dish out, how
   // many counting units it has of how many it needs, and whether its water
-  // is right. `ready` is the three together: heat it and this dish forms,
-  // unless an earlier template forms first. Tainted water is not ready — it
-  // must boil first — but `waterBoils` says it will be.
-  function templateStatus(t, kind, rows, water){
-    const units = contentUnits(rows);
+  // is right: for a template with water, at least dishWaterMinMl() of it,
+  // clean; for one without, none. `ready` is the three together: heat it and
+  // this dish forms, unless an earlier template forms first. Enough tainted
+  // water is not ready — it must boil first — but `waterBoils` says it will
+  // be.
+  function templateStatus(t, v){
+    const units = contentUnits(v.contents || []);
     const target = t.exactly != null ? t.exactly : t.min;
     const blocked = units.some(u=> !inIngredientSet(t.allowed, u))
       || (t.exactly != null && units.length > t.exactly);
     const have = units.filter(u=> inIngredientSet(t.counts || t.allowed, u)).length;
-    const waterOk = t.water ? water === "clean" : !water;
-    const applies = t.vessels.includes(kind);
+    const enough = !!v.fluid && v.fluid.ml >= dishWaterMinMl(v);
+    const waterOk = t.water ? enough && v.fluid.kind === "clean" : !v.fluid;
+    const applies = t.vessels.includes(vesselDefOf(v).kind);
     return { applies, blocked, have, target, need: Math.max(0, target - have), waterOk,
-      waterBoils: t.water && water === "tainted",
+      waterBoils: t.water && enough && v.fluid.kind === "tainted",
       ready: applies && !blocked && have >= target && waterOk };
   }
   // The template a vessel's contents and water make, the first in order.
   function matchingTemplate(v){
-    const kind = vesselDefOf(v).kind, rows = v.contents || [], water = waterKindOf(v);
-    return DISH_TEMPLATES.find(t=> templateStatus(t, kind, rows, water).ready) || null;
+    return DISH_TEMPLATES.find(t=> templateStatus(t, v).ready) || null;
   }
   // One unit's contribution to a dish, in restores: the ingredient's own
   // `restores` when it has them, else its Cooked restores for a cookable
@@ -8982,26 +9315,27 @@ x_sn_9 m_sn_sn_sn sn p
     return words.join(" and ") + " " + ITEM_REGISTRY[t.item].name.toLowerCase();
   }
   // A dish made from fresh units of `ids` for template `templateId`, in the
-  // named vessel's water, in `cookState`: the world's pots of stew. It gets
-  // its age like any world item, from stampMissingAges().
+  // named vessel full of water, in `cookState`: the world's pots of stew. It
+  // gets its age like any world item, from stampMissingAges().
   function dishFrom(templateId, vesselId, ids, cookState){
     const t = DISH_TEMPLATES.find(x=> x.id === templateId);
     const dish = buildDish(t, ids.map(id=> itemFromRegistry({ id, qty:1 })),
-      t.water ? ITEM_REGISTRY[vesselId].vessel.waterKg : 0);
+      t.water ? ITEM_REGISTRY[vesselId].holdsFluid.capacityMl / 1000 : 0);
     dish.cookState = cookState;
     if(cookState === "raw") dish.cookMinutes = 0;
     return dish;
   }
-  // Formation: the contents and the water become one raw dish, the vessel's
-  // only content, new and Fresh. From then on nothing can be taken out.
+  // Formation: the contents and all the water become one raw dish, the
+  // vessel's only content, new and Fresh. From then on nothing can be taken
+  // out.
   function formDish(v, t){
-    const dish = buildDish(t, v.contents || [], t.water ? vesselDefOf(v).waterKg : 0);
+    const dish = buildDish(t, v.contents || [], fluidWeightOf(v));
     dish.ages = [0];
     dish.agedAt = settledAt;
     dish.cookState = "raw";
     dish.cookMinutes = 0;
     v.contents = [dish];
-    delete v.water;
+    delete v.fluid;
     delete v.boilMinutes;
   }
   // `span` minutes of a vessel in a lit heat container, in order:
@@ -9020,10 +9354,10 @@ x_sn_9 m_sn_sn_sn sn p
       const ready = matchingTemplate(v);
       if(ready) formDish(v, ready);
     }
-    if(!dishIn(v) && waterKindOf(v) === "tainted"){
+    if(!dishIn(v) && fluidKindOf(v) === "tainted"){
       v.boilMinutes = (v.boilMinutes || 0) + span;
       if(v.boilMinutes >= BOIL_MINUTES - TICK_EPSILON){
-        v.water.kind = "clean";
+        v.fluid.kind = "clean";
         delete v.boilMinutes;
         const t = matchingTemplate(v);
         if(t){ formDish(v, t); return; }
@@ -9049,11 +9383,10 @@ x_sn_9 m_sn_sn_sn sn p
       if(!vesselDefOf(it)){ rawRows([it]); return; }
       const dish = dishIn(it);
       if(dish){ rawRows([dish]); return; }
-      if(waterKindOf(it) === "tainted") consider("water", Math.max(0, BOIL_MINUTES - (it.boilMinutes || 0)), true);
+      if(fluidKindOf(it) === "tainted") consider("water", Math.max(0, BOIL_MINUTES - (it.boilMinutes || 0)), true);
       const t = matchingTemplate(it);
       if(t){
-        const water = t.water ? vesselDefOf(it).waterKg : 0;
-        consider(buildDish(t, it.contents || [], water).name.toLowerCase(), cookMinutesOf({ itemId:t.item }));
+        consider(buildDish(t, it.contents || [], fluidWeightOf(it)).name.toLowerCase(), cookMinutesOf({ itemId:t.item }));
       } else rawRows(it.contents || []);
     }));
     return best;
@@ -9482,7 +9815,7 @@ x_sn_9 m_sn_sn_sn sn p
       dish.agedAt = minutesSinceCollapse();
       return Object.assign(itemFromRegistry({ id:"cooking_pot", qty:it.qty }), { contents:[dish] });
     },
-    bottled_water:       it=> Object.assign(itemFromRegistry({ id:"plastic_bottle", qty:it.qty }), { water:{ kind:"clean", fill:1 } })
+    bottled_water:       it=> Object.assign(itemFromRegistry({ id:"plastic_bottle", qty:it.qty }), { fluid:{ kind:"clean", ml:500 } })
   };
   // `qty` units of `id`, every one of them exactly Rotten.
   function rottenItem(id, qty){
@@ -9505,6 +9838,33 @@ x_sn_9 m_sn_sn_sn sn p
     delete state.illnessMinutesLeft;
     stampMissingAges();
     resyncUidCounter();
+  }
+  // migrateFluidRelease(): brings a 0.11 save into the fluid release, run on
+  // every load after migrateCookingRelease(). A browser save from 0.11 never
+  // reaches it — SAVE_KEY rotated with the MINOR bump — but an imported 0.11
+  // file does, and must load. Idempotent: a save it has already migrated
+  // passes through unchanged.
+  //   An item's `water` becomes `fluid` when its registry entry holds fluid:
+  //   a bottle's `fill` of its capacityMl, rounded to the millilitre, and a
+  //   vessel's water, which was always full, its whole capacityMl. An item
+  //   whose entry holds none just loses `water`.
+  //   The thermos's `unitWeight`, copied onto every instance, is set from the
+  //   registry, which changed it.
+  function migrateFluidRelease(){
+    const migrate = (it)=>{
+      if(!it || typeof it !== "object") return;
+      if(it.water && typeof it.water === "object"){
+        const cap = capacityMlOf(it);
+        if(cap > 0){
+          const ml = typeof it.water.fill === "number" ? Math.round(it.water.fill * cap) : cap;
+          if(ml > 0) it.fluid = { kind: it.water.kind, ml };
+        }
+        delete it.water;
+      }
+      if(it.itemId === "thermos") it.unitWeight = ITEM_REGISTRY.thermos.unitWeight;
+    };
+    forEachItemList(list=> list.forEach(migrate));
+    CONTAINER_SLOTS.forEach(slotKey=> migrate(state[slotKey]));
   }
   // A save from before room definitions and saved state split (every save
   // before 0.10) carries `world` and no `rooms`. Its rooms can't be mapped
@@ -9547,6 +9907,7 @@ x_sn_9 m_sn_sn_sn sn p
     backfillPowerState();
     refreshPower();
     detailItem = null;
+    openGroups.clear();
     deviceTarget = null;
     nextRulesChoice = null;
     gameOver = false;
@@ -9567,6 +9928,7 @@ x_sn_9 m_sn_sn_sn sn p
     backfillIllnessScale();
     backfillInventoryCap();
     migrateCookingRelease();
+    migrateFluidRelease();
     rebuildSchedule();
     render();
     return true;
@@ -9592,6 +9954,11 @@ x_sn_9 m_sn_sn_sn sn p
   // And the cooking release's shapes: a `spoils` whose staleAfter is not
   // below its rottenAfter, an `ingredient.role` outside INGREDIENT_ROLES, and
   // a DISH_TEMPLATES template whose `item` is not a dish entry with `cooks`.
+  //
+  // And the fluid release's: a `holdsFluid` whose capacityMl is not a whole
+  // number above 0, a `holdsWater` or a `vessel.waterKg` left on an entry,
+  // and a spawn pool entry's `state` or a placement's `overrides` carrying
+  // `water` rather than `fluid`.
   const INGREDIENT_ROLES = ["meat", "vegetable", "grain"];
   function validateItemRegistry(){
     const missing = [];
@@ -9614,7 +9981,25 @@ x_sn_9 m_sn_sn_sn sn p
         missing.push(`ITEM_REGISTRY.${id}.spoils: staleAfter ${def.spoils.staleAfter} is not below rottenAfter ${def.spoils.rottenAfter}`);
       if(def.ingredient && !INGREDIENT_ROLES.includes(def.ingredient.role))
         missing.push(`ITEM_REGISTRY.${id}.ingredient.role: "${def.ingredient.role}" is not one of ${INGREDIENT_ROLES.join("/")}`);
+      if(def.holdsFluid && !(Number.isInteger(def.holdsFluid.capacityMl) && def.holdsFluid.capacityMl > 0))
+        missing.push(`ITEM_REGISTRY.${id}.holdsFluid.capacityMl: ${def.holdsFluid.capacityMl} is not a whole number above 0`);
+      if(def.holdsWater) missing.push(`ITEM_REGISTRY.${id}.holdsWater: retired, holdsFluid holds water now`);
+      if(def.vessel && "waterKg" in def.vessel) missing.push(`ITEM_REGISTRY.${id}.vessel.waterKg: retired, holdsFluid holds water now`);
     });
+    // Instance state carrying the retired `water`: a spawn pool entry's
+    // `state`, or a placement's `overrides`, anywhere in a building instance.
+    Object.keys(SPAWN_POOLS).forEach(poolId=> SPAWN_POOLS[poolId].entries.forEach(e=>{
+      if(e.state && "water" in e.state) missing.push(`SPAWN_POOLS.${poolId} entry ${poolEntryKey(e)}: state carries water, not fluid`);
+    }));
+    const placements = (v, where)=>{
+      if(Array.isArray(v)) v.forEach((x, i)=> placements(x, `${where}[${i}]`));
+      else if(v && typeof v === "object") Object.keys(v).forEach(k=>{
+        if(k === "overrides" && ITEM_REGISTRY[v.id] && v.overrides && "water" in v.overrides)
+          missing.push(`${where}: overrides carry water, not fluid`);
+        placements(v[k], `${where}.${k}`);
+      });
+    };
+    buildingInstances().forEach(inst=> placements(inst, `building ${inst.id}`));
     RECIPES.forEach(r=>{
       r.inputs.forEach(inp=>{ if(!ITEM_REGISTRY[inp.id]) missing.push(`RECIPES[${r.id}].inputs: ${inp.id}`); });
       if(!ITEM_REGISTRY[r.output.id]) missing.push(`RECIPES[${r.id}].output: ${r.output.id}`);
@@ -9624,7 +10009,7 @@ x_sn_9 m_sn_sn_sn sn p
       if(!def || !def.dish || !def.cooks) missing.push(`DISH_TEMPLATES[${t.id}].item: ${t.item} is not a dish entry with cooks`);
     });
     if(missing.length) console.warn("validateItemRegistry: problems", missing);
-    else console.log("validateItemRegistry: all recipe and dish ids resolve in ITEM_REGISTRY, every foodPoisoningChance is in [0,1], every cooks.minutes is above 0, every spoils is ordered, every ingredient role is known, every bag's carryFactor is in (0,1]");
+    else console.log("validateItemRegistry: all recipe and dish ids resolve in ITEM_REGISTRY, every foodPoisoningChance is in [0,1], every cooks.minutes is above 0, every spoils is ordered, every ingredient role is known, every bag's carryFactor is in (0,1], every holdsFluid's capacityMl is a whole number above 0, and no water is left in the retired shapes");
     return missing;
   }
   // validateLocations(): dev-only console helper (not wired to any button
@@ -10387,7 +10772,7 @@ x_sn_9 m_sn_sn_sn sn p
       const stove = roomStove(room);
       replayPlace(stove.items, { id:"fish", qty:1 });
       const pot = itemFromRegistry({ id:"cooking_pot", qty:1 });
-      pot.water = { kind:"tainted" };
+      pot.fluid = { kind:"tainted", ml:2000 };
       pot.contents = [asNewlyMade(itemFromRegistry({ id:"meat", qty:1 })), asNewlyMade(itemFromRegistry({ id:"vegetables", qty:1 }))];
       addToList(stove.items, pot);
       doLightStove();
@@ -10438,7 +10823,7 @@ x_sn_9 m_sn_sn_sn sn p
       doFillAtSink("inv", items.indexOf(bottle));
       for(let n = 0; n < REPLAY_POT_FILLS; n++){
         doFillAtSink("inv", items.indexOf(pot));
-        doPourOutWater(pot);
+        doPourOut("inv", items.indexOf(pot));
       }
       replayMove("home_living");
       state.vitals.energy = REPLAY_SLEEP_ENERGY;
@@ -10560,6 +10945,7 @@ x_sn_9 m_sn_sn_sn sn p
     stampMissingAges();
     rebuildSchedule();
     detailItem = null;
+    openGroups.clear();
     deviceTarget = null;
     invTab = "inventory";
     worldTab = "floor";
@@ -10618,6 +11004,25 @@ x_sn_9 m_sn_sn_sn sn p
   });
   const sideMenu = document.getElementById("sideMenu");
   const menuBackdrop = document.getElementById("menuBackdrop");
+  // The end of every action: thirsty and awake, you drink on your own
+  // (autoDrink()), and the screen is drawn again only if you did. This is
+  // what makes a bottle filled while thirsty drunk from at once, and waking
+  // thirsty drink on waking. One hook, on every button click in the places
+  // actions are dispatched from (ACTION_AREAS: the play area, the pop-ups,
+  // the Crafting panel), so no list of actions has to be kept in step with
+  // it. It runs after the button's own handler, which has rendered: the
+  // click's path is read as it was dispatched, since the render may have
+  // taken the button out of the page. The drawer is left out: a Load is not
+  // an action.
+  const ACTION_AREAS = ["left", "sidebar", "itemPop", "devicePop", "walkPop", "mapCard", "craftingPanel"];
+  function afterAction(){
+    if(gameOver || asleep || !(state.vitals.thirst < LOW_THIRST_THRESHOLD)) return;
+    if(autoDrink()) render();
+  }
+  document.addEventListener("click", e=>{
+    const path = e.composedPath();
+    if(path.some(n=> n.tagName === "BUTTON") && path.some(n=> ACTION_AREAS.includes(n.id))) afterAction();
+  });
   // ==================================================
   // EVENTS / UI HELPERS
   // ==================================================
@@ -10697,7 +11102,12 @@ x_sn_9 m_sn_sn_sn sn p
     rebuild();
     if(!had || (isLayer && !layerOpen(root)) || (had.isConnected && document.activeElement === had)) return;
     const after = focusablesIn(root);
-    (after.find(x => x.textContent === label) || after[Math.min(index, after.length - 1)] || root).focus({ preventScroll:true });
+    // A control that names an item or a group (data-uid, data-group) is
+    // found again by that before its label: a group's disclosure button
+    // changes its label as it opens.
+    const same = (had.dataset.uid || had.dataset.group)
+      && after.find(x => x.className === had.className && x.dataset.uid === had.dataset.uid && x.dataset.group === had.dataset.group);
+    (same || after.find(x => x.textContent === label) || after[Math.min(index, after.length - 1)] || root).focus({ preventScroll:true });
   }
   document.addEventListener("keydown", e=>{
     if(e.key !== "Escape" || !layerStack.length) return;
@@ -11687,7 +12097,7 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // The parenthesised state labels shown after an item's name, in a fixed
   // order: Open, then cook state (a cookable item always shows Raw or
-  // Cooked), then freshness or Frozen, then water. `ctx` carries what a label
+  // Cooked), then freshness or Frozen, then fluid, then On. `ctx` carries what a label
   // needs from outside the item: `ctx.container`, the room container the row
   // is in, and `ctx.roomId`, its room, for Frozen. The row and the item pop-up show them; log lines keep
   // the plain name.
@@ -11703,80 +12113,161 @@ x_sn_9 m_sn_sn_sn sn p
     // A perishable always shows its freshness, or Frozen while it sits in a
     // freezer that is holding it.
     if(isPerishable(it)) labels.push(ctx && isFrozenIn(ctx.container, ctx.roomId) ? "Frozen" : FRESHNESS_LABELS[unitFreshness(it)]);
-    // Water shows its kind, never its level: an empty bottle is the plain name.
-    const water = waterKindOf(it);
-    if(water) labels.push(water === "tainted" ? "Tainted" : "Water");
+    // A fluid shows its kind; its level is the row's meter. An empty bottle
+    // is the plain name.
+    const fluid = fluidKindOf(it);
+    if(fluid) labels.push(FLUID_LABELS[fluid] || fluid);
+    if(it.on) labels.push(ON_LABEL);
     return labels;
   }
+  const FLUID_LABELS = { clean:"Water", tainted:"Tainted" };
+  // A device switched on. The one label a group's header never shows, since
+  // its rows may differ by it.
+  const ON_LABEL = "On";
   // What an item shows as, in its list row and its pop-up alike: { name,
   // state, category, vessel }. `state` is everything shown after the name,
   // its labels, " (Open) (Fresh)". A vessel holding a dish shows as the dish
   // — the dish's name, labels and category — and `vessel` is then the
   // vessel, which only the pop-up names; otherwise it is null. The one
-  // statement of which of the two an item shows as.
-  function itemDisplay(it, ctx){
+  // statement of which of the two an item shows as. `shared`: a group's
+  // header, which shows only the labels its rows share, so never On.
+  function itemDisplay(it, ctx, shared){
     const dish = vesselDefOf(it) && dishIn(it);
     const shown = dish || it;
-    return { name: shown.name, state: itemStateLabels(shown, ctx).map(l=> ` (${l})`).join(""),
+    const labels = itemStateLabels(shown, ctx).filter(l=> !shared || l !== ON_LABEL);
+    return { name: shown.name, state: labels.map(l=> ` (${l})`).join(""),
       category: shown.category, vessel: dish ? it : null };
   }
+  // A meter at or below this share of full draws in the warning colour, so a
+  // bottle a quarter full already warns. A balance value, retunable.
+  const LEVEL_WARN_BELOW = 0.25;
+  // A level as a meter (see .meter): `cls` places it, a row's or the
+  // pop-up's.
+  function levelMeter(level, cls){
+    const m = document.createElement("div");
+    m.className = "meter " + cls + (level <= LEVEL_WARN_BELOW ? " low" : "");
+    m.setAttribute("role", "meter");
+    m.setAttribute("aria-valuemin", "0");
+    m.setAttribute("aria-valuemax", "100");
+    m.setAttribute("aria-valuenow", String(Math.round(level * 100)));
+    m.setAttribute("aria-label", "Level");
+    const fill = document.createElement("div");
+    fill.style.width = (Math.max(0, Math.min(1, level)) * 100) + "%";
+    m.appendChild(fill);
+    return m;
+  }
+  // Where a group's open state is kept in openGroups: by side, tab and key.
+  function groupOpenKey(side, key){ return JSON.stringify([side, side === "world" ? worldTab : invTab, key]); }
+  // An item list. Rows of one group (groupsOf()) gather under a header at
+  // the place of the group's first row; a group of one row draws as a plain
+  // row. The header holds a disclosure button, the name, the labels its
+  // rows share, the units and weight of all of them, and the panel's quick
+  // button over the whole group (each button's `group`); it has no meter.
+  // Open, its rows follow it, indented, least left first, each as a plain
+  // row draws. `buttons` are the panel's quick buttons: `onClick(i)` acts on
+  // row i of `list`, `group(rows)` on a group.
   function renderItemList(el, list, buttons, side, ctx){
-    el.innerHTML = "";
-    if(list.length === 0){ el.innerHTML = '<li class="empty">Nothing here.</li>'; return; }
-    list.forEach((it, i)=>{
-      const li = document.createElement("li");
-      const total = itemWeight(it).toFixed(2);
-      const meta = document.createElement("span");
-      meta.className = "meta";
-      const shown = itemDisplay(it, ctx);
-      const nameEl = document.createElement("button");
-      nameEl.className = "itemname";
-      nameEl.textContent = shown.name;
-      // Carried only by an item that already has a _uid: every item the
-      // pop-up has been opened on does, and minting one for every row drawn
-      // would put a _uid into every save for nothing. It is how the pop-up
-      // finds its anchor row, and focus finds its way back, after a rebuild.
-      if(it._uid) nameEl.dataset.uid = it._uid;
-      nameEl.addEventListener("click", ()=>{ detailItem = { uid: ensureUid(it), side }; render(); });
-      meta.appendChild(nameEl);
-      // The state text sits outside nameEl so the control's text stays
-      // exactly the name shown, which focus-by-label depends on.
-      if(shown.state){
-        const stateEl = document.createElement("span");
-        stateEl.className = "state";
-        stateEl.textContent = shown.state;
-        meta.appendChild(stateEl);
-      }
-      meta.appendChild(document.createTextNode(` ×${it.qty} — ${total} kg `));
-      const catSpan = document.createElement("span");
-      catSpan.className = "cat";
-      catSpan.textContent = `(${shown.category})`;
-      meta.appendChild(catSpan);
-      li.appendChild(meta);
-      const row = document.createElement("span");
-      row.className = "btnrow";
-      buttons.forEach(b=>{
-        if(b.test && !b.test(it)) return;
-        const isDisabled = b.disabled && b.disabled(it);
-        const btn = document.createElement("button");
-        btn.className = "mini" + (b.cls ? " " + b.cls : "") + (isDisabled ? " blocked" : "");
-        btn.textContent = typeof b.label === "function" ? b.label(it) : b.label;
-        if(isDisabled){ btn.disabled = true; }
-        else { btn.addEventListener("click", ()=> b.onClick(i)); }
-        row.appendChild(btn);
+    rebuildKeepingFocus(el, ()=>{
+      el.innerHTML = "";
+      if(list.length === 0){ el.innerHTML = '<li class="empty">Nothing here.</li>'; return; }
+      groupsOf(list).forEach((rows, key)=>{
+        if(rows.length === 1){ el.appendChild(itemRow(list, rows[0], buttons, side, ctx, false)); return; }
+        const open = openGroups.has(groupOpenKey(side, key));
+        el.appendChild(groupHeader(rows, key, open, buttons, side, ctx));
+        if(open) rowsLeastLeftFirst(rows).forEach(r=> el.appendChild(itemRow(list, r, buttons, side, ctx, true)));
       });
-      li.appendChild(row);
-      el.appendChild(li);
+    }, false);
+  }
+  // The text of a row or a header: the name control, the labels, units and
+  // weight, and the category.
+  function itemMeta(nameEl, shown, qty, kg){
+    const meta = document.createElement("span");
+    meta.className = "meta";
+    nameEl.className = "itemname";
+    nameEl.textContent = shown.name;
+    meta.appendChild(nameEl);
+    // The state text sits outside nameEl so the control's text stays
+    // exactly the name shown, which focus-by-label depends on.
+    if(shown.state){
+      const stateEl = document.createElement("span");
+      stateEl.className = "state";
+      stateEl.textContent = shown.state;
+      meta.appendChild(stateEl);
+    }
+    meta.appendChild(document.createTextNode(` ×${qty} — ${kg.toFixed(2)} kg `));
+    const catSpan = document.createElement("span");
+    catSpan.className = "cat";
+    catSpan.textContent = `(${shown.category})`;
+    meta.appendChild(catSpan);
+    return meta;
+  }
+  // The panel's quick buttons for a row (`subject` the row) or a header
+  // (`subject` its first row); `act` runs the chosen one.
+  function quickButtons(buttons, subject, act){
+    const row = document.createElement("span");
+    row.className = "btnrow";
+    buttons.forEach(b=>{
+      if(b.test && !b.test(subject)) return;
+      const isDisabled = b.disabled && b.disabled(subject);
+      const btn = document.createElement("button");
+      btn.className = "mini" + (b.cls ? " " + b.cls : "") + (isDisabled ? " blocked" : "");
+      btn.textContent = typeof b.label === "function" ? b.label(subject) : b.label;
+      if(isDisabled){ btn.disabled = true; }
+      else { btn.addEventListener("click", ()=> act(b)); }
+      row.appendChild(btn);
     });
+    return row;
+  }
+  function itemRow(list, it, buttons, side, ctx, inGroup){
+    const li = document.createElement("li");
+    if(inGroup) li.classList.add("group-row");
+    const nameEl = document.createElement("button");
+    // Carried only by an item that already has a _uid: every item the
+    // pop-up has been opened on does, and minting one for every row drawn
+    // would put a _uid into every save for nothing. It is how the pop-up
+    // finds its anchor row, and focus finds its way back, after a rebuild.
+    if(it._uid) nameEl.dataset.uid = it._uid;
+    nameEl.addEventListener("click", ()=>{ detailItem = { uid: ensureUid(it), side }; render(); });
+    li.appendChild(itemMeta(nameEl, itemDisplay(it, ctx), it.qty, itemWeight(it)));
+    li.appendChild(quickButtons(buttons, it, b=> b.onClick(list.indexOf(it))));
+    // The meter along the bottom edge, in the divider's place.
+    const lvl = unitLevel(it);
+    if(lvl){
+      li.classList.add("metered");
+      li.appendChild(levelMeter(lvl.level, "row-meter"));
+    }
+    return li;
+  }
+  function groupHeader(rows, key, open, buttons, side, ctx){
+    const li = document.createElement("li");
+    li.className = "group-head";
+    const toggle = document.createElement("button");
+    toggle.className = "disclosure";
+    toggle.dataset.group = key;
+    toggle.textContent = open ? "▾" : "▸";
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    toggle.setAttribute("aria-label", `${open ? "Hide" : "Show"} the ${rows.length} stacks`);
+    toggle.addEventListener("click", ()=>{
+      const k = groupOpenKey(side, key);
+      if(openGroups.has(k)) openGroups.delete(k); else openGroups.add(k);
+      render();
+    });
+    const nameEl = document.createElement("button");
+    nameEl.dataset.group = key;
+    nameEl.addEventListener("click", ()=>{ detailItem = { group: key, side }; render(); });
+    const meta = itemMeta(nameEl, itemDisplay(rows[0], ctx, true), unitCount(rows), totalWeight(rows));
+    meta.insertBefore(toggle, nameEl);
+    li.appendChild(meta);
+    li.appendChild(quickButtons(buttons, rows[0], b=> b.group(rows)));
+    return li;
   }
   // An item's durability as the player reads it: uses left, or, for anything
-  // on batteries, its charge and whether it is on. The one statement of that
-  // line, shown by the item pop-up.
+  // on batteries, whether it is on. No device shows its charge: one dies
+  // without warning, by design. The one statement of that line, shown by the
+  // item pop-up.
   function durabilityText(it){
     if(it.durability.mode === "uses") return `${Math.round(it.durability.current)}/${it.durability.max} uses`;
-    return it.hasBatteries === false
-      ? "No batteries installed"
-      : `${Math.round(100*batteryCharge(it)/it.durability.max)}% charge${it.on ? " — On" : " — Off"}`;
+    return it.hasBatteries === false ? "No batteries installed" : it.on ? "On" : "Off";
   }
   // The item detail view: a pop-up at the tapped item's row. It shows what
   // the view always has (name, category and weight, durability, sealed
@@ -11793,14 +12284,26 @@ x_sn_9 m_sn_sn_sn sn p
   // another tab would act on the wrong item. Both tabs are final by now,
   // since the two item panels render first. The other side's tab may
   // change freely; that only moves where Take/Place/Store go.
+  // A group's pop-up (detailItem.group) is resolved against its side's tab
+  // on every render: down to one row, it becomes that row's pop-up; gone, it
+  // closes.
   function renderItemPop(){
-    const found = detailItem && findItemByUid(detailItem.uid);
-    const slot = found && (detailItem.side === "world"
-      ? worldSlot(world[state.currentRoom], worldTab)
-      : invSlot(invTab));
-    if(detailItem && (!slot || slot.items !== found.list)) detailItem = null;
+    const sideSlot = ()=> detailItem.side === "world" ? worldSlot(world[state.currentRoom], worldTab) : invSlot(invTab);
+    let rows = null;
+    if(detailItem && detailItem.group){
+      const slot = sideSlot();
+      rows = (slot && groupsOf(slot.items).get(detailItem.group)) || [];
+      if(!rows.length) detailItem = null;
+      else if(rows.length === 1){ detailItem = { uid: ensureUid(rows[0]), side: detailItem.side }; rows = null; }
+    }
+    const found = detailItem && !rows && findItemByUid(detailItem.uid);
+    if(detailItem && !rows){
+      const slot = found && sideSlot();
+      if(!slot || slot.items !== found.list) detailItem = null;
+    }
     if(!detailItem){ closeLayer(itemPop); return; }
-    const it = found.item;
+    const list = rows ? sideSlot().items : found.list;
+    const it = rows ? rows[0] : found.item;
     rebuildKeepingFocus(itemPop, ()=>{
       itemPop.innerHTML = "";
       const box = document.createElement("div");
@@ -11809,55 +12312,74 @@ x_sn_9 m_sn_sn_sn sn p
       const nameB = document.createElement("b");
       const ctx = { container: detailItem.side === "world" ? worldTabContainer(world[state.currentRoom], worldTab) : null,
         roomId: state.currentRoom };
-      const shown = itemDisplay(it, ctx);
+      const shown = itemDisplay(it, ctx, !!rows);
       nameB.textContent = shown.name;
       nameLine.appendChild(nameB);
       if(shown.state) nameLine.appendChild(document.createTextNode(shown.state));
       box.appendChild(nameLine);
-      // The weights are the item's, the vessel and its dish together.
-      const statsLine = document.createElement("div");
-      statsLine.appendChild(document.createTextNode(`${shown.category} · ${itemWeight(it).toFixed(2)} kg `));
-      const eachSpan = document.createElement("span");
-      eachSpan.style.color = "var(--ink-faint)";
-      eachSpan.textContent = `(${itemUnitWeight(it).toFixed(2)} kg each)`;
-      statsLine.appendChild(eachSpan);
-      box.appendChild(statsLine);
-      // A dish shown in its vessel's place names the vessel here, and only
-      // here. Functional UI text, retunable.
-      if(shown.vessel){
-        const inLine = document.createElement("div");
-        inLine.textContent = `In a ${shown.vessel.name.toLowerCase()}`;
-        box.appendChild(inLine);
-      }
-      if(it.durability){
-        const durLine = document.createElement("div");
-        durLine.textContent = durabilityText(it);
-        box.appendChild(durLine);
-      }
-      if(it.sealed !== undefined){
-        const sealLine = document.createElement("div");
-        sealLine.textContent = it.sealed ? "Sealed" : "Opened";
-        box.appendChild(sealLine);
-      }
-      // A vessel lists what it holds, since its contents are not rows. A
-      // vessel holding a dish shows as the dish instead.
-      if(vesselDefOf(it) && !dishIn(it)){
-        const rows = it.contents || [];
-        const holds = document.createElement("div");
-        holds.textContent = rows.length
-          ? "Holds: " + rows.map(r=>{ const d = itemDisplay(r, ctx); return d.name + d.state + " ×" + r.qty; }).join(", ")
-          : (it.water ? "Holds no food" : "Empty");
-        box.appendChild(holds);
-        if(it.water){
-          const waterLine = document.createElement("div");
-          waterLine.textContent = it.water.kind === "tainted" ? "Full of tainted water" : "Full of water";
-          box.appendChild(waterLine);
+      if(rows){
+        // A group: its weight, and how many units in how many stacks.
+        // Functional UI text, retunable.
+        const statsLine = document.createElement("div");
+        statsLine.textContent = `${shown.category} · ${totalWeight(rows).toFixed(2)} kg`;
+        box.appendChild(statsLine);
+        const countLine = document.createElement("div");
+        countLine.textContent = `${unitCount(rows)} in ${rows.length} stacks`;
+        box.appendChild(countLine);
+      } else {
+        // The weights are the item's, the vessel and its dish together.
+        const statsLine = document.createElement("div");
+        statsLine.appendChild(document.createTextNode(`${shown.category} · ${itemWeight(it).toFixed(2)} kg `));
+        const eachSpan = document.createElement("span");
+        eachSpan.style.color = "var(--ink-faint)";
+        eachSpan.textContent = `(${itemUnitWeight(it).toFixed(2)} kg each)`;
+        statsLine.appendChild(eachSpan);
+        box.appendChild(statsLine);
+        // A dish shown in its vessel's place names the vessel here, and only
+        // here. Functional UI text, retunable.
+        if(shown.vessel){
+          const inLine = document.createElement("div");
+          inLine.textContent = `In a ${shown.vessel.name.toLowerCase()}`;
+          box.appendChild(inLine);
+        }
+        // What is left of the unit: a larger meter and the exact figure. A
+        // device's uses are its level, and stand for its durability line.
+        const lvl = unitLevel(it);
+        if(lvl){
+          box.appendChild(levelMeter(lvl.level, "pop-meter"));
+          const figLine = document.createElement("div");
+          figLine.textContent = lvl.figure;
+          box.appendChild(figLine);
+        } else if(it.durability){
+          const durLine = document.createElement("div");
+          durLine.textContent = durabilityText(it);
+          box.appendChild(durLine);
+        }
+        if(it.sealed !== undefined){
+          const sealLine = document.createElement("div");
+          sealLine.textContent = it.sealed ? "Sealed" : "Opened";
+          box.appendChild(sealLine);
+        }
+        // A vessel lists what it holds, since its contents are not rows. A
+        // vessel holding a dish shows as the dish instead.
+        if(vesselDefOf(it) && !dishIn(it)){
+          const held = it.contents || [];
+          const holds = document.createElement("div");
+          holds.textContent = held.length
+            ? "Holds: " + held.map(r=>{ const d = itemDisplay(r, ctx); return d.name + d.state + " ×" + r.qty; }).join(", ")
+            : (it.fluid ? "Holds no food" : "Empty");
+          box.appendChild(holds);
         }
       }
       itemPop.appendChild(box);
       const actions = document.createElement("div");
       actions.className = "pop-actions";
-      getItemActions(found.list, found.index, detailItem.side).forEach(a=>{
+      if(detailItem.pour && !rows && drinkable(it)){
+        renderPourMenu(actions, found.list, found.index, detailItem.side);
+        itemPop.appendChild(actions);
+        return;
+      }
+      (rows ? getGroupActions(list, rows, detailItem.side) : getItemActions(found.list, found.index, detailItem.side)).forEach(a=>{
         // A note stands where an action would be (hereNote()'s style).
         if(a.note){ actions.appendChild(hereNote(a.label)); return; }
         const btn = document.createElement("button");
@@ -11869,13 +12391,63 @@ x_sn_9 m_sn_sn_sn sn p
       });
       itemPop.appendChild(actions);
     });
-    // Focus goes back to the item's name. doOpen() re-points detailItem at
-    // the unit it opened, and the pop-up follows, so the name it returns to
-    // follows too.
+    // Focus goes back to the item's name, or the group's. doOpen() re-points
+    // detailItem at the unit it opened, and the pop-up follows, so the name
+    // it returns to follows too.
+    const target = detailItem;
+    const back = { el:null, uid: detailItem.uid || null, find: ()=> popAnchorName(target) };
     const layer = layerStack.find(l => l.el === itemPop);
-    if(layer) layer.back.uid = detailItem.uid;
-    else openLayer(itemPop, showItemPop, hideItemPop, { el:null, uid: detailItem.uid });
+    if(layer) layer.back = back;
+    else openLayer(itemPop, showItemPop, hideItemPop, back);
     positionItemPop();
+  }
+  // The transfer submenu, in the item pop-up in place of its actions, for
+  // row `index` of `list`: a heading, Back to the actions, then one entry per
+  // target (pourTargets()): its name and labels, its place where two entries
+  // would otherwise read the same, its meter, and Pour (as much as fits) and
+  // Pour by the measure. Functional UI text, retunable.
+  function renderPourMenu(box, list, index, side){
+    const head = document.createElement("div");
+    head.className = "detailBox";
+    head.style.marginBottom = "0";
+    head.textContent = "Pour the water into…";
+    box.appendChild(head);
+    box.appendChild(actionButton("Back", ()=>{ detailItem = { uid: detailItem.uid, side: detailItem.side }; render(); }));
+    const targets = pourTargets(list, list[index]);
+    if(!targets.length){ box.appendChild(hereNote("Nothing here has room for it.")); return; }
+    targets.forEach(t=>{
+      const shown = itemDisplay(t.unit, null);
+      const clash = targets.some(o=> o !== t && itemDisplay(o.unit, null).name === shown.name && itemDisplay(o.unit, null).state === shown.state);
+      const entry = document.createElement("div");
+      entry.className = "pour-target";
+      const line = document.createElement("div");
+      line.className = "pour-line";
+      const text = document.createElement("span");
+      text.textContent = shown.name + shown.state + (clash ? ` (${t.place})` : "");
+      line.appendChild(text);
+      const btns = document.createElement("span");
+      btns.className = "btnrow";
+      btns.appendChild(actionButton("Pour", ()=> doPour(side, index, t.key, null)));
+      btns.appendChild(actionButton(`Pour ${groupedNumber(MEASURE_ML)} mL`, ()=> doPour(side, index, t.key, MEASURE_ML)));
+      line.appendChild(btns);
+      entry.appendChild(line);
+      const lvl = unitLevel(t.unit);
+      entry.appendChild(levelMeter(lvl ? lvl.level : 0, "pop-meter"));
+      box.appendChild(entry);
+    });
+  }
+  // The name control the item pop-up hangs from: its group's header for a
+  // group, else its row's, else, for a row drawn inside a closed group, that
+  // group's header. Looked up in its side's list.
+  function popAnchorName(target = detailItem){
+    if(!target) return null;
+    const listEl = document.getElementById(target.side === "world" ? "worldList" : "invList");
+    const header = (key)=> Array.from(listEl.querySelectorAll(".itemname")).find(b=> b.dataset.group === key) || null;
+    if(target.group) return header(target.group);
+    const name = itemNameButton(target.uid);
+    if(name) return name;
+    const found = findItemByUid(target.uid);
+    return found ? header(groupKeyOf(found.item)) : null;
   }
   // A pop-up hangs from its anchor: the item pop-up from its item's row,
   // the device pop-up from the strip under the Here tabs. It opens directly
@@ -11905,7 +12477,7 @@ x_sn_9 m_sn_sn_sn sn p
   // The item pop-up's row, found again by uid on every call.
   function positionItemPop(){
     if(!detailItem || !layerOpen(itemPop)) return;
-    const name = itemNameButton(detailItem.uid);
+    const name = popAnchorName();
     const row = name && name.closest("li");
     if(row) placePop(itemPop, row.getBoundingClientRect());
   }
@@ -11963,9 +12535,9 @@ x_sn_9 m_sn_sn_sn sn p
       : numberWord(t.min) + " or more " + ingredientWords(set, 2);
     return vessel + ", and " + what;
   }
-  // "holds 1 of 2 · needs one more meat or vegetable, and water", or
-  // "ready to cook".
-  function dishProgressText(t, st, water){
+  // "holds 1 of 2 · needs one more meat or vegetable, and at least 800 mL of
+  // water", or "ready to cook", for vessel `v`.
+  function dishProgressText(t, st, v){
     if(st.blocked) return "holds something that doesn't belong in it";
     if(st.ready) return "ready to cook";
     if(st.need === 0 && st.waterBoils) return "ready once the water boils";
@@ -11973,8 +12545,8 @@ x_sn_9 m_sn_sn_sn sn p
     if(st.need > 0) needs.push((t.counts || t.allowed).ids
       ? ingredientWords(t.counts || t.allowed, st.need)
       : numberWord(st.need) + " more " + ingredientWords(t.counts || t.allowed, st.need));
-    if(t.water && !water) needs.push("water");
-    if(!t.water && water) needs.push("the water poured out");
+    if(t.water && !(v.fluid && v.fluid.ml >= dishWaterMinMl(v))) needs.push(`at least ${groupedNumber(dishWaterMinMl(v))} mL of water`);
+    if(!t.water && v.fluid) needs.push("the water poured out");
     return `holds ${st.have} of ${st.target}` + (needs.length ? " · needs " + needs.join(", and ") : "")
       + (st.waterBoils ? " · the water will boil first" : "");
   }
@@ -11999,7 +12571,7 @@ x_sn_9 m_sn_sn_sn sn p
     DISH_TEMPLATES.forEach(t=>{
       const kind = vessel && vesselDefOf(vessel).kind;
       if(vessel && !t.vessels.includes(kind)) return;
-      const st = vessel && templateStatus(t, kind, vessel.contents || [], waterKindOf(vessel));
+      const st = vessel && templateStatus(t, vessel);
       if(!dishShown(t, !!(st && st.ready))) return;
       const row = document.createElement("div");
       row.className = "dish-row";
@@ -12007,7 +12579,7 @@ x_sn_9 m_sn_sn_sn sn p
       text.appendChild(document.createTextNode(ITEM_REGISTRY[t.item].name + " "));
       const note = document.createElement("span");
       note.className = "cost";
-      note.textContent = vessel ? `(${dishProgressText(t, st, waterKindOf(vessel))})` : `(needs ${dishNeedsText(t)})`;
+      note.textContent = vessel ? `(${dishProgressText(t, st, vessel)})` : `(needs ${dishNeedsText(t)})`;
       text.appendChild(note);
       row.appendChild(text);
       if(vessel && canAddMissing(t, vessel)){
@@ -12620,6 +13192,14 @@ x_sn_9 m_sn_sn_sn sn p
     if(room.searchLabel && !room.searched){
       hereBox.appendChild(actionButton(room.searchLabel + " " + fmtDuration(room.searchMinutes), doSearch));
     }
+    // The tap: Drink and, below full Thirst, Drink all (doDrinkAtSink()), or
+    // the note while its tank is dry. Functional UI text, retunable.
+    if(canDrinkAtSink()){
+      hereBox.appendChild(actionButton("Drink at the sink", ()=> doDrinkAtSink(false)));
+      if(state.vitals.thirst < VITAL_MAX) hereBox.appendChild(actionButton("Drink your fill at the sink", ()=> doDrinkAtSink(true)));
+    } else if(sinkDry()){
+      hereBox.appendChild(hereNote("The tap is dry."));
+    }
     getWindowsInRoom(state.currentRoom).forEach(w=>{
       if(w.state === "closed"){
         hereBox.appendChild(actionButton("Open the " + w.label, ()=> doOpenWindow(w.id)));
@@ -12757,7 +13337,7 @@ x_sn_9 m_sn_sn_sn sn p
     const shown = electricalView ? currentInv.items.filter(it=> hasTag(it, "electrical")) : currentInv.items;
     renderItemList(invList, shown, [
       { label: worldTab === "floor" ? "Place" : "Store", onClick:(i)=> doStore(currentInv.items.indexOf(shown[i])),
-        test:()=> !electricalView && !!worldSlot(world[state.currentRoom], worldTab) }
+        group:(rows)=> doStoreGroup(rows), test:()=> !electricalView && !!worldSlot(world[state.currentRoom], worldTab) }
     ], "inv", { container:null });
     if(electricalView && !shown.length) invList.innerHTML = `<li class="empty">${ELECTRICAL_EMPTY_INV}</li>`;
   }
@@ -12842,7 +13422,8 @@ x_sn_9 m_sn_sn_sn sn p
       // Disabled rather than hidden, for the reason given at the detail
       // view's Take family in getItemActions(): the item can be taken, just
       // not into the keychain.
-      { label:"Take", disabled:(it)=> invTab === "keychain" && !keychainAllows(it), onClick:(i)=> doTake(i) }
+      { label:"Take", disabled:(it)=> invTab === "keychain" && !keychainAllows(it), onClick:(i)=> doTake(i),
+        group:(rows)=> doTakeGroup(rows) }
     ], "world", { container: worldTabContainer(room, worldTab), roomId: state.currentRoom });
   }
   // A circuit's Here tab key in the Electrical view, prefixed as a device's

@@ -18,8 +18,10 @@ watching it: nothing checks the whole world every minute.
 **The clock.** Every advance of time (`advanceTime()`, `doRest()`,
 `doSleep()`) moves the clock in steps of at most a minute, and each step is
 `clockStep()`: the minutes are added to `state.totalMinutes`, Hunger and
-Thirst fall (`applyHungerThirst()`), and whatever is due by then is
-processed (`processDueEvents()`). The caller adds its own vitals piece after
+Thirst fall (`applyHungerThirst()`), the player drinks on their own if that
+step took Thirst below `LOW_THIRST_THRESHOLD` while awake (`autoDrink()`,
+[Fluids](fluids.md)), and whatever is due by then is processed
+(`processDueEvents()`). The caller adds its own vitals piece after
 the step (`recoveryStep()`, or sleep's Energy gain) and keeps its own stop
 condition. The steps exist for the player's own vitals, whose rules read
 state at minute resolution. The world does no work in a step unless
@@ -139,8 +141,9 @@ is out by then, and says so where the player can hear it.
 
 ## Costs
 
-- **Per step:** the vitals, and one comparison of now with the next due
-  minute.
+- **Per step:** the vitals, one comparison of Thirst before and after for
+  auto-drink, and one comparison of now with the next due minute. Nothing
+  about fluid is scheduled: a fluid changes only by an action or a drink.
 - **Per advance of time:** planning the next due minute over the lit rooms,
   the running timers, the refilling tanks, the battery minutes, the grid's
   changes and the clock events; settling to now; settling the lists the
