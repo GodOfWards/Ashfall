@@ -264,13 +264,48 @@ Status: secondary unless marked; read 2026-09-27.
     running it technically from 2013, extended to Lima six months after
     Zárate ([Enlace Crítico, 2013-04-16](https://www.enlacecritico.com/zarate/aysa-comenzara-a-operar-tecnicamente-en-aguas-de-zarate-sapem/)).
     Now through **ENDEZA**, the municipal water entity.
-  - **A source not yet read:** ENDEZA's *Servicio Red de Abastecimiento de
-    Agua Potable, Partido de Zárate* (7 October 2025), its summer 2025–2026
-    projection, which may cover Lima's wells and network
-    ([endeza.gob.ar](https://endeza.gob.ar/wp-content/uploads/2025/10/PROYECCION-VERANO-2025-2026-7-octubre.pdf);
-    the Wayback Machine has a copy of 2025-12-04). On 2026-09-29 the live
-    site served a bot check and the archive refused the download. A person
-    opening it in a browser should get it.
+  - **ENDEZA's *Servicio Red de Abastecimiento de Agua Potable, Partido de
+    Zárate, Proyección Verano 2025 / 2026*** (October 2025). **Primary** for
+    the utility, read 2026-10-01
+    ([PDF](https://endeza.gob.ar/wp-content/uploads/2025/10/PROYECCION-VERANO-2025-2026-7-octubre.pdf)).
+    It postdates the game's era by eight months.
+    - **Lima has its own distribution network:** "El Sistema de distribución
+      de Lima que a la fecha se encuentra estabilizada, necesita un refuerzo
+      para llegar con mayor caudal y presión ubicados al norte de la
+      localidad."
+    - **A new well was planned at Calles 29 y 4**, "15 hp 60 m3/h", as a
+      "pozo de cola de la red existente". It postdates the era, so it isn't
+      in the game.
+    - **The wells run on the grid and stop with it.** In each summer's cuts
+      and voltage drops "los pozos pasan por etapas de parada general, ya que
+      actúan las protecciones ante bajas de tensión en fases o directamente
+      quedan parados hasta tanto se restablezca el servicio."
+    - **Repressurising is slow:** if the main aqueduct empties, "la
+      presurización definitiva de la red demorará casi 24 hs"; after a
+      neighbourhood well stops, "la presurización final ocurrirá en un lapso
+      que como mínimo, duplica el tiempo de parada."
+    - **The norm for a home on the network**, as the report cites it from
+      AySA, OSSE and Aguas Provinciales: "ninguna instalación interna debe
+      ser alimentada directamente desde la red pública. El ingreso se hace a
+      una cisterna y desde allí se impulsa mediante bomba a un tanque
+      elevado ... la presión de red no garantiza suministro constante a
+      alturas superiores a los 5 metros". This is the norm, not a survey of
+      Lima; whether Lima's tanks fill on network pressure or through a
+      cistern and pump is unconfirmed.
+    - **Newer wells have telemetry and PLCs**, watched around the clock from
+      a pumping control room at ENDEZA, Esmeralda 710, Zárate. They were
+      being fitted in 2025; how many were in place by February 2025 is
+      unknown.
+    - **Lima has a sewer network:** the report names "el sistema de red
+      cloacal de Zarate y Lima".
+  - **ENDEZA's own figures** for the partido, not Lima: "90% Cobertura de
+    agua potable", "65% Viviendas con cloacas", "62.400 m³ producidos por
+    día" and "42% Pozos de bombeo operativos", the last under its Plan
+    Director 2025, where whether it is a state or a target is unclear.
+    **Primary** for the utility, page undated
+    ([endeza.gob.ar/about](https://endeza.gob.ar/about/), read 2026-10-01).
+    A search summary's "65 wells in Zárate and 8 in Lima" appears in neither
+    source and is not used.
   - **All from groundwater wells:** **65 electric pumping wells** serve
     Zárate and Lima, all running at their limit.
   - **No town tank (Tom, 2026-09-28).** An earlier note said Lima's system

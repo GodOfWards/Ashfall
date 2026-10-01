@@ -531,7 +531,11 @@ them.
 - **The water heater is in the laundry**, with the pump.
 - **Appliances:** the gas cooker, a fridge-freezer, a **small microwave**, a
   **toaster**, an **electric kettle**, a **small washing machine** and a
-  **TV**. **No range hood.**
+  **TV**. **No range hood.** The game's washing machine is instead a
+  front-loader, the Longvie L8012 (Tom, 2026-10-01; below).
+
+The game's SOCKETS circuit is **20 A** (Tom, 2026-10-01, #384), the TUG
+maximum, so that the washing machine and the kettle run together.
 
 The main's rating (32 A, OCEBA's Tarifa 1 maximum), the diferencial's
 (30 mA, 2 × 40 A, AEA's worked example) and the circuits' ratings are game
@@ -739,9 +743,69 @@ Argentine retail listings: **secondary** unless marked otherwise.
     separate start winding. Secondary, a repair blog
     ([ElectroNika](https://electronikasoftware.blogspot.com/2024/07/lavarropas-drean-concept-505-v1-no.html),
     read 2026-10-01).
-  - **The plate's total and the motor's start surge are unconfirmed**
-    (#384). The manual and retail pages (Sodimac, Frávega, Megatone, read
-    2026-10-01) give neither.
+  - **Drean's own manual for the Concept 5.05 V1** (read 2026-10-01,
+    **primary** for Drean,
+    [PDF](https://blog.drean.com.ar/wp-content/uploads/2022/02/Manual-Drean-Concept-5.05-V1.pdf)):
+    - the plate is on the back, "la placa características (ubicada en la
+      parte trasera del producto)";
+    - it prints a power figure: "los fusibles, el toma corriente y la
+      instalación estén dimensionados para la potencia indicada en la placa
+      de características";
+    - its technical table gives none: "Tensión de alimentación 220 V - 50
+      Hz", 5 kg, "Consumo de energía en programa Algodón 0,300 KWh";
+    - a thermal protector "protege automáticamente al motor en caso de
+      sobrecarga mecánica, de subtensión o sobretensión eléctrica", and the
+      machine "volverá a la normalidad transcurridos unos 20 minutos
+      aproximadamente".
+  - **The plate's total and the motor's start surge are unconfirmed.** The
+    manual and retail pages (Sodimac, Frávega, Megatone, read 2026-10-01)
+    give neither. No longer needed for the game: the row house's machine is
+    now a front-loader (below).
+- **Washing machine, front-loader** (#332, #384, 2026-10-01). **The game's
+  machine is the Longvie L8012** (Tom, 2026-10-01): Tom's own is a Longvie
+  bought around 2010–2015.
+  - **Longvie's Cleanium range**, from the maker's manual *Manual de
+    Instrucciones Lavarropas y Lavasecarropas Cleanium* (document 13280,
+    laid out 2014-11-04). **Primary** for Longvie, read on a dealer's copy
+    ([PDF](https://www.marceloboggio.com.ar/uploads/555e2f961fd13.pdf),
+    2026-10-01). Its *Características técnicas*:
+
+    | | L6508 | L6510 | L8010 | L8012 | LS8012 (washer-dryer) |
+    |---|---|---|---|---|---|
+    | Potencia motor de lavado (W) | 360 | 470 | 470 | 470 | 470 |
+    | Potencia resistencia de calentamiento de agua (W) | 1,600 | 1,600 | 1,600 | 1,600 | 1,600 |
+    | Potencia resistencia de secado (W) | – | – | – | – | 1,340 |
+    | **Potencia máxima consumida (W)** | **1,800** | **1,800** | **1,800** | **1,800** | **1,800** |
+    | Tensión de alimentación (V) | 220 | 220 | 220 | 220 | 220 |
+    | Capacidad de lavado (kg) | 6.5 | 6.5 | 8 | 8 | 8 |
+    | Centrifugado máximo (rpm) | 800 | 1,000 | 1,000 | 1,200 | 1,200 |
+    | Peso con embalaje (kg) | 64 | 64 | 67 | 67 | 69.5 |
+    | Ancho/alto/profundidad (cm) | 60/85/55 | 60/85/55 | 60/85/60 | 60/85/60 | 60/85/60 |
+
+    Programmes include Algodón 90° + Prelavado, 60°, 40° and 30°, and
+    Rápido 14, 30 and 59 min. The manual sizes the supply "a la potencia
+    especificada en el cuadro de Características Técnicas", and the model is
+    "informado en la placa del producto".
+  - **No 9 kg Longvie of 2010–2015 was found.** Later variants (L18012,
+    L18012P, L18012C, L16508) are still 8 kg at most
+    ([longvie.com](https://www.longvie.com/Front/showProduct/2),
+    [Frávega](https://www.fravega.com/p/lavarropas-longvie-carga-frontal-l8012-8kg-172901/),
+    2026-10-01).
+  - **Whirlpool WNQ66A, WNQ76A, WNQ86AB** (6, 7, 8 kg): "Tensión Nominal (V)
+    220", "Frecuencia Nominal (Hz) 50", **"Potencia Nominal (W) 2200"** for
+    all three. The manual also requires "circuito y disyuntores
+    termomagnéticos exclusivos" for the machine. **Primary** for Whirlpool,
+    its manual hosted by Frávega
+    ([PDF](http://manuales.fravega.com/media/manuales/173294.pdf),
+    2026-10-01).
+  - **Drean LFDR0914ISG0** (9 kg, inverter, current range): 220 V / 50 Hz;
+    "Potencia nominal de la resistencia de calentamiento de agua (W):
+    1950W"; 0.39 kWh and 65.8 L per cycle; no total given. **Primary** for
+    Drean
+    ([drean.com.ar](https://drean.com.ar/es_AR/Lavado/Lavarropas/Lavarropas-Carga-Frontal/Lavarropas-Carga-Frontal-Inverter-9-Kg-Gris-Drean---LFDR0914ISG0/p/LFDR0914ISG0),
+    2026-10-01). Whether it was on sale by February 2025 is unknown.
+  - **The start surge:** no maker prints one. The heater dominates the
+    draw. Unconfirmed.
 - **TV, 32" LED HD** (2026-10-01):
   - Samsung UN32T4300AGCZB, the Argentine variant: "Consumo de Energía: 48
     W"; "Suministro de energía: AC220-240V 50/60Hz". **Primary** for the
@@ -855,12 +919,16 @@ Argentine retail listings: **secondary** unless marked otherwise.
 
 ## Not yet researched
 
-- **The small appliances' gaps (#332):** a small washing machine's plate
-  total and motor start (#384); a small digital microwave's standby draw;
-  whether an Argentine kettle's, toaster's and water heater's plates print
-  watts or amps; an electric termotanque's standing loss on its own, apart
-  from gas ones. A first-hand reading of a real plate settles the first and
-  third.
+- **The small appliances' gaps (#332):** a small digital microwave's
+  standby draw; whether an Argentine kettle's, toaster's and water heater's
+  plates print watts or amps; an electric termotanque's standing loss on its
+  own, apart from gas ones; a front-loader's start surge. On watts or amps:
+  Atma's kettle manual gives "PE5103E: 230V ~ 50Hz 2200W" (secondary, the
+  search engine's title for a PDF that now returns 404,
+  [atma.com.ar](https://atma.com.ar/media/atma/descargas/Pava%20electrica/Manual%20PE5103E%20PE5713E.pdf),
+  2026-10-01), and every washing machine manual read gives watts. That
+  supports the game's assumption without confirming it; a first-hand
+  reading of a real plate settles it.
 - **The appliances' cycles (#334):** a toaster's cycle time per browning
   level; the temperature of an Argentine kettle's mate setting.
 - **Over-fusing (#365):** the strand diameter of IRAM NM 280 class-4 cable;
