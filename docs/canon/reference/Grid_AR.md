@@ -227,11 +227,14 @@ Belgrano and Campana.
   [Smart Energy International](https://www.smart-energy.com/industry-sectors/energy-grid-management/new-york-grid-operators-self-isolate-over-covid-19-fears/),
   [NBC News](https://www.nbcnews.com/tech/security/prepared-worst-electrical-grid-workers-isolate-coronavirus-spreads-n1173171),
   [APPA](https://www.publicpower.org/blog/power-industrys-mission-essential-workers-ensure-flow-power-during-pandemic).
-  Whether CAMMESA or Transener did the same in 2020 wasn't found.
+  Transener didn't sequester its control room in 2020; it cut it to one
+  operator and the shift chief per shift ("Who operates each layer",
+  below). Whether CAMMESA sequestered anyone wasn't found.
 - **CEZ runs a 24-hour telephone line for Lima's complaints**, with
   operators "exclusive" to Lima (2015). Primary:
   [CEZ, "Call Center Lima"](https://cezarate.com/2015/01/call-center-lima/).
-  How CEZ's network control and repair crews are staffed is unconfirmed.
+  CEZ's headcount and its Guardia are under "Who operates each layer",
+  below; the size of its night crews is unconfirmed.
 - **How long a grid lasts with no one at all: an informal estimate only.**
   A Straight Dope column (Science Advisory Board, undated), citing unnamed
   plant operators and pipeline engineers and the 2003 North American
@@ -246,7 +249,7 @@ Belgrano and Campana.
   **Unconfirmed**: a North American estimate by an anonymous columnist, not
   a study; it is the only one found.
 
-## Who operates each layer (#346, 2026-09-29)
+## Who operates each layer (#346, 2026-09-29 and 2026-10-01)
 
 - **CAMMESA's operations centre (COC) is at Pérez, Santa Fe**, near
   Rosario: "the highest operating authority of the SADI", coordinating the
@@ -258,6 +261,11 @@ Belgrano and Campana.
   [Argentina.gob.ar](https://www.argentina.gob.ar/noticias/el-subsecretario-de-energia-electrica-inauguro-el-nuevo-centro-de-operaciones-de-emergencia)
   (undated), [ETDEWEB, "CAMMESA control center controllers qualification"](https://www.osti.gov/etdeweb/biblio/20930150)
   (search summary).
+  - **In 2020 CAMMESA said it had tightened its safety and hygiene
+    measures**, with COC operators explaining in a video how they worked
+    during the lockdown. No staffing figures. Secondary (CAMMESA's own post,
+    read through a page summary), 2026-10-01:
+    [CAMMESA on LinkedIn, May 2020](https://es.linkedin.com/posts/cammesa_centro-de-control-cammesa-activity-6661314470024933376-cRSf).
 - **Transener runs its whole high-voltage network remotely from a single
   control centre at the ET Rosario Oeste, also in Pérez**, "with a reduced
   staff of highly qualified personnel". Its substations are **unattended**:
@@ -267,16 +275,49 @@ Belgrano and Campana.
   "Operaciones de líneas y estaciones transformadoras"; the page itself
   wouldn't load), 2026-09-29:
   [Transener](https://www.transener.com.ar/en/operacionesdelineas/).
-- **Transba (Lima's 132 kV supplier) is telecontrolled** over SCADA from its
-  **COTDT at the Ezeiza substation**, which controls **75 high-to-medium
-  voltage transformer stations** across the province, with regional centres
-  at Bragado, San Nicolás, Olavarría and Bahía Blanca. Remote command from
-  the operations centre is "the usual operating mode"; local operation is
-  inhibited while it holds. About 5,500 km of 500/220/132/66 kV lines.
-  Secondary, 2026-09-29:
-  ["Sistema de telecontrol de Transener y Transba"](http://www.luisosens.com.ar/archivos/Telecontrol_Transener.pdf),
-  [silo.tips copy](https://silo.tips/download/sistema-de-telecontrol-de-transba-sa-tema-01-centros-de-control)
-  (search summaries; the paper's date unconfirmed).
+  - **The control centre (COT) normally runs two operators and a shift chief
+    (*Jefe de Turno*) per shift.** Under the 2020 lockdown Transener cut it
+    to **two operators plus the shift chief from 20 March**, then to **one
+    operator plus the shift chief from 25 March**. A second operator came
+    back on morning shifts on 3 July, afternoons on 12 November and nights
+    on 11 December. So **the national 500 kV network ran on two people per
+    shift for over three months.** Confirmed (Transener, *Memoria 2020*,
+    "Operaciones — COVID-19", pp. 23–24), 2026-10-01:
+    [Transener, Memoria 2020](https://www.transener.com.ar/wp-content/uploads/2021/03/Memoria-Transener-2020_Clean.pdf).
+  - The same report: preventive maintenance was cut to emergency and
+    unavoidable corrective work, partly because the reduced COT couldn't
+    handle more; field crews worked in **sanitary bubbles**, and moving
+    staff between jurisdictions and finding places for them to sleep were
+    the main limits. In 2020 the licences of **4 shift chiefs, 9 COT
+    operators and 2 support operators** were renewed or granted (that
+    year's renewals, not the whole roster), and **84 transformer-station
+    technicians** were licensed. Transener had **1,453 employees**. An
+    **Emergency Centre** with backup consoles was commissioned in 2020 in
+    the old control room, after the new SCADA went live on 20 February
+    2020. Confirmed, same source.
+- **Transba (Lima's 132 kV supplier) is telecontrolled** over SCADA.
+  **Where from in 2025 is unconfirmed; the two sources disagree:**
+  - **Pérez, today.** Transba's own page says its high-voltage network is
+    operated "from a single Control Centre, at the ET Rosario Oeste, in
+    Pérez", 24 hours a day, with "a reduced staff of highly qualified
+    personnel" and an Emergency Centre to take over if it fails entirely.
+    The wording follows Transener's page closely, so it may be copied text.
+    Primary, read 2026-10-01 (undated):
+    [Transba, "Operaciones de líneas"](https://www.transba.com.ar/operaciones-de-lineas/).
+  - **Ezeiza, in 2002.** A Transba paper by Rodolfo Pellizzoni and Arturo
+    González Avenente (September 2002) puts control at its **COTDT at the
+    Ezeiza substation**, over **75 high-to-medium voltage transformer
+    stations** across the province, with regional centres at Bragado, San
+    Nicolás, Olavarría 500 kV and Bahía Blanca. The COTDT had seven
+    consoles, **three of them for operators**, one being **the shift
+    chief's**; Transener's COT could back it up in an emergency. Remote
+    command from the operations centre is "the usual operating mode"; local
+    operation is inhibited while it holds. About 5,500 km of
+    500/220/132/66 kV lines. Secondary (search summaries and a page
+    summary), 2026-09-29 and 2026-10-01:
+    ["Sistema de telecontrol de Transener y Transba"](http://www.luisosens.com.ar/archivos/Telecontrol_Transener.pdf),
+    [silo.tips copy](https://silo.tips/download/sistema-de-telecontrol-de-transba-sa-tema-01-centros-de-control).
+  - Pérez is the likelier answer for 2025, being the later source.
 - **Yacyretá** (20 Kaplan turbines, about 14 % of the SADI's energy in
   2019): a main control room with a **shift chief and operators** for
   dispatch and load control, plus an extra control room per five turbines;
@@ -287,10 +328,27 @@ Belgrano and Campana.
   How long it would keep generating unattended: only the informal estimate
   above (hydro: days to weeks).
 - **CEZ, Lima's distributor:** about **38,961 users** by another count (the
-  41,000 in `Lima.md` is CEZ's own). Its staff, crews and on-call rotas were
-  **not found**. Secondary, 2026-09-29:
+  41,000 in `Lima.md` is CEZ's own). Secondary, 2026-09-29:
   [Unión Industrial de Zárate](http://www.uizarate.com.ar/asociadas/cez/)
   (search summary).
+  - **288 permanent staff** (176 men, 112 women; mean age 43) and **490
+    people on contracted services**, in the year to 30 June 2022. The
+    headcount covers all of CEZ's services, not only electricity (it also
+    runs social and medical services), so the electrical share is unknown.
+    **57,940 members (*asociados*)**, 89.24 % in Zárate and **10.76 % in
+    Lima**. Confirmed (CEZ, *Balance Social Cooperativo 2021–2022*),
+    2026-10-01:
+    [CEZ, Balance Social 2021–2022](https://cezarate.com/wp-content/uploads/2022/11/BALANCE-SOCIAL-COOPERATIVO-CEZ-2021-2022.pdf).
+  - **A 24-hour, 365-day call centre** (about 270 calls a day) through
+    which users see "in real time the work of the **Guardia** and the
+    general state of the distribution network". Confirmed, same source.
+  - **The Guardia has its own line** and works with the **Maintenance
+    (*Mantenimiento*)** crews in **both Zárate and Lima**; in July 2026, after
+    the game's era, CEZ added three 4×4 pickups and a 4×4 crane truck for
+    those areas. Confirmed, 2026-10-01:
+    [CEZ, Quiénes somos](https://cezarate.com/quienes-somos/),
+    [CEZ, 2026-07-29](https://cezarate.com/2026/07/nuevos-vehiculos-para-la-prestacion-del-servicio-electrico/).
+    How many are on the Guardia at night: unconfirmed.
 
 ## Backup fuel at thermal plants (#346)
 
@@ -327,6 +385,11 @@ Belgrano and Campana.
     Access paper, 2020).
   - The US utilities' association (EEI) planned for **up to 40 % of the
     workforce out sick**.
+  - A 2020 review of the grid under COVID-19 (Noorazar et al.) lists the
+    measures taken (backup control centres, operators split between main
+    and backup, sequestration, skeleton crews) and gives **no figure for
+    how long a grid lasts without them**. Read on the PDF, 2026-10-01:
+    [arXiv:2010.01746](https://arxiv.org/abs/2010.01746).
   - Secondary (search summaries), 2026-09-29:
     [APPA on NERC's report](https://www.publicpower.org/periodical/article/nerc-highlights-potential-summer-power-grid-issues-tied-pandemic),
     [Utility Dive](https://www.utilitydive.com/news/grid-operators-cancel-travel-shift-to-remote-meetings-as-industry-preps-f/573988/),
@@ -423,10 +486,10 @@ the airborne strain can be protected against.
 use until something better is found. Replace them the moment a source
 turns up.
 
-- **CEZ's staff: about 150–200 people.** At the cooperatives' average of
-  about 240 users per employee, CEZ's roughly 39,000–41,000 users give
-  about 165; its large industrial load and extra services (fibre, TV)
-  suggest the upper end.
+- **CEZ's staff: replaced by a source.** The earlier estimate of 150–200
+  (from the cooperatives' 240 users per employee) was too low: CEZ had 288
+  permanent staff and 490 contracted in 2021–22 ("Who operates each
+  layer", above), not all of them on electricity.
   - **Who keeps the network running at night: a handful.** Most likely one
     or two people at a network desk in Zárate and two or three on-call
     crews of two for Zárate and Lima together, perhaps one based at the
@@ -486,9 +549,12 @@ turns up.
 
 ## Not yet known
 
-- How many operators per shift CAMMESA's COC and Transener's and Transba's
-  control centres run, and whether any of them sequestered staff in 2020.
-- CEZ's staff, network control and repair crews.
+- How many operators per shift CAMMESA's COC runs, and whether it
+  sequestered staff in 2020.
+- Where Transba's network was controlled from in 2025, and with how many
+  operators per shift.
+- How many are on CEZ's Guardia at night, and how many of its 288 staff
+  work on the electrical network.
 - The under-frequency relief thresholds and shares.
 - Any study (rather than an informal estimate) of how long an unattended
   grid stays up.
