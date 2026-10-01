@@ -23,8 +23,27 @@ does make radioactive material a hazard**. This file answers that: it can
     moderator tank. Secondary: the RELAP5/SCDAPSIM severe-accident paper,
     through its abstract ([OSTI](https://www.osti.gov/etdeweb/biblio/22750770)).
   - **Emergency power: four emergency diesel generators**, a German design
-    choice from 1980, against the usual three. Secondary. **How long their
-    fuel lasts is unconfirmed.**
+    choice from 1980, against the usual three. Secondary. **One per safety
+    train, each sized for 50 %** of the load, so two carry it. They take
+    load **20–30 s** after a blackout; the reactor protection and
+    measuring systems run meanwhile on **220 V and 24 V DC batteries** or
+    static converters. **Primary**: the ARN's 9th national report (below),
+    Annex III.3.3.7, read 2026-10-01. **How long their fuel lasts is
+    unconfirmed**; an estimate is below ("How long the diesel fuel could
+    last").
+  - **Heavy water: about 650 t.** "La fabricación de las 650 a 670
+    toneladas de agua pesada necesarias" for Atucha II began in 2006
+    (Niebas, ex-CNEA, to the Diputados science committee, 2019-05-21:
+    [HCDN](https://www.hcdn.gob.ar/comisiones/permanentes/ccytecnologia/reuniones/vts/vtcom.html?id=6220));
+    the 650 t were delivered in stages, the last in July 2013
+    ([U-238, 2014-06-06](http://u-238.com.ar/agua-pesada-argentina-para-el-mundo/)).
+    Secondary, read 2026-10-01. Both count what was ordered for the plant,
+    which may include a small reserve beyond the circuits' fill.
+  - Its pressure vessel is **7.368 m** inside diameter and **14.24 m**
+    high. **Primary**: IAEA, *Heavy Water Reactors: Status and Projected
+    Development* (TRS-407, 2002), Table LXVIII
+    ([IAEA](https://www-pub.iaea.org/MTCD/publications/PDF/TRS407_scr/D407_scr3.pdf)),
+    read 2026-10-01.
   - **Before the era, the grid did without it for ten months.** Inspections
     in **October 2022** found one of the reactor's four internal separators
     detached; it was out of service until **28 August 2023** (the designer
@@ -43,6 +62,24 @@ does make radioactive material a hazard**. This file answers that: it can
   - Secondary, press: EconoJournal
     ([2025-02](https://econojournal.com.ar/2025/02/atucha-i-avanzan-las-tareas-de-extension-de-vida-de-la-central/),
     [2024-09](https://econojournal.com.ar/2024/09/nucleoelectrica-fondos-extension-de-vida-de-la-central-atucha-i/)).
+  - **Its size: 1,179 MWt**, 357 MWe gross. **Primary**: the ARN's 9th
+    national report, Annex III.1.3.9, and TRS-407, Table LXVIII (both
+    above and below), read 2026-10-01.
+  - **The 241 doesn't match the core's size.** The 9th report gives **250**
+    fuel assemblies in the core, and TRS-407 **252** channels. Whether the
+    241 leaves out positions holding something other than fuel, or the
+    press figure is wrong, is **unresolved**.
+  - **Emergency power: three emergency diesels, each 100 %**: any one can
+    carry the shutdown and design-basis loads (9th report, Annex
+    III.1.3.7; primary). The same paragraph also says "two diesel
+    generator set"; the 3 × 100 % reading is the explicit one. Which were
+    in service during the outage is unconfirmed.
+  - **Heavy water: not found.** The rule of thumb of **0.8–1 t per MWe**
+    of initial inventory
+    ([ENULA, 2023-06-22](https://enula.org/2023/06/agua-pesada-un-insumo-estrategico-para-el-futuro-argentino/);
+    secondary) gives **about 290–360 t**; an estimate, not a fact. The
+    reactor was emptied of fuel, not drained, so how much was still in its
+    circuits in February 2025 is unknown.
 
 ## Spent fuel
 
@@ -101,6 +138,17 @@ All read 2026-09-29.
   generators and vent the steam to the atmosphere**. It can also power the
   volume control system and inject water into the primary-moderator
   system. Unit I has its own mobile diesel, with a written procedure.
+- **Atucha II's emergency power building** has four equal sections. The
+  **diesel fuel storage tanks** are on its lower floor, and **a day tank
+  for each diesel** is on a gallery on the upper floor (9th report, Annex
+  III.3.2). Their volumes aren't stated.
+- **Refuelling the diesels is a written crew task.** The emergency response
+  organisation's internal instructions include **ORE-008**, "Fuel supply
+  to emergency diesel generators CNA I-II"; **ORE-016**, "Fuel oil from
+  tank EGB01BB001 to weekly tanks of emergency diesel generators";
+  **ORE-025/026**, running the mobile diesel and fuelling it; and, still to
+  be written, "Connecting the temporary cooling system of diesel
+  generators" (9th report, 3.18; read 2026-10-01).
 - **The two units can feed each other:** a manual electrical
   interconnection between Units I and II, and Unit I's emergency diesels
   can supply Unit II.
@@ -171,8 +219,9 @@ makes tritium, and it is most of what the plants release:
   "not relevant from a public exposure viewpoint".
 
 In the case where the plant is abandoned, the tritium in the heavy water
-would leave with any steam or leak. How much heavy water each unit holds is
-unconfirmed.
+would leave with any steam or leak. Atucha II holds **about 650 t** of
+heavy water; Atucha I's inventory isn't known (above, "The plants at the
+collapse").
 
 ## Decay heat: how fast it falls
 
@@ -271,16 +320,19 @@ game only shows what the road shows.
   [Wikipedia, "Spent fuel pool"](https://en.wikipedia.org/wiki/Spent_fuel_pool),
   [Union of Concerned Scientists](https://blog.ucs.org/david-wright/where-did-the-water-in-the-spent-fuel-pools-go/),
   [OECD-NEA, pools under loss of cooling (2015)](https://www.oecd-nea.org/upload/docs/application/pdf/2021-02/csni-r2015-2.pdf)
-  (search summaries). **Atucha's pool dimensions and Atucha II's
-  heavy-water inventory are unconfirmed** (#350).
+  (search summaries). **Atucha's pool dimensions are
+  unconfirmed.**
 
 **Estimate — not a fact.** Taking the lights going out at **about two
 months after Atucha II's shutdown** (some weeks after day 21):
 - **Atucha II's core** then gives about **2 MW** (Way–Wigner, with the
   fuel's roughly year-long residence in the core; derived), boiling off
-  about **75 tonnes a day** once hot. With a heavy-water inventory of some
-  hundreds of tonnes (assumed), its fuel would be **uncovered within about
-  one to three weeks**. The damage starts **inside the pressure vessel and
+  about **75 tonnes a day** once hot. Its **about 650 t** of heavy water
+  (secondary, above) would all boil off in about nine days once boiling,
+  and the fuel is uncovered before the last of it goes; with the time to
+  heat up first, its fuel would be **uncovered within about one to two
+  weeks** (revised 2026-10-01 from "one to three weeks", which assumed
+  "some hundreds of tonnes"). The damage starts **inside the pressure vessel and
   the containment**, which are built to hold it; a release needs them to
   fail or vent.
 - **Atucha I's pool**, holding its whole core about six months out of the
@@ -344,7 +396,25 @@ Convention on Nuclear Safety, cited above, read in full text 2026-09-30.
   (*jefe de turno*), who answers for everything in the room. Secondary,
   2026-09-30:
   [Mining Press, 2022-04-18](https://miningpress.com/nota/346454/como-es-atucha-i-y-ii-por-dentro-seguridad-produccion-y-plan-de-ampliacion-con-china).
-  The licensed minimum per shift is unconfirmed.
+- **The legal floor: two operators in the control room at all times.**
+  ARN norm **AR 3.9.1** rev. 1 (Res. 41/01, *Boletín Oficial* 8/2/02),
+  criterion 23: "El plantel mínimo de operación debe contemplar la
+  cantidad necesaria de personal autorizado de manera de cubrir los turnos
+  de operación, los reemplazos, la permanencia como mínimo de dos
+  operadores en la sala de control y asegurar que cada operador no exceda
+  de un turno diario de labor, admitiéndose, en circunstancias
+  debidamente justificadas, la extensión a dos (2) turnos como máximo."
+  **Primary**
+  ([ARN](https://www.argentina.gob.ar/sites/default/files/3-9-1_r1.pdf)),
+  read 2026-10-01.
+  - So an operator works one shift a day, **two in a row at most**, and
+    only when justified.
+  - Criterion 22: the posts in the plant's operating organisation chart
+    must stay covered. Criterion 19: there must always be pool space for a
+    whole core.
+  - **Each plant's own minimum** is set in its licence documents ("minimum
+    staff in plant and control room (see Regulatory Standard AR 3.9.1)",
+    10th report; primary). **Atucha's figure isn't published.**
 - **What Atucha did in 2020 (primary, 9th report, 3.6.5):** "a
   reorganization of **minimal shifts of operation along with sanitary
   protection for 14 days**, a strict control over the workplace hygiene,
@@ -401,9 +471,21 @@ Convention on Nuclear Safety, cited above, read in full text 2026-09-30.
   system; one pool keeps room for **all 451 core assemblies**; pool 3 holds
   1,435 old Atucha I elements; the concrete takes no damage up to
   60 °C water.
-- **Atucha I's pools:** a 3-D model of losing the pool cooling pumps has
-  been simulated and is updated yearly (10th report); the results aren't
+- **Atucha I's pools:** a 3-D GOTHIC 8.1 model of losing the pool cooling
+  pumps has been simulated, "with and without gates between pools in
+  place, considering in the latter case the water mixing between the
+  pools", and is updated yearly (10th report); the results aren't
   published.
+- **If the cooling water is lost, Atucha II's pools are refilled from
+  groundwater** by a pump (UJ) installed for that purpose, under a severe
+  accident guideline. In the long term, the steam generators and the pools
+  can also be fed from the plant's fire system (SGA). 10th report;
+  primary, read 2026-10-01.
+- **The pools' volumes, depths and heat loads weren't found** for either
+  unit (2026-10-01). A search summary gave Atucha I's pools as "16 m deep,
+  8 × 5.5 m". Its source, the 5th Joint Convention report (2015, G.2),
+  gives the 16 m for **FACIRI**, CNEA's store for research-reactor fuel,
+  not Atucha, so the figure isn't used.
 
 ### The emergency plan puts Lima in the 10 km zone
 
@@ -486,33 +568,62 @@ minutes of sounding**. Secondary, 2026-09-30:
   charts), 2026-09-30:
   [Generator Source](https://generatorsource.com/tools-info/fuel-consumption-charts/),
   [Walt Power](https://waltpower.com/diesel-generator-fuel-consumption-chart/).
-- Atucha II's diesels' ratings and tank volumes weren't found (#350).
+- **Atucha II's diesels' ratings and tank volumes weren't found**
+  (2026-10-01). Searched: the ARN's 9th and 10th national reports, the 5th
+  and 8th Joint Convention reports, TRS-407, and the web in English and
+  Spanish.
+- **The German rule, KTA 3702** (Atucha II is a Siemens/KWU design): the
+  engine and its key parts must be approved for at least **500 hours of
+  continuous running**, about three weeks. Secondary, 2026-10-01: a search
+  summary of
+  [KTA 3702 (2022)](https://www.kta-gs.de/d/regeln/3700/3702_r_2022_11.pdf),
+  whose file couldn't be downloaded; its fuel-reserve clause wasn't read.
 - **How far the diesels can be heard** is worked out in `Sound.md`: an open
   set plainly within about a kilometre on a quiet night, one inside its
   building within a few hundred metres.
 
-**Estimate — not a fact.** A week per diesel is sized for the heavy loads
-of an accident. A reactor shut down for weeks needs much less: a
-residual-heat train, the pool cooling, instruments, lighting, the control
-room's air. A crew running **one diesel at a time at part load**, working
-through **four** diesels' weekly tanks, then Atucha I's diesels (which can
-feed Unit II), the mobile diesel and the auxiliary boiler's fuel tank, could
-plausibly stretch the site's fuel to **weeks, perhaps one to two months**.
-Diesel in the Atucha I overhaul's work vehicles and yard would stretch it
-further, for a crew willing to go out for it.
+**Estimate — not a fact** (2026-10-01; retunable). It rests on these
+assumptions:
+- **A "weekly tank" holds about 7 days of fuel at the diesel's rated
+  load**, as in the US standard. This is the weakest link, and the result
+  scales directly with it.
+- **A diesel at low load burns less fuel.** At a quarter load it burns
+  about 30 % of its full-load fuel, and at half load about 50 % (the charts
+  above). So a weekly tank lasts **about 3 weeks at a quarter load and
+  about 2 weeks at half**.
+- **Weeks after shutdown, the load is a quarter to half of each diesel's
+  rating.** A residual-heat train, the pool cooling, cooling water,
+  instruments, lighting and the control room's air need far less than the
+  accident loads each diesel is sized to carry half of.
+- **All four start on their own.** Each is tied to its own train and
+  starts when the grid fails. Running them one at a time takes a crew.
+
+| Case | How long the fuel lasts |
+|---|---|
+| **Unattended.** All four run side by side, lightly loaded, until their tanks run dry at about the same time. | **About 2–3 weeks** |
+| **Skeleton crew.** They run one diesel at a time through the four weekly tanks, then Atucha I's diesels (which can feed Unit II), the mobile diesel and the auxiliary boiler's tank (ORE-008, ORE-016, ORE-026). | **About 1–2 months** |
+| **Floor**, if "weekly" doesn't mean what it suggests | **12 hours**, the minimum committed after 2019 |
+
+- **Unattended, wear may stop them at about the same time as the fuel**,
+  if KTA 3702's 500 hours holds.
+- **The unattended case assumes the pumps that move fuel from the storage
+  tanks to each day tank run by themselves.** That's typical, but
+  unconfirmed for Atucha.
+- Diesel in the Atucha I overhaul's work vehicles and yard would stretch
+  the crewed case further, for a crew willing to go out for it.
+- **One tank volume or one diesel rating** for Atucha II would turn this
+  into a figure.
 
 ## Not yet researched
 
-- **How long the emergency diesels run** on their own tanks. The reports give
-  only the 12-hour availability commitment, the "weekly tanks", the 72-hour
-  procedures and an unquantified "increasing DGs autonomy" (above).
-- **The licensed minimum crew per shift**, beyond the five in the control
-  room.
-- **The pools' heat loads and boil-off times**, including Atucha I's
-  unpublished loss-of-cooling simulations.
-- The pools' **water volumes and depths**, and their current heat loads.
-- **How much heavy water** each unit holds.
-
-Sources to try: NA-SA's technical pages, IAEA PRIS, and the ARN's
-stress-test report itself (it isn't published online; the national reports
-summarise it).
+What's still open after #350 (2026-10-01). All of it is most likely in the
+ARN's stress-test report or NA-SA's safety reports, neither of them public.
+- **The diesels' tank volumes, ratings and autonomy**, for both units; the
+  autonomy reached by Atucha II's "increasing DGs autonomy". An estimate is
+  above.
+- **Atucha's own licensed minimum crew per shift**, beyond AR 3.9.1's two
+  operators in the control room.
+- The pools' **water volumes, depths and heat loads**, and the results of
+  Atucha I's GOTHIC simulations.
+- **Atucha I's heavy-water inventory.**
+- Whether **241, 250 or 252** is right for Atucha I's core.
