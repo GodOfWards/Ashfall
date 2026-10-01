@@ -37,17 +37,17 @@ much.
 **The sink and the tap.** A room with a sink runs while `waterRunningIn()`
 holds ([Power](power.md): a building's tank while it holds water, else the
 mains). `doFillAtSink()` fills one unit as far as it has room, clean water
-mixed into what is there; `doDrinkAtSink()` drinks Drink's or Drink all's
-amount from the tap. Off a tank, both draw the litres they take, to the
+mixed into what is there; `doDrinkAtSink()` drinks `MEASURE_ML` from the
+tap. Off a tank, both draw the litres they take, to the
 millilitre (`drawFromTank()`), only what the tank has left on the last of it,
 and a draw that moves a pumped tank's float resolves its building. A sink on
 the mains draws nothing down. A dry tank's sink says so in the fill's and the
 tap's place (`tapDryFor()`, `sinkDry()`).
 
 **Drinking.** Any holder with fluid and no dish is drunk from (`drinkable()`),
-a vessel with ingredients included: the water, never the food. Drink takes
-`MEASURE_ML`, Drink all what brings Thirst to `VITAL_MAX`
-(`drinkAllMl()`), each or what is left. The unit is the least-left one
+a vessel with ingredients included: the water, never the food. Every drink
+takes `MEASURE_ML`, or what is left when less; there is no drink to full
+Thirst. The unit is the least-left one
 holding the same fluid among the rows of the same item (`drinkTarget()`), as
 Eat picks. `drinkFrom()` is the one drink: Thirst at `WATER_THIRST_PER_L`, the
 fluid taken (a holder drunk dry stays, empty), its line, and for tainted water
@@ -56,9 +56,10 @@ food poisoning at `TAINTED_WATER_POISONING_CHANCE` per
 
 **Auto-drink.** Awake and below `LOW_THIRST_THRESHOLD`, the player drinks on
 their own (`autoDrink()`) from what they carry (`invPools()`), clean water
-only and never from a tap: the holder with the least left first, each as
-Drink all, the next as one empties, until Thirst is full or the clean water
-carried runs out. It is checked at the minute Thirst crosses the threshold, in
+only and never from a tap: `MEASURE_ML` in all, from the holder with the
+least left first, then the next if one runs dry, until the measure is drunk
+or the clean water carried runs out. At the threshold, one measure lifts
+Thirst clear of it, so it fires again only when Thirst next falls below. It is checked at the minute Thirst crosses the threshold, in
 `clockStep()`, and at the end of every action (`afterAction()`), never while
 asleep, during a sleep or a blackout. There is no switch.
 
@@ -115,11 +116,11 @@ gather under one header (`groupKeyOf()`).
 
 ## Constants
 
-- `MEASURE_ML`: what Drink drinks and Pour by the measure pours.
+- `MEASURE_ML`: what every drink drinks, auto-drink's included, and what Pour
+  by the measure pours.
 - `WATER_THIRST_PER_L`: Thirst restored per litre drunk.
 - `TAINTED_WATER_POISONING_CHANCE`, `TAINTED_WATER_DOSE_ML`: tainted water's
   food-poisoning chance, and the amount it is for.
-- `VITAL_MAX`: the top of Thirst's scale, what Drink all drinks to.
 - `LOW_THIRST_THRESHOLD`: below it, the player drinks on their own.
 - `DISH_WATER_MIN_SHARE`: the share of a vessel a dish needs in water.
 - `BOIL_MINUTES`: how long tainted water boils before it comes clean.
