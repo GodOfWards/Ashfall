@@ -5,7 +5,8 @@ records what's decided). See `README.md` for the status labels. Gathered
 2026-10-01 for #389, so that #388's Test action (any `voltage-test` tool put
 across a loose battery) can print a real reading for each charge level. Kept
 general: every cell a household might hold, not only the flashlight's and
-the radio's.
+the radio's. Run times and weights for the devices were added 2026-10-01
+for #391, so that #388 can set each device's drain from a real figure.
 
 Two readings matter throughout. **At rest** (open circuit) is what a meter
 reads across a cell lying loose, after it has recovered. **Under load** is the
@@ -236,7 +237,8 @@ device's cutoff is set by. A cell that stopped a device recovers at rest, so a
   Another Argentine shop sells a 2 × AA pocket radio. Secondary:
   [La Colón](https://www.lacolon.com.ar/productos/radio-portatil-suono-am-fm-con-antena-a-pilas-aa/).
 - **Flashlights.** A plastic LED flashlight on **2 × D**: 180 lm, 40 h on
-  one set, 225 g, alkaline D cells included. Confirmed as its spec,
+  one set, 225 g without its cells (see below), sold with two alkaline D
+  cells. Confirmed as its spec,
   2026-10-01; a Mexican maker, not confirmed on sale in Argentina:
   [Truper LIPLA-180](https://www.truper.com/ficha_tecnica/Linterna-plastica-LED-luz-directa-2-pilas-D-180-Lm-10599.html).
   An LED headlamp on **3 × AAA**: 100 lm, 6.5 h high, 7.5 h low, 75 g.
@@ -247,6 +249,95 @@ device's cutoff is set by. A cell that stopped a device recovers at rest, so a
   reads.
 - Which device is "typical" no source says. **Unconfirmed**, and a design
   choice.
+
+## How long they run, and what they weigh
+
+Each figure is one maker's claim for one model, on alkaline cells. Weights
+without cells subtract 23.0 g per AA (Energizer E91, above) where a maker
+gives the weight with them.
+
+### Flashlights
+
+| Model | Cells | Light | Run time on one set | Weight without cells |
+|---|---|---|---|---|
+| Truper LIPLA-180, plastic, 1 LED | 2 × D | 180 lm | 40 h | 225 g |
+| Truper LIPLA-80, plastic, 1 LED | 2 × AA | 80 lm | 8 h | 105 g |
+| Truper LIPLA45-K, plastic, 3 LEDs | 2 × AA | 45 lm | 7 h | not stated |
+| Truper Expert LINA-2AAN, aluminium | 2 × AA | 235 lm high, 100 lm low | 3.5 h high, 5.5 h low | 96 g (cells not stated) |
+| Mini Maglite AA LED, aluminium | 2 × AA | 127 lm high | 11 h high, 25 h low | about 72 g (117.75 g with cells) |
+
+- **LIPLA-180 and LIPLA-80** are one line: same ABS body with TPR grip, same
+  sheet layout. LIPLA-80: "Duración de la batería en uso: 8 horas", "Peso:
+  105 g", "Incluye: 2 Pilas alcalinas tipo AA"; its packaging: "Emplea 2
+  pilas alcalinas tipo AA de 1.5 V c.c. … Duración: 8 h* … *Con pilas
+  alcalinas." Confirmed as its spec, 2026-10-01:
+  [spec page](https://www.truper.com/ficha_tecnica/Linterna-plastica-LED-luz-directa-2-pilas-AA-80-Lm-10598.html),
+  [printable sheet](https://www.truper.com/ficha_merca/ficha-print.php?code=13018),
+  [packaging](https://www.truper.com/admin/descargables/manual/13018-08.pdf).
+  A Mexican maker, not confirmed on sale in Argentina.
+- **The 225 g is without cells.** LIPLA-180's sheets and packaging give
+  "Peso: 225 g" and "Incluye: 2 Pilas alcalinas tipo D" and never say which
+  the weight covers. The same maker's pair of alkaline D cells weighs 0.27 kg
+  in its blister (Volteck AL-D, code 46318), and Energizer's E95 D weighs
+  139 g, so two cells alone outweigh 225 g. Confirmed, 2026-10-01:
+  [LIPLA-180 sheet](https://www.truper.com/ficha_merca/ficha-print.php?code=13019),
+  [packaging](https://www.truper.com/admin/descargables/manual/13019-08.pdf),
+  [Volteck AL-D sheet](https://www.truper.com/ficha_merca/ficha-print.php?code=46318).
+  That the weight excludes the cells is **Derived**.
+- **LIPLA-80's 105 g** is not stated either way. Read by its sibling's
+  convention, it is without cells. **Derived, Unconfirmed.** With the cells
+  in it, the body would be about 59 g.
+- **The others.** Confirmed as each maker's spec, 2026-10-01:
+  [LIPLA45-K](https://www.truper.com/ficha_tecnica_pdf/views/ficha-print.php?id=2840)
+  ("Duración de carga: 7 horas"),
+  [LINA-2AAN](https://www.truper.com/ficha_tecnica_pdf/views/ficha-print.php?id=2828),
+  [Mini Maglite](https://maglite.com/products/mini-maglite-led-2aa-flashlight)
+  ("Weight with Batteries: 4.15 oz. / 117.75 g"; "Runtime – High: 11 hr.";
+  "Runtime – Low: 25 hr."; read through a fetch summary that quoted these
+  lines). The Mini Maglite's 72 g is **Derived**.
+- **Observation, not a source's claim:** a plain plastic 2 × AA LED light
+  runs 7–8 h on a set; brighter lights run shorter on high. Bodies weigh
+  about 60–105 g.
+
+### Pocket radios
+
+| Model | Cells | Run time, through the speaker | Weight without cells |
+|---|---|---|---|
+| Sony ICF-P26, 69.5 × 119 × 38 mm, 100 mW | 2 × AA | about 100 h FM, 110 h AM | about 144 g (190 g with cells) |
+| Panasonic RF-P50, Latin America | 2 × AA | about 50 h FM, 52 h AM | 140 g (cells not stated) |
+
+- **Sony ICF-P26:** "Battery life*: Approx. 100 hours (FM
+  reception)/Approx. 110 hours (AM reception). * When listening through the
+  speaker on alkaline batteries manufactured by Sony (LR6SG). The actual
+  battery life varies significantly depending on battery type (such as
+  rechargeable batteries), usage and circumstances." "Mass: Approx. 190 g
+  (6 3/4 oz) (incl. batteries)". Confirmed, 2026-10-01: the maker's
+  operating instructions (4-573-992-13(1)), read on mirrors
+  ([manua.ls](https://www.manua.ls/sony/icf-p26/manual),
+  [ManualsLib](https://www.manualslib.com/manual/1502860/Sony-Icf-P26.html));
+  Sony's own pages refuse automated reads. The 144 g is **Derived**.
+- **Panasonic RF-P50**, service manual order No. AD9907188C1, "Area P …
+  Latin America": "Play time: [Approximate operating time and in hours (at
+  25°C, on a flat, stable surface).] Panasonic alkaline dry cell batteries:
+  FM: About 50 hours AM: About 52 hours". Battery current: 4.5 mA (FM) and
+  6.9 mA (AM) at minimum volume, 92 mA at maximum. Confirmed, 2026-10-01,
+  from the service manual's text on
+  [ManualsLib](https://www.manualslib.com/manual/2628178/Panasonic-Rf-P50.html).
+  The 140 g is **Secondary**, from a manual site's spec summary
+  ([manua.ls](https://www.manua.ls/panasonic/rf-p50/manual)), with or
+  without cells not stated. A later variant, the RF-P50D, gives about 64 h
+  FM and 68 h AM through the speaker, and 111 g: **Secondary**, the same
+  site's summary of its manual.
+- **The cell maker's radio test.** Energizer's E91 AA datasheet charts the
+  industry "RADIO/CLOCK" test, 50 mA for 1 h in every 8, to 1 V. The curve
+  reaches 1.0 V at about 53 h, read off the graph to ±2 h. Confirmed,
+  2026-10-01: [E91](https://data.energizer.com/pdfs/e91.pdf).
+- **Volume decides it.** Neither radio maker says at what volume it measured
+  battery life. The Panasonic draws twenty times more at full volume than at
+  minimum.
+- **No run time was found for the Daihatsu D-RK pocket radios** above.
+- **Observation, not a source's claim:** a pocket radio runs about 50–100 h
+  on one set of AA cells. The bodies weigh about 110–145 g.
 
 ## Cells sold in Argentina
 
@@ -271,3 +362,6 @@ device's cutoff is set by. A cell that stopped a device recovers at rest, so a
 - At-rest tables by charge for D cells, zinc-carbon and coin cells, and an
   empty NiMH cell's at-rest reading.
 - A car battery maker's own voltage table.
+- A run time for any Daihatsu D-RK pocket radio, and at what volume the
+  radio makers measure battery life.
+- Whether LIPLA-80's 105 g includes its cells.
