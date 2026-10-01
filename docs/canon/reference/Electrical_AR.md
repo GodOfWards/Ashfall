@@ -405,6 +405,50 @@ breaker: it is replaced with a spare fuse item.
   asking what current such a strand melts at. Secondary, one thread
   ([Foros de Electrónica, *El típico fusible casero*, 2010-02-20](https://www.forosdeelectronica.com/threads/el-tipico-fusible-casero.31635/),
   read 2026-09-30).
+- **What a copper bodge melts at (#365, 2026-10-01).** Preece's formula,
+  I = a·d^1.5, with **a = 80.0 for copper, d in mm** (10,244 with d in
+  inches); copper melts at 1,083 °C. "These calculations must be considered
+  as approximates". Secondary (Jefferson Lab Hall A, *Fusing Currents –
+  Melting Temperature*,
+  [PDF](https://hallaweb.jlab.org/tech/Detectors/public_html/hall_a/miscellaneous_info/Fusing_Currents_Melting_Temperature_Copper_Aluminum_Magnet_Wire_R2.011609.pdf),
+  read 2026-10-01). It is for a long wire in free air: a short one between a
+  *tapón*'s screws loses heat to them and melts higher, by an amount not
+  found. Derived from it:
+
+  | Fitted in place of fuse wire | Diameter | Melts at |
+  |---|---|---|
+  | One strand of class-5 flexible 1.5 mm² cable | ≤ 0.26 mm | ≈ 11 A |
+  | The whole 1.5 mm² core | ≈ 1.38 mm equivalent | ≈ 130 A |
+
+  **The game's bodge is the whole core** (Tom, 2026-10-01, #365).
+- **Strand sizes:** IEC 60228 class 5, 1.5 mm²: **at most 0.26 mm per
+  wire**; class 2 stranded: at least 7 wires. Primary for the maker
+  restating the standard (Nexans, *Classification of conductors according
+  to IEC 60228*, February 2021,
+  [PDF](https://www.nexans.be/en/dam/jcr:efe5d9a2-f346-4047-87b4-99d1e319d768/IEC60228_ENG.pdf),
+  read 2026-10-01). Prysmian's Superastic Flex (IRAM NM 247-3) is class 5
+  (search summary, secondary); Cobrhil's unipolar is class 4 to IRAM NM 280
+  (below).
+- **What 1.5 mm² wiring carries.** IRAM NM 247-3 unipolar, PVC, 70 °C
+  service: **1.5 mm² 15 A** with 2 conductors in conduit, 14 A with 3, 18 A
+  in free air; 1 mm² 11.5 A; 2.5 mm² 21 A. **Primary** for the maker
+  (Cobrhil, *Cable Unipolar Normalizado IRAM NM 247-3*,
+  [PDF](https://www.cablescobrhil.com.ar/pdf_productos/Cobrhil-unipolar.pdf),
+  read 2026-10-01). AEA 90364-7-770's table 770.12.I is said to give the same
+  15 A and 21 A at 40 °C ambient (search summary, secondary; the regulator's
+  PDF returned 403). Whether old Lima houses are wired in 1.5 mm² is
+  unconfirmed.
+- **AEA's overload rule:** IB ≤ In ≤ Iz and I2 ≤ 1.45 Iz. A breaker to IEC
+  60898 meets the second automatically; a gG fuse must be checked (1.6 In ≤
+  1.45 Iz). Secondary (Capo and Leuzzi, APSE, *Ingeniería Eléctrica* 304,
+  November 2016,
+  [link](https://www.editores.com.ar/revistas/ie/304/apse_verificaciones_conductores),
+  read 2026-10-01).
+- **PVC insulation's limits:** 70 °C continuous and **160 °C in a short
+  circuit** (Prysmian's datasheet, search summary); in overload **up to 130
+  °C, for at most 100 h in any 12 months** (a Spanish cable maker's table,
+  search summary); its backbone starts to decompose at **200–340 °C**,
+  releasing HCl (a TG-FTIR study, search summary). All secondary.
 - **Fuses on both poles, behind a manual switch: the regulated practice.**
   Rosario's building regulation, Ordenanza 3419/83 (Reglamento de
   Edificación, Sección 4, electrical installations), is **primary** for
@@ -660,7 +704,10 @@ Argentine retail listings: **secondary** unless marked otherwise.
   BGH B120DS20 and B120DN20 (digital) 1,050 W
   ([Megatone](https://www.megatone.net/producto/microondas-b120ds20-20l-700w-digital-pl-bgh_COC2020BGH/));
   BGH B120M20 and Daewoo D120M 1,150 W maximum. CEZ's table gives 1,300 W
-  (below). **Standby draw: not found.**
+  (below). **Standby draw: not found** for any Argentine model (BGH
+  B120DS20I and Drean HMD20ARNJ0's pages list none, read 2026-10-01). The
+  game's microwave is the dial B120M16, with no clock or display (Tom,
+  2026-10-01); whether it draws anything idle is unconfirmed.
 - **Washing machine,** small (5 kg) automatic top-loader:
   - Drean Concept 5.05: 220 V - 50 Hz, **0.300 kWh per cotton programme**;
     its manual gives no rated power and points to the plate on the back.
@@ -674,12 +721,49 @@ Argentine retail listings: **secondary** unless marked otherwise.
   - The older Drean Concept (5 kg top-loader): **motor 187 W, 220 V**, read
     directly on a spare-parts listing
     ([Línea Blanca SRL](https://www.lineablancasrl.com.ar/productos/motor-lavarropas-drean-concept-mod-viejo/)).
-  - **The plate's total and the motor's start surge are unconfirmed.**
-- **TV, 32" LED: unconfirmed.** Only generic guidance was found, 30–50 W on
-  and 0.5–3 W on standby
-  ([Naldo](https://blog.naldo.com.ar/cuanto-consume-un-televisor/),
-  [Infobae](https://www.infobae.com/tecno/2024/07/31/cuanta-energia-consume-un-smart-tv-en-modo-espera-y-como-ahorrar-en-el-pago-mensual/)).
-  No Argentine model's own figure was read.
+  - Drean Concept 5.05 V1's energy label (IRAM 2141-3:2017, Res. ex SICyM
+    319/99): class B, **0.62 kWh and 127 L for its standard cotton test
+    cycle, which lasts 324 min**; 5.0 kg; 500 rpm. From an image of the
+    label Tom supplied, 2026-10-01 (where it came from wasn't stated). Some
+    of its fields look unfilled (noise "YZ"), so the 324 min is unconfirmed.
+    It is the energy test's cycle, not an everyday wash. The manual's
+    programme table gives cotton **about 128 min** and shorter programmes
+    down to about 37 min for rinse and spin ("Los tiempos de los programas
+    son estimativos"); **secondary**, from manualslib's text extract, whose
+    columns read ambiguously
+    ([manualslib](https://www.manualslib.es/manual/721136/Drean-Concept-5-05-V1.html?page=21),
+    read 2026-10-01). The 0.300 kWh above and the label's 0.62 kWh likely
+    measure different programmes.
+  - The Concept 5.05 / V1 / C12 / Fuzzy Tech motor runs on a **16 µF × 400
+    VAC run capacitor**: a permanent-split-capacitor motor, with no
+    separate start winding. Secondary, a repair blog
+    ([ElectroNika](https://electronikasoftware.blogspot.com/2024/07/lavarropas-drean-concept-505-v1-no.html),
+    read 2026-10-01).
+  - **The plate's total and the motor's start surge are unconfirmed**
+    (#384). The manual and retail pages (Sodimac, Frávega, Megatone, read
+    2026-10-01) give neither.
+- **TV, 32" LED HD** (2026-10-01):
+  - Samsung UN32T4300AGCZB, the Argentine variant: "Consumo de Energía: 48
+    W"; "Suministro de energía: AC220-240V 50/60Hz". **Primary** for the
+    maker ([samsung.com/ar](https://www.samsung.com/ar/tvs/hd-tv/t4300-32-inch-hd-smart-tv-un32t4300agczb/),
+    read 2026-10-01). No standby figure. The Latin American variant lists
+    "Maximum Power Consumption 60 W" at AC 100–240 V
+    ([samsung.com/latin](https://www.samsung.com/latin/tvs/hd-tv/t4300-32-inch-hd-smart-tv-un32t4300apxpa/)).
+  - Noblex DM32X7000 (an Argentine brand): **43 W on, 0.3 W on standby**,
+    energy class B. **Secondary**: search summaries of Argentine retail
+    listings
+    ([MercadoLibre](https://articulo.mercadolibre.com.ar/MLA-884701425-smart-tv-noblex-32-dm32x7000-hd-_JM));
+    the pages didn't load. **The game's figure** (Tom, 2026-10-01, #333),
+    without its standby.
+  - **A TV's label must print its standby draw in W.** Disposición 219/2015
+    (under Res. 319/1999) makes the energy label compulsory on TVs sold in
+    Argentina: on-mode class and annual kWh (IRAM 62411), and standby in W
+    (IRAM 62301). Secondary
+    ([CDA](https://www.cda.org.ar/detalle_noticia.php?id=35244), read
+    2026-10-01).
+  - Generic guidance, superseded: 30–50 W on and 0.5–3 W on standby
+    ([Naldo](https://blog.naldo.com.ar/cuanto-consume-un-televisor/),
+    [Infobae](https://www.infobae.com/tecno/2024/07/31/cuanta-energia-consume-un-smart-tv-en-modo-espera-y-como-ahorrar-en-el-pago-mensual/)).
 - **What a rating plate prints:** IEC 60335-1 §7.1 requires "rated power
   input in watts or rated current in amperes": **either form is allowed.**
   **Primary** for the standard's wording, quoted verbatim in an IEC 60335-1
@@ -688,6 +772,30 @@ Argentine retail listings: **secondary** unless marked otherwise.
   read 2026-09-28). **Which form an Argentine kettle's, toaster's or water
   heater's plate uses is unconfirmed.** Every listing quotes watts, and the
   microwaves' input is given in watts.
+
+**How the small appliances stop (#334, 2026-10-01).** Secondary unless marked.
+
+- **Kettle boil time: derived, not read.** 1.7 L from 20 °C to 100 °C takes
+  1.7 × 4.186 × 80 ≈ 569 kJ: **≈ 4.3 min at 2,200 W with no losses, ≈ 4.9
+  min at 88 % efficiency.** Kettles are typically 80–90 % efficient (search
+  summary).
+- **A kettle cuts out empty.** The Atma PE1821 "turns off automatically when
+  the water boils or if there is insufficient water" (Argentine retail
+  listings, search summary). Its **temperature selector has 6 levels,
+  including one for mate**, cutting out below the boil. The setting's
+  temperature wasn't found.
+- **A toaster pops up when the power goes.** "Newer electromagnetic style
+  toasters won't stay down when unplugged because the electromagnet requires
+  power"; at the end of the timer, "power to the magnet is cut, and a spring
+  pulls the lever back up" (iFixit, *Toaster Troubleshooting*, search
+  summary). The Atma TO8020i has 7 browning levels and a cancel button; its
+  cycle time wasn't found.
+- **A dial microwave's timer runs to 35 min.** BGH's Quick Chef B120M has 5
+  power levels and a 35-minute timer (retail listings, search summary).
+  BGH's digital Quick Chef stops "el tiempo y la cocción" when its door
+  opens (manual for B120D/B223D/B228D, another model;
+  [manualslib](https://www.manualslib.es/manual/7292/Bgh-Quick-Chef-Serie.html?page=15),
+  read 2026-10-01).
 
 **Extension cords (for #244):**
 - **Cord cable is "tipo taller"** to IRAM NM 247-5 (it replaced IRAM 2158):
@@ -744,12 +852,19 @@ Argentine retail listings: **secondary** unless marked otherwise.
 
 ## Not yet researched
 
-- **The small appliances' gaps (#332):** a 32" LED TV's draw on and on
-  standby; a small washing machine's plate total and motor start; a small
-  microwave's standby draw; whether an Argentine kettle's, toaster's and
-  water heater's plates print watts or amps; an electric termotanque's
-  standing loss on its own, apart from gas ones. A first-hand reading of a
-  real plate settles any of the first four.
+- **The small appliances' gaps (#332):** a small washing machine's plate
+  total and motor start (#384); a small digital microwave's standby draw;
+  whether an Argentine kettle's, toaster's and water heater's plates print
+  watts or amps; an electric termotanque's standing loss on its own, apart
+  from gas ones. A first-hand reading of a real plate settles the first and
+  third.
+- **The appliances' cycles (#334):** a toaster's cycle time per browning
+  level; what a kettle's latch and a dial microwave's timer do in a power
+  cut; the temperature of an Argentine kettle's mate setting.
+- **Over-fusing (#365):** the strand diameter of IRAM NM 280 class-4 cable;
+  how much higher a short wire between a *tapón*'s screws melts than
+  Preece's free-air figure; whether old Lima houses are wired in 1.5 mm²;
+  how long PVC wiring takes to burn at a given overload.
 - **IEC 60898-1 §5.3.2's exact preferred ratings** (the 1, 2, 4 and 8 A
   dispute, under "Breakers").
 - **A maker's own statement of a peripheral pump's motor type**, and a 50 Hz
