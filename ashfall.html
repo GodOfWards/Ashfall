@@ -496,7 +496,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.11.1" };
+  const GAME_CONFIG = { VERSION: "0.12.0" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -719,8 +719,8 @@
   //   item     the dish's registry entry, whose cooks.minutes is how long the
   //            dish takes once formed
   //   vessels  the vessel kinds it forms in
-  //   water    true: the vessel holds clean water (tainted must boil first);
-  //            false: it holds none
+  //   water    true: the vessel holds clean water, at least DISH_WATER_MIN_SHARE
+  //            of its capacity (tainted must boil first); false: it holds none
   //   allowed  what may be in it, by ingredient role or by item id
   //   counts   what counts toward `min` / `exactly`, when narrower than
   //            `allowed` (a stew may hold grain, but needs two meat or
@@ -1049,7 +1049,8 @@
   //                   1 kg a litre (fluidWeightOf()).
   //     portion       instance: how much of one unit of food is left — 1,
   //                   0.75, 0.5 or 0.25, absent = 1 — after Eat 1/2 or 1/4.
-  //                   Never shown; a unit weighs its portion of unitWeight.
+  //                   Shown as a meter and its words ("½ left",
+  //                   unitLevel()); a unit weighs its portion of unitWeight.
   //     disassembleLog the line Disassemble logs for a `disassemble`-tagged
   //                   item, with {qty} standing for the first recipe
   //                   input's quantity. Definition data, read from the
@@ -1168,7 +1169,9 @@
     tire_iron: { name:"Tire iron", category:"Tool", unitWeight:1.0, tags:["blunt"] },
     // A car's registration card, kept in its glovebox.
     cedula_verde: { name:"Vehicle registration card", category:"Misc", unitWeight:0.02 },
-    thermos: { name:"Thermos", category:"Misc", unitWeight:0.4 },
+    // A stainless mate thermos: 1,000 mL, the most common size sold for mate,
+    // at 0.65 kg (secondary). It holds water; keeping it hot is not modelled.
+    thermos: { name:"Thermos", category:"Misc", unitWeight:0.65, holdsFluid:{ capacityMl:1000 } },
     house_key: { name:"House key", category:"Key", unitWeight:0.03, doorId:"home-front" },
     bandage: { name:"Bandage", category:"Medical", unitWeight:0.05 },
     campfire_kit: { name:"Campfire Kit", category:"Materials", unitWeight:2.4, tags:["disassemble"],
@@ -5773,7 +5776,7 @@ x_sn_9 m_sn_sn_sn sn p
   // never merges a durability-bearing item and every fire-starter placement in
   // the world is qty:1, so the entry is exactly one unit. A placement giving
   // qty > 1 would mean two matchboxes sharing one durability object, which is
-  // already wrong wherever it came from and is #134/#116's to fix, not
+  // already wrong wherever it came from and is #116's to fix, not
   // something to defend against here.
   //
   // Still returns true: the use it just spent was real, so the caller's action
@@ -6085,9 +6088,10 @@ x_sn_9 m_sn_sn_sn sn p
     if(rest <= 0){ dropUnits(list, list.indexOf(row), 1); return; }
     changeOneUnit(list, row, unit=>{ unit.portion = rest; });
   }
-  // FLUIDS. A holder (registry `holdsFluid`) holds one fluid, `fluid: { kind,
-  // ml }`, from a millilitre to its capacityMl, and none at all once it holds
-  // a dish. Every reader of a holder's fluid goes through these.
+  // FLUIDS: docs/systems/fluids.md has the model. A holder (registry
+  // `holdsFluid`) holds one fluid, `fluid: { kind, ml }`, from a millilitre
+  // to its capacityMl, and none at all once it holds a dish. Every reader of
+  // a holder's fluid goes through these.
   function fluidKindOf(it){ return it.fluid ? it.fluid.kind : null; }
   function capacityMlOf(it){
     const def = registryEntryOf(it);
@@ -7751,14 +7755,11 @@ x_sn_9 m_sn_sn_sn sn p
       state.illnesses[id] = left - tick;
     });
   }
-  // AUTO-DRINK: docs/systems/fluids.md has the model. Awake and below
-  // LOW_THIRST_THRESHOLD, you drink on your own from what you carry
-  // (invPools()), clean water only, never from a tap: the holder with the
-  // least left first (unitLevel(), ties in list order), each as Drink all,
-  // the next as one empties, until Thirst is full or the clean water you
-  // carry runs out. One line per holder, drinkFrom()'s. It is checked at the
-  // minute Thirst crosses the threshold (clockStep()) and at the end of
-  // every action (afterAction()), never while asleep. Returns whether it
+  // AUTO-DRINK: docs/systems/fluids.md has the model. From the clean water
+  // carried (invPools()), the holder with the least left first (unitLevel(),
+  // ties in list order), each as Drink all, until Thirst is full or the
+  // water runs out; one line per holder, drinkFrom()'s. Its callers check
+  // that you are awake and below LOW_THIRST_THRESHOLD. Returns whether it
   // drank.
   function autoDrink(){
     let drank = false;
@@ -9838,6 +9839,33 @@ x_sn_9 m_sn_sn_sn sn p
     stampMissingAges();
     resyncUidCounter();
   }
+  // migrateFluidRelease(): brings a 0.11 save into the fluid release, run on
+  // every load after migrateCookingRelease(). A browser save from 0.11 never
+  // reaches it — SAVE_KEY rotated with the MINOR bump — but an imported 0.11
+  // file does, and must load. Idempotent: a save it has already migrated
+  // passes through unchanged.
+  //   An item's `water` becomes `fluid` when its registry entry holds fluid:
+  //   a bottle's `fill` of its capacityMl, rounded to the millilitre, and a
+  //   vessel's water, which was always full, its whole capacityMl. An item
+  //   whose entry holds none just loses `water`.
+  //   The thermos's `unitWeight`, copied onto every instance, is set from the
+  //   registry, which changed it.
+  function migrateFluidRelease(){
+    const migrate = (it)=>{
+      if(!it || typeof it !== "object") return;
+      if(it.water && typeof it.water === "object"){
+        const cap = capacityMlOf(it);
+        if(cap > 0){
+          const ml = typeof it.water.fill === "number" ? Math.round(it.water.fill * cap) : cap;
+          if(ml > 0) it.fluid = { kind: it.water.kind, ml };
+        }
+        delete it.water;
+      }
+      if(it.itemId === "thermos") it.unitWeight = ITEM_REGISTRY.thermos.unitWeight;
+    };
+    forEachItemList(list=> list.forEach(migrate));
+    CONTAINER_SLOTS.forEach(slotKey=> migrate(state[slotKey]));
+  }
   // A save from before room definitions and saved state split (every save
   // before 0.10) carries `world` and no `rooms`. Its rooms can't be mapped
   // onto the rebuilt world, so it is refused, whole, with its own line.
@@ -9900,6 +9928,7 @@ x_sn_9 m_sn_sn_sn sn p
     backfillIllnessScale();
     backfillInventoryCap();
     migrateCookingRelease();
+    migrateFluidRelease();
     rebuildSchedule();
     render();
     return true;
@@ -9925,6 +9954,11 @@ x_sn_9 m_sn_sn_sn sn p
   // And the cooking release's shapes: a `spoils` whose staleAfter is not
   // below its rottenAfter, an `ingredient.role` outside INGREDIENT_ROLES, and
   // a DISH_TEMPLATES template whose `item` is not a dish entry with `cooks`.
+  //
+  // And the fluid release's: a `holdsFluid` whose capacityMl is not a whole
+  // number above 0, a `holdsWater` or a `vessel.waterKg` left on an entry,
+  // and a spawn pool entry's `state` or a placement's `overrides` carrying
+  // `water` rather than `fluid`.
   const INGREDIENT_ROLES = ["meat", "vegetable", "grain"];
   function validateItemRegistry(){
     const missing = [];
@@ -9947,7 +9981,25 @@ x_sn_9 m_sn_sn_sn sn p
         missing.push(`ITEM_REGISTRY.${id}.spoils: staleAfter ${def.spoils.staleAfter} is not below rottenAfter ${def.spoils.rottenAfter}`);
       if(def.ingredient && !INGREDIENT_ROLES.includes(def.ingredient.role))
         missing.push(`ITEM_REGISTRY.${id}.ingredient.role: "${def.ingredient.role}" is not one of ${INGREDIENT_ROLES.join("/")}`);
+      if(def.holdsFluid && !(Number.isInteger(def.holdsFluid.capacityMl) && def.holdsFluid.capacityMl > 0))
+        missing.push(`ITEM_REGISTRY.${id}.holdsFluid.capacityMl: ${def.holdsFluid.capacityMl} is not a whole number above 0`);
+      if(def.holdsWater) missing.push(`ITEM_REGISTRY.${id}.holdsWater: retired, holdsFluid holds water now`);
+      if(def.vessel && "waterKg" in def.vessel) missing.push(`ITEM_REGISTRY.${id}.vessel.waterKg: retired, holdsFluid holds water now`);
     });
+    // Instance state carrying the retired `water`: a spawn pool entry's
+    // `state`, or a placement's `overrides`, anywhere in a building instance.
+    Object.keys(SPAWN_POOLS).forEach(poolId=> SPAWN_POOLS[poolId].entries.forEach(e=>{
+      if(e.state && "water" in e.state) missing.push(`SPAWN_POOLS.${poolId} entry ${poolEntryKey(e)}: state carries water, not fluid`);
+    }));
+    const placements = (v, where)=>{
+      if(Array.isArray(v)) v.forEach((x, i)=> placements(x, `${where}[${i}]`));
+      else if(v && typeof v === "object") Object.keys(v).forEach(k=>{
+        if(k === "overrides" && ITEM_REGISTRY[v.id] && v.overrides && "water" in v.overrides)
+          missing.push(`${where}: overrides carry water, not fluid`);
+        placements(v[k], `${where}.${k}`);
+      });
+    };
+    buildingInstances().forEach(inst=> placements(inst, `building ${inst.id}`));
     RECIPES.forEach(r=>{
       r.inputs.forEach(inp=>{ if(!ITEM_REGISTRY[inp.id]) missing.push(`RECIPES[${r.id}].inputs: ${inp.id}`); });
       if(!ITEM_REGISTRY[r.output.id]) missing.push(`RECIPES[${r.id}].output: ${r.output.id}`);
@@ -9957,7 +10009,7 @@ x_sn_9 m_sn_sn_sn sn p
       if(!def || !def.dish || !def.cooks) missing.push(`DISH_TEMPLATES[${t.id}].item: ${t.item} is not a dish entry with cooks`);
     });
     if(missing.length) console.warn("validateItemRegistry: problems", missing);
-    else console.log("validateItemRegistry: all recipe and dish ids resolve in ITEM_REGISTRY, every foodPoisoningChance is in [0,1], every cooks.minutes is above 0, every spoils is ordered, every ingredient role is known, every bag's carryFactor is in (0,1]");
+    else console.log("validateItemRegistry: all recipe and dish ids resolve in ITEM_REGISTRY, every foodPoisoningChance is in [0,1], every cooks.minutes is above 0, every spoils is ordered, every ingredient role is known, every bag's carryFactor is in (0,1], every holdsFluid's capacityMl is a whole number above 0, and no water is left in the retired shapes");
     return missing;
   }
   // validateLocations(): dev-only console helper (not wired to any button
