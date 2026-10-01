@@ -280,7 +280,7 @@ Belgrano and Campana.
     to **two operators plus the shift chief from 20 March**, then to **one
     operator plus the shift chief from 25 March**. A second operator came
     back on morning shifts on 3 July, afternoons on 12 November and nights
-    on 11 December. So **the national 500 kV network ran on two people per
+    on 11 December: **three shifts a day** (morning, afternoon, night). So **the national 500 kV network ran on two people per
     shift for over three months.** Confirmed (Transener, *Memoria 2020*,
     "Operaciones — COVID-19", pp. 23–24), 2026-10-01:
     [Transener, Memoria 2020](https://www.transener.com.ar/wp-content/uploads/2021/03/Memoria-Transener-2020_Clean.pdf).
@@ -523,6 +523,12 @@ turns up.
     around hydro plants or a determined resistant crew could last longer,
     perhaps two weeks. **Three weeks (the game's `POWER_FAILS_DAY = 21`) is
     at the far end** and needs a reason: a crew that held on.
+  - **The national control room isn't the weak link.** Transener ran the
+    500 kV network on one operator and a shift chief per shift for over
+    three months in 2020 (above), so a few resistant people at Pérez could
+    keep transmission control going. What ends the grid is the plants'
+    crews, the gas chain and unrepaired faults, not who sits at the COT.
+    This sharpens "a crew that held on" without moving the figures.
 - **If crews sealed themselves in before they were exposed** (Tom: the
   airborne strain can be protected against):
   - **Who has to hold:** CAMMESA's and Transener's control rooms at Pérez
