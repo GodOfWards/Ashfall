@@ -20,6 +20,199 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 <!-- New entries go directly below this line. -->
 
+## v0.12.0 — Fluid transfer: item groups and meters, water in millilitres, drinking, pouring and auto-drink
+
+Implements: handoffs/fluid-transfer.md
+
+Implements #134 and #47 in full, per `handoffs/fluid-transfer.md`, as one
+release in six phases. Water stops being an all-or-nothing state and becomes a
+measured fluid every holder carries by the millilitre; rows of the same thing
+gather under one header, and what is left of a unit shows as a meter.
+
+**New**
+
+- *Levels and groups* (INVENTORY / ITEM SYSTEM). `unitLevel()` is the one
+  statement of what is left of a unit, `{ level, figure }`: a holder's `ml`
+  over its `capacityMl` ("1,250 of 2,000 mL"), food's `portion` below 1 ("½
+  left"), a `durability` of mode "uses" ("N/M uses"); null for anything else, a
+  device on batteries included. `groupKeyOf()` makes rows one group: the same
+  item and name, `!!sealed`, cook state, fluid kind, `rowFreshness()`, and the
+  same `contents`. `rowsLeastLeftFirst()` orders a group by `orderLevel()`.
+- *Group moves.* `doTakeGroup()` and `doStoreGroup()` move All, Half (from 3,
+  rounding up) or 1 (from 2) of a group's units, least left first across its
+  rows (`groupPicks()`), all or nothing: `destinationRefusal()`, factored out
+  of `addToDestination()`, is asked once for the whole move.
+- *Fluids.* A registry `holdsFluid: { capacityMl }` makes an item a holder: the
+  plastic bottle 500, the saucepans 1,000, the cooking pot 2,000, the thermos
+  1,000. An instance's `fluid: { kind, ml }` replaces `water`, absent when
+  empty. `capacityMlOf()`, `holdsFluidAtAll()`, `fluidSpaceMl()`,
+  `fluidKindOf()`, `addFluid()`, `takeFluid()` and `fluidWeightOf()` (a litre
+  weighs 1 kg) are its readers and writers; `mixKinds()` is the one rule of
+  what mixes (clean with tainted is tainted; any pair it doesn't name, null).
+  Every fluid action takes the least of what is asked, what the source has and
+  what the target has room for.
+- *The sink.* `doFillAtSink()` fills one unit as far as it has room, vessels
+  part-way like bottles; off a tank, to `min(space, tank left)` floored to the
+  millilitre (`tankLeftMl()`), drawn by `drawFromTank()`.
+- *Drinking.* Any holder with fluid and no dish (`drinkable()`), a vessel with
+  ingredients included, offers Drink (`MEASURE_ML` = 250) and, below full
+  Thirst, Drink all (`drinkAllMl()`: `ceil((VITAL_MAX − Thirst) /
+  WATER_THIRST_PER_L × 1000)`), each or what is left when less, from the unit
+  `drinkTarget()` picks. `drinkFrom()` is the one drink: Thirst `+= ml / 1000 ×
+  WATER_THIRST_PER_L` (60, a 500 mL bottle's old 30), the fluid taken, its
+  line, and tainted water's food poisoning at `TAINTED_WATER_POISONING_CHANCE ×
+  ml / TAINTED_WATER_DOSE_ML` (500). `consumeProfile()` is food's alone again,
+  and so is `EAT_PARTS`.
+- *The tap.* `doDrinkAtSink()`: Drink at the sink and Drink your fill at the
+  sink, clean, instant, drawing on the tank as a fill does.
+- *Pouring.* `pourTargets()` lists every holder within reach
+  (`nearbyPlaces()`) with room and a fluid that mixes; `pourFluid()` splits
+  the source unit off first and moves the least of the three amounts. `doPour()`
+  and `doPourOut()` are the actions; Pour out the water is on every holder.
+- *Auto-drink* (SURVIVAL / TIME SIMULATION). `autoDrink()`: awake and below
+  `LOW_THIRST_THRESHOLD`, the player drinks from carried clean water, least
+  left first, each holder as Drink all, until Thirst is full or the water runs
+  out. Checked in `clockStep()` on the step Thirst crosses the threshold, not
+  while `asleep`, and at the end of every action (`afterAction()`).
+- *Dishes* (FIRE / COOKING). A dish that needs water needs at least
+  `DISH_WATER_MIN_SHARE` (0.4) of its vessel's capacity in clean water
+  (`dishWaterMinMl()`: 400 mL in a saucepan, 800 mL in the pot);
+  `templateStatus(t, v)` now takes the vessel. A dish takes up all the water
+  there is (`formDish()` passes `fluidWeightOf()`); the world's stews
+  (`dishFrom()`) a full vessel's.
+- *Loading older saves* (PERSISTENCE). `migrateFluidRelease()`, after
+  `migrateCookingRelease()`, idempotent: a holder's `water` becomes `fluid`
+  (`round(fill × capacityMl)`, or a vessel's whole capacity), anything else
+  loses `water`, and the thermos's `unitWeight` is set from the registry.
+
+**New content**
+
+- The thermos is a holder: `holdsFluid:{ capacityMl:1000 }`, `unitWeight`
+  0.65 (stainless, the most common mate size; secondary).
+- The spawn pools' and the home's and corner store's bottles, and
+  `MIGRATED_ITEMS.bottled_water`, hold `fluid:{ kind:"clean", ml:500 }`; the
+  replay page's pot `fluid:{ kind:"tainted", ml:2000 }`.
+
+**Removed**
+
+- `holdsWater` and `vessel.waterKg` from the registry, instance `water`, and
+  `waterWeightOf()`, `waterKindOf()`, `holdsWaterAtAll()`, `canTakeWater()`,
+  `sinkLitresFor()`, `addWater()`, `canPourInto()`, `doPourIntoVessel()` and
+  `doPourOutWater()`, replaced by the fluid helpers above.
+- The "Pour into the …" buttons, replaced by the Pour… submenu; Drink ½ and ¼
+  on water; the interim Drink rule.
+- A device's "N% charge": `durabilityText()` reads "On", "Off" or "No
+  batteries installed". A device dies without warning, by design.
+
+**UI**
+
+- Item lists: rows of one group gather under a header (`groupHeader()`): a ▸/▾
+  disclosure button (`aria-expanded`, "Show the N stacks"), the name, the
+  labels its rows share (never On), the units and weight of the whole group,
+  and the panel's quick button over it. Open, the rows follow indented, least
+  left first. Closed by default; `openGroups` keeps what is open, by side, tab
+  and key, never saved, cleared on load, restart and new game.
+- A row with a level draws a meter along its bottom edge in its divider's
+  place (`levelMeter()`, `role="meter"`), in the warning colour at or below
+  `LEVEL_WARN_BELOW`. The item pop-up shows a larger one and the exact figure
+  (the vessel's "Full of water" line went into it).
+- A group's pop-up (`detailItem = { group, side }`): name, shared labels,
+  weight, "N in M stacks", and its moves, Eat and Drink (`getGroupActions()`).
+  Down to one row it becomes that row's pop-up.
+- `(On)` after a switched-on device's name.
+- The item pop-up's Pour… opens the transfer submenu in place of its actions
+  (`renderPourMenu()`): "Pour the water into…", Back, then one entry per
+  target with its labels, its place where two would read alike, its meter,
+  Pour and Pour 250 mL; "Nothing here has room for it." when none.
+- The Here actions: Drink at the sink, Drink your fill at the sink, or "The tap
+  is dry."
+- Crafting's Dishes: "needs at least 800 mL of water".
+- The item lists are rebuilt keeping focus (`rebuildKeepingFocus()`), which
+  now finds a control naming an item or a group (`data-uid`, `data-group`)
+  before matching by label: focus stays on a disclosure button through its
+  toggle.
+
+**Documentation**
+
+- New `docs/systems/fluids.md`, listed in the Index. `survival.md` and
+  `time.md` name auto-drink and the clock step's crossing check; `power.md`
+  names `doDrinkAtSink()` and `drawFromTank()` beside `doFillAtSink()`.
+- ITEM DATA SCHEMA: `holdsFluid` and `fluid` in place of `holdsWater` and
+  `water`; `vessel` without `waterKg`; `portion` is shown now. VESSELS AND
+  DISHES and the `DISH_TEMPLATES` comment state the dish minimum. The sink
+  comment's pipes are #300's; the references to #47 and #134 are gone.
+- `validateItemRegistry()` also flags a `holdsFluid` whose `capacityMl` is not
+  a whole number above 0, a `holdsWater` or `vessel.waterKg` left on an entry,
+  and a pool `state` or placement `overrides` carrying `water`.
+- Nothing was deferred, so no issue was filed.
+
+**Explicitly out of scope**
+
+- #388 (batteries as cells), #394 (new holders), #385 (the kettle as a pour
+  target), #300 (water left in the pipes), #52 (treatment, boiling by volume),
+  #239 (petrol as a fluid kind), #165 (a switch for auto-drink); keeping water
+  hot, mate, spilling and lids; the discrete liquids.
+
+**Sections touched**
+
+ITEM DATA SCHEMA; WORLD DATA (registry, spawn pools, placements);
+INVENTORY / ITEM SYSTEM; WORLD INTERACTION (nothing of its own: the sink and
+the tap live with the fluids); SURVIVAL / TIME SIMULATION (`clockStep()`,
+`autoDrink()`); FIRE / COOKING; PERSISTENCE; EVENTS / UI HELPERS
+(`afterAction()`, `rebuildKeepingFocus()`); RENDERING; the dev seam's
+`validateItemRegistry()`; the replay page's data. `SAVE_KEY` rotates to
+`ashfall_save_v0.12`.
+
+**Open questions / decisions resolved**
+
+- *Where the end-of-action check lives:* option (a), one hook,
+  `afterAction()`, run by a single click listener on the document for any
+  button in the places actions are dispatched from (`ACTION_AREAS`: the play
+  area, the pop-ups, the Crafting panel), so no list of call sites is kept in
+  step with it. It reads the click's path as dispatched, since the action's
+  render may have removed the button. The drawer is left out: a Load is not an
+  action. It renders again only if it drank.
+- *Identifiers:* the handoff's suggestions, plus `drinkable()`,
+  `drinkTarget()`, `drinkAllMl()`, `quench()`, `drawFromTank()`,
+  `tankLeftMl()`, `canDrinkAtSink()`, `sinkDry()`, `nearbyPlaces()`,
+  `pourKeyOf()`, `dishWaterMinMl()`, `groupedNumber()`, `ON_LABEL`,
+  `FLUID_LABELS`.
+- *The meter:* 2 px along a row, 4 px in the pop-up; its track the divider's
+  colour (`--divider`), its fill `--ink-dim`, `--warn` when low. Retunable.
+- *The submenu:* the item's own details stay above it; each entry is one
+  wrapping line (text, then its two buttons) over its meter.
+- *`openGroups`:* a Set of `[side, tab, key]` as JSON (`groupOpenKey()`).
+
+**Notes / assumptions**
+
+- `LEVEL_WARN_BELOW` warns at or below 0.25, not strictly below: the handoff's
+  check has a bottle at ¼ draw in the warning colour. Retunable.
+- A group's key also carries the name and the contents, so a pot of stew
+  never groups with an empty pot, nor two pots holding different ingredients.
+- In a group's order, a row with no level sorts as full, except an empty
+  holder, which sorts as empty (`orderLevel()`).
+- A group moves by the unit when every row is one a row could split or holds a
+  single unit (`groupSplittable()`).
+- Pour targets are one entry per place and per the fluid they would hold after
+  the pour (`pourKeyOf()`), so empty bottles and one of water are one entry, as
+  the handoff's check has it. Everything carried is one place, "carried".
+- A group pop-up's row, when its own row is inside a closed group, hangs from
+  that group's header (`popAnchorName()`).
+- Drinking lines collapse by line, as eating's do by item.
+- `tankLeftMl()` floors the tank's litres to the millilitre with a 1e-6 nudge,
+  since `tankDrawn` is kept to the millilitre and 0.3 L must not floor to
+  299 mL.
+- The game text: "You drink from the …", "You drink the last of the water in
+  the …", "You drink your fill from the …", "You drink from the tap.", "You
+  drink your fill at the tap.", "You pour the water into the …". Retunable.
+- The replay page differs from v0.11.1's only in steps 6 and 7's digests, by
+  the carried bottle's `water` becoming `fluid`. The Performance check's
+  figures are in the pull request.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.11.1"` → `"0.12.0"`
+
+---
+
 ## v0.11.1 — Code health: history out of the comments, containers placed by id
 
 Implements: handoffs/code-health-comments-and-containers.md
