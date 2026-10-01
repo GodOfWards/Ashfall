@@ -641,6 +641,9 @@
   // rate a bottle restored when it was drunk whole. A balance value,
   // retunable.
   const WATER_THIRST_PER_L = 60;
+  // What Drink drinks, and Pour by the measure pours, in mL: a glass. The
+  // buttons' labels read it. Retunable.
+  const MEASURE_ML = 250;
   // Minutes tainted water must sit in a heated vessel to come out clean,
   // whatever its volume. Retunable.
   const BOIL_MINUTES = 5;
@@ -737,7 +740,10 @@
     { id:"stir_fry", item:"dish_stir_fry", vessels:["frying_pan","saucepan"], water:false,
       allowed:{ roles:["meat","vegetable","grain"] }, min:1, named:true }
   ];
-  function clamp(v){ return Math.max(0, Math.min(100, v)); }
+  // The top of every vital's scale, which clamp() holds them to and Drink
+  // all drinks up to.
+  const VITAL_MAX = 100;
+  function clamp(v){ return Math.max(0, Math.min(VITAL_MAX, v)); }
 
   // ==================================================
   // WORLD DATA
@@ -6030,8 +6036,6 @@ x_sn_9 m_sn_sn_sn sn p
   // the same food — itemId, cook state and freshness — the one with the
   // least left, and among equals the oldest. So a half-eaten can is finished
   // before a new one is started, whichever row was clicked.
-  // For a holder, its fluid plays the food's part: which kind it is joins
-  // the match, and its share of full is what is left.
   function eatTarget(list, it){
     return leastLeftRow(list, it, r=>{ const p = consumeProfile(r); return p ? p.left : null; });
   }
@@ -6046,21 +6050,13 @@ x_sn_9 m_sn_sn_sn sn p
       && fluidKindOf(r) === fluidKindOf(it));
     return same.sort((a, b)=> leftOf(a) - leftOf(b) || unitAges(b)[0] - unitAges(a)[0])[0] || it;
   }
-  // What eating or drinking one whole unit of `it` does, or null when it is
-  // nothing to eat or drink: { left, restores, poisoning, water }. Food is
-  // unitFoodEffects() with its portion left. A holder with fluid and no dish
-  // is drunk from, not eaten: a whole one restores WATER_THIRST_PER_L for
-  // its capacity, tainted water carries TAINTED_WATER_POISONING_CHANCE for
-  // TAINTED_WATER_DOSE_ML of it, and its share of full is what is left.
+  // What eating one whole unit of `it` does, or null when it is nothing to
+  // eat: { left, restores, poisoning }, unitFoodEffects() with its portion
+  // left. A holder's fluid is drunk, not eaten (drinkFrom()).
   function consumeProfile(it){
     if(it.sealed) return null;
-    const cap = capacityMlOf(it);
-    if(cap > 0 && it.fluid && !dishIn(it)){
-      return { left: it.fluid.ml / cap, restores:{ thirst: WATER_THIRST_PER_L * cap / 1000 }, water:true,
-        poisoning: it.fluid.kind === "tainted" ? TAINTED_WATER_POISONING_CHANCE * cap / TAINTED_WATER_DOSE_ML : 0 };
-    }
     const fx = unitFoodEffects(it);
-    return fx.restores ? { left: portionOf(it), restores: fx.restores, poisoning: fx.poisoning, water:false } : null;
+    return fx.restores ? { left: portionOf(it), restores: fx.restores, poisoning: fx.poisoning } : null;
   }
   // Applies `change` to one unit of `row` rather than to the whole row. A
   // unit split out of a larger row goes back into the list changed; a lone
@@ -6076,15 +6072,9 @@ x_sn_9 m_sn_sn_sn sn p
     remergeRow(list, row);
     return row;
   }
-  // Takes `amount` of one unit off `row`: food's portion, a holder's share
-  // of its capacity, in whole millilitres. Food eaten to nothing is gone; a
-  // holder drunk dry stays, empty.
+  // Takes `amount` of one unit's portion off `row`. Food eaten to nothing is
+  // gone.
   function eatFromRow(list, row, amount){
-    if(consumeProfile(row).water){
-      const ml = Math.min(row.fluid.ml, Math.round(amount * capacityMlOf(row)));
-      changeOneUnit(list, row, unit=> takeFluid(unit, ml));
-      return;
-    }
     const rest = portionOf(row) - amount;
     if(rest <= 0){ dropUnits(list, list.indexOf(row), 1); return; }
     changeOneUnit(list, row, unit=>{ unit.portion = rest; });
@@ -6124,6 +6114,52 @@ x_sn_9 m_sn_sn_sn sn p
     if(left > 0) unit.fluid.ml = left;
     else { delete unit.fluid; delete unit.boilMinutes; }
   }
+  // DRINKING. Any holder with fluid and no dish is drunk from, a vessel with
+  // ingredients in it included: what is drunk is the water, never the food.
+  // Drink takes MEASURE_ML, Drink all what brings Thirst to full
+  // (drinkAllMl()), each or what is left when less. The unit drunk from is
+  // the least-left one holding the same fluid among the rows of the same
+  // item, as Eat picks (drinkTarget()). Drinking is instant.
+  function drinkable(it){ return !!it.fluid && !dishIn(it); }
+  function drinkTarget(list, it){
+    return leastLeftRow(list, it, r=> drinkable(r) ? r.fluid.ml : null);
+  }
+  // The millilitres that bring Thirst to full. The nudge keeps a figure that
+  // is whole but for float noise from rounding a millilitre up.
+  function drinkAllMl(){ return Math.max(0, Math.ceil((VITAL_MAX - state.vitals.thirst) / WATER_THIRST_PER_L * 1000 - 1e-9)); }
+  // Thirst for `ml` of water drunk, from a holder or the tap alike.
+  function quench(ml){ state.vitals.thirst = clamp(state.vitals.thirst + ml / 1000 * WATER_THIRST_PER_L); }
+  // A drink of `ml` from `unit` of `list`, the one way a holder is drunk
+  // from, by hand or on your own (autoDrink()): Thirst, the fluid taken (a
+  // holder drunk dry stays, empty), its line, and, for tainted water, food
+  // poisoning at TAINTED_WATER_POISONING_CHANCE per TAINTED_WATER_DOSE_ML,
+  // after the line so the onset reads as its consequence. `all`: a Drink
+  // all, whose line says when it drank your fill. The lines are game text,
+  // retunable.
+  function drinkFrom(list, unit, ml, all){
+    const kind = unit.fluid.kind, name = unit.name.toLowerCase();
+    quench(ml);
+    const after = changeOneUnit(list, unit, u=> takeFluid(u, ml));
+    const line = !after.fluid ? `You drink the last of the water in the ${name}.`
+      : all && state.vitals.thirst >= VITAL_MAX ? `You drink your fill from the ${name}.`
+      : `You drink from the ${name}.`;
+    log(line, "good", "drink:" + line);
+    if(kind === "tainted") rollFoodPoisoning(TAINTED_WATER_POISONING_CHANCE * ml / TAINTED_WATER_DOSE_ML);
+    return after;
+  }
+  // Drink (or, `all`, Drink all) from row `index` of the side's tab.
+  function doDrink(sourceKind, index, all){
+    const room = world[state.currentRoom];
+    const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
+    const list = src && src.items;
+    const clicked = getItemAt(list, index);
+    if(!clicked || !drinkable(clicked)) return;
+    const unit = drinkTarget(list, clicked);
+    const ml = Math.min(all ? drinkAllMl() : MEASURE_ML, unit.fluid.ml);
+    if(!(ml > 0)) return;
+    drinkFrom(list, unit, ml, all);
+    render();
+  }
   // Sinks. A holder can be filled at the sink of the room it is in while the
   // water runs (waterRunningIn()), while it has room, part-way or from
   // empty alike. One unit fills, as far as it has room; the water is clean,
@@ -6142,10 +6178,7 @@ x_sn_9 m_sn_sn_sn sn p
   // Whether the room's sink is dry for an item with room for water: its
   // tank drawn dry, whether or not the grid is up. What the pop-up says in
   // the fill action's place.
-  function tapDryFor(it){
-    const room = world[state.currentRoom];
-    return !!room.sink && fluidSpaceMl(it) > 0 && tankOf(state.currentRoom) > 0 && !(tankLeft(state.currentRoom) > 0);
-  }
+  function tapDryFor(it){ return fluidSpaceMl(it) > 0 && sinkDry(); }
   // The whole millilitres a tank in the current room has left. Its drawn
   // litres are kept to the millilitre; the nudge takes back the float noise
   // that would floor 0.3 L to 299 mL.
@@ -6177,6 +6210,28 @@ x_sn_9 m_sn_sn_sn sn p
     const floatBefore = floatNow();
     state.tankDrawn[b] = Math.round(((state.tankDrawn[b] || 0) + ml / 1000) * 1000) / 1000;
     return floatNow() !== floatBefore ? b : null;
+  }
+  // Drinking at the tap, the sink's Drink (MEASURE_ML) and Drink all (to
+  // full Thirst), while the water runs. The water is clean. Instant, as
+  // filling is, and drawn as a fill draws: off a tank, the litres drunk,
+  // only what is left on the last of it; a sink on the mains draws nothing
+  // down. The lines are game text, retunable.
+  function canDrinkAtSink(){ return !!world[state.currentRoom].sink && waterRunningIn(state.currentRoom); }
+  // Whether the room's sink is dry: its tank drawn dry. What the Here panel
+  // says in the tap's place.
+  function sinkDry(){ return !!world[state.currentRoom].sink && tankOf(state.currentRoom) > 0 && !(tankLeft(state.currentRoom) > 0); }
+  function doDrinkAtSink(all){
+    if(!canDrinkAtSink()) return;
+    const fromTank = tankOf(state.currentRoom) > 0;
+    const want = all ? drinkAllMl() : MEASURE_ML;
+    const ml = fromTank ? Math.min(want, tankLeftMl()) : want;
+    if(!(ml > 0)) return;
+    quench(ml);
+    const moved = fromTank ? drawFromTank(ml) : null;
+    log(fromTank && tankLeft(state.currentRoom) <= 0 ? "The tap coughs, spits, and runs dry."
+      : all ? "You drink your fill at the tap." : "You drink from the tap.", "good");
+    if(moved) resolveBuilding(moved);
+    render();
   }
   // Vessels within reach of an item: every vessel in the lists crafting
   // reaches (nearbyLists()), and every vessel in the room's heat container,
@@ -6348,8 +6403,7 @@ x_sn_9 m_sn_sn_sn sn p
     if(fx.restores.hunger) state.vitals.hunger = clamp(state.vitals.hunger + fx.restores.hunger * a);
     if(fx.restores.thirst) state.vitals.thirst = clamp(state.vitals.thirst + fx.restores.thirst * a);
     eatFromRow(list, it, a);
-    // What is drunk from a bottle is the water, not the bottle.
-    const verb = it.verb.toLowerCase(), name = fx.water ? "water" : it.name.toLowerCase();
+    const verb = it.verb.toLowerCase(), name = it.name.toLowerCase();
     log(a === 1 ? `You ${verb} the ${name}.` : `You ${verb} some of the ${name}.`, "good", "consume:" + (it.itemId || it.name));
     // After the eating line, so the onset line reads as its consequence.
     rollFoodPoisoning(fx.poisoning * a);
@@ -6483,6 +6537,7 @@ x_sn_9 m_sn_sn_sn sn p
     // (renderCraftingPanel()), which is a catalogue and would become
     // undiscoverable if filtered.
     consumeActions(list, index, side).forEach(a=> actions.push(a));
+    drinkActions(list, index, side).forEach(a=> actions.push(a));
     vesselActions(it).forEach(a=> actions.push(a));
     // An ingredient offers every vessel within reach that can take it, and a
     // bottle with water every one it can pour into, labelled per
@@ -6519,9 +6574,9 @@ x_sn_9 m_sn_sn_sn sn p
     if(disassemblyRecipe(it)) actions.push({ label:"Disassemble", onClick:()=> doDisassemble(list, index) });
     return actions;
   }
-  // Eat or Drink, by the whole and the part, on row `index` of `list`: what
-  // it eats is the unit eatTarget() picks, so a group's pop-up offers the
-  // same through any of its rows.
+  // Eat, by the whole and the part, on row `index` of `list` (its verb: milk
+  // is drunk by it too): what it eats is the unit eatTarget() picks, so a
+  // group's pop-up offers the same through any of its rows.
   function consumeActions(list, index, side){
     const it = getItemAt(list, index);
     if(!it || !consumeProfile(it)) return [];
@@ -6533,11 +6588,20 @@ x_sn_9 m_sn_sn_sn sn p
     });
     return actions;
   }
+  // Drink and Drink all on row `index` of `list`, a holder with fluid and no
+  // dish. Drink all is not offered at full Thirst.
+  function drinkActions(list, index, side){
+    const it = getItemAt(list, index);
+    if(!it || !drinkable(it)) return [];
+    const actions = [{ label:"Drink", onClick:()=> doDrink(side, index, false) }];
+    if(state.vitals.thirst < VITAL_MAX) actions.push({ label:"Drink all", onClick:()=> doDrink(side, index, true) });
+    return actions;
+  }
   // A group's pop-up actions (`rows`, a group of `list`): its stack's own,
   // over the whole group. Take, Store or Place All, Half and 1 over its
   // units, by a row's rules, least left first (doTakeGroup(),
   // doStoreGroup()), the Take family disabled for the keychain as a row's
-  // is; then Eat or Drink as a row's. Nothing else: Open, Fill, Add, Pour,
+  // is; then Eat, or Drink and Drink all, as a row's. Nothing else: Open, Fill, Add, Pour,
   // Equip, Disassemble and the battery controls stay on the rows.
   function getGroupActions(list, rows, side){
     const actions = [];
@@ -6555,6 +6619,8 @@ x_sn_9 m_sn_sn_sn sn p
     }
     const eater = rows.find(r=> consumeProfile(r));
     if(eater) consumeActions(list, list.indexOf(eater), side).forEach(a=> actions.push(a));
+    const drinker = rows.find(drinkable);
+    if(drinker) drinkActions(list, list.indexOf(drinker), side).forEach(a=> actions.push(a));
     return actions;
   }
   // The recipe a `disassemble`-tagged item takes apart by: the RECIPES entry
@@ -12930,6 +12996,14 @@ x_sn_9 m_sn_sn_sn sn p
     }
     if(room.searchLabel && !room.searched){
       hereBox.appendChild(actionButton(room.searchLabel + " " + fmtDuration(room.searchMinutes), doSearch));
+    }
+    // The tap: Drink and, below full Thirst, Drink all (doDrinkAtSink()), or
+    // the note while its tank is dry. Functional UI text, retunable.
+    if(canDrinkAtSink()){
+      hereBox.appendChild(actionButton("Drink at the sink", ()=> doDrinkAtSink(false)));
+      if(state.vitals.thirst < VITAL_MAX) hereBox.appendChild(actionButton("Drink your fill at the sink", ()=> doDrinkAtSink(true)));
+    } else if(sinkDry()){
+      hereBox.appendChild(hereNote("The tap is dry."));
     }
     getWindowsInRoom(state.currentRoom).forEach(w=>{
       if(w.state === "closed"){
