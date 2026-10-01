@@ -7751,6 +7751,33 @@ x_sn_9 m_sn_sn_sn sn p
       state.illnesses[id] = left - tick;
     });
   }
+  // AUTO-DRINK: docs/systems/fluids.md has the model. Awake and below
+  // LOW_THIRST_THRESHOLD, you drink on your own from what you carry
+  // (invPools()), clean water only, never from a tap: the holder with the
+  // least left first (unitLevel(), ties in list order), each as Drink all,
+  // the next as one empties, until Thirst is full or the clean water you
+  // carry runs out. One line per holder, drinkFrom()'s. It is checked at the
+  // minute Thirst crosses the threshold (clockStep()) and at the end of
+  // every action (afterAction()), never while asleep. Returns whether it
+  // drank.
+  function autoDrink(){
+    let drank = false;
+    for(;;){
+      if(!(state.vitals.thirst < VITAL_MAX)) break;
+      let next = null;
+      invPools().forEach(list=> list.forEach(row=>{
+        if(!drinkable(row) || row.fluid.kind !== "clean") return;
+        const level = unitLevel(row).level;
+        if(!next || level < next.level) next = { list, row, level };
+      }));
+      if(!next) break;
+      const ml = Math.min(drinkAllMl(), next.row.fluid.ml);
+      if(!(ml > 0)) break;
+      drinkFrom(next.list, next.row, ml, true);
+      drank = true;
+    }
+    return drank;
+  }
   // Sleep's runtime flags, never saved: `asleep` while doSleep()'s loop runs,
   // and while a blackout runs (advanceTime()), so an event picks its asleep
   // line; `wokenUp` set when a waking event fires during either, which ends
@@ -7983,7 +8010,11 @@ x_sn_9 m_sn_sn_sn sn p
   // it, and its own stop condition.
   function clockStep(dt){
     state.totalMinutes += dt;
+    const thirstBefore = state.vitals.thirst;
     applyHungerThirst(dt);
+    // The minute Thirst crosses LOW_THIRST_THRESHOLD, awake, you drink
+    // (autoDrink()). One comparison a step.
+    if(!asleep && thirstBefore >= LOW_THIRST_THRESHOLD && state.vitals.thirst < LOW_THIRST_THRESHOLD) autoDrink();
     processDueEvents();
   }
   function applyEnergyBaseline(min, multiplier){
@@ -10921,6 +10952,25 @@ x_sn_9 m_sn_sn_sn sn p
   });
   const sideMenu = document.getElementById("sideMenu");
   const menuBackdrop = document.getElementById("menuBackdrop");
+  // The end of every action: thirsty and awake, you drink on your own
+  // (autoDrink()), and the screen is drawn again only if you did. This is
+  // what makes a bottle filled while thirsty drunk from at once, and waking
+  // thirsty drink on waking. One hook, on every button click in the places
+  // actions are dispatched from (ACTION_AREAS: the play area, the pop-ups,
+  // the Crafting panel), so no list of actions has to be kept in step with
+  // it. It runs after the button's own handler, which has rendered: the
+  // click's path is read as it was dispatched, since the render may have
+  // taken the button out of the page. The drawer is left out: a Load is not
+  // an action.
+  const ACTION_AREAS = ["left", "sidebar", "itemPop", "devicePop", "walkPop", "mapCard", "craftingPanel"];
+  function afterAction(){
+    if(gameOver || asleep || !(state.vitals.thirst < LOW_THIRST_THRESHOLD)) return;
+    if(autoDrink()) render();
+  }
+  document.addEventListener("click", e=>{
+    const path = e.composedPath();
+    if(path.some(n=> n.tagName === "BUTTON") && path.some(n=> ACTION_AREAS.includes(n.id))) afterAction();
+  });
   // ==================================================
   // EVENTS / UI HELPERS
   // ==================================================
