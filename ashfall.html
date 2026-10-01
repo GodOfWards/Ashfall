@@ -630,18 +630,27 @@
   // baseline food-poisoning chance combined with the food's own
   // (combinePoisoning()). POISONING_TRAIT_MULTIPLIER is a placeholder until
   // traits (#9) exist, and multiplies the rotten baseline only. Tainted
-  // water's chance is for a full bottle's worth, scaled by the amount drunk.
-  // Balance values, retunable.
+  // water's chance is for TAINTED_WATER_DOSE_ML of it, scaled by the
+  // millilitres drunk. Balance values, retunable.
   const ROTTEN_RESTORES_FACTOR = 0.35;
   const ROTTEN_POISONING_CHANCE = 0.35;
   const POISONING_TRAIT_MULTIPLIER = 1;
   const TAINTED_WATER_POISONING_CHANCE = 0.35;
-  // Minutes tainted water must sit in a heated vessel to come out clean.
-  // Retunable.
+  const TAINTED_WATER_DOSE_ML = 500;
+  // Thirst restored per litre of water drunk: a 500 mL bottle's 30, the
+  // rate a bottle restored when it was drunk whole. A balance value,
+  // retunable.
+  const WATER_THIRST_PER_L = 60;
+  // Minutes tainted water must sit in a heated vessel to come out clean,
+  // whatever its volume. Retunable.
   const BOIL_MINUTES = 5;
   // A dish restores the sum of its ingredients' contributions times
   // (1 + this). Retunable.
   const DISH_RESTORES_BONUS = 0.25;
+  // A dish that needs water needs at least this share of its vessel's
+  // capacityMl of clean water (dishWaterMinMl()). A balance value,
+  // retunable.
+  const DISH_WATER_MIN_SHARE = 0.4;
   // The stove timer's add buttons, in minutes, in the order they are shown.
   // Retunable.
   const STOVE_TIMER_STEPS = [5, 10, 30];
@@ -956,11 +965,11 @@
   //                   the item's weight (itemUnitWeight()), bags may nest to
   //                   any depth, and every load-time scan reaches them
   //                   through forEachItemList()
-  //     vessel        { kind, capacityKg, waterKg } — the item is a pot or
-  //                   pan: `kind` is what DISH_TEMPLATES match on,
-  //                   `capacityKg` bounds its contents' weight, and
-  //                   `waterKg` is the water it holds when full (0 = none).
-  //                   Definition data, read by itemId.
+  //     vessel        { kind, capacityKg } — the item is a pot or pan:
+  //                   `kind` is what DISH_TEMPLATES match on, and
+  //                   `capacityKg` bounds its contents' weight. One that
+  //                   holds water has `holdsFluid` too. Definition data,
+  //                   read by itemId.
   //     ingredient    { role, label, restores?, addPortion? } — the item
   //                   can go in a vessel: `role` is meat, vegetable or grain,
   //                   `label` names a dish ("Fish stew"), `restores` is what
@@ -1017,13 +1026,16 @@
   //                   `ages` sets it, and a row read without one is taken as
   //                   true now. Ageing is worked out when the row's list is
   //                   next settled (settleList()).
-  //     holdsWater    { kg, restores } — the item holds water: `kg` when
-  //                   full, and what drinking a full one restores. A bottle.
-  //                   Definition data, read by itemId.
-  //     water         instance: { kind, fill } — the water an item holds,
-  //                   "clean" or "tainted", and a bottle's fill (1, 0.75,
-  //                   0.5 or 0.25); absent when empty. Shown as its kind,
-  //                   never its level; weighs holdsWater.kg × fill.
+  //     holdsFluid    { capacityMl } — the item holds a fluid, up to
+  //                   capacityMl millilitres, part-way at any level: a
+  //                   bottle, a saucepan, the pot. Definition data, read by
+  //                   itemId (capacityMlOf()).
+  //     fluid         instance: { kind, ml } — the fluid a holder holds: its
+  //                   kind ("clean" or "tainted" water today, open-ended)
+  //                   and how much, a positive whole number of millilitres.
+  //                   Absent when empty, never ml 0. Two kinds mix only as
+  //                   mixKinds() says. Shown as its kind and a meter; weighs
+  //                   1 kg a litre (fluidWeightOf()).
   //     portion       instance: how much of one unit of food is left — 1,
   //                   0.75, 0.5 or 0.25, absent = 1 — after Eat 1/2 or 1/4.
   //                   Never shown; a unit weighs its portion of unitWeight.
@@ -1052,13 +1064,13 @@
     pasta: { name:"Pasta", category:"Food", unitWeight:0.5,
       ingredient:{ role:"grain", label:"Pasta", restores:{hunger:120}, addPortion:0.25 } },
     frying_pan: { name:"Frying pan", category:"Tool", unitWeight:0.9, tags:["blunt"],
-      vessel:{ kind:"frying_pan", capacityKg:1, waterKg:0 } },
+      vessel:{ kind:"frying_pan", capacityKg:1 } },
     kitchen_knife: { name:"Kitchen knife", category:"Tool", unitWeight:0.15, tags:["blade","can-opening"] },
     can_opener: { name:"Can opener", category:"Tool", unitWeight:0.1, tags:["can-opening"] },
     leftovers: { name:"Leftovers", category:"Food", unitWeight:0.8, restores:{hunger:25}, verb:"Eat",
       spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
     plastic_bottle: { name:"Plastic bottle", category:"Food", unitWeight:0.05, verb:"Drink",
-      holdsWater:{ kg:0.5, restores:{thirst:30} } },
+      holdsFluid:{ capacityMl:500 } },
     granola_bars: { name:"Granola bars", category:"Food", unitWeight:0.1, restores:{hunger:15}, verb:"Eat" },
     painkillers: { name:"Painkillers", category:"Medical", unitWeight:0.1 },
     toilet_paper: { name:"Toilet paper", category:"Materials", unitWeight:0.2 },
@@ -1080,7 +1092,7 @@
       ingredient:{ role:"vegetable", label:"Bean" } },
     board_games: { name:"Board games", category:"Misc", unitWeight:1.0 },
     burnt_saucepan: { name:"Burnt saucepan", category:"Tool", unitWeight:0.6,
-      vessel:{ kind:"saucepan", capacityKg:1.5, waterKg:1.0 } },
+      vessel:{ kind:"saucepan", capacityKg:1.5 }, holdsFluid:{ capacityMl:1000 } },
     canned_corn: { name:"Canned corn", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat", sealed:true, opensWith:"can-opening",
       spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY },
       ingredient:{ role:"vegetable", label:"Corn" } },
@@ -1097,11 +1109,11 @@
     scrap_metal: { name:"Scrap metal", category:"Materials", unitWeight:0.5 },
     metal_pipe: { name:"Metal pipe", category:"Tool", unitWeight:1.3, tags:["blunt"] },
     dented_saucepan: { name:"Dented saucepan", category:"Tool", unitWeight:0.7,
-      vessel:{ kind:"saucepan", capacityKg:1.5, waterKg:1.0 } },
+      vessel:{ kind:"saucepan", capacityKg:1.5 }, holdsFluid:{ capacityMl:1000 } },
     cooking_pot: { name:"Cooking pot", category:"Tool", unitWeight:1.2,
-      vessel:{ kind:"pot", capacityKg:3, waterKg:2.0 } },
+      vessel:{ kind:"pot", capacityKg:3 }, holdsFluid:{ capacityMl:2000 } },
     roasting_pan: { name:"Roasting pan", category:"Tool", unitWeight:1.5,
-      vessel:{ kind:"roasting_pan", capacityKg:3, waterKg:0 } },
+      vessel:{ kind:"roasting_pan", capacityKg:3 } },
     crowbar: { name:"Crowbar", category:"Tool", unitWeight:2.5, tags:["blunt","prying"] },
     wrench: { name:"Wrench", category:"Tool", unitWeight:0.8, tags:["blunt"] },
     portable_radio: { name:"Portable radio", category:"Electronics", unitWeight:0.4, on:false, hasBatteries:true, durability:{ current:100, max:100, mode:"time" }, drainRate:100/2880 },
@@ -1308,7 +1320,7 @@
   // up in ITEM_REGISTRY by itemId (registryEntryOf()), so itemFromRegistry()
   // leaves them off the instance. A retune then reaches every save, and no
   // stale copy on an instance is there to be read by mistake.
-  const REGISTRY_ONLY_FIELDS = ["carryFactor", "foodPoisoningChance", "disassembleLog", "cooks", "spoils", "holdsWater",
+  const REGISTRY_ONLY_FIELDS = ["carryFactor", "foodPoisoningChance", "disassembleLog", "cooks", "spoils", "holdsFluid",
     "vessel", "ingredient", "dish", "fuseRating"];
   // An item's (or a slot's) registry entry, by its itemId, or null for
   // anything without one: the keychain, an item from a save the registry no
@@ -1425,7 +1437,7 @@
       { itemId:"fish", key:"fish_cooked", state:{ cookState:"cooked" }, chance:0.016129, qtyMin:1, qtyMax:1 } ]},
     kitchen_nonperishable: { emptyChance:0.1, entries:[
       { itemId:"canned_soup", chance:0.193774, qtyMin:1, qtyMax:2 },
-      { itemId:"plastic_bottle", state:{ water:{ kind:"clean", fill:1 } }, chance:0.193774, qtyMin:1, qtyMax:3 },
+      { itemId:"plastic_bottle", state:{ fluid:{ kind:"clean", ml:500 } }, chance:0.193774, qtyMin:1, qtyMax:3 },
       { itemId:"canned_beans", chance:0.171049, qtyMin:1, qtyMax:2 },
       { itemId:"canned_corn", chance:0.171049, qtyMin:1, qtyMax:2 },
       { itemId:"canned_tuna", chance:0.147906, qtyMin:1, qtyMax:2 },
@@ -1542,7 +1554,7 @@
       { itemId:"walkie_talkie", chance:0.069728, qtyMin:1, qtyMax:1 },
       { itemId:"portable_radio", chance:0.069728, qtyMin:1, qtyMax:1 } ]},
     retail_stock_food: { emptyChance:0.1, entries:[
-      { itemId:"plastic_bottle", state:{ water:{ kind:"clean", fill:1 } }, chance:0.309252, qtyMin:1, qtyMax:3 },
+      { itemId:"plastic_bottle", state:{ fluid:{ kind:"clean", ml:500 } }, chance:0.309252, qtyMin:1, qtyMax:3 },
       { itemId:"candy_bar", chance:0.274647, qtyMin:1, qtyMax:2 },
       { itemId:"potato_chips", chance:0.274647, qtyMin:1, qtyMax:2 },
       { itemId:"canned_corn", chance:0.238925, qtyMin:1, qtyMax:2 },
@@ -4153,7 +4165,7 @@ x_sn_9 m_sn_sn_sn sn p
             items:{
               stove:[ { id:"cooking_pot", qty:1, overrides:{ contents:[ dishFrom("stew", "cooking_pot", ["meat", "vegetables"], "cooked") ] } } ],
               cupboards:[ { id:"canned_soup", qty:3 }, { id:"pasta", qty:2 }, { id:"frying_pan", qty:1 },
-                { id:"plastic_bottle", qty:4, overrides:{ water:{ kind:"clean", fill:1 } } }, { id:"granola_bars", qty:3 } ],
+                { id:"plastic_bottle", qty:4, overrides:{ fluid:{ kind:"clean", ml:500 } } }, { id:"granola_bars", qty:3 } ],
               drawers:[ { id:"kitchen_knife", qty:1 }, { id:"can_opener", qty:1 } ],
               fridge:[ { id:"leftovers", qty:1, overrides:{ ages:[5*MINUTES_PER_DAY] } } ] } },
           bathroom:{ items:{
@@ -4231,7 +4243,7 @@ x_sn_9 m_sn_sn_sn sn p
             containers:[
               { id:"shelves", name:"Shelves", capacityKg:30, spawnPools:["retail_stock_food","retail_stock_general"], items:[
                 { id:"canned_corn", qty:4 }, { id:"potato_chips", qty:3 },
-                { id:"plastic_bottle", qty:5, overrides:{ water:{ kind:"clean", fill:1 } } } ] },
+                { id:"plastic_bottle", qty:5, overrides:{ fluid:{ kind:"clean", ml:500 } } } ] },
               { id:"register", name:"Register Counter", capacityKg:5, spawnPools:["valuables","retail_stock_general"], items:[
                 { id:"loose_change", qty:1 }, { id:"lighter", qty:1 } ] },
               { id:"storage", name:"Storage Room", capacityKg:40, spawnPools:["retail_stock_food","retail_stock_general","cleaning_supplies"], items:[
@@ -5360,6 +5372,8 @@ x_sn_9 m_sn_sn_sn sn p
   // game's prose already follows. Used by the collapsed log summaries.
   const NUMBER_WORDS = ["zero","one","two","three","four","five","six","seven","eight","nine","ten"];
   function numberWord(n){ return n >= 0 && n < NUMBER_WORDS.length ? NUMBER_WORDS[n] : String(n); }
+  // A whole number with its thousands grouped by commas: "1,250".
+  function groupedNumber(n){ return Math.round(n).toLocaleString("en-US"); }
   // See MIN_MOVE_MIN for why the floor has two forms and why the flat one
   // must stay. A load over the carry limit slows the pace (see
   // overloadSpeedFactor()) but never scales the floor.
@@ -5461,21 +5475,15 @@ x_sn_9 m_sn_sn_sn sn p
   // The only place an item's weight is computed. A stowed bag weighs itself
   // plus everything in its `contents`, and the recursion runs back through
   // totalWeight(), so bags nested to any depth count in full. A part-eaten
-  // unit weighs its `portion` of a whole one, and water adds its own weight.
-  // An item with no `contents`, portion or water weighs exactly qty ×
-  // unitWeight.
+  // unit weighs its `portion` of a whole one, and a fluid adds its own
+  // weight. An item with no `contents`, portion or fluid weighs exactly qty
+  // × unitWeight.
   function itemUnitWeight(it){
-    return it.unitWeight * portionOf(it) + waterWeightOf(it)
+    return it.unitWeight * portionOf(it) + fluidWeightOf(it)
       + (Array.isArray(it.contents) ? totalWeight(it.contents) : 0);
   }
-  // The weight of the water one unit holds: a bottle's holdsWater.kg at its
-  // fill, a vessel's waterKg when it holds any.
-  function waterWeightOf(it){
-    const def = it.water && registryEntryOf(it);
-    if(!def) return 0;
-    if(def.holdsWater) return def.holdsWater.kg * it.water.fill;
-    return def.vessel ? def.vessel.waterKg : 0;
-  }
+  // The weight of the fluid one unit holds: a litre of water weighs a kg.
+  function fluidWeightOf(it){ return it.fluid ? it.fluid.ml / 1000 : 0; }
   // How much of one unit is left: `portion`, 1 when absent.
   function portionOf(it){ return typeof it.portion === "number" ? it.portion : 1; }
   function itemWeight(it){ return it.qty * itemUnitWeight(it); }
@@ -5497,8 +5505,8 @@ x_sn_9 m_sn_sn_sn sn p
   // only at the same progress, so two fish put in a stove minutes apart stay
   // two rows until both are cooked. A perishable's rows merge only when every
   // unit of both is in the same freshness state. Part-eaten units merge only
-  // with units as eaten as they are, never with whole ones, and bottles only
-  // with bottles holding the same water to the same level.
+  // with units as eaten as they are, never with whole ones, and holders only
+  // with holders holding the same fluid to the same millilitre.
   function sameStackState(a, b){
     return STACKABLE.has(a.category) && a.itemId === b.itemId && a.category === b.category
       && !a.durability && !b.durability && !!a.sealed === !!b.sealed
@@ -5506,11 +5514,8 @@ x_sn_9 m_sn_sn_sn sn p
       && (cookStateOf(a) !== "raw" || (a.cookMinutes || 0) === (b.cookMinutes || 0))
       && rowFreshness(a) === rowFreshness(b) && rowFreshness(a) !== "mixed"
       && portionOf(a) === portionOf(b)
-      && waterKindOf(a) === waterKindOf(b) && (a.water && a.water.fill) === (b.water && b.water.fill);
+      && fluidKindOf(a) === fluidKindOf(b) && (a.fluid ? a.fluid.ml : 0) === (b.fluid ? b.fluid.ml : 0);
   }
-  // The kind of water an item holds, "clean" or "tainted", or null when it
-  // holds none.
-  function waterKindOf(it){ return it.water ? it.water.kind : null; }
   // Folds `row` into `target`, an existing row sameStackState() accepts. The
   // one place two rows become one: the units' ages come along, re-sorted
   // oldest first. Both rows are always settled to the same minute, so their
@@ -5602,16 +5607,9 @@ x_sn_9 m_sn_sn_sn sn p
   // the radio does.
   const PORTION_WORDS = { 0.75:"¾", 0.5:"½", 0.25:"¼" };
   function unitLevel(it){
-    const def = registryEntryOf(it);
-    if(def && def.holdsWater){
-      if(!it.water) return null;
-      const ml = Math.round(def.holdsWater.kg * 1000);
-      return { level: it.water.fill, figure: `${Math.round(it.water.fill * ml)} of ${ml} mL` };
-    }
-    if(vesselDefOf(it)){
-      if(!it.water || dishIn(it)) return null;
-      return { level:1, figure: it.water.kind === "tainted" ? "Full of tainted water" : "Full of water" };
-    }
+    const cap = capacityMlOf(it);
+    if(cap > 0) return it.fluid
+      ? { level: it.fluid.ml / cap, figure: `${groupedNumber(it.fluid.ml)} of ${groupedNumber(cap)} mL` } : null;
     if(it.durability && it.durability.mode === "uses")
       return { level: it.durability.current / it.durability.max, figure: durabilityText(it) };
     const p = portionOf(it);
@@ -5622,14 +5620,14 @@ x_sn_9 m_sn_sn_sn sn p
   function orderLevel(it){
     const l = unitLevel(it);
     if(l) return l.level;
-    return holdsWaterAtAll(it) ? 0 : 1;
+    return holdsFluidAtAll(it) ? 0 : 1;
   }
   // What makes rows one group: the same item, sealed or not, cook state,
-  // water kind and freshness (a container's Frozen is every row's), and the
+  // fluid kind and freshness (a container's Frozen is every row's), and the
   // same contents, so a pot of stew never groups with an empty pot. Rows of
   // a group differ only by their level, raw cookMinutes, or `on`.
   function groupKeyOf(it){
-    return JSON.stringify([it.itemId || null, it.name, !!it.sealed, cookStateOf(it), waterKindOf(it), rowFreshness(it),
+    return JSON.stringify([it.itemId || null, it.name, !!it.sealed, cookStateOf(it), fluidKindOf(it), rowFreshness(it),
       Array.isArray(it.contents) ? it.contents.map(c=> [groupKeyOf(c), c.qty]) : null]);
   }
   // A list's groups, each key's rows in list order, the groups in the order
@@ -6032,35 +6030,34 @@ x_sn_9 m_sn_sn_sn sn p
   // the same food — itemId, cook state and freshness — the one with the
   // least left, and among equals the oldest. So a half-eaten can is finished
   // before a new one is started, whichever row was clicked.
-  // For a bottle, the water plays the food's part: which kind it is joins
-  // the match, and its fill is what is left.
+  // For a holder, its fluid plays the food's part: which kind it is joins
+  // the match, and its share of full is what is left.
   function eatTarget(list, it){
     return leastLeftRow(list, it, r=>{ const p = consumeProfile(r); return p ? p.left : null; });
   }
   // Among the rows of `list` holding the same thing as `it` — itemId, cook
-  // state, freshness and water kind — the one whose `leftOf` is least, and
+  // state, freshness and fluid kind — the one whose `leftOf` is least, and
   // among equals the oldest; `it` itself when none qualifies. A row whose
   // `leftOf` is null does not qualify. Eating and adding an ingredient by
   // the part both pick their unit here.
   function leastLeftRow(list, it, leftOf){
     const same = list.filter(r=> r.itemId === it.itemId && leftOf(r) != null
       && cookStateOf(r) === cookStateOf(it) && rowFreshness(r) === rowFreshness(it)
-      && waterKindOf(r) === waterKindOf(it));
+      && fluidKindOf(r) === fluidKindOf(it));
     return same.sort((a, b)=> leftOf(a) - leftOf(b) || unitAges(b)[0] - unitAges(a)[0])[0] || it;
   }
   // What eating or drinking one whole unit of `it` does, or null when it is
   // nothing to eat or drink: { left, restores, poisoning, water }. Food is
-  // unitFoodEffects() with its portion left. A bottle is drunk from, not
-  // eaten: its holdsWater restores, tainted water carries
-  // TAINTED_WATER_POISONING_CHANCE, and its fill is what is left. This is
-  // the interim Drink rule, until fluid volumes (#47) replace it.
+  // unitFoodEffects() with its portion left. A holder with fluid and no dish
+  // is drunk from, not eaten: a whole one restores WATER_THIRST_PER_L for
+  // its capacity, tainted water carries TAINTED_WATER_POISONING_CHANCE for
+  // TAINTED_WATER_DOSE_ML of it, and its share of full is what is left.
   function consumeProfile(it){
     if(it.sealed) return null;
-    const def = registryEntryOf(it);
-    if(def && def.holdsWater){
-      if(!it.water) return null;
-      return { left: it.water.fill, restores: def.holdsWater.restores, water:true,
-        poisoning: it.water.kind === "tainted" ? TAINTED_WATER_POISONING_CHANCE : 0 };
+    const cap = capacityMlOf(it);
+    if(cap > 0 && it.fluid && !dishIn(it)){
+      return { left: it.fluid.ml / cap, restores:{ thirst: WATER_THIRST_PER_L * cap / 1000 }, water:true,
+        poisoning: it.fluid.kind === "tainted" ? TAINTED_WATER_POISONING_CHANCE * cap / TAINTED_WATER_DOSE_ML : 0 };
     }
     const fx = unitFoodEffects(it);
     return fx.restores ? { left: portionOf(it), restores: fx.restores, poisoning: fx.poisoning, water:false } : null;
@@ -6079,96 +6076,107 @@ x_sn_9 m_sn_sn_sn sn p
     remergeRow(list, row);
     return row;
   }
-  // Takes `amount` of one unit off `row`: food's portion, a bottle's fill.
-  // Food eaten to nothing is gone; a bottle drunk dry stays, empty.
+  // Takes `amount` of one unit off `row`: food's portion, a holder's share
+  // of its capacity, in whole millilitres. Food eaten to nothing is gone; a
+  // holder drunk dry stays, empty.
   function eatFromRow(list, row, amount){
-    const water = !!consumeProfile(row).water;
-    const rest = consumeProfile(row).left - amount;
-    if(!water && rest <= 0){ dropUnits(list, list.indexOf(row), 1); return; }
-    changeOneUnit(list, row, unit=>{
-      if(!water) unit.portion = rest;
-      else if(rest > 0) unit.water.fill = rest;
-      else delete unit.water;
-    });
+    if(consumeProfile(row).water){
+      const ml = Math.min(row.fluid.ml, Math.round(amount * capacityMlOf(row)));
+      changeOneUnit(list, row, unit=> takeFluid(unit, ml));
+      return;
+    }
+    const rest = portionOf(row) - amount;
+    if(rest <= 0){ dropUnits(list, list.indexOf(row), 1); return; }
+    changeOneUnit(list, row, unit=>{ unit.portion = rest; });
   }
-  // Sinks. A water-holding item — a bottle — can be filled at the sink of the
-  // room it is in while the water runs (waterRunningIn()), unless it is
-  // already full, of either kind. One unit fills, to full; its water is clean
-  // unless it already held tainted water, since any tainted water taints
-  // everything it mixes with. Instant. After the water fails the sink gives
-  // nothing, and whatever was left in the pipes is #47's.
-  // A vessel fills too, while it holds no dish and no water.
-  // Off a tank, at any time, a fill draws the litres it adds (1 kg of water
-  // is 1 L) and takes only what the tank has left: a bottle fills part way on
-  // the last of it, and a vessel, whose water is all or nothing, needs its
-  // whole waterKg. A sink without a tank draws on the mains, and draws
-  // nothing down. The lines are functional, retunable.
-  function canFillAtSink(it){
-    const room = world[state.currentRoom];
-    if(!room.sink || !waterRunningIn(state.currentRoom) || !canTakeWater(it)) return false;
-    return !tankOf(state.currentRoom) || !vesselDefOf(it) || tankLeft(state.currentRoom) >= sinkLitresFor(it);
-  }
-  // Whether the room's sink is dry for an item that could take water: its
-  // tank drawn too low for it, whether or not the grid is up. What the pop-up
-  // says in the fill action's place.
-  function tapDryFor(it){
-    const room = world[state.currentRoom];
-    return !!room.sink && canTakeWater(it) && tankOf(state.currentRoom) > 0 && !canFillAtSink(it);
-  }
-  // The litres filling one unit of `it` to full would add.
-  function sinkLitresFor(it){
+  // FLUIDS. A holder (registry `holdsFluid`) holds one fluid, `fluid: { kind,
+  // ml }`, from a millilitre to its capacityMl, and none at all once it holds
+  // a dish. Every reader of a holder's fluid goes through these.
+  function fluidKindOf(it){ return it.fluid ? it.fluid.kind : null; }
+  function capacityMlOf(it){
     const def = registryEntryOf(it);
-    if(def && def.holdsWater) return def.holdsWater.kg * (1 - (it.water ? it.water.fill : 0));
-    return def && def.vessel ? def.vessel.waterKg : 0;
+    return def && def.holdsFluid ? def.holdsFluid.capacityMl : 0;
   }
-  // Whether an item can take more water: a bottle that is not full, or a
-  // vessel holding none, since a vessel's water is all or nothing (#47).
-  // Filling at the sink and pouring in both ask this.
-  function canTakeWater(it){
-    if(!holdsWaterAtAll(it)) return false;
-    return !it.water || (!vesselDefOf(it) && it.water.fill < 1);
+  // Whether an item holds fluid at all right now: a holder with no dish.
+  function holdsFluidAtAll(it){ return capacityMlOf(it) > 0 && !dishIn(it); }
+  // The millilitres an item has room for, 0 for anything that holds none.
+  function fluidSpaceMl(it){ return holdsFluidAtAll(it) ? capacityMlOf(it) - (it.fluid ? it.fluid.ml : 0) : 0; }
+  // What two fluids make together, the one statement of what mixes: nothing
+  // with anything is that thing, a kind with itself is that kind, and clean
+  // water with tainted is tainted. Any other pair is null: they don't mix,
+  // and no action offers it.
+  function mixKinds(a, b){
+    if(a === null) return b;
+    if(b === null || a === b) return a;
+    const pair = [a, b].sort().join("+");
+    return pair === "clean+tainted" ? "tainted" : null;
   }
-  // Whether an item can take water right now: a bottle always, a vessel with
-  // a waterKg while it holds no dish.
-  function holdsWaterAtAll(it){
-    const def = registryEntryOf(it);
-    if(def && def.holdsWater) return true;
-    return !!(def && def.vessel && def.vessel.waterKg > 0 && !dishIn(it));
-  }
-  // Puts water of `kind` into one unit: a bottle full to the top, a vessel
-  // full. Any tainted water already there taints it, and new water in a
-  // vessel starts its boil over.
-  // A bottle can be filled to `fill` short of the top (a tank's last litres).
-  function addWater(unit, kind, fill = 1){
-    const k = waterKindOf(unit) === "tainted" ? "tainted" : kind;
-    unit.water = vesselDefOf(unit) ? { kind:k } : { kind:k, fill };
+  // `ml` of `kind` into one unit, mixed with what it holds (mixKinds()). New
+  // water in a vessel starts its boil over. A caller never adds more than
+  // fluidSpaceMl().
+  function addFluid(unit, kind, ml){
+    unit.fluid = { kind: mixKinds(fluidKindOf(unit), kind), ml: (unit.fluid ? unit.fluid.ml : 0) + ml };
     delete unit.boilMinutes;
   }
+  // `ml` out of one unit; emptied, it holds nothing, and has nothing to boil.
+  function takeFluid(unit, ml){
+    const left = unit.fluid.ml - ml;
+    if(left > 0) unit.fluid.ml = left;
+    else { delete unit.fluid; delete unit.boilMinutes; }
+  }
+  // Sinks. A holder can be filled at the sink of the room it is in while the
+  // water runs (waterRunningIn()), while it has room, part-way or from
+  // empty alike. One unit fills, as far as it has room; the water is clean,
+  // and mixes with what is there (mixKinds()), so tainted water already in it
+  // taints it. Instant. After the water fails the sink gives nothing, and
+  // whatever was left in the pipes is #300's.
+  // Off a tank, at any time, a fill draws the litres it adds and takes only
+  // what the tank has left, to the millilitre: a holder fills part-way on the
+  // last of it. A sink without a tank draws on the mains, and draws nothing
+  // down. The lines are functional, retunable.
+  function canFillAtSink(it){
+    const room = world[state.currentRoom];
+    return !!room.sink && waterRunningIn(state.currentRoom) && fluidSpaceMl(it) > 0
+      && mixKinds(fluidKindOf(it), "clean") !== null;
+  }
+  // Whether the room's sink is dry for an item with room for water: its
+  // tank drawn dry, whether or not the grid is up. What the pop-up says in
+  // the fill action's place.
+  function tapDryFor(it){
+    const room = world[state.currentRoom];
+    return !!room.sink && fluidSpaceMl(it) > 0 && tankOf(state.currentRoom) > 0 && !(tankLeft(state.currentRoom) > 0);
+  }
+  // The whole millilitres a tank in the current room has left. Its drawn
+  // litres are kept to the millilitre; the nudge takes back the float noise
+  // that would floor 0.3 L to 299 mL.
+  function tankLeftMl(){ return Math.floor(tankLeft(state.currentRoom) * 1000 + 1e-6); }
   function doFillAtSink(sourceKind, index){
     const room = world[state.currentRoom];
     const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
     const it = getItemAt(src && src.items, index);
     if(!it || !canFillAtSink(it)) return;
-    const need = sinkLitresFor(it);
     const fromTank = tankOf(state.currentRoom) > 0;
-    // Rounded to the millilitre, so a tank's running total and a bottle's
-    // part fill don't carry float noise.
-    const litres = Math.round((fromTank ? Math.min(need, tankLeft(state.currentRoom)) : need) * 1000) / 1000;
-    const def = registryEntryOf(it);
-    const fill = def && def.holdsWater ? Math.round(((it.water ? it.water.fill : 0) + litres / def.holdsWater.kg) * 1000) / 1000 : 1;
-    const filled = changeOneUnit(src.items, it, unit=> addWater(unit, "clean", Math.min(1, fill)));
-    // A draw that moves a pumped tank's float resolves its building at once,
-    // so its pump starts, or stops calling, with the draw.
-    const b = world[state.currentRoom].buildingId;
-    const floatNow = ()=> TANK_PUMPS[b] !== undefined ? JSON.stringify(tankFloat(BUILDING_INFO[b].tankL, state.tankDrawn[b] || 0)) : null;
-    const floatBefore = fromTank ? floatNow() : null;
-    if(fromTank) state.tankDrawn[b] = Math.round(((state.tankDrawn[b] || 0) + litres) * 1000) / 1000;
+    const ml = fromTank ? Math.min(fluidSpaceMl(it), tankLeftMl()) : fluidSpaceMl(it);
+    if(!(ml > 0)) return;
+    const filled = changeOneUnit(src.items, it, unit=> addFluid(unit, "clean", ml));
+    const moved = fromTank ? drawFromTank(ml) : null;
     // The pop-up follows the filled bottle, as doOpen()'s follows the opened can.
     detailItem = { uid: ensureUid(filled), side: sourceKind };
     log(fromTank && tankLeft(state.currentRoom) <= 0 ? "The tap coughs, spits, and runs dry."
       : `You fill the ${it.name.toLowerCase()} at the sink.`);
-    if(fromTank && floatNow() !== floatBefore) resolveBuilding(b);
+    if(moved) resolveBuilding(moved);
     render();
+  }
+  // `ml` drawn from the current room's tank. Returns its building when the
+  // draw moved a pumped tank's float, for the caller to resolve at once,
+  // after its own line, so the pump starts, or stops calling, with the draw;
+  // null otherwise.
+  function drawFromTank(ml){
+    const b = world[state.currentRoom].buildingId;
+    const floatNow = ()=> TANK_PUMPS[b] !== undefined ? JSON.stringify(tankFloat(BUILDING_INFO[b].tankL, state.tankDrawn[b] || 0)) : null;
+    const floatBefore = floatNow();
+    state.tankDrawn[b] = Math.round(((state.tankDrawn[b] || 0) + ml / 1000) * 1000) / 1000;
+    return floatNow() !== floatBefore ? b : null;
   }
   // Vessels within reach of an item: every vessel in the lists crafting
   // reaches (nearbyLists()), and every vessel in the room's heat container,
@@ -6265,16 +6273,15 @@ x_sn_9 m_sn_sn_sn sn p
   // still missing, nothing ruling the dish out, and one within reach that
   // the vessel can take.
   function canAddMissing(t, vessel){
-    const st = templateStatus(t, vesselDefOf(vessel).kind, vessel.contents || [], waterKindOf(vessel));
+    const st = templateStatus(t, vessel);
     return !st.blocked && st.need > 0 && templateCandidates(t).some(c=> canAddToVessel(c.list, c.row, vessel));
   }
   // Add ingredients: adds what `t` still needs to `vessel` from within reach,
   // one unit at a time, exactly as Add would. Water is never pulled. It
   // never chooses the dish: the contents do, when heated.
   function doAddMissingIngredients(t, vessel){
-    const kind = vesselDefOf(vessel).kind;
     for(;;){
-      const st = templateStatus(t, kind, vessel.contents || [], waterKindOf(vessel));
+      const st = templateStatus(t, vessel);
       if(st.blocked || st.need === 0) break;
       const c = templateCandidates(t).find(x=> canAddToVessel(x.list, x.row, vessel));
       if(!c || !addIngredientTo(c.list, c.row, vessel)) break;
@@ -6289,30 +6296,27 @@ x_sn_9 m_sn_sn_sn sn p
     giveItem(row);
     render();
   }
-  // Whether a bottle's water can go into `vessel`: while the vessel can take
-  // water, and into its clean water when the bottle's is tainted, which only
-  // taints it — kept, by choice, as the one pour into water already there.
+  // Whether a bottle's water can go into `vessel`: while the vessel has room
+  // and the two mix (mixKinds()).
   function canPourInto(bottle, vessel){
-    if(!bottle.water || !holdsWaterAtAll(bottle) || !vesselDefOf(vessel)) return false;
-    return canTakeWater(vessel)
-      || (holdsWaterAtAll(vessel) && waterKindOf(vessel) === "clean" && waterKindOf(bottle) === "tainted");
+    if(!bottle.fluid || !holdsFluidAtAll(bottle) || !vesselDefOf(vessel) || vessel === bottle) return false;
+    return fluidSpaceMl(vessel) > 0 && mixKinds(fluidKindOf(bottle), fluidKindOf(vessel)) !== null;
   }
-  // Empties a bottle into a vessel, whatever its fill: the vessel then holds
-  // water, tainted if either was. Volumes are #47's. The line's wording is
-  // retunable.
+  // Pours as much of a bottle's water into a vessel as fits. The line's
+  // wording is retunable.
   function doPourIntoVessel(list, index, vessel){
     const bottle = getItemAt(list, index);
     if(!bottle || !canPourInto(bottle, vessel)) return;
-    addWater(vessel, bottle.water.kind);
-    changeOneUnit(list, bottle, u=>{ delete u.water; });
+    const kind = bottle.fluid.kind, ml = Math.min(bottle.fluid.ml, fluidSpaceMl(vessel));
+    addFluid(vessel, kind, ml);
+    changeOneUnit(list, bottle, u=> takeFluid(u, ml));
     log(`You pour the water into the ${vessel.name.toLowerCase()}.`);
     render();
   }
   // Silent: the vessel's label loses its water.
   function doPourOutWater(vessel){
-    if(dishIn(vessel)) return;
-    delete vessel.water;
-    delete vessel.boilMinutes;
+    if(dishIn(vessel) || !vessel.fluid) return;
+    takeFluid(vessel, vessel.fluid.ml);
     render();
   }
   // A dish never leaves its vessel, so the pot is emptied of it. The line's
@@ -6594,7 +6598,7 @@ x_sn_9 m_sn_sn_sn sn p
       actions.push({ label:"Pour it out", onClick:()=> doPourOutDish(v) });
       return actions;
     }
-    if(v.water) actions.push({ label:"Pour out the water", onClick:()=> doPourOutWater(v) });
+    if(v.fluid) actions.push({ label:"Pour out the water", onClick:()=> doPourOutWater(v) });
     (v.contents || []).forEach(row=>{
       actions.push({ label:`Take out the ${row.name.toLowerCase()}`, onClick:()=> doTakeOutOfVessel(v, row) });
     });
@@ -9039,10 +9043,12 @@ x_sn_9 m_sn_sn_sn sn p
   }
   function cookMinutesOf(it){ return registryEntryOf(it).cooks.minutes; }
   function cookRemaining(it){ return Math.max(0, cookMinutesOf(it) - (it.cookMinutes || 0)); }
-  // VESSELS AND DISHES. A vessel (registry `vessel`: kind, capacityKg,
-  // waterKg) holds ingredients in its `contents` — or, once a dish has
-  // formed, that one dish — and, when waterKg is above 0, water: `water:
-  // { kind }` while full, absent when not. A vessel has no fill level.
+  // VESSELS AND DISHES. A vessel (registry `vessel`: kind, capacityKg)
+  // holds ingredients in its `contents` — or, once a dish has formed, that
+  // one dish — and, when it is a holder too (`holdsFluid`), water, from a
+  // millilitre to full, as any holder does (FLUIDS). A dish that needs water
+  // needs at least dishWaterMinMl() of it, clean, and takes up all the water
+  // there is.
   function vesselDefOf(it){ const def = registryEntryOf(it); return def && def.vessel || null; }
   function ingredientOf(it){ const def = registryEntryOf(it); return def && def.ingredient || null; }
   function isDish(it){ const def = registryEntryOf(it); return !!(def && def.dish); }
@@ -9064,28 +9070,32 @@ x_sn_9 m_sn_sn_sn sn p
     if(!ing) return false;
     return set.ids ? set.ids.includes(it.itemId) : set.roles.includes(ing.role);
   }
-  // Where a vessel stands against a template: whether the template is for
+  // The water a dish that needs water needs in vessel `v`, in mL.
+  function dishWaterMinMl(v){ return Math.ceil(DISH_WATER_MIN_SHARE * capacityMlOf(v)); }
+  // Where vessel `v` stands against a template: whether the template is for
   // this kind of vessel, whether something in it rules the dish out, how
   // many counting units it has of how many it needs, and whether its water
-  // is right. `ready` is the three together: heat it and this dish forms,
-  // unless an earlier template forms first. Tainted water is not ready — it
-  // must boil first — but `waterBoils` says it will be.
-  function templateStatus(t, kind, rows, water){
-    const units = contentUnits(rows);
+  // is right: for a template with water, at least dishWaterMinMl() of it,
+  // clean; for one without, none. `ready` is the three together: heat it and
+  // this dish forms, unless an earlier template forms first. Enough tainted
+  // water is not ready — it must boil first — but `waterBoils` says it will
+  // be.
+  function templateStatus(t, v){
+    const units = contentUnits(v.contents || []);
     const target = t.exactly != null ? t.exactly : t.min;
     const blocked = units.some(u=> !inIngredientSet(t.allowed, u))
       || (t.exactly != null && units.length > t.exactly);
     const have = units.filter(u=> inIngredientSet(t.counts || t.allowed, u)).length;
-    const waterOk = t.water ? water === "clean" : !water;
-    const applies = t.vessels.includes(kind);
+    const enough = !!v.fluid && v.fluid.ml >= dishWaterMinMl(v);
+    const waterOk = t.water ? enough && v.fluid.kind === "clean" : !v.fluid;
+    const applies = t.vessels.includes(vesselDefOf(v).kind);
     return { applies, blocked, have, target, need: Math.max(0, target - have), waterOk,
-      waterBoils: t.water && water === "tainted",
+      waterBoils: t.water && enough && v.fluid.kind === "tainted",
       ready: applies && !blocked && have >= target && waterOk };
   }
   // The template a vessel's contents and water make, the first in order.
   function matchingTemplate(v){
-    const kind = vesselDefOf(v).kind, rows = v.contents || [], water = waterKindOf(v);
-    return DISH_TEMPLATES.find(t=> templateStatus(t, kind, rows, water).ready) || null;
+    return DISH_TEMPLATES.find(t=> templateStatus(t, v).ready) || null;
   }
   // One unit's contribution to a dish, in restores: the ingredient's own
   // `restores` when it has them, else its Cooked restores for a cookable
@@ -9154,26 +9164,27 @@ x_sn_9 m_sn_sn_sn sn p
     return words.join(" and ") + " " + ITEM_REGISTRY[t.item].name.toLowerCase();
   }
   // A dish made from fresh units of `ids` for template `templateId`, in the
-  // named vessel's water, in `cookState`: the world's pots of stew. It gets
-  // its age like any world item, from stampMissingAges().
+  // named vessel full of water, in `cookState`: the world's pots of stew. It
+  // gets its age like any world item, from stampMissingAges().
   function dishFrom(templateId, vesselId, ids, cookState){
     const t = DISH_TEMPLATES.find(x=> x.id === templateId);
     const dish = buildDish(t, ids.map(id=> itemFromRegistry({ id, qty:1 })),
-      t.water ? ITEM_REGISTRY[vesselId].vessel.waterKg : 0);
+      t.water ? ITEM_REGISTRY[vesselId].holdsFluid.capacityMl / 1000 : 0);
     dish.cookState = cookState;
     if(cookState === "raw") dish.cookMinutes = 0;
     return dish;
   }
-  // Formation: the contents and the water become one raw dish, the vessel's
-  // only content, new and Fresh. From then on nothing can be taken out.
+  // Formation: the contents and all the water become one raw dish, the
+  // vessel's only content, new and Fresh. From then on nothing can be taken
+  // out.
   function formDish(v, t){
-    const dish = buildDish(t, v.contents || [], t.water ? vesselDefOf(v).waterKg : 0);
+    const dish = buildDish(t, v.contents || [], fluidWeightOf(v));
     dish.ages = [0];
     dish.agedAt = settledAt;
     dish.cookState = "raw";
     dish.cookMinutes = 0;
     v.contents = [dish];
-    delete v.water;
+    delete v.fluid;
     delete v.boilMinutes;
   }
   // `span` minutes of a vessel in a lit heat container, in order:
@@ -9192,10 +9203,10 @@ x_sn_9 m_sn_sn_sn sn p
       const ready = matchingTemplate(v);
       if(ready) formDish(v, ready);
     }
-    if(!dishIn(v) && waterKindOf(v) === "tainted"){
+    if(!dishIn(v) && fluidKindOf(v) === "tainted"){
       v.boilMinutes = (v.boilMinutes || 0) + span;
       if(v.boilMinutes >= BOIL_MINUTES - TICK_EPSILON){
-        v.water.kind = "clean";
+        v.fluid.kind = "clean";
         delete v.boilMinutes;
         const t = matchingTemplate(v);
         if(t){ formDish(v, t); return; }
@@ -9221,11 +9232,10 @@ x_sn_9 m_sn_sn_sn sn p
       if(!vesselDefOf(it)){ rawRows([it]); return; }
       const dish = dishIn(it);
       if(dish){ rawRows([dish]); return; }
-      if(waterKindOf(it) === "tainted") consider("water", Math.max(0, BOIL_MINUTES - (it.boilMinutes || 0)), true);
+      if(fluidKindOf(it) === "tainted") consider("water", Math.max(0, BOIL_MINUTES - (it.boilMinutes || 0)), true);
       const t = matchingTemplate(it);
       if(t){
-        const water = t.water ? vesselDefOf(it).waterKg : 0;
-        consider(buildDish(t, it.contents || [], water).name.toLowerCase(), cookMinutesOf({ itemId:t.item }));
+        consider(buildDish(t, it.contents || [], fluidWeightOf(it)).name.toLowerCase(), cookMinutesOf({ itemId:t.item }));
       } else rawRows(it.contents || []);
     }));
     return best;
@@ -9654,7 +9664,7 @@ x_sn_9 m_sn_sn_sn sn p
       dish.agedAt = minutesSinceCollapse();
       return Object.assign(itemFromRegistry({ id:"cooking_pot", qty:it.qty }), { contents:[dish] });
     },
-    bottled_water:       it=> Object.assign(itemFromRegistry({ id:"plastic_bottle", qty:it.qty }), { water:{ kind:"clean", fill:1 } })
+    bottled_water:       it=> Object.assign(itemFromRegistry({ id:"plastic_bottle", qty:it.qty }), { fluid:{ kind:"clean", ml:500 } })
   };
   // `qty` units of `id`, every one of them exactly Rotten.
   function rottenItem(id, qty){
@@ -10560,7 +10570,7 @@ x_sn_9 m_sn_sn_sn sn p
       const stove = roomStove(room);
       replayPlace(stove.items, { id:"fish", qty:1 });
       const pot = itemFromRegistry({ id:"cooking_pot", qty:1 });
-      pot.water = { kind:"tainted" };
+      pot.fluid = { kind:"tainted", ml:2000 };
       pot.contents = [asNewlyMade(itemFromRegistry({ id:"meat", qty:1 })), asNewlyMade(itemFromRegistry({ id:"vegetables", qty:1 }))];
       addToList(stove.items, pot);
       doLightStove();
@@ -11866,7 +11876,7 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // The parenthesised state labels shown after an item's name, in a fixed
   // order: Open, then cook state (a cookable item always shows Raw or
-  // Cooked), then freshness or Frozen, then water. `ctx` carries what a label
+  // Cooked), then freshness or Frozen, then fluid, then On. `ctx` carries what a label
   // needs from outside the item: `ctx.container`, the room container the row
   // is in, and `ctx.roomId`, its room, for Frozen. The row and the item pop-up show them; log lines keep
   // the plain name.
@@ -11882,13 +11892,14 @@ x_sn_9 m_sn_sn_sn sn p
     // A perishable always shows its freshness, or Frozen while it sits in a
     // freezer that is holding it.
     if(isPerishable(it)) labels.push(ctx && isFrozenIn(ctx.container, ctx.roomId) ? "Frozen" : FRESHNESS_LABELS[unitFreshness(it)]);
-    // Water shows its kind; its level is the row's meter. An empty bottle is
-    // the plain name.
-    const water = waterKindOf(it);
-    if(water) labels.push(water === "tainted" ? "Tainted" : "Water");
+    // A fluid shows its kind; its level is the row's meter. An empty bottle
+    // is the plain name.
+    const fluid = fluidKindOf(it);
+    if(fluid) labels.push(FLUID_LABELS[fluid] || fluid);
     if(it.on) labels.push(ON_LABEL);
     return labels;
   }
+  const FLUID_LABELS = { clean:"Water", tainted:"Tainted" };
   // A device switched on. The one label a group's header never shows, since
   // its rows may differ by it.
   const ON_LABEL = "On";
@@ -12135,7 +12146,7 @@ x_sn_9 m_sn_sn_sn sn p
           const holds = document.createElement("div");
           holds.textContent = held.length
             ? "Holds: " + held.map(r=>{ const d = itemDisplay(r, ctx); return d.name + d.state + " ×" + r.qty; }).join(", ")
-            : (it.water ? "Holds no food" : "Empty");
+            : (it.fluid ? "Holds no food" : "Empty");
           box.appendChild(holds);
         }
       }
@@ -12263,9 +12274,9 @@ x_sn_9 m_sn_sn_sn sn p
       : numberWord(t.min) + " or more " + ingredientWords(set, 2);
     return vessel + ", and " + what;
   }
-  // "holds 1 of 2 · needs one more meat or vegetable, and water", or
-  // "ready to cook".
-  function dishProgressText(t, st, water){
+  // "holds 1 of 2 · needs one more meat or vegetable, and at least 800 mL of
+  // water", or "ready to cook", for vessel `v`.
+  function dishProgressText(t, st, v){
     if(st.blocked) return "holds something that doesn't belong in it";
     if(st.ready) return "ready to cook";
     if(st.need === 0 && st.waterBoils) return "ready once the water boils";
@@ -12273,8 +12284,8 @@ x_sn_9 m_sn_sn_sn sn p
     if(st.need > 0) needs.push((t.counts || t.allowed).ids
       ? ingredientWords(t.counts || t.allowed, st.need)
       : numberWord(st.need) + " more " + ingredientWords(t.counts || t.allowed, st.need));
-    if(t.water && !water) needs.push("water");
-    if(!t.water && water) needs.push("the water poured out");
+    if(t.water && !(v.fluid && v.fluid.ml >= dishWaterMinMl(v))) needs.push(`at least ${groupedNumber(dishWaterMinMl(v))} mL of water`);
+    if(!t.water && v.fluid) needs.push("the water poured out");
     return `holds ${st.have} of ${st.target}` + (needs.length ? " · needs " + needs.join(", and ") : "")
       + (st.waterBoils ? " · the water will boil first" : "");
   }
@@ -12299,7 +12310,7 @@ x_sn_9 m_sn_sn_sn sn p
     DISH_TEMPLATES.forEach(t=>{
       const kind = vessel && vesselDefOf(vessel).kind;
       if(vessel && !t.vessels.includes(kind)) return;
-      const st = vessel && templateStatus(t, kind, vessel.contents || [], waterKindOf(vessel));
+      const st = vessel && templateStatus(t, vessel);
       if(!dishShown(t, !!(st && st.ready))) return;
       const row = document.createElement("div");
       row.className = "dish-row";
@@ -12307,7 +12318,7 @@ x_sn_9 m_sn_sn_sn sn p
       text.appendChild(document.createTextNode(ITEM_REGISTRY[t.item].name + " "));
       const note = document.createElement("span");
       note.className = "cost";
-      note.textContent = vessel ? `(${dishProgressText(t, st, waterKindOf(vessel))})` : `(needs ${dishNeedsText(t)})`;
+      note.textContent = vessel ? `(${dishProgressText(t, st, vessel)})` : `(needs ${dishNeedsText(t)})`;
       text.appendChild(note);
       row.appendChild(text);
       if(vessel && canAddMissing(t, vessel)){
