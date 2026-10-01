@@ -723,8 +723,8 @@ Argentine retail listings: **secondary** unless marked otherwise.
     ([Línea Blanca SRL](https://www.lineablancasrl.com.ar/productos/motor-lavarropas-drean-concept-mod-viejo/)).
   - Drean Concept 5.05 V1's energy label (IRAM 2141-3:2017, Res. ex SICyM
     319/99): class B, **0.62 kWh and 127 L for its standard cotton test
-    cycle, which lasts 324 min**; 5.0 kg; 500 rpm. From an image of the
-    label Tom supplied, 2026-10-01 (where it came from wasn't stated). Some
+    cycle, which lasts 324 min**; 5.0 kg; 500 rpm. **Secondary**: an image
+    of the label Tom found through an image search, 2026-10-01. Some
     of its fields look unfilled (noise "YZ"), so the 324 min is unconfirmed.
     It is the energy test's cycle, not an everyday wash. The manual's
     programme table gives cotton **about 128 min** and shorter programmes
@@ -796,6 +796,9 @@ Argentine retail listings: **secondary** unless marked otherwise.
   opens (manual for B120D/B223D/B228D, another model;
   [manualslib](https://www.manualslib.es/manual/7292/Bgh-Quick-Chef-Serie.html?page=15),
   read 2026-10-01).
+- **In a power cut** (Tom, 2026-10-01; unconfirmed elsewhere): **a dial
+  microwave's timer resumes** when the power returns; **a kettle doesn't
+  stay latched**, so it is off when the power returns.
 
 **Extension cords (for #244):**
 - **Cord cable is "tipo taller"** to IRAM NM 247-5 (it replaced IRAM 2158):
@@ -859,8 +862,7 @@ Argentine retail listings: **secondary** unless marked otherwise.
   from gas ones. A first-hand reading of a real plate settles the first and
   third.
 - **The appliances' cycles (#334):** a toaster's cycle time per browning
-  level; what a kettle's latch and a dial microwave's timer do in a power
-  cut; the temperature of an Argentine kettle's mate setting.
+  level; the temperature of an Argentine kettle's mate setting.
 - **Over-fusing (#365):** the strand diameter of IRAM NM 280 class-4 cable;
   how much higher a short wire between a *tapón*'s screws melts than
   Preece's free-air figure; whether old Lima houses are wired in 1.5 mm²;
