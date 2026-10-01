@@ -97,6 +97,11 @@
   .walk-list{ display:flex; flex-direction:column; gap:6px; }
   .pop-actions{ display:flex; flex-direction:column; align-items:stretch; gap:6px; }
   .pop-actions button.action{ text-align:left; }
+  /* An entry of the item pop-up's transfer submenu (renderPourMenu()): the
+     target and its two buttons on one line, wrapping at phone width, and
+     its meter under them. */
+  .pour-target{ font-size:12px; color:var(--ink); }
+  .pour-line{ display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:4px 8px; }
   /* The stove timer's add buttons, side by side in the device pop-up,
      sharing the row evenly so all three fit it at phone width. */
   .timer-steps{ display:flex; gap:6px; }
@@ -5632,8 +5637,9 @@ x_sn_9 m_sn_sn_sn sn p
   // fluid kind and freshness (a container's Frozen is every row's), and the
   // same contents, so a pot of stew never groups with an empty pot. Rows of
   // a group differ only by their level, raw cookMinutes, or `on`.
-  function groupKeyOf(it){
-    return JSON.stringify([it.itemId || null, it.name, !!it.sealed, cookStateOf(it), fluidKindOf(it), rowFreshness(it),
+  // `kind` stands for the fluid's kind where it is asked as it would be.
+  function groupKeyOf(it, kind = fluidKindOf(it)){
+    return JSON.stringify([it.itemId || null, it.name, !!it.sealed, cookStateOf(it), kind, rowFreshness(it),
       Array.isArray(it.contents) ? it.contents.map(c=> [groupKeyOf(c), c.qty]) : null]);
   }
   // A list's groups, each key's rows in list order, the groups in the order
@@ -6233,28 +6239,33 @@ x_sn_9 m_sn_sn_sn sn p
     if(moved) resolveBuilding(moved);
     render();
   }
-  // Vessels within reach of an item: every vessel in the lists crafting
-  // reaches (nearbyLists()), and every vessel in the room's heat container,
-  // once each. Each comes as { vessel, place }, the place being where it was
-  // found: "carried" for the inventory pools, else the Here tab's label —
-  // "Floor", or the container's name.
-  function nearbyVessels(){
+  // The item lists within reach of an item, once each: the lists crafting
+  // reaches (nearbyLists()), and the room's heat container. Each comes as
+  // { list, place }, the place being where it is: "carried" for the
+  // inventory pools, else the Here tab's label — "Floor", or the
+  // container's name.
+  function nearbyPlaces(){
     const room = world[state.currentRoom];
     const heat = getHeatContainer(room);
     const pools = invPools();
     const containers = room.containers.concat(room.carContainers || []);
     const placeOf = list=> pools.includes(list) ? "carried"
       : list === room.floor ? "Floor" : containers.find(c=> c.items === list).name;
+    // An empty list holds nothing to find; the pools' unworn slots each
+    // give a fresh one.
+    return nearbyLists().concat(heat ? [heat.items] : [])
+      .filter((list, i, all)=> list.length && all.indexOf(list) === i).map(list=> ({ list, place:placeOf(list) }));
+  }
+  // Vessels within reach of an item, each as { vessel, place }.
+  function nearbyVessels(){
     const out = [];
-    nearbyLists().concat(heat ? [heat.items] : []).forEach(list=> list.forEach(it=>{
-      if(vesselDefOf(it) && !out.some(o=> o.vessel === it)) out.push({ vessel:it, place:placeOf(list) });
-    }));
+    nearbyPlaces().forEach(({ list, place })=> list.forEach(it=>{ if(vesselDefOf(it)) out.push({ vessel:it, place }); }));
     return out;
   }
   // The vessel names one action's buttons show, over the nearbyVessels()
   // entries it is offered on. Vessels sharing a name and a place get one
   // button, on the fullest of them by contents' weight (a tie to the first),
-  // since nothing yet tells them apart (#47). A name still on two or more
+  // since an ingredient needs only one of them. A name still on two or more
   // buttons shows each one's place, so no two buttons read the same. Returns
   // a Map of the vessels given a button to the name their label shows.
   function vesselButtonNames(offered){
@@ -6351,27 +6362,67 @@ x_sn_9 m_sn_sn_sn sn p
     giveItem(row);
     render();
   }
-  // Whether a bottle's water can go into `vessel`: while the vessel has room
-  // and the two mix (mixKinds()).
-  function canPourInto(bottle, vessel){
-    if(!bottle.fluid || !holdsFluidAtAll(bottle) || !vesselDefOf(vessel) || vessel === bottle) return false;
-    return fluidSpaceMl(vessel) > 0 && mixKinds(fluidKindOf(bottle), fluidKindOf(vessel)) !== null;
+  // POURING. Any holder with fluid and no dish pours into any other within
+  // reach (nearbyPlaces()) that has room and whose fluid mixes with it
+  // (mixKinds()). Identical targets are one: the rows of one item in one
+  // place that would hold the same fluid after the pour (pourKeyOf()), an
+  // empty bottle and one of water alike, poured into the fullest unit among
+  // them that is not full, so bottles are topped up rather than water spread
+  // thin. The source unit is split off first, so the other units of its own
+  // row are targets like any other.
+  //   An entry: { place, key, unit, list }, `unit` the row it pours into
+  // now and `list` its list.
+  function pourKeyOf(row, kind){ return groupKeyOf(row, mixKinds(kind, fluidKindOf(row))); }
+  function pourTargets(srcList, src){
+    const kind = fluidKindOf(src);
+    const byKey = new Map();
+    nearbyPlaces().forEach(({ list, place })=> list.forEach(row=>{
+      if((row === src && row.qty === 1) || !(fluidSpaceMl(row) > 0) || mixKinds(kind, fluidKindOf(row)) === null) return;
+      const k = place + KEY_SEP + pourKeyOf(row, kind);
+      const best = byKey.get(k);
+      const ml = row.fluid ? row.fluid.ml : 0;
+      if(!best || ml > (best.unit.fluid ? best.unit.fluid.ml : 0)) byKey.set(k, { place, key:k, unit:row, list });
+    }));
+    return Array.from(byKey.values());
   }
-  // Pours as much of a bottle's water into a vessel as fits. The line's
-  // wording is retunable.
-  function doPourIntoVessel(list, index, vessel){
-    const bottle = getItemAt(list, index);
-    if(!bottle || !canPourInto(bottle, vessel)) return;
-    const kind = bottle.fluid.kind, ml = Math.min(bottle.fluid.ml, fluidSpaceMl(vessel));
-    addFluid(vessel, kind, ml);
-    changeOneUnit(list, bottle, u=> takeFluid(u, ml));
-    log(`You pour the water into the ${vessel.name.toLowerCase()}.`);
+  // Moves min(`ml`, what the source has, what the target has room for) from
+  // one unit of `src` into one unit of `dst`, each unit split off its row
+  // first (changeOneUnit()). The kind mixes, a vessel target's boil starts
+  // over, and a source keeps its boil. Returns the source unit after.
+  function pourFluid(srcList, src, dstList, dst, ml){
+    const n = Math.min(ml, src.fluid.ml, fluidSpaceMl(dst));
+    const kind = src.fluid.kind;
+    const after = changeOneUnit(srcList, src, u=> takeFluid(u, n));
+    changeOneUnit(dstList, dst, u=> addFluid(u, kind, n));
+    return after;
+  }
+  // Pour (`ml` null: as much as fits) or Pour by the measure from row
+  // `index` of the side's tab into the entry keyed `key`, found again now.
+  // The pop-up follows the source, its submenu open while it still holds
+  // fluid. Pouring tainted water into clean is allowed: the entry's label
+  // says so. The line's wording is retunable.
+  function doPour(sourceKind, index, key, ml){
+    const room = world[state.currentRoom];
+    const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
+    const it = getItemAt(src && src.items, index);
+    if(!it || !drinkable(it)) return;
+    const target = pourTargets(src.items, it).find(e=> e.key === key);
+    if(!target) return;
+    const name = target.unit.name.toLowerCase();
+    const after = pourFluid(src.items, it, target.list, target.unit, ml == null ? Infinity : ml);
+    log(`You pour the water into the ${name}.`);
+    detailItem = { uid: ensureUid(after), side: sourceKind, pour: drinkable(after) };
     render();
   }
-  // Silent: the vessel's label loses its water.
-  function doPourOutWater(vessel){
-    if(dishIn(vessel) || !vessel.fluid) return;
-    takeFluid(vessel, vessel.fluid.ml);
+  // Pour out the water, on any holder with fluid and no dish: one unit is
+  // emptied, and the water is gone. Silent: its label and meter go.
+  function doPourOut(sourceKind, index){
+    const room = world[state.currentRoom];
+    const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
+    const it = getItemAt(src && src.items, index);
+    if(!it || !drinkable(it)) return;
+    const after = changeOneUnit(src.items, it, u=> takeFluid(u, u.fluid.ml));
+    detailItem = { uid: ensureUid(after), side: sourceKind };
     render();
   }
   // A dish never leaves its vessel, so the pot is emptied of it. The line's
@@ -6538,17 +6589,20 @@ x_sn_9 m_sn_sn_sn sn p
     // undiscoverable if filtered.
     consumeActions(list, index, side).forEach(a=> actions.push(a));
     drinkActions(list, index, side).forEach(a=> actions.push(a));
+    // A holder with fluid and no dish: Pour…, which opens the transfer
+    // submenu in the pop-up (renderPourMenu()), and Pour out the water.
+    if(drinkable(it)){
+      actions.push({ label:"Pour…", onClick:()=>{ detailItem = { uid: ensureUid(it), side, pour:true }; render(); } });
+      actions.push({ label:"Pour out the water", onClick:()=> doPourOut(side, index) });
+    }
     vesselActions(it).forEach(a=> actions.push(a));
-    // An ingredient offers every vessel within reach that can take it, and a
-    // bottle with water every one it can pour into, labelled per
-    // vesselButtonNames().
+    // An ingredient offers every vessel within reach that can take it,
+    // labelled per vesselButtonNames().
     if(!vesselDefOf(it)){
       const near = nearbyVessels();
       const add = vesselButtonNames(near.filter(n=> canAddToVessel(list, it, n.vessel)));
-      const pour = vesselButtonNames(near.filter(n=> canPourInto(it, n.vessel)));
       near.forEach(({ vessel:v })=>{
         if(add.has(v)) actions.push({ label:`Add to the ${add.get(v)}`, onClick:()=> doAddToVessel(list, index, v) });
-        if(pour.has(v)) actions.push({ label:`Pour into the ${pour.get(v)}`, onClick:()=> doPourIntoVessel(list, index, v) });
       });
     }
     if(it.sealed && (!it.opensWith || hasTool(it.opensWith)))
@@ -6647,9 +6701,9 @@ x_sn_9 m_sn_sn_sn sn p
     render();
   }
   // A vessel's own actions. Holding a dish: eat it from the pot, by the
-  // whole and the part, or pour it out. Otherwise: pour out its water, take
-  // out any ingredient, or open the Crafting panel's Dishes on it. Fill at
-  // the sink is getItemActions()'s, shared with bottles.
+  // whole and the part, or pour it out. Otherwise: take out any ingredient,
+  // or open the Crafting panel's Dishes on it. Drinking, pouring and Fill at
+  // the sink are getItemActions()'s, shared with every holder.
   function vesselActions(v){
     if(!vesselDefOf(v)) return [];
     const actions = [];
@@ -6664,7 +6718,6 @@ x_sn_9 m_sn_sn_sn sn p
       actions.push({ label:"Pour it out", onClick:()=> doPourOutDish(v) });
       return actions;
     }
-    if(v.fluid) actions.push({ label:"Pour out the water", onClick:()=> doPourOutWater(v) });
     (v.contents || []).forEach(row=>{
       actions.push({ label:`Take out the ${row.name.toLowerCase()}`, onClick:()=> doTakeOutOfVessel(v, row) });
     });
@@ -10687,7 +10740,7 @@ x_sn_9 m_sn_sn_sn sn p
       doFillAtSink("inv", items.indexOf(bottle));
       for(let n = 0; n < REPLAY_POT_FILLS; n++){
         doFillAtSink("inv", items.indexOf(pot));
-        doPourOutWater(pot);
+        doPourOut("inv", items.indexOf(pot));
       }
       replayMove("home_living");
       state.vitals.energy = REPLAY_SLEEP_ENERGY;
@@ -12219,6 +12272,11 @@ x_sn_9 m_sn_sn_sn sn p
       itemPop.appendChild(box);
       const actions = document.createElement("div");
       actions.className = "pop-actions";
+      if(detailItem.pour && !rows && drinkable(it)){
+        renderPourMenu(actions, found.list, found.index, detailItem.side);
+        itemPop.appendChild(actions);
+        return;
+      }
       (rows ? getGroupActions(list, rows, detailItem.side) : getItemActions(found.list, found.index, detailItem.side)).forEach(a=>{
         // A note stands where an action would be (hereNote()'s style).
         if(a.note){ actions.appendChild(hereNote(a.label)); return; }
@@ -12240,6 +12298,41 @@ x_sn_9 m_sn_sn_sn sn p
     if(layer) layer.back = back;
     else openLayer(itemPop, showItemPop, hideItemPop, back);
     positionItemPop();
+  }
+  // The transfer submenu, in the item pop-up in place of its actions, for
+  // row `index` of `list`: a heading, Back to the actions, then one entry per
+  // target (pourTargets()): its name and labels, its place where two entries
+  // would otherwise read the same, its meter, and Pour (as much as fits) and
+  // Pour by the measure. Functional UI text, retunable.
+  function renderPourMenu(box, list, index, side){
+    const head = document.createElement("div");
+    head.className = "detailBox";
+    head.style.marginBottom = "0";
+    head.textContent = "Pour the water into…";
+    box.appendChild(head);
+    box.appendChild(actionButton("Back", ()=>{ detailItem = { uid: detailItem.uid, side: detailItem.side }; render(); }));
+    const targets = pourTargets(list, list[index]);
+    if(!targets.length){ box.appendChild(hereNote("Nothing here has room for it.")); return; }
+    targets.forEach(t=>{
+      const shown = itemDisplay(t.unit, null);
+      const clash = targets.some(o=> o !== t && itemDisplay(o.unit, null).name === shown.name && itemDisplay(o.unit, null).state === shown.state);
+      const entry = document.createElement("div");
+      entry.className = "pour-target";
+      const line = document.createElement("div");
+      line.className = "pour-line";
+      const text = document.createElement("span");
+      text.textContent = shown.name + shown.state + (clash ? ` (${t.place})` : "");
+      line.appendChild(text);
+      const btns = document.createElement("span");
+      btns.className = "btnrow";
+      btns.appendChild(actionButton("Pour", ()=> doPour(side, index, t.key, null)));
+      btns.appendChild(actionButton(`Pour ${groupedNumber(MEASURE_ML)} mL`, ()=> doPour(side, index, t.key, MEASURE_ML)));
+      line.appendChild(btns);
+      entry.appendChild(line);
+      const lvl = unitLevel(t.unit);
+      entry.appendChild(levelMeter(lvl ? lvl.level : 0, "pop-meter"));
+      box.appendChild(entry);
+    });
   }
   // The name control the item pop-up hangs from: its group's header for a
   // group, else its row's, else, for a row drawn inside a closed group, that
