@@ -9,6 +9,7 @@
     --bg:#111315; --panel:#1b1e22; --panel-2:#20242a; --line:#33383f;
     --ink:#e5e5e0; --ink-dim:#9a9fa6; --ink-faint:#888e97;
     --accent:#3b82f6; --accent-dim:#25508f; --warn:#d97b3f; --danger:#c76552; --good:#7a9463;
+    --divider:rgba(51,56,63,.6);
   }
   *{box-sizing:border-box;}
   body{ margin:0; min-height:100vh; background:var(--bg); color:var(--ink);
@@ -238,9 +239,29 @@
     margin-bottom:9px; font-size:12px; color:var(--ink-dim); }
   .tab-strip > span{ white-space:nowrap; }
   ul.itemlist{ list-style:none; margin:0; padding:0; }
-  ul.itemlist li{ display:flex; justify-content:space-between; align-items:center; gap:6px;
-    padding:6px 0; border-bottom:1px solid rgba(51,56,63,.6); font-size:12px; }
+  ul.itemlist li{ position:relative; display:flex; justify-content:space-between; align-items:center; gap:6px;
+    padding:6px 0; border-bottom:1px solid var(--divider); font-size:12px; }
   ul.itemlist li:last-child{ border-bottom:none; }
+  /* A unit's level (unitLevel()): a bar filled to what is left. Along a row's
+     bottom edge it takes the divider's place (.row-meter), its track the
+     divider's colour, so every meter in a list is the same length and levels
+     compare down it; the item pop-up draws a larger one (.pop-meter). At or
+     below LEVEL_WARN_BELOW the fill takes the warning colour (.low). The 2px
+     and 4px heights and the ink fill are judgment calls, retunable. */
+  .meter{ background:var(--divider); }
+  .meter > div{ height:100%; background:var(--ink-dim); }
+  .meter.low > div{ background:var(--warn); }
+  ul.itemlist li.metered{ border-bottom-color:transparent; }
+  .row-meter{ position:absolute; left:0; right:0; bottom:-1px; height:2px; }
+  .pop-meter{ height:4px; margin:4px 0 2px; }
+  /* An item group (renderItemList()): a header row with its disclosure
+     button, then, while open, its rows indented under the header's name.
+     The indent is the disclosure button's width and the gap after it, so a
+     row's name lines up with the header's; its meter starts there too. */
+  .disclosure{ background:none; border:none; font:inherit; color:var(--ink-dim); cursor:pointer;
+    width:12px; padding:6px 0; margin:-6px 6px -6px 0; text-align:left; }
+  ul.itemlist li.group-row{ padding-left:18px; }
+  ul.itemlist li.group-row .row-meter{ left:18px; }
   ul.itemlist .meta{ color:var(--ink-dim); flex:1; }
   ul.itemlist .cat{ color:var(--ink-faint); font-size:12px; }
   ul.itemlist .state{ color:var(--ink-dim); }
@@ -5130,7 +5151,14 @@ x_sn_9 m_sn_sn_sn sn p
   // line log() is given, in order; null otherwise.
   const replayMode = new URLSearchParams(location.search).has("replay");
   let replayLog = null;
-  let detailItem = null; // UI-only: { uid, side } — resolved fresh via findItemByUid(), safe against list mutation
+  // UI-only: { uid, side }, an item's pop-up, resolved fresh via
+  // findItemByUid(), safe against list mutation; or { group, side }, a
+  // group's (groupKeyOf()), resolved fresh against the side's current tab.
+  let detailItem = null;
+  // The item groups shown open, each by its side, tab and group key
+  // (groupOpenKey()). UI-only and never saved, like detailItem, and cleared
+  // where it is on load, restart and a new game.
+  const openGroups = new Set();
   // What the device pop-up is open on, or null when it is closed:
   // { kind:"container", id }, a room fixture tagged `device`, or
   // { kind:"panel" | "board", id }, a panel or board by its POWER_NET node
@@ -5562,6 +5590,80 @@ x_sn_9 m_sn_sn_sn sn p
     if(!target._uid && row._uid) target._uid = row._uid;
     list.splice(list.indexOf(row), 1);
   }
+  // LEVELS AND GROUPS. What is left of one unit, as a share of full
+  // (unitLevel()), and the rows of a list that are one thing told apart only
+  // by what each has left (groupKeyOf()). RENDERING draws the first as a
+  // meter along a row and the second as a group under one header; a group's
+  // moves take its units least left first (rowsLeastLeftFirst()).
+  //   A unit's level is { level, figure }: `level` in [0,1], and `figure`
+  // the exact amount as the item pop-up says it. null for anything whose
+  // level is not shown, a device on batteries included: a device shows its
+  // level only where the device itself does, and neither the flashlight nor
+  // the radio does.
+  const PORTION_WORDS = { 0.75:"¾", 0.5:"½", 0.25:"¼" };
+  function unitLevel(it){
+    const def = registryEntryOf(it);
+    if(def && def.holdsWater){
+      if(!it.water) return null;
+      const ml = Math.round(def.holdsWater.kg * 1000);
+      return { level: it.water.fill, figure: `${Math.round(it.water.fill * ml)} of ${ml} mL` };
+    }
+    if(vesselDefOf(it)){
+      if(!it.water || dishIn(it)) return null;
+      return { level:1, figure: it.water.kind === "tainted" ? "Full of tainted water" : "Full of water" };
+    }
+    if(it.durability && it.durability.mode === "uses")
+      return { level: it.durability.current / it.durability.max, figure: durabilityText(it) };
+    const p = portionOf(it);
+    return p < 1 ? { level:p, figure: `${PORTION_WORDS[p] || Math.round(p * 100) + "%"} left` } : null;
+  }
+  // Where a unit sorts, least left first: by its level; an empty holder as
+  // empty, and anything else with no level as full.
+  function orderLevel(it){
+    const l = unitLevel(it);
+    if(l) return l.level;
+    return holdsWaterAtAll(it) ? 0 : 1;
+  }
+  // What makes rows one group: the same item, sealed or not, cook state,
+  // water kind and freshness (a container's Frozen is every row's), and the
+  // same contents, so a pot of stew never groups with an empty pot. Rows of
+  // a group differ only by their level, raw cookMinutes, or `on`.
+  function groupKeyOf(it){
+    return JSON.stringify([it.itemId || null, it.name, !!it.sealed, cookStateOf(it), waterKindOf(it), rowFreshness(it),
+      Array.isArray(it.contents) ? it.contents.map(c=> [groupKeyOf(c), c.qty]) : null]);
+  }
+  // A list's groups, each key's rows in list order, the groups in the order
+  // their first rows come.
+  function groupsOf(list){
+    const out = new Map();
+    list.forEach(it=>{
+      const k = groupKeyOf(it);
+      if(!out.has(k)) out.set(k, []);
+      out.get(k).push(it);
+    });
+    return out;
+  }
+  function rowsLeastLeftFirst(rows){
+    return rows.map((r, i)=> ({ r, i, l: orderLevel(r) })).sort((a, b)=> a.l - b.l || a.i - b.i).map(x=> x.r);
+  }
+  function unitCount(rows){ return rows.reduce((s, r)=> s + r.qty, 0); }
+  // Whether a group moves by the unit as a row does (All, Half, 1): every
+  // row one a row could split, or a single unit.
+  function groupSplittable(rows){ return rows.every(r=> r.qty === 1 || (STACKABLE.has(r.category) && !r.durability)); }
+  // The units a group move of `qty` takes, least left first across its rows:
+  // [{ row, n }].
+  function groupPicks(rows, qty){
+    const picks = [];
+    let left = qty;
+    rowsLeastLeftFirst(rows).forEach(row=>{
+      if(left <= 0) return;
+      const n = Math.min(row.qty, left);
+      picks.push({ row, n });
+      left -= n;
+    });
+    return picks;
+  }
+  function picksWeight(picks){ return picks.reduce((s, p)=> s + p.n * itemUnitWeight(p.row), 0); }
   function invPools(){
     return [state.inventory.items].concat(
       CONTAINER_SLOTS.map(slot => state[slot] ? state[slot].items : []));
@@ -5683,16 +5785,23 @@ x_sn_9 m_sn_sn_sn sn p
   // loose inventory the hidden caps. Load is what the item adds at the
   // destination's factor.
   function addToDestination(item){
-    const dst = invSlot(invTab);
-    if(!dst) return { ok:false, reason:"no-destination" };
-    if(invTab === "keychain" && !keychainAllows(item)) return { ok:false, reason:"keychain" };
-    const weight = itemWeight(item);
-    if(dst.capacityKg && totalWeight(dst.items) + weight > dst.capacityKg) return { ok:false, reason:"capacity" };
-    if(invTab === "inventory" && (totalWeight(dst.items) + weight > LOOSE_INVENTORY_MAX_KG
-       || dst.items.length >= LOOSE_INVENTORY_MAX_ENTRIES)) return { ok:false, reason:"capacity" };
-    if(playerLoad() + weight * carryFactorOf(dst) > CARRY_HARD_LIMIT_KG) return { ok:false, reason:"load" };
-    addToList(dst.items, item);
+    const reason = destinationRefusal(item, itemWeight(item), 1);
+    if(reason) return { ok:false, reason };
+    addToList(invSlot(invTab).items, item);
     return { ok:true };
+  }
+  // Why the inventory tab can't take `weight` kg of `item`'s kind in
+  // `entries` new rows at most, or null when it can: addToDestination()'s
+  // checks, which a group move (doTakeGroup()) asks once for all it moves.
+  function destinationRefusal(item, weight, entries){
+    const dst = invSlot(invTab);
+    if(!dst) return "no-destination";
+    if(invTab === "keychain" && !keychainAllows(item)) return "keychain";
+    if(dst.capacityKg && totalWeight(dst.items) + weight > dst.capacityKg) return "capacity";
+    if(invTab === "inventory" && (totalWeight(dst.items) + weight > LOOSE_INVENTORY_MAX_KG
+       || dst.items.length + entries > LOOSE_INVENTORY_MAX_ENTRIES)) return "capacity";
+    if(playerLoad() + weight * carryFactorOf(dst) > CARRY_HARD_LIMIT_KG) return "load";
+    return null;
   }
   // Every refusal ends on the floor. Only the keychain's has its own line;
   // room and load alike take the floor lines below.
@@ -5800,15 +5909,46 @@ x_sn_9 m_sn_sn_sn sn p
     const moveQty = normalizeQty(qty, it.qty);
     if(moveQty == null) return;
     const result = addToDestination(unitsOf(it, moveQty));
-    if(!result.ok){
-      if(result.reason === "capacity") log("That won't fit — not enough room there.", "warn");
-      else if(result.reason === "load") log("You can't carry any more.", "warn");
-      return; // no-destination and keychain-restricted stay silent, matching the disabled/hidden button state
-    }
+    if(!result.ok){ logTakeRefusal(result.reason); return; }
     dropUnits(src.items, index, moveQty);
     // No log line: the item visibly moves between the Here and Inventory
     // panels, so the line only repeated what the screen already showed.
     // The capacity warning above still speaks.
+    render();
+  }
+  // no-destination and keychain-restricted stay silent, matching the
+  // disabled/hidden button state.
+  function logTakeRefusal(reason){
+    if(reason === "capacity") log("That won't fit — not enough room there.", "warn");
+    else if(reason === "load") log("You can't carry any more.", "warn");
+  }
+  // A group's Take and Store: `qty` of its units (all when null), least left
+  // first across its rows (groupPicks()). All or nothing: when the whole
+  // amount won't fit, nothing moves and the row's warning speaks.
+  function doTakeGroup(rows, qty){
+    const src = worldSlot(world[state.currentRoom], worldTab);
+    if(!src || !rows.length || rows.some(r=> !src.items.includes(r))) return;
+    const moveQty = normalizeQty(qty, unitCount(rows));
+    if(moveQty == null) return;
+    const picks = groupPicks(rows, moveQty);
+    const reason = destinationRefusal(rows[0], picksWeight(picks), picks.length);
+    if(reason){ logTakeRefusal(reason); return; }
+    const dst = invSlot(invTab);
+    picks.forEach(p=> addToList(dst.items, dropUnits(src.items, src.items.indexOf(p.row), p.n)));
+    render();
+  }
+  function doStoreGroup(rows, qty){
+    const dst = worldSlot(world[state.currentRoom], worldTab);
+    const src = invSlot(invTab);
+    if(!dst || !src || !rows.length || rows.some(r=> !src.items.includes(r))) return;
+    const moveQty = normalizeQty(qty, unitCount(rows));
+    if(moveQty == null) return;
+    const picks = groupPicks(rows, moveQty);
+    if(dst.capacityKg && totalWeight(dst.items) + picksWeight(picks) > dst.capacityKg){
+      log("That won't fit there.", "warn");
+      return;
+    }
+    picks.forEach(p=> addToList(dst.items, dropUnits(src.items, src.items.indexOf(p.row), p.n)));
     render();
   }
   function doStore(index, qty){
@@ -6338,14 +6478,7 @@ x_sn_9 m_sn_sn_sn sn p
     // the keychain-blocked Take above and the Crafting panel's recipe list
     // (renderCraftingPanel()), which is a catalogue and would become
     // undiscoverable if filtered.
-    if(consumeProfile(it)){
-      const verb = it.verb || "Use";
-      const left = consumeProfile(eatTarget(list, it)).left;
-      actions.push({ label: verb, onClick:()=>doConsume(side, index) });
-      EAT_PARTS.forEach(part=>{
-        if(part.amount < left) actions.push({ label: verb + " " + part.label, onClick:()=>doConsume(side, index, part.amount) });
-      });
-    }
+    consumeActions(list, index, side).forEach(a=> actions.push(a));
     vesselActions(it).forEach(a=> actions.push(a));
     // An ingredient offers every vessel within reach that can take it, and a
     // bottle with water every one it can pour into, labelled per
@@ -6380,6 +6513,44 @@ x_sn_9 m_sn_sn_sn sn p
     // controls here.
     batteryActions(it).forEach(a=> actions.push(a));
     if(disassemblyRecipe(it)) actions.push({ label:"Disassemble", onClick:()=> doDisassemble(list, index) });
+    return actions;
+  }
+  // Eat or Drink, by the whole and the part, on row `index` of `list`: what
+  // it eats is the unit eatTarget() picks, so a group's pop-up offers the
+  // same through any of its rows.
+  function consumeActions(list, index, side){
+    const it = getItemAt(list, index);
+    if(!it || !consumeProfile(it)) return [];
+    const verb = it.verb || "Use";
+    const left = consumeProfile(eatTarget(list, it)).left;
+    const actions = [{ label: verb, onClick:()=>doConsume(side, index) }];
+    EAT_PARTS.forEach(part=>{
+      if(part.amount < left) actions.push({ label: verb + " " + part.label, onClick:()=>doConsume(side, index, part.amount) });
+    });
+    return actions;
+  }
+  // A group's pop-up actions (`rows`, a group of `list`): its stack's own,
+  // over the whole group. Take, Store or Place All, Half and 1 over its
+  // units, by a row's rules, least left first (doTakeGroup(),
+  // doStoreGroup()), the Take family disabled for the keychain as a row's
+  // is; then Eat or Drink as a row's. Nothing else: Open, Fill, Add, Pour,
+  // Equip, Disassemble and the battery controls stay on the rows.
+  function getGroupActions(list, rows, side){
+    const actions = [];
+    const total = unitCount(rows), parts = groupSplittable(rows);
+    if(side === "world"){
+      const keychainBlocked = invTab==="keychain" && !keychainAllows(rows[0]);
+      actions.push({ label:"Take All", disabled: keychainBlocked, onClick:()=>doTakeGroup(rows) });
+      if(parts && total>=3) actions.push({ label:"Take Half", disabled: keychainBlocked, onClick:()=>doTakeGroup(rows, Math.ceil(total/2)) });
+      if(parts && total>1) actions.push({ label:"Take 1", disabled: keychainBlocked, onClick:()=>doTakeGroup(rows, 1) });
+    } else if(worldSlot(world[state.currentRoom], worldTab)){
+      const verb = worldTab==="floor" ? "Place" : "Store";
+      actions.push({ label: verb + " All", onClick:()=>doStoreGroup(rows) });
+      if(parts && total>=3) actions.push({ label: verb + " Half", onClick:()=>doStoreGroup(rows, Math.ceil(total/2)) });
+      if(parts && total>1) actions.push({ label: verb + " 1", onClick:()=>doStoreGroup(rows, 1) });
+    }
+    const eater = rows.find(r=> consumeProfile(r));
+    if(eater) consumeActions(list, list.indexOf(eater), side).forEach(a=> actions.push(a));
     return actions;
   }
   // The recipe a `disassemble`-tagged item takes apart by: the RECIPES entry
@@ -6441,7 +6612,7 @@ x_sn_9 m_sn_sn_sn sn p
     if(it.hasBatteries !== false){
       actions.push({ label: it.on ? "Turn off" : "Turn on", onClick:()=>{
         switchDevice(it, !it.on);
-        // Silent: the status line already reads "— On" / "— Off".
+        // Silent: the status line already reads "On" / "Off".
         render();
       }});
       actions.push({ label:"Remove batteries", onClick:()=>{
@@ -6462,7 +6633,8 @@ x_sn_9 m_sn_sn_sn sn p
         it.durability.asOf = minutesSinceCollapse();
         scheduleBatteryDeath(it);
       }
-      // Silent: the status line's charge readout jumps to 100%.
+      // Silent: the batteries leave the inventory. Nothing shows a charge:
+      // a device dies without warning, by design.
       render();
     }});
     return actions;
@@ -9547,6 +9719,7 @@ x_sn_9 m_sn_sn_sn sn p
     backfillPowerState();
     refreshPower();
     detailItem = null;
+    openGroups.clear();
     deviceTarget = null;
     nextRulesChoice = null;
     gameOver = false;
@@ -10560,6 +10733,7 @@ x_sn_9 m_sn_sn_sn sn p
     stampMissingAges();
     rebuildSchedule();
     detailItem = null;
+    openGroups.clear();
     deviceTarget = null;
     invTab = "inventory";
     worldTab = "floor";
@@ -10697,7 +10871,12 @@ x_sn_9 m_sn_sn_sn sn p
     rebuild();
     if(!had || (isLayer && !layerOpen(root)) || (had.isConnected && document.activeElement === had)) return;
     const after = focusablesIn(root);
-    (after.find(x => x.textContent === label) || after[Math.min(index, after.length - 1)] || root).focus({ preventScroll:true });
+    // A control that names an item or a group (data-uid, data-group) is
+    // found again by that before its label: a group's disclosure button
+    // changes its label as it opens.
+    const same = (had.dataset.uid || had.dataset.group)
+      && after.find(x => x.className === had.className && x.dataset.uid === had.dataset.uid && x.dataset.group === had.dataset.group);
+    (same || after.find(x => x.textContent === label) || after[Math.min(index, after.length - 1)] || root).focus({ preventScroll:true });
   }
   document.addEventListener("keydown", e=>{
     if(e.key !== "Escape" || !layerStack.length) return;
@@ -11703,80 +11882,160 @@ x_sn_9 m_sn_sn_sn sn p
     // A perishable always shows its freshness, or Frozen while it sits in a
     // freezer that is holding it.
     if(isPerishable(it)) labels.push(ctx && isFrozenIn(ctx.container, ctx.roomId) ? "Frozen" : FRESHNESS_LABELS[unitFreshness(it)]);
-    // Water shows its kind, never its level: an empty bottle is the plain name.
+    // Water shows its kind; its level is the row's meter. An empty bottle is
+    // the plain name.
     const water = waterKindOf(it);
     if(water) labels.push(water === "tainted" ? "Tainted" : "Water");
+    if(it.on) labels.push(ON_LABEL);
     return labels;
   }
+  // A device switched on. The one label a group's header never shows, since
+  // its rows may differ by it.
+  const ON_LABEL = "On";
   // What an item shows as, in its list row and its pop-up alike: { name,
   // state, category, vessel }. `state` is everything shown after the name,
   // its labels, " (Open) (Fresh)". A vessel holding a dish shows as the dish
   // — the dish's name, labels and category — and `vessel` is then the
   // vessel, which only the pop-up names; otherwise it is null. The one
-  // statement of which of the two an item shows as.
-  function itemDisplay(it, ctx){
+  // statement of which of the two an item shows as. `shared`: a group's
+  // header, which shows only the labels its rows share, so never On.
+  function itemDisplay(it, ctx, shared){
     const dish = vesselDefOf(it) && dishIn(it);
     const shown = dish || it;
-    return { name: shown.name, state: itemStateLabels(shown, ctx).map(l=> ` (${l})`).join(""),
+    const labels = itemStateLabels(shown, ctx).filter(l=> !shared || l !== ON_LABEL);
+    return { name: shown.name, state: labels.map(l=> ` (${l})`).join(""),
       category: shown.category, vessel: dish ? it : null };
   }
+  // A meter at or below this share of full draws in the warning colour, so a
+  // bottle a quarter full already warns. A balance value, retunable.
+  const LEVEL_WARN_BELOW = 0.25;
+  // A level as a meter (see .meter): `cls` places it, a row's or the
+  // pop-up's.
+  function levelMeter(level, cls){
+    const m = document.createElement("div");
+    m.className = "meter " + cls + (level <= LEVEL_WARN_BELOW ? " low" : "");
+    m.setAttribute("role", "meter");
+    m.setAttribute("aria-valuemin", "0");
+    m.setAttribute("aria-valuemax", "100");
+    m.setAttribute("aria-valuenow", String(Math.round(level * 100)));
+    m.setAttribute("aria-label", "Level");
+    const fill = document.createElement("div");
+    fill.style.width = (Math.max(0, Math.min(1, level)) * 100) + "%";
+    m.appendChild(fill);
+    return m;
+  }
+  // Where a group's open state is kept in openGroups: by side, tab and key.
+  function groupOpenKey(side, key){ return JSON.stringify([side, side === "world" ? worldTab : invTab, key]); }
+  // An item list. Rows of one group (groupsOf()) gather under a header at
+  // the place of the group's first row; a group of one row draws as a plain
+  // row. The header holds a disclosure button, the name, the labels its
+  // rows share, the units and weight of all of them, and the panel's quick
+  // button over the whole group (each button's `group`); it has no meter.
+  // Open, its rows follow it, indented, least left first, each as a plain
+  // row draws. `buttons` are the panel's quick buttons: `onClick(i)` acts on
+  // row i of `list`, `group(rows)` on a group.
   function renderItemList(el, list, buttons, side, ctx){
-    el.innerHTML = "";
-    if(list.length === 0){ el.innerHTML = '<li class="empty">Nothing here.</li>'; return; }
-    list.forEach((it, i)=>{
-      const li = document.createElement("li");
-      const total = itemWeight(it).toFixed(2);
-      const meta = document.createElement("span");
-      meta.className = "meta";
-      const shown = itemDisplay(it, ctx);
-      const nameEl = document.createElement("button");
-      nameEl.className = "itemname";
-      nameEl.textContent = shown.name;
-      // Carried only by an item that already has a _uid: every item the
-      // pop-up has been opened on does, and minting one for every row drawn
-      // would put a _uid into every save for nothing. It is how the pop-up
-      // finds its anchor row, and focus finds its way back, after a rebuild.
-      if(it._uid) nameEl.dataset.uid = it._uid;
-      nameEl.addEventListener("click", ()=>{ detailItem = { uid: ensureUid(it), side }; render(); });
-      meta.appendChild(nameEl);
-      // The state text sits outside nameEl so the control's text stays
-      // exactly the name shown, which focus-by-label depends on.
-      if(shown.state){
-        const stateEl = document.createElement("span");
-        stateEl.className = "state";
-        stateEl.textContent = shown.state;
-        meta.appendChild(stateEl);
-      }
-      meta.appendChild(document.createTextNode(` ×${it.qty} — ${total} kg `));
-      const catSpan = document.createElement("span");
-      catSpan.className = "cat";
-      catSpan.textContent = `(${shown.category})`;
-      meta.appendChild(catSpan);
-      li.appendChild(meta);
-      const row = document.createElement("span");
-      row.className = "btnrow";
-      buttons.forEach(b=>{
-        if(b.test && !b.test(it)) return;
-        const isDisabled = b.disabled && b.disabled(it);
-        const btn = document.createElement("button");
-        btn.className = "mini" + (b.cls ? " " + b.cls : "") + (isDisabled ? " blocked" : "");
-        btn.textContent = typeof b.label === "function" ? b.label(it) : b.label;
-        if(isDisabled){ btn.disabled = true; }
-        else { btn.addEventListener("click", ()=> b.onClick(i)); }
-        row.appendChild(btn);
+    rebuildKeepingFocus(el, ()=>{
+      el.innerHTML = "";
+      if(list.length === 0){ el.innerHTML = '<li class="empty">Nothing here.</li>'; return; }
+      groupsOf(list).forEach((rows, key)=>{
+        if(rows.length === 1){ el.appendChild(itemRow(list, rows[0], buttons, side, ctx, false)); return; }
+        const open = openGroups.has(groupOpenKey(side, key));
+        el.appendChild(groupHeader(rows, key, open, buttons, side, ctx));
+        if(open) rowsLeastLeftFirst(rows).forEach(r=> el.appendChild(itemRow(list, r, buttons, side, ctx, true)));
       });
-      li.appendChild(row);
-      el.appendChild(li);
+    }, false);
+  }
+  // The text of a row or a header: the name control, the labels, units and
+  // weight, and the category.
+  function itemMeta(nameEl, shown, qty, kg){
+    const meta = document.createElement("span");
+    meta.className = "meta";
+    nameEl.className = "itemname";
+    nameEl.textContent = shown.name;
+    meta.appendChild(nameEl);
+    // The state text sits outside nameEl so the control's text stays
+    // exactly the name shown, which focus-by-label depends on.
+    if(shown.state){
+      const stateEl = document.createElement("span");
+      stateEl.className = "state";
+      stateEl.textContent = shown.state;
+      meta.appendChild(stateEl);
+    }
+    meta.appendChild(document.createTextNode(` ×${qty} — ${kg.toFixed(2)} kg `));
+    const catSpan = document.createElement("span");
+    catSpan.className = "cat";
+    catSpan.textContent = `(${shown.category})`;
+    meta.appendChild(catSpan);
+    return meta;
+  }
+  // The panel's quick buttons for a row (`subject` the row) or a header
+  // (`subject` its first row); `act` runs the chosen one.
+  function quickButtons(buttons, subject, act){
+    const row = document.createElement("span");
+    row.className = "btnrow";
+    buttons.forEach(b=>{
+      if(b.test && !b.test(subject)) return;
+      const isDisabled = b.disabled && b.disabled(subject);
+      const btn = document.createElement("button");
+      btn.className = "mini" + (b.cls ? " " + b.cls : "") + (isDisabled ? " blocked" : "");
+      btn.textContent = typeof b.label === "function" ? b.label(subject) : b.label;
+      if(isDisabled){ btn.disabled = true; }
+      else { btn.addEventListener("click", ()=> act(b)); }
+      row.appendChild(btn);
     });
+    return row;
+  }
+  function itemRow(list, it, buttons, side, ctx, inGroup){
+    const li = document.createElement("li");
+    if(inGroup) li.classList.add("group-row");
+    const nameEl = document.createElement("button");
+    // Carried only by an item that already has a _uid: every item the
+    // pop-up has been opened on does, and minting one for every row drawn
+    // would put a _uid into every save for nothing. It is how the pop-up
+    // finds its anchor row, and focus finds its way back, after a rebuild.
+    if(it._uid) nameEl.dataset.uid = it._uid;
+    nameEl.addEventListener("click", ()=>{ detailItem = { uid: ensureUid(it), side }; render(); });
+    li.appendChild(itemMeta(nameEl, itemDisplay(it, ctx), it.qty, itemWeight(it)));
+    li.appendChild(quickButtons(buttons, it, b=> b.onClick(list.indexOf(it))));
+    // The meter along the bottom edge, in the divider's place.
+    const lvl = unitLevel(it);
+    if(lvl){
+      li.classList.add("metered");
+      li.appendChild(levelMeter(lvl.level, "row-meter"));
+    }
+    return li;
+  }
+  function groupHeader(rows, key, open, buttons, side, ctx){
+    const li = document.createElement("li");
+    li.className = "group-head";
+    const toggle = document.createElement("button");
+    toggle.className = "disclosure";
+    toggle.dataset.group = key;
+    toggle.textContent = open ? "▾" : "▸";
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    toggle.setAttribute("aria-label", `${open ? "Hide" : "Show"} the ${rows.length} stacks`);
+    toggle.addEventListener("click", ()=>{
+      const k = groupOpenKey(side, key);
+      if(openGroups.has(k)) openGroups.delete(k); else openGroups.add(k);
+      render();
+    });
+    const nameEl = document.createElement("button");
+    nameEl.dataset.group = key;
+    nameEl.addEventListener("click", ()=>{ detailItem = { group: key, side }; render(); });
+    const meta = itemMeta(nameEl, itemDisplay(rows[0], ctx, true), unitCount(rows), totalWeight(rows));
+    meta.insertBefore(toggle, nameEl);
+    li.appendChild(meta);
+    li.appendChild(quickButtons(buttons, rows[0], b=> b.group(rows)));
+    return li;
   }
   // An item's durability as the player reads it: uses left, or, for anything
-  // on batteries, its charge and whether it is on. The one statement of that
-  // line, shown by the item pop-up.
+  // on batteries, whether it is on. No device shows its charge: one dies
+  // without warning, by design. The one statement of that line, shown by the
+  // item pop-up.
   function durabilityText(it){
     if(it.durability.mode === "uses") return `${Math.round(it.durability.current)}/${it.durability.max} uses`;
-    return it.hasBatteries === false
-      ? "No batteries installed"
-      : `${Math.round(100*batteryCharge(it)/it.durability.max)}% charge${it.on ? " — On" : " — Off"}`;
+    return it.hasBatteries === false ? "No batteries installed" : it.on ? "On" : "Off";
   }
   // The item detail view: a pop-up at the tapped item's row. It shows what
   // the view always has (name, category and weight, durability, sealed
@@ -11793,14 +12052,26 @@ x_sn_9 m_sn_sn_sn sn p
   // another tab would act on the wrong item. Both tabs are final by now,
   // since the two item panels render first. The other side's tab may
   // change freely; that only moves where Take/Place/Store go.
+  // A group's pop-up (detailItem.group) is resolved against its side's tab
+  // on every render: down to one row, it becomes that row's pop-up; gone, it
+  // closes.
   function renderItemPop(){
-    const found = detailItem && findItemByUid(detailItem.uid);
-    const slot = found && (detailItem.side === "world"
-      ? worldSlot(world[state.currentRoom], worldTab)
-      : invSlot(invTab));
-    if(detailItem && (!slot || slot.items !== found.list)) detailItem = null;
+    const sideSlot = ()=> detailItem.side === "world" ? worldSlot(world[state.currentRoom], worldTab) : invSlot(invTab);
+    let rows = null;
+    if(detailItem && detailItem.group){
+      const slot = sideSlot();
+      rows = (slot && groupsOf(slot.items).get(detailItem.group)) || [];
+      if(!rows.length) detailItem = null;
+      else if(rows.length === 1){ detailItem = { uid: ensureUid(rows[0]), side: detailItem.side }; rows = null; }
+    }
+    const found = detailItem && !rows && findItemByUid(detailItem.uid);
+    if(detailItem && !rows){
+      const slot = found && sideSlot();
+      if(!slot || slot.items !== found.list) detailItem = null;
+    }
     if(!detailItem){ closeLayer(itemPop); return; }
-    const it = found.item;
+    const list = rows ? sideSlot().items : found.list;
+    const it = rows ? rows[0] : found.item;
     rebuildKeepingFocus(itemPop, ()=>{
       itemPop.innerHTML = "";
       const box = document.createElement("div");
@@ -11809,55 +12080,69 @@ x_sn_9 m_sn_sn_sn sn p
       const nameB = document.createElement("b");
       const ctx = { container: detailItem.side === "world" ? worldTabContainer(world[state.currentRoom], worldTab) : null,
         roomId: state.currentRoom };
-      const shown = itemDisplay(it, ctx);
+      const shown = itemDisplay(it, ctx, !!rows);
       nameB.textContent = shown.name;
       nameLine.appendChild(nameB);
       if(shown.state) nameLine.appendChild(document.createTextNode(shown.state));
       box.appendChild(nameLine);
-      // The weights are the item's, the vessel and its dish together.
-      const statsLine = document.createElement("div");
-      statsLine.appendChild(document.createTextNode(`${shown.category} · ${itemWeight(it).toFixed(2)} kg `));
-      const eachSpan = document.createElement("span");
-      eachSpan.style.color = "var(--ink-faint)";
-      eachSpan.textContent = `(${itemUnitWeight(it).toFixed(2)} kg each)`;
-      statsLine.appendChild(eachSpan);
-      box.appendChild(statsLine);
-      // A dish shown in its vessel's place names the vessel here, and only
-      // here. Functional UI text, retunable.
-      if(shown.vessel){
-        const inLine = document.createElement("div");
-        inLine.textContent = `In a ${shown.vessel.name.toLowerCase()}`;
-        box.appendChild(inLine);
-      }
-      if(it.durability){
-        const durLine = document.createElement("div");
-        durLine.textContent = durabilityText(it);
-        box.appendChild(durLine);
-      }
-      if(it.sealed !== undefined){
-        const sealLine = document.createElement("div");
-        sealLine.textContent = it.sealed ? "Sealed" : "Opened";
-        box.appendChild(sealLine);
-      }
-      // A vessel lists what it holds, since its contents are not rows. A
-      // vessel holding a dish shows as the dish instead.
-      if(vesselDefOf(it) && !dishIn(it)){
-        const rows = it.contents || [];
-        const holds = document.createElement("div");
-        holds.textContent = rows.length
-          ? "Holds: " + rows.map(r=>{ const d = itemDisplay(r, ctx); return d.name + d.state + " ×" + r.qty; }).join(", ")
-          : (it.water ? "Holds no food" : "Empty");
-        box.appendChild(holds);
-        if(it.water){
-          const waterLine = document.createElement("div");
-          waterLine.textContent = it.water.kind === "tainted" ? "Full of tainted water" : "Full of water";
-          box.appendChild(waterLine);
+      if(rows){
+        // A group: its weight, and how many units in how many stacks.
+        // Functional UI text, retunable.
+        const statsLine = document.createElement("div");
+        statsLine.textContent = `${shown.category} · ${totalWeight(rows).toFixed(2)} kg`;
+        box.appendChild(statsLine);
+        const countLine = document.createElement("div");
+        countLine.textContent = `${unitCount(rows)} in ${rows.length} stacks`;
+        box.appendChild(countLine);
+      } else {
+        // The weights are the item's, the vessel and its dish together.
+        const statsLine = document.createElement("div");
+        statsLine.appendChild(document.createTextNode(`${shown.category} · ${itemWeight(it).toFixed(2)} kg `));
+        const eachSpan = document.createElement("span");
+        eachSpan.style.color = "var(--ink-faint)";
+        eachSpan.textContent = `(${itemUnitWeight(it).toFixed(2)} kg each)`;
+        statsLine.appendChild(eachSpan);
+        box.appendChild(statsLine);
+        // A dish shown in its vessel's place names the vessel here, and only
+        // here. Functional UI text, retunable.
+        if(shown.vessel){
+          const inLine = document.createElement("div");
+          inLine.textContent = `In a ${shown.vessel.name.toLowerCase()}`;
+          box.appendChild(inLine);
+        }
+        // What is left of the unit: a larger meter and the exact figure. A
+        // device's uses are its level, and stand for its durability line.
+        const lvl = unitLevel(it);
+        if(lvl){
+          box.appendChild(levelMeter(lvl.level, "pop-meter"));
+          const figLine = document.createElement("div");
+          figLine.textContent = lvl.figure;
+          box.appendChild(figLine);
+        } else if(it.durability){
+          const durLine = document.createElement("div");
+          durLine.textContent = durabilityText(it);
+          box.appendChild(durLine);
+        }
+        if(it.sealed !== undefined){
+          const sealLine = document.createElement("div");
+          sealLine.textContent = it.sealed ? "Sealed" : "Opened";
+          box.appendChild(sealLine);
+        }
+        // A vessel lists what it holds, since its contents are not rows. A
+        // vessel holding a dish shows as the dish instead.
+        if(vesselDefOf(it) && !dishIn(it)){
+          const held = it.contents || [];
+          const holds = document.createElement("div");
+          holds.textContent = held.length
+            ? "Holds: " + held.map(r=>{ const d = itemDisplay(r, ctx); return d.name + d.state + " ×" + r.qty; }).join(", ")
+            : (it.water ? "Holds no food" : "Empty");
+          box.appendChild(holds);
         }
       }
       itemPop.appendChild(box);
       const actions = document.createElement("div");
       actions.className = "pop-actions";
-      getItemActions(found.list, found.index, detailItem.side).forEach(a=>{
+      (rows ? getGroupActions(list, rows, detailItem.side) : getItemActions(found.list, found.index, detailItem.side)).forEach(a=>{
         // A note stands where an action would be (hereNote()'s style).
         if(a.note){ actions.appendChild(hereNote(a.label)); return; }
         const btn = document.createElement("button");
@@ -11869,13 +12154,28 @@ x_sn_9 m_sn_sn_sn sn p
       });
       itemPop.appendChild(actions);
     });
-    // Focus goes back to the item's name. doOpen() re-points detailItem at
-    // the unit it opened, and the pop-up follows, so the name it returns to
-    // follows too.
+    // Focus goes back to the item's name, or the group's. doOpen() re-points
+    // detailItem at the unit it opened, and the pop-up follows, so the name
+    // it returns to follows too.
+    const target = detailItem;
+    const back = { el:null, uid: detailItem.uid || null, find: ()=> popAnchorName(target) };
     const layer = layerStack.find(l => l.el === itemPop);
-    if(layer) layer.back.uid = detailItem.uid;
-    else openLayer(itemPop, showItemPop, hideItemPop, { el:null, uid: detailItem.uid });
+    if(layer) layer.back = back;
+    else openLayer(itemPop, showItemPop, hideItemPop, back);
     positionItemPop();
+  }
+  // The name control the item pop-up hangs from: its group's header for a
+  // group, else its row's, else, for a row drawn inside a closed group, that
+  // group's header. Looked up in its side's list.
+  function popAnchorName(target = detailItem){
+    if(!target) return null;
+    const listEl = document.getElementById(target.side === "world" ? "worldList" : "invList");
+    const header = (key)=> Array.from(listEl.querySelectorAll(".itemname")).find(b=> b.dataset.group === key) || null;
+    if(target.group) return header(target.group);
+    const name = itemNameButton(target.uid);
+    if(name) return name;
+    const found = findItemByUid(target.uid);
+    return found ? header(groupKeyOf(found.item)) : null;
   }
   // A pop-up hangs from its anchor: the item pop-up from its item's row,
   // the device pop-up from the strip under the Here tabs. It opens directly
@@ -11905,7 +12205,7 @@ x_sn_9 m_sn_sn_sn sn p
   // The item pop-up's row, found again by uid on every call.
   function positionItemPop(){
     if(!detailItem || !layerOpen(itemPop)) return;
-    const name = itemNameButton(detailItem.uid);
+    const name = popAnchorName();
     const row = name && name.closest("li");
     if(row) placePop(itemPop, row.getBoundingClientRect());
   }
@@ -12757,7 +13057,7 @@ x_sn_9 m_sn_sn_sn sn p
     const shown = electricalView ? currentInv.items.filter(it=> hasTag(it, "electrical")) : currentInv.items;
     renderItemList(invList, shown, [
       { label: worldTab === "floor" ? "Place" : "Store", onClick:(i)=> doStore(currentInv.items.indexOf(shown[i])),
-        test:()=> !electricalView && !!worldSlot(world[state.currentRoom], worldTab) }
+        group:(rows)=> doStoreGroup(rows), test:()=> !electricalView && !!worldSlot(world[state.currentRoom], worldTab) }
     ], "inv", { container:null });
     if(electricalView && !shown.length) invList.innerHTML = `<li class="empty">${ELECTRICAL_EMPTY_INV}</li>`;
   }
@@ -12842,7 +13142,8 @@ x_sn_9 m_sn_sn_sn sn p
       // Disabled rather than hidden, for the reason given at the detail
       // view's Take family in getItemActions(): the item can be taken, just
       // not into the keychain.
-      { label:"Take", disabled:(it)=> invTab === "keychain" && !keychainAllows(it), onClick:(i)=> doTake(i) }
+      { label:"Take", disabled:(it)=> invTab === "keychain" && !keychainAllows(it), onClick:(i)=> doTake(i),
+        group:(rows)=> doTakeGroup(rows) }
     ], "world", { container: worldTabContainer(room, worldTab), roomId: state.currentRoom });
   }
   // A circuit's Here tab key in the Electrical view, prefixed as a device's
