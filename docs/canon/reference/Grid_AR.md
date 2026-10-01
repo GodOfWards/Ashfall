@@ -320,6 +320,10 @@ Belgrano and Campana.
     ["Sistema de telecontrol de Transener y Transba"](http://www.luisosens.com.ar/archivos/Telecontrol_Transener.pdf),
     [silo.tips copy](https://silo.tips/download/sistema-de-telecontrol-de-transba-sa-tema-01-centros-de-control).
   - Pérez is the likelier answer for 2025, being the later source.
+  - Transener's *Memoria 2020* doesn't settle it: it says only that new
+    500 kV and 132 kV points were added to supervision and remote command
+    "from Transener's COT" (p. 24), without naming Transba's own centre.
+    Read on the PDF, 2026-10-01 (source above).
 - **Yacyretá** (20 Kaplan turbines, about 14 % of the SADI's energy in
   2019): a main control room with a **shift chief and operators** for
   dispatch and load control, plus an extra control room per five turbines;
@@ -385,6 +389,22 @@ Belgrano and Campana.
   - **Real-time operation "is not fully automated and requires continuous
     human intervention"**, in normal running and in faults alike (an IEEE
     Access paper, 2020).
+  - **The same paper names the study as missing.** It calls absenteeism the
+    main issue for grid operation and says it "should be addressed in future
+    research, especially looking at how many employees an electric utility
+    can lose before critical functions are not able to be completed". So
+    the gap is the field's, not this file's search. It also notes that in
+    the **1918 pandemic illness disrupted coal supply**, New York City's
+    **anthracite shipments falling about 17 %**, and that SARS (2003) and
+    H1N1 (2009) caused no grid failures. Secondary (Wormuth et al., *IEEE
+    Access* 8, 2020, read through a page summary), 2026-10-01:
+    [PMC8545261](https://pmc.ncbi.nlm.nih.gov/articles/PMC8545261/).
+  - **Los Alamos's integrated pandemic simulation** (Fair et al., "An
+    Integrated Simulation of Pandemic Influenza Evolution, Mitigation and
+    Infrastructure Response", IEEE HST 2007) couples a disease model to
+    infrastructure models but gives **no figures for electric power**. Read
+    on the PDF, 2026-10-01:
+    [OSTI 1237208](https://www.osti.gov/servlets/purl/1237208).
   - The US utilities' association (EEI) planned for **up to 40 % of the
     workforce out sick**.
   - A 2020 review of the grid under COVID-19 (Noorazar et al.) lists the
@@ -563,4 +583,5 @@ turns up.
   work on the electrical network.
 - The under-frequency relief thresholds and shares.
 - Any study (rather than an informal estimate) of how long an unattended
-  grid stays up.
+  grid stays up. The literature says none exists ("What the industry says
+  about losing its staff", above), so this is unlikely to be filled.
