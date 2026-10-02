@@ -1,10 +1,11 @@
-# Water holders — what a thermos, a bucket, a canteen and a water jug hold and weigh
+# Water holders — what a thermos, a bucket, a canteen, a water jug and a kettle hold and weigh
 
 Real-world facts, not canon until a decision adopts them (`../Ashfall_Canon.md`
 records what's decided). See `README.md` for the status labels. Gathered
 2026-10-01 for #393: #47 needs the mate thermos's capacity, and #394 needs
 the bucket's, the canteen's and the water jug's capacities and empty weights.
-Brands are named here as sources only; none appears in the game.
+Brands are named here as sources only; none appears in the game. The
+kettles were added 2026-10-02 for #425, which #385 needs.
 
 Most figures come from retail listings, not makers' spec sheets, so they are
 **Secondary** unless marked otherwise. Where several listings agree, the
@@ -114,6 +115,58 @@ Two kinds, and households meet both.
   (an Argentine maker). With handle and cap, about 0.1 kg (Unconfirmed: the
   page gives no weight for them).
 
+## Kettle (*pava*)
+
+Gathered 2026-10-02 for #425. That session's network policy blocked
+fetching the pages, so every kettle figure comes from **search summaries of
+the listed pages: Secondary.** A maker's page read directly would confirm
+them.
+
+### Electric kettle (*pava eléctrica*), 1.7 L, 220 V
+
+- **Empty, with its base: 0.8–1.0 kg.** Four makers' 1.7 L models:
+  - Atma PE1821 (AP2, NAP, RAP): 1 kg; one listing gives 1.04 kg gross for
+    the NAP, and an older PE1821AP 0.85 kg.
+    [Somos Rex](https://somosrex.com/pava-electrica-esential-blanca-atma-1-7-lts-pe1821ap2.html),
+    [Castillo](https://www.castillo.com.ar/pava-electrica-atma-pe1821ap2-1-7-litros-blanca/p),
+    [Electro Misiones](https://www.electromisiones.com.ar/pavas_electricas/18355-pava_electrica_atma_91pe1821ap2_17_litros_2200w_negro.html),
+    [Electrónica Megatone](https://www.electronicamegatonesrl.com/pava-electrica-atma-pe1821ap-145144/p).
+  - Philips HD9350/90, stainless steel: 973 g, on Philips's own product
+    pages for Chile and Spain. Argentine listings giving 1.48–1.5 kg look
+    like the boxed weight.
+    [Philips Chile](https://www.philips.cl/c-p/HD9350_90/daily-collection-hervidor),
+    [Philips Spain](https://philips.es/tienda/productos-para-el-hogar/hervidoras/daily-collection-hervidor/p/HD9350_90).
+  - Electrolux EKA20: 0.85 kg, 1.1 kg boxed.
+    [Pardo](https://www.pardo.com.ar/pava-electrica-electrolux-eka20-1-7-l/p).
+  - Daewoo WK5416: 0.9 kg (22 × 22.8 × 17.4 cm); WK5422B: 0.80 kg. A
+    DEK-1316 listing's 1.5 kg is out of line and probably boxed.
+    [Somos Rex](https://somosrex.com/pava-electrica-digital-daewoo-wk5416-1-7-litros-negra.html),
+    [Morph](https://morph.com.ar/productos/pava-electrica-black-mate-te-daewoo/).
+- **Whether the figure includes the base: Unconfirmed.** No listing says.
+  Each kettle is sold with its base, so the figure is read as kettle plus
+  base; a spec sheet that splits the two would confirm it.
+
+### Stovetop kettle
+
+- **Sizes go by number: N° 12 is about 1 L, N° 14 is 1.2–1.3 L, N° 16
+  about 1.5 L.** No common household size is 1.1 L.
+  [Megamix, N° 14 1.2 L](https://www.megamixdistribuidor.com.ar/pava-aluminio-clasica-eco-d-e-n-14-1-2lts-00530064),
+  [Gourmet Shop, 14 cm 1.3 L](https://www.gourmetshop.com.ar/productos/67102/),
+  [El Santo Mate, N° 16 1.5 L](https://www.elsantomate.com/MLA-1146464014-pava-grande-aluminio-15-litros-asa-madera-y-metal-n-16-_JM).
+- **Aluminium, household, N° 14 (1.2 L), empty: about 0.2 kg.** Almandoz
+  N° 14: 0.21 kg.
+  [Bazar Colucci](https://www.bazarcolucci.com.ar/productos/pava-n-14/),
+  [Milenium Import](https://mileniumimport.com.ar/producto/pava-aluminio-n-14-almandoz/).
+  Camping kettles agree: Naturehike 1.1 L, 196 g; Montagne 1.6 L, 250 g.
+  [Naturehike Argentina](https://www.naturehike.com.ar/articulo/7490-pava-de-campamento-de-aluminio-1-1-lt.html),
+  [Montagne](https://www.montagne.com.ar/producto/463-pava-de-aluminio-16-lts).
+- **Enamelled steel (*enlozada*), 1–1.5 L, empty: about 0.65–0.71 kg.**
+  1 L: 0.709 kg; 1.3 L: about 0.65 kg (the listing wasn't named in the
+  summary); 1.5 L reinforced: 0.71 kg. Other enamelled listings give 0.3 kg
+  or 1 kg, which look like shipping placeholders and aren't used.
+  [Centro Confort Deco](https://www.centroconfortdeco.com/productos/pava-enlozada-1-litro/),
+  [Baibao](https://baibao.com.ar/productos/pava-pavo-enlozada-reforzada-15-lts-diseno-pico-matero-mate-te/).
+
 ## For the game
 
 Figures a handoff can quote, rounded to the issue's precision:
@@ -128,3 +181,6 @@ Figures a handoff can quote, rounded to the issue's precision:
 | Dispenser jug, returnable | 20 L | 0.75–0.82 kg | Secondary |
 | Dispenser jug, returnable | 12 L | about 0.5–0.6 kg | Unconfirmed |
 | Pantry jug, single-use | 6 L | about 0.1 kg | Confirmed (body only) |
+| Electric kettle, with base | 1.7 L | 0.8–1.0 kg | Secondary |
+| Stovetop kettle, aluminium | 1.2 L (N° 14) | about 0.2 kg | Secondary |
+| Stovetop kettle, enamelled steel | 1–1.3 L | 0.6–0.7 kg | Secondary |
