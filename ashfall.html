@@ -627,6 +627,10 @@
   // How long rewiring a blown fuse takes, in minutes (doRewireFuse()). A
   // judgment call, retunable.
   const REWIRE_FUSE_MIN = 5;
+  // The share of generated casas whose kitchen has a 20 L dispenser jug
+  // standing on the floor, in percent, by a stable roll of the building's id
+  // (generatedHomes()). Tom's figure, retunable.
+  const DISPENSER_JUG_PCT = 30;
   // The spoilage rate in a powered fridge, as a multiple of the rate food
   // ages at room temperature (see spoilageRate()). A powered freezer stops
   // ageing; anything unpowered ages at 1 at once. Balance value, retunable.
@@ -1172,6 +1176,19 @@
     // A stainless mate thermos: 1,000 mL, the most common size sold for mate,
     // at 0.65 kg (secondary). It holds water; keeping it hot is not modelled.
     thermos: { name:"Thermos", category:"Misc", unitWeight:0.65, holdsFluid:{ capacityMl:1000 } },
+    // A household bucket: 10 L, the standard size, 0.4–0.5 kg with no lid
+    // (secondary). The weight is a judgment call, retunable.
+    bucket: { name:"Bucket", category:"Misc", unitWeight:0.45, holdsFluid:{ capacityMl:10000 } },
+    // A military-style plastic canteen with its cup and cloth cover: 1,000 mL,
+    // 0.35–0.4 kg (secondary). The weight is a judgment call, retunable.
+    canteen: { name:"Canteen", category:"Misc", unitWeight:0.4, holdsFluid:{ capacityMl:1000 } },
+    // A single-use jug of still water, the size a household keeps: 6.25 L
+    // (confirmed), about 0.1 kg empty with its handle and cap (unconfirmed).
+    // The weight is a judgment call, retunable.
+    water_jug: { name:"Water jug", category:"Food", unitWeight:0.1, holdsFluid:{ capacityMl:6250 } },
+    // A returnable 20 L jug, delivered full for a water dispenser: 0.75–0.82 kg
+    // empty (secondary). The weight is a judgment call, retunable.
+    dispenser_jug: { name:"Dispenser jug", category:"Food", unitWeight:0.8, holdsFluid:{ capacityMl:20000 } },
     house_key: { name:"House key", category:"Key", unitWeight:0.03, doorId:"home-front" },
     bandage: { name:"Bandage", category:"Medical", unitWeight:0.05 },
     campfire_kit: { name:"Campfire Kit", category:"Materials", unitWeight:2.4, tags:["disassemble"],
@@ -1424,6 +1441,12 @@
   //   So are the fuse wire's: the whole `old_board_spares` pool, and
   //   its `hardware_store` entry (0.25, 1–3; the quantity a judgment call).
   //   Retunable.
+  //   So are the water holders' (#394): the bucket in `cleaning_supplies`
+  //   (0.25) and `hardware_store` (0.20), the canteen in `outdoor_camping`
+  //   (0.25), and the full water jug in `kitchen_nonperishable` (0.25, 1–2)
+  //   and `retail_stock_food` (0.30, 1–2). The dispenser jug is never pooled:
+  //   full, it outweighs most containers, and rolls ignore capacity.
+  //   Retunable.
   //   Replacing an item id keeps its entry's derived chance: the retired
   //   spoiled foods' entries now name the fresh food they were
   //   (rotten_leftovers → leftovers, and so on; the pot of spoiled stew is
@@ -1465,7 +1488,8 @@
       { itemId:"coffee_grounds", chance:0.100345, qtyMin:1, qtyMax:1 },
       { itemId:"yerba_mate", chance:0.35, qtyMin:1, qtyMax:1 },
       { itemId:"alfajores", chance:0.15, qtyMin:1, qtyMax:1 },
-      { itemId:"galletitas", chance:0.25, qtyMin:1, qtyMax:1 } ]},
+      { itemId:"galletitas", chance:0.25, qtyMin:1, qtyMax:1 },
+      { itemId:"water_jug", state:{ fluid:{ kind:"clean", ml:capacityMlOf({ itemId:"water_jug" }) } }, chance:0.25, qtyMin:1, qtyMax:2 } ]},
     kitchen_frozen: { emptyChance:0.2, entries:[
       { itemId:"meat", chance:0.5, qtyMin:1, qtyMax:2 },
       { itemId:"vegetables", chance:0.5, qtyMin:1, qtyMax:2 },
@@ -1577,7 +1601,8 @@
       { itemId:"chewing_gum", chance:0.238925, qtyMin:1, qtyMax:1 },
       { itemId:"yerba_mate", chance:0.30, qtyMin:1, qtyMax:1 },
       { itemId:"alfajores", chance:0.25, qtyMin:1, qtyMax:1 },
-      { itemId:"galletitas", chance:0.25, qtyMin:1, qtyMax:1 } ]},
+      { itemId:"galletitas", chance:0.25, qtyMin:1, qtyMax:1 },
+      { itemId:"water_jug", state:{ fluid:{ kind:"clean", ml:capacityMlOf({ itemId:"water_jug" }) } }, chance:0.30, qtyMin:1, qtyMax:2 } ]},
     retail_stock_general: { emptyChance:0.15, entries:[
       { itemId:"candy_bar", chance:0.394965, qtyMin:1, qtyMax:1 },
       { itemId:"chewing_gum", chance:0.394965, qtyMin:1, qtyMax:1 },
@@ -1597,7 +1622,8 @@
       { itemId:"bolt_cutters", chance:0.081043, qtyMin:1, qtyMax:1 },
       { itemId:"hand_axe", chance:0.081043, qtyMin:1, qtyMax:1 },
       { itemId:"propane_torch", chance:0.081043, qtyMin:1, qtyMax:1 },
-      { itemId:"fuse_wire", chance:0.25, qtyMin:1, qtyMax:3 } ]},
+      { itemId:"fuse_wire", chance:0.25, qtyMin:1, qtyMax:3 },
+      { itemId:"bucket", chance:0.20, qtyMin:1, qtyMax:1 } ]},
     // The spare lengths of fuse wire kept by an old fuse board: only the
     // kitchen drawers of a casa that has one draw from it (generatedHomes()).
     old_board_spares: { emptyChance:0, entries:[
@@ -1608,7 +1634,8 @@
       { itemId:"water_purification_tablets", chance:0.267574, qtyMin:1, qtyMax:1 },
       { itemId:"camping_tent", chance:0.204082, qtyMin:1, qtyMax:1 },
       { itemId:"fishing_rod", chance:0.204082, qtyMin:1, qtyMax:1 },
-      { itemId:"compass", chance:0.204082, qtyMin:1, qtyMax:1 } ]},
+      { itemId:"compass", chance:0.204082, qtyMin:1, qtyMax:1 },
+      { itemId:"canteen", chance:0.25, qtyMin:1, qtyMax:1 } ]},
     valuables: { emptyChance:0.35, entries:[
       { itemId:"crumpled_cash", chance:0.120000, qtyMin:1, qtyMax:1 },
       { itemId:"jewelry_piece", chance:0.080000, qtyMin:1, qtyMax:1 },
@@ -1663,7 +1690,8 @@
       { itemId:"dish_soap", chance:0.380800, qtyMin:1, qtyMax:1 },
       { itemId:"trash_bags", chance:0.380800, qtyMin:1, qtyMax:1 },
       { itemId:"rubber_gloves", chance:0.331200, qtyMin:1, qtyMax:1 },
-      { itemId:"laundry_detergent", chance:0.280000, qtyMin:1, qtyMax:1 } ]},
+      { itemId:"laundry_detergent", chance:0.280000, qtyMin:1, qtyMax:1 },
+      { itemId:"bucket", chance:0.25, qtyMin:1, qtyMax:1 } ]},
     electronics: { emptyChance:0.3, entries:[
       { itemId:"dead_cellphone", chance:0.233333, qtyMin:1, qtyMax:1 },
       { itemId:"disposable_camera", chance:0.166667, qtyMin:1, qtyMax:1 },
@@ -4176,10 +4204,12 @@ x_sn_9 m_sn_sn_sn sn p
               sideboard:[ { id:"tv_remote", qty:1 }, { id:"paperback_novel", qty:1 } ],
               bookshelf:[ { id:"box_of_matches", qty:1 }, { id:"photo_album", qty:1 } ] } },
           kitchen:{ desc:"Your kitchen. The gas bottle under the cooker is the one you changed last week.",
+            floor:[ { id:"dispenser_jug", qty:1, overrides:{ fluid:{ kind:"clean", ml:12000 } } } ],
             items:{
               stove:[ { id:"cooking_pot", qty:1, overrides:{ contents:[ dishFrom("stew", "cooking_pot", ["meat", "vegetables"], "cooked") ] } } ],
               cupboards:[ { id:"canned_soup", qty:3 }, { id:"pasta", qty:2 }, { id:"frying_pan", qty:1 },
-                { id:"plastic_bottle", qty:4, overrides:{ fluid:{ kind:"clean", ml:500 } } }, { id:"granola_bars", qty:3 } ],
+                { id:"plastic_bottle", qty:4, overrides:{ fluid:{ kind:"clean", ml:500 } } }, { id:"granola_bars", qty:3 },
+                { id:"water_jug", qty:1, overrides:{ fluid:{ kind:"clean", ml:capacityMlOf({ itemId:"water_jug" }) } } } ],
               drawers:[ { id:"kitchen_knife", qty:1 }, { id:"can_opener", qty:1 } ],
               fridge:[ { id:"leftovers", qty:1, overrides:{ ages:[5*MINUTES_PER_DAY] } } ] } },
           bathroom:{ items:{
@@ -4221,6 +4251,7 @@ x_sn_9 m_sn_sn_sn sn p
           rooms:[
             { role:"desk", room:"Front desk", shelter:"full", cannotHaveFire:true, floorCap:60,
               desc:"The front desk of the police station. Papers on the floor, a chair on its side.",
+              floor:[ { id:"dispenser_jug", qty:1, overrides:{ fluid:{ kind:"clean", ml:8000 } } } ],
               containers:[
                 { id:"frontdesk", name:"Front Desk", capacityKg:15, spawnPools:["office_supplies","police_gear","electronics"] },
                 { id:"lockerroom", name:"Locker Room", capacityKg:25, spawnPools:["police_gear","clothing"] } ] },
@@ -4254,6 +4285,7 @@ x_sn_9 m_sn_sn_sn sn p
         overrides:{ rooms:{
           shop:{ desc:"A small corner store: a counter, a fridge for drinks, shelves to the ceiling.",
             searchLabel:"Search the shop", searchMinutes:25,
+            floor:[ { id:"dispenser_jug", qty:2, overrides:{ fluid:{ kind:"clean", ml:capacityMlOf({ itemId:"dispenser_jug" }) } } } ],
             containers:[
               { id:"shelves", name:"Shelves", capacityKg:30, spawnPools:["retail_stock_food","retail_stock_general"], items:[
                 { id:"canned_corn", qty:4 }, { id:"potato_chips", qty:3 },
@@ -4274,6 +4306,7 @@ x_sn_9 m_sn_sn_sn sn p
               { id:"workbench", name:"Workbench", capacityKg:30, spawnPools:["tools_workshop"] },
               { id:"partsshelf", name:"Parts Shelf", capacityKg:25, spawnPools:["tools_workshop","warehouse_goods"] } ] },
           office:{ desc:"A small office with a calendar and a stack of invoices.",
+            floor:[ { id:"dispenser_jug", qty:1, overrides:{ fluid:{ kind:"clean", ml:5000 } } } ],
             containers:[
               { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore","electronics"] },
               { id:"filingcabinet", name:"Filing Cabinet", capacityKg:20, spawnPools:["office_supplies","documents_lore","electronics"] } ] } } } },
@@ -4301,6 +4334,7 @@ x_sn_9 m_sn_sn_sn sn p
               { id:"palletrack1", name:"Pallet Rack 1", capacityKg:35, spawnPools:["warehouse_goods"] },
               { id:"palletrack2", name:"Pallet Rack 2", capacityKg:35, spawnPools:["warehouse_goods"] } ] },
           office:{ desc:"The shift office. A clipboard still hangs by the door.",
+            floor:[ { id:"dispenser_jug", qty:1, overrides:{ fluid:{ kind:"clean", ml:14000 } } } ],
             containers:[
               { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore","electronics"] },
               { id:"safe", name:"Safe", capacityKg:20, spawnPools:["valuables","documents_lore"] } ] } } } }
@@ -4320,11 +4354,24 @@ x_sn_9 m_sn_sn_sn sn p
   function hasOldBoard(stop, id){
     return stop.type !== "barrio" && stableHash(id + KEY_SEP + "board") % 100 < OLD_BOARD_PCT;
   }
+  //   Any casa, the barrio's included, has a part-drunk dispenser jug on its
+  // kitchen floor when a roll of its id and "jug" is under DISPENSER_JUG_PCT
+  // (hasDispenserJug()), independent of the door's and the board's. Its
+  // `floor` is laid beside an old board's kitchen `containers`, never over
+  // them.
+  function hasDispenserJug(id){
+    return stableHash(id + KEY_SEP + "jug") % 100 < DISPENSER_JUG_PCT;
+  }
   function generatedHomes(){
     return LIMA.stops.filter(s=> s.kind === "m" && s.id !== HOME_STOP).map(s=>{
       const id = "h_" + s.id;
       const overrides = { doors:{ front:{ locked: stableHash(id) % 100 < HOME_LOCKED_PCT } } };
       if(hasOldBoard(s, id)) Object.assign(overrides, oldBoardOverrides());
+      if(hasDispenserJug(id)){
+        overrides.rooms = overrides.rooms || {};
+        overrides.rooms.kitchen = Object.assign({}, overrides.rooms.kitchen,
+          { floor:[ { id:"dispenser_jug", qty:1, overrides:{ fluid:{ kind:"clean", ml:10000 } } } ] });
+      }
       return { id, type:"casa", site:s.id, name:"House", address:streetName(s.street) || UNNAMED_STREET,
         seed:stableHash(s.id), enter:"Enter a house", overrides };
     });

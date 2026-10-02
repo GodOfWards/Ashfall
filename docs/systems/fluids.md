@@ -11,9 +11,10 @@ HELPERS (`afterAction()`). The shapes are in ITEM DATA SCHEMA (`holdsFluid`,
 ## Purpose
 
 Water is a measured fluid. Every holder (a bottle, a saucepan, the pot, the
-thermos) holds some millilitres of one kind of water, which the player fills
-at a sink, drinks in measured amounts, pours between holders, cooks with,
-and drinks on their own when thirsty.
+thermos, a canteen, a bucket, a water jug, a dispenser jug) holds some
+millilitres of one kind of water, which the player fills at a sink, drinks
+in measured amounts, pours between holders, cooks with, and drinks on their
+own when thirsty.
 
 ## Model
 
