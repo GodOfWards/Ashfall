@@ -697,6 +697,19 @@ Argentine retail listings: **secondary** unless marked otherwise.
   ([Tescuo](https://www.tescuo.com.ar/productos/pavas1/)); Electrolux EKA20
   2,000 W; Vonne 1,850 W
   ([Tecnohidro](https://www.tienda.tecnohidro.com.ar/pava-electrica-vonne-regulador-con-corte-automatico-17lts-c/p/MLA22753463)).
+- **Electric kettle, 1 L and 1.2 L (#429, 2026-10-02): 1,800–2,400 W, most
+  commonly 2,200–2,400 W. A smaller kettle doesn't draw less.** Search
+  summaries, secondary. Small kettles are rare in Argentine listings, nearly
+  all of which are 1.7 L; no Atma, Daewoo, Electrolux, Peabody or Liliana
+  one turned up. Philips HD4691, 1.2 L, 2,400 W, made in Argentina
+  ([Philips Argentina](https://www.philips.com.ar/c-p/HD4691_40/viva-collection-pava-elec.));
+  BKF BF-EK4.0B, 1.2 L, 1,800 W
+  ([Mercado Libre Uruguay](https://www.mercadolibre.com.uy/jarra-electrica-bkf-desayuno-bf-ek40b-blanca-12l/p/MLU8019642));
+  Philips HD4695/90, 1 L, 2,200 W (one listing 2,400 W)
+  ([Frávega](https://www.fravega.com/p/pava-jarra-electrica-philips-hd4695-90-de-1-litro-2200w-21124606/));
+  Moulinex BY297F58, 1 L, 2,400 W
+  ([Frávega](https://www.fravega.com/p/pava-electrica-moulinex-2400w-1lt-by297f58-12679/)).
+  At 220 V: 1,800 W ≈ 8.2 A, 2,200 W = 10 A, 2,400 W ≈ 10.9 A.
 - **Toaster** (*tostadora*), two slots, 220 V / 50 Hz: **700–850 W.** Atma
   TO8020i and TO2180 700 W
   ([Somos Rex](https://somosrex.com/tostadora-electrica-7-niveles-atma-to8020ip-funcion-descongelar.html));
@@ -844,6 +857,9 @@ Argentine retail listings: **secondary** unless marked otherwise.
   1.7 × 4.186 × 80 ≈ 569 kJ: **≈ 4.3 min at 2,200 W with no losses, ≈ 4.9
   min at 88 % efficiency.** Kettles are typically 80–90 % efficient (search
   summary).
+  **1.2 L (#429):** 1.2 × 4.186 × 80 ≈ 402 kJ: **≈ 3.0 min at 2,200 W with
+  no losses, ≈ 3.5 min at 88 %**; at 2,400 W ≈ 2.8 and 3.2 min; at 1,800 W
+  ≈ 3.7 and 4.2 min.
 - **A kettle cuts out empty.** The Atma PE1821 "turns off automatically when
   the water boils or if there is insufficient water" (Argentine retail
   listings, search summary). Its **temperature selector has 6 levels,

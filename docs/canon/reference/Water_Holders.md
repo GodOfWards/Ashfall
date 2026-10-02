@@ -5,7 +5,7 @@ records what's decided). See `README.md` for the status labels. Gathered
 2026-10-01 for #393: #47 needs the mate thermos's capacity, and #394 needs
 the bucket's, the canteen's and the water jug's capacities and empty weights.
 Brands are named here as sources only; none appears in the game. The
-kettles were added 2026-10-02 for #425, which #385 needs.
+kettles were added 2026-10-02 for #425 and #429, which #385 needs.
 
 Most figures come from retail listings, not makers' spec sheets, so they are
 **Secondary** unless marked otherwise. Where several listings agree, the
@@ -146,6 +146,28 @@ them.
   Each kettle is sold with its base, so the figure is read as kettle plus
   base; a spec sheet that splits the two would confirm it.
 
+### Electric kettle, 1 L and 1.2 L
+
+Added 2026-10-02 for #429, from search summaries (the pages couldn't be
+fetched): **Secondary.** Small kettles are rare in Argentine listings.
+
+- **Empty, with its base: 0.8–1.0 kg, no lighter than a 1.7 L kettle.** The
+  base and element weigh what they do; the smaller jug saves little.
+  - Philips HD4695/90, 1 L: 0.85–1.0 kg across listings (0.85, 0.9, 1 kg).
+    [Frávega](https://www.fravega.com/p/pava-jarra-electrica-philips-hd4695-90-de-1-litro-2200w-21124606/),
+    [Castillo](https://www.castillo.com.ar/pava-elect-philips-hd4695-90-1-0lts-2200w-c-aut-ngo/p).
+  - Philips HD4608, 0.8 L: 0.8 kg.
+    [Philips Philippines](https://www.philips.com.ph/c-p/HD4608_00/daily-collection-mini-kettle).
+  - Philips HD4691, 1.2 L: 1.2 kg in most Argentine listings, which may be
+    the boxed weight; 0.5 kg and 3 kg elsewhere are out of line.
+    [Selex Hogar](https://selexhogar.com.ar/shop/pava-electrica-c-selec-temperatura-hd4691-40-blanca-philips/),
+    [Bienestar Confort](https://bienestarconfort.com.ar/tienda/electrodomesticos/pequenos/pava-electrica-philips-hd4691/).
+  - Moulinex BY297F58, 1 L: one listing's 1.5 kg "peso neto" (others 1.2,
+    2.5 and 3.1 kg) reads as boxed and isn't used.
+- **Whether the figure includes the base: Unconfirmed**, as for the 1.7 L
+  kettles. A maker's spec sheet read directly would settle the weight and
+  the base.
+
 ### Stovetop kettle
 
 - **Sizes go by number: N° 12 is about 1 L, N° 14 is 1.2–1.3 L, N° 16
@@ -182,5 +204,6 @@ Figures a handoff can quote, rounded to the issue's precision:
 | Dispenser jug, returnable | 12 L | about 0.5–0.6 kg | Unconfirmed |
 | Pantry jug, single-use | 6 L | about 0.1 kg | Confirmed (body only) |
 | Electric kettle, with base | 1.7 L | 0.8–1.0 kg | Secondary |
+| Electric kettle, with base | 1.2 L | 0.8–1.0 kg; about 0.9 kg | Secondary |
 | Stovetop kettle, aluminium | 1.2 L (N° 14) | about 0.2 kg | Secondary |
 | Stovetop kettle, enamelled steel | 1–1.3 L | 0.6–0.7 kg | Secondary |
