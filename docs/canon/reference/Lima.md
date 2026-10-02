@@ -470,6 +470,14 @@ Status: secondary unless marked; read 2026-09-27.
     the town and ends at Atucha I. Lima has natural gas service with
     **2,150 users** (ENARGAS). Details, sources and the pressures are in
     `Gas_AR.md`, "The line to Lima and Atucha".
+  - **The network has two city gates on TGN's lines**, both in the Partido
+    de Exaltación de la Cruz: one at the tap, one near Marín (#407,
+    2026-10-02; OSM, secondary). Their settings aren't public. `Gas_AR.md`,
+    "Lima's two city gates".
+  - **Lima's meter niches have no regulator** (Tom, Street View,
+    2026-10-02), so its streets are most likely **low-pressure**, with no
+    house regulator. `Gas_AR.md`, "Distribution pressures and house
+    regulators".
 - **Fuel:**
   - **Zárate:** Shell (Justa Lima & Castelli), Axion (19 de Marzo &
     Ituzaingó) and YPF (Gallesio & Hipólito Yrigoyen), per La Voz de Zárate
