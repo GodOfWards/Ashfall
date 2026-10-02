@@ -20,6 +20,81 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 <!-- New entries go directly below this line. -->
 
+## v0.12.3 — The homes' TV and washing machine, 20 A sockets, and a household screwdriver
+
+Implements: handoffs/home-appliances-and-screwdriver.md
+
+Implements #333, #384 and #367 in full, per
+`handoffs/home-appliances-and-screwdriver.md`. Content only: WORLD DATA (POWER
+SCHEMA, SPAWN POOLS, one BUILDING TYPES comment). No mechanic, resolver or
+rendering code changed, and no save field.
+
+**New content**
+
+- `APPLIANCES.washing_machine`: 1,800 W at 220 V (Longvie's L8012, "Potencia
+  máxima consumida"), `leftOnChance:0`, `nameplate:{ printsWatts:true }`,
+  readout "Running" / "Stopped". No `startWatts`, `dutyCycle` or wash cycle:
+  it draws its full 1,800 W while on (#385 is using it).
+- `APPLIANCES.tv`: 43 W at 220 V (Noblex's DM32X7000), `leftOnChance:0`,
+  `nameplate:{ printsWatts:true }`, readout "On" / "Dark". Standby left out.
+- `WIRING_TEMPLATES.row_house`: SOCKETS `rating:20`, `roles:["kitchen",
+  "living", "laundry"]`; fixtures `tv` (living) and `washing_machine`
+  (laundry) on `sockets`, after the microwave.
+- `WIRING_TEMPLATES.casa`: SOCKETS `rating:20`, `roles:["kitchen",
+  "living"]`; fixture `tv` (living) on `sockets`, after the microwave.
+  `casa_fuses` carries it on `fuses` with no edit, built from the casa's
+  fixtures as before. `apartment` unchanged.
+- `SPAWN_POOLS`: `screwdriver` in `tools_general` (0.20) and `kitchen_tools`
+  (0.10), so a blown fuse can usually be rewired from what a house holds.
+
+**UI**
+
+- The Electrical view lists the TV on SOCKETS in the row house and casa, and
+  the washing machine on SOCKETS in the row house, both switched off.
+
+**Documentation**
+
+- The POWER SCHEMA figures comment gains `washing_machine` and `tv` with
+  their sources; the leftOnChance and nameplate paragraphs name both (the
+  plates' forms unconfirmed, #332).
+- The `WIRING_TEMPLATES` comment: the row house's SOCKETS is 20 A, AEA 770's
+  general-socket cap (Table 770.6.I), serving the kitchen, the TV and the
+  washing machine; the casa's figures are the lights' 10 A and the sockets'
+  20 A; its closing line drops the TV.
+- `BUILDING_TYPES.row_house`'s comment drops the washing machine from the
+  fixtures that are words only.
+- The pool comment lists the two screwdriver chances as chosen, retunable.
+- `docs/systems/power.md` names no appliance or rating: unchanged.
+- Nothing deferred; no issues filed.
+
+**Validation performed**
+
+- `ashfallDev.validateWiring()`: no problems.
+- `ashfallDev.simulatePower()` on a row house: washing machine + kettle +
+  fridge (35 W average) holds at 18.3 A of 20; adding the toaster or the
+  microwave trips SOCKETS; the TV changes neither outcome. Casa and
+  `casa_fuses`: the TV draws when switched on.
+- `ashfallDev.validateReachability()`: tool tag `"screwdriving"` lists live
+  pools `kitchen_tools`, `tools_general`, `tools_workshop`.
+- Load ids come from template and key, not position (`expandWiring()`), so
+  the fixture order feeds nothing seeded.
+
+**Sections touched**
+
+- WORLD DATA: POWER SCHEMA (`APPLIANCES`, its comments, `WIRING_TEMPLATES`
+  and its comment), SPAWN POOLS (`tools_general`, `kitchen_tools`, the pool
+  comment), BUILDING TYPES (one comment in `row_house`).
+
+**Notes / assumptions**
+
+- The readout words ("Running" / "Stopped"; "On" / "Dark") and both
+  screwdriver chances are judgment calls, retunable. Adding pool entries
+  changes what unrolled containers roll; nothing saved changes.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.12.2"` → `"0.12.3"`
+
+---
+
 ## v0.12.2 — Street surfaces by quarter, Calle 42, and stop text that fits them
 
 Implements: handoffs/street-surfaces.md
