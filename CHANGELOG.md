@@ -20,6 +20,95 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 <!-- New entries go directly below this line. -->
 
+## v0.12.1 — Water holders: a bucket, a canteen, a water jug and a dispenser jug
+
+Implements: handoffs/water-holders.md
+
+Implements #394 in full, per `handoffs/water-holders.md`. Content only: ITEM
+DATA and WORLD DATA, no rule changes. Every fluid action already works on any
+holder (`docs/systems/fluids.md`).
+
+**New content**
+
+- Four `ITEM_REGISTRY` holders, each with a one-line sourcing comment and no
+  `verb` or tags: `bucket` (Misc, 0.45 kg, 10,000 mL), `canteen` (Misc,
+  0.4 kg, 1,000 mL), `water_jug` (Food, 0.1 kg, 6,250 mL) and `dispenser_jug`
+  (Food, 0.8 kg, 20,000 mL). The two jugs stack as `plastic_bottle` does.
+- Five `SPAWN_POOLS` entries, each at the end of its pool: `bucket` empty in
+  `cleaning_supplies` (0.25) and `hardware_store` (0.20), `canteen` empty in
+  `outdoor_camping` (0.25), and a full `water_jug` in `kitchen_nonperishable`
+  (0.25, 1–2) and `retail_stock_food` (0.30, 1–2). They are added to the
+  exceptions list in the comment above `SPAWN_POOLS`. The dispenser jug is
+  never pooled.
+- Dispenser jugs of clean water placed on floors: the player's home kitchen
+  (12,000 mL), the police station's front desk (8,000), the repair shop's
+  office (5,000), the paper mill's office (14,000), and two full ones in the
+  corner store's shop. The home's kitchen cupboards also get one full
+  `water_jug`. The neighbours' row house gets none.
+- `DISPENSER_JUG_PCT` (30) and `hasDispenserJug()`: a generated casa, the
+  barrio's included, has a 10,000 mL dispenser jug on its kitchen floor when
+  `stableHash(id + KEY_SEP + "jug") % 100` is under it. This roll is
+  independent of the door's and the board's. In `generatedHomes()`, the jug's
+  `rooms.kitchen.floor` is merged with an old board's
+  `rooms.kitchen.containers` and never replaces them.
+
+**Open questions / decisions resolved**
+
+- The full water jug's `ml` (and the corner store's full dispenser jugs') is
+  read with `capacityMlOf({ itemId })` from the registry, so it can't drift
+  from `capacityMl`. The part-drunk fills are literals, as per-instance
+  content.
+- `DISPENSER_JUG_PCT` sits in CONFIG / CONSTANTS just after the old-board
+  group (`OLD_BOARD_PCT` … `REWIRE_FUSE_MIN`), not inside it. That keeps the
+  fuse constants together.
+
+**Notes / assumptions**
+
+- Every weight, chance, quantity, fill and the 30% share is a judgment call
+  within the reference figures, and retunable.
+- A v0.12 save finds the new placements in any room whose floor or containers
+  it never changed, and the new pool entries in any container not yet opened.
+  The save shape is unchanged.
+
+**Documentation**
+
+- `docs/systems/fluids.md`: the Purpose sentence's list of holders names the
+  new ones.
+- Deferred: the `hardware_store`, `retail_stock_food` and `outdoor_camping`
+  entries are inert. Every container that draws those pools carries
+  hand-placed items and never rolls. So the canteen is unreachable, as the
+  thermos already was. Shipped as specified (Tom, 2026-10-02) and recorded on
+  #133. Fill time by volume stays #411.
+
+**Explicitly out of scope**
+
+- Fill and pour time by volume (#411), the 12 L dispenser jug, a dispenser
+  appliance, a bucket's lid, spilling, `galpon` pools (#308), the water
+  network (#300), potability (#52), and `plastic_bottle`'s `verb`.
+
+**Validation performed**
+
+- Headless Chromium: `validateItemRegistry()` and `validateBuildings()` are
+  clean. Against `main`, `validateReachability()` adds one line, `canteen`
+  unreachable (above).
+- `simulateSeed()` on seeds 1, 2, 12345 and 999 shows every placement above.
+  The same 125 of 427 casas (29%) have a jug in every seed.
+- In play: the home kitchen's dispenser jug shows with its meter. Drink, Pour…
+  (into the water jug), Pour out the water and Fill at the sink work on it,
+  and Drink and Pour out work on the water jug. An empty bucket fills at the
+  sink to 10.45 kg.
+- `?replay` (seven steps, no problems) and `?bench` run clean.
+
+**Sections touched**
+
+- CONFIG / CONSTANTS (`DISPENSER_JUG_PCT`); ITEM DATA (`ITEM_REGISTRY`,
+  `SPAWN_POOLS`); WORLD DATA (`landmarkInstances()`, `generatedHomes()`,
+  `hasDispenserJug()`).
+
+**Version**: `GAME_CONFIG.VERSION` `"0.12.0"` → `"0.12.1"`
+
+---
+
 ## v0.12.0 — Fluid transfer: item groups and meters, water in millilitres, drinking, pouring and auto-drink
 
 Implements: handoffs/fluid-transfer.md
