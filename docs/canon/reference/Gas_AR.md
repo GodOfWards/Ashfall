@@ -7,7 +7,9 @@ the lore session (#329) on whether Lima's mains gas outlasts the grid
 Atucha's connection are in `Lima.md`, "Utilities in Lima and the region";
 garrafas are in `Fuel_AR.md`; the grid is in `Grid_AR.md`.
 Line pack, the fields' power and TGN's control room were added for #348
-(2026-10-01).
+(2026-10-01). The line that feeds Lima and Atucha, the city gates' pressures
+and the house regulators' low-pressure cut-off were added for #404
+(2026-10-02).
 
 ## The distributor: Naturgy BAN
 
@@ -50,6 +52,12 @@ Line pack, the fields' power and TGN's control room were added for #348
     (391,000 HP)**; **734 direct employees**; its critical systems include
     the compressor plants' and turbocompressors' control systems and
     SCADA.
+- **TGN's trunk lines are 24" and 30" pipes that carried gas at "a variable
+  pressure of between 20 and 70 kg/cm²"**, with 16 compressor plants, as of
+  1999. **Primary** (the privatisation record):
+  [Memoria de las Privatizaciones, TGN, "Producción"](https://mepriv.mecon.gob.ar/gas/memybces/transpgasdelnorte/produccion.htm),
+  read 2026-10-02. Dated. The MAPOs at Lima's tap are in "The line to Lima
+  and Atucha".
 - **TGS** runs about 9,248 km of pipelines from the south and west.
   Secondary: [Wikipedia](https://en.wikipedia.org/wiki/Transportadora_de_Gas_del_Sur).
 - **TGN's map** draws the trunk from San Jerónimo straight to the Buenos
@@ -64,11 +72,8 @@ Line pack, the fields' power and TGN's control room were added for #348
   **15 MMm³/d**. **Primary**: TGN, Audiencia Pública Ene. 2024 (above),
   p. 41, read 2026-10-01; secondary:
   [EconoJournal, 2023-12](https://econojournal.com.ar/2023/12/el-gasoducto-mercedes-cardales-ya-entro-en-operacion-y-comenzo-a-transportar-gas-de-vaca-muerta/).
-- **Which trunk line or city gate feeds Zárate and Lima is unconfirmed**,
-  as is the Atucha plant's line. Naturgy BAN's site, TGN's reports and OSM
-  name none (2026-10-01). The line to Lima came "above all" to supply the
-  Atucha plant (Perfil, 2013; `Lima.md`). ENARGAS's list of Naturgy BAN's
-  delivery points (*puntos de entrega*) would confirm it.
+- **What feeds Zárate, Lima and Atucha** is in "The line to Lima and
+  Atucha" below.
 - **TGN runs its whole system from one control room at its Buenos Aires
   headquarters, 24 hours a day, 365 days a year.** **Primary**: TGN,
   Audiencia Pública Ene. 2024 (above), p. 4, read 2026-10-01.
@@ -81,6 +86,104 @@ Line pack, the fields' power and TGN's control room were added for #348
   crews in, as the grid operators did, was not found.**
 - **Compressor stations are built to run unattended**, steered over SCADA
   from a control centre (`Grid_AR.md`).
+
+## The line to Lima and Atucha (#404)
+
+**Source: one dataset**, ENARGAS's pipeline layers, published by the
+Secretaría de Energía:
+[Gasoductos (ENARGAS)](http://datos.energia.gob.ar/dataset/transporte-hidrocarburos-ductos-troncales-gasoductos).
+- **Distribution layer:**
+  [CSV](http://datos.energia.gob.ar/dataset/8758101a-1e0d-413f-8cc5-83e21ece6391/resource/3f7f87ab-bdcf-4a21-b361-f59732754330/download/gasoductos-de-distribucin.csv),
+  last modified 2026-09-02. It holds trunk mains only, not street pipes.
+- **Transmission layer:**
+  [SHP](http://datos.energia.gob.ar/dataset/8758101a-1e0d-413f-8cc5-83e21ece6391/resource/5af07e15-f356-40b9-a369-63dbf38a938a/download/gasoductos-de-transporte-enargas-.zip),
+  last modified 2023-12.
+
+Read 2026-10-01. **What the data states is Confirmed:** each segment's
+pipeline name, operator, type and geometry.
+
+**The route is reconstructed** by joining segments whose ends meet within
+about 30 m, and the lengths are measured along them. **No document states
+that this line feeds Lima, and none names a city gate at the tap.** Town
+positions are `Lima.md`'s (Lima's centre, Atucha I's site).
+
+- **Lima is not on a transmission line.** TGN's Gasoducto Norte trunk (N1T,
+  segment "San Nicolás – Los Cardales") and its parallel (N3P, "Ramallo –
+  Los Cardales") pass about **13 km south-west** of Lima. At their nearest
+  point, about 34.13 S, 59.30 W, they are in the Partido de San Antonio de
+  Areco (OSM reverse geocoding, secondary).
+  - Both run on to Los Cardales. There they meet the Mercedes–Cardales
+    line (TGS/TGN) and the Escobar–Cardales LNG line.
+- **Lima and Atucha hang off one Naturgy BAN main, named "25.06 T" in the
+  data.**
+  - **It leaves TGN's lines** at about **34.205 S, 59.172 W**, 0.2–0.4 km
+    from them, in the **Partido de Exaltación de la Cruz** (OSM reverse
+    geocoding, secondary). That is about 19 km south of Lima as the crow
+    flies.
+  - **It runs north for about 27–28 km of pipe to Lima**, passing **0.5 km**
+    from the town's centre.
+  - **It goes on about 9 km to the Atucha complex** and ends at 33.971 S,
+    59.206 W, **0.1 km** from Atucha I's site.
+  - **So the town sits on the branch the plant needed**, as Perfil said in
+    2013 (`Lima.md`, "Utilities").
+  - **Segment IDs** (`nombretram`), to check the route against the file:
+    - 79933063, from south-east of Zárate towards Lima;
+    - 120703, through Lima;
+    - 77982819, 77979592, 56860036, 58243583 and 58243376, from Lima
+      north;
+    - 56860359, the end of the line at Atucha.
+- **Zárate city is on the same network**, by a branch from south-east of the
+  city (34.151 S, 59.022 W) towards Lima. The network meets TGN's lines a
+  second time, at about 34.27 S, 59.08 W, towards Campana. Whether there is
+  a second city gate there is unconfirmed.
+- **TGN's lines at the tap.** **Primary**: ENARGAS's GIS server, layer
+  [Gasoductos de Transporte](https://sig.enargas.gov.ar/arcgis/rest/services/Enargas_ext/Gsoductos_de_Transporte/MapServer/0),
+  queried 2026-10-02.
+  - **The trunk (N1T)**, from about 34.151 S, 59.270 W to Los Cardales
+    (32.47 km): **22" X52 pipe**, design pressure 59.8, **MAPO 40.0**.
+  - **The parallel (N3P):** **30" X52**, design pressure 60.35, **MAPO
+    59.8**.
+  - Which of the two the tap draws from isn't stated.
+  - The layer gives no units. **kg/cm² is most likely**, TGN's own unit;
+    unconfirmed.
+- **Lima has natural gas service with 2,150 users; Zárate city has 25,146.**
+  **Primary**: ENARGAS's GIS server, layer
+  [Localidades Abastecidas](https://sig.enargas.gov.ar/arcgis/rest/services/Enargas_ext/Localidades_Abastecidas/MapServer/0),
+  queried 2026-10-02, undated. Lima's users by residential category:
+  - R1: 561;
+  - R2 (sub-categories 1–3): 713;
+  - R3 (sub-categories 1–4): 876.
+- **What the name "25.06" means is unconfirmed.** Only Naturgy BAN's mains
+  carry such names, across 12,231 segments, as *first.second* followed by T
+  or D. The reading below is inferred from the data; ENARGAS's data
+  dictionary calls the field only the pipeline's *denominación*. #407 asks.
+  - **The first number takes only four values: 10, 25, 45 and 60.** It is
+    the same along a whole network, from the tap to Atucha's end. **Most
+    likely a pressure class in bar.**
+  - **The second number runs from 01 to 24, and each pair covers one compact
+    area.** "25.06" is the Zárate–Lima–Atucha network and nothing else.
+    **Most likely a network number.**
+  - **T marks the spine and D its stubs and branches** (perhaps *troncal* and
+    *derivación*).
+  - **It isn't a volume or a flow.** A flow falls along a branch as each town
+    takes its share, but the name stays the same from the tap to the end of
+    the line.
+  - **A coincidence, ruled out:** ENARGAS's daily report for 22–23 June 2017
+    shows 25.06 MMm³/d entering the Gasoducto Norte from the Norte basin.
+    That is one day's figure: on 3, 14 and 24 February 2025 it was 4.6,
+    2.57 and 4.48.
+- **The city gate itself is not found:** its name, set pressure and
+  capacity, or whether it has a low-pressure trip. These sources name no
+  such gate:
+  - ENARGAS's datasets and GIS server, which have no public layer of
+    delivery points or regulator stations;
+  - TGN's hearing reports;
+  - Naturgy BAN's press releases and tariff filings;
+  - the Boletín Oficial.
+
+  ENARGAS's figures for gas delivered stop at the distributor and subzone
+  ("Buenos Aires Norte" for the whole of Naturgy BAN). #407 asks Naturgy
+  BAN or ENARGAS directly.
 
 ## Distribution runs without electricity
 
@@ -95,6 +198,77 @@ Line pack, the fields' power and TGN's control room were added for #348
   [Alicat](https://www.alicat.com/articles/natural-gas-distribution-pressure-control/),
   [DNV, 2023](https://www.dnv.com/news/2023/managing-regulator-station-risk-mitigating-overpressure-and-outage-risks-in-pipelines-246245/)
   (search summaries).
+- **But a regulator built with a low-pressure cut-off shuts the gas off when
+  its inlet can't hold the outlet, and stays shut until reset by hand.**
+  Argentina's house regulators work this way; city gates may. Without power,
+  nothing resets them.
+
+## Distribution pressures and house regulators (#404)
+
+- **Distribution pressure classes** (NAG-100 §3, definitions 25–27):
+  - **high:** above 4 bar;
+  - **medium:** 0.5 to 4 bar;
+  - **low:** 18 to 28 mbar in the main.
+
+  **Primary**:
+  [ENARGAS, NAG-100](https://www.enargas.gob.ar/secciones/normativa/pdf/normas-tecnicas/NAG-100.pdf),
+  read 2026-10-02.
+- **House regulators on medium-pressure networks** take **0.5 to 4 bar in**
+  and give **19 mbar out**. **Primary**:
+  [NAG-235 (1995)](https://www.enargas.gob.ar/secciones/normativa/pdf/normas-tecnicas/NAG-235_1995.pdf),
+  §2.2–2.3, read 2026-10-02.
+  - **For a low inlet pressure, the 1995 standard (§5.5.2) allows either:**
+    - (a) **a cut-off valve with manual reset** that shuts the gas off when
+      the outlet pressure reaches **13 mbar (±10 %)**; or
+    - (b) normal regulation with the inlet down to **0.150 bar**.
+  - **The 2019 draft makes the cut-off mandatory**, with **manual reset**,
+    before the outlet falls below **8 mbar**. **Primary**:
+    [NAG-235 (2019, in public consultation)](https://www.enargas.gob.ar/secciones/normativa/pdf/normas-discusion/NAG-235.pdf),
+    §5.5.2.
+- **A low-pressure service has no house regulator.** "If the service is low
+  pressure, the regulator need not be fitted" (Figure 2.7, note 2). The
+  regulator belongs to the customer's installation, "installed at the
+  customer's expense by a registered fitter" (§2.2.2 n). **Primary**:
+  [NAG-200 (2025)](https://www.enargas.gov.ar/secciones/normativa/pdf/normas-discusion/IF-2025-103868516-APN-GIYN-ENARGAS.pdf),
+  read 2026-10-02.
+  - **So a regulator in the meter niche marks a medium-pressure street**: a
+    round domed body with a vent, beside the meter.
+  - **Whether Lima's streets are medium- or low-pressure is unconfirmed.** A
+    Street View check of a meter niche would settle it (#407). The Barrio
+    Atucha's "low box fed by a yellow pipe" (`Lima.md`) would fit a
+    regulator.
+- **It has happened.**
+  - **Mar del Plata, 3 July 2025** (Camuzzi, in a cold wave):
+    - supply "upstream" fell short;
+    - **each home's regulator cut off when the network fell below 500 g/cm²
+      (0.5 bar)**;
+    - reconnecting takes a technician to check the pressure and reset each
+      one by hand;
+    - about 1.5 % of households were cut off. Camuzzi sent 150 technicians,
+      and 2,700 homes were back by the next evening.
+
+    Secondary (press), 2026-10-02:
+    [EconoJournal](https://econojournal.com.ar/energia/corte-de-gas-a-hogares-que-fue-lo-que-paso-en-mar-del-plata/),
+    [Infobae, 2025-07-03](https://www.infobae.com/sociedad/2025/07/03/mar-del-plata-se-reactiva-tras-la-crisis-por-el-corte-de-gas-sin-clases-y-hubo-comercios-cerrados-durante-la-noche/).
+  - **Paraná, early July 2026** (Redengas):
+    - gas "stopped entering the system";
+    - the network recovered overnight, but **regulators were reactivated
+      house by house**;
+    - each has a reset button, and the distributor asked residents to wait
+      for its crews.
+
+    Secondary (press), 2026-10-02:
+    [Elonce](https://www.elonce.com/parana/gas-en-parana-la-red-ya-fue-normalizada-pero-deben-reactivar-reguladores-en-los-domicilios.htm),
+    [APF Digital, 2026-07-03](https://www.apfdigital.com.ar/noticias/2026/07/03/462004-corte-de-gas-en-parana-el-servicio-se-restablece-y-redengas-intensifica-el-operativo-de-reconectar-casa-por-casa).
+- **City-gate slam-shut valves can trip on under-pressure as well as
+  over-pressure, and need a manual reset.** Secondary (makers' literature),
+  2026-10-02:
+  [Fiorentini SBC 187](https://www.fiorentini.com/wp-content/uploads/2023/06/sbc187_technicalbrochure_ENG_revB.pdf),
+  [Mooney Flowgrid Slam Shut](https://dam.bakerhughes.com/m/7b3fca4b23df85d1/original/Mooney-Flowgrid-Slam-Shut-1-Manual-English.pdf).
+  - The transporters keep **automatic high/low pressure protection** at the
+    Buenos Aires ring's delivery points (NAG-601 §5.4.4, below).
+  - **Whether Lima's city gate trips on low pressure, and at what pressure,
+    is unconfirmed** (#407).
 
 ## Who uses the gas, and when
 
@@ -151,8 +325,48 @@ Line pack, the fields' power and TGN's control room were added for #348
   [LM Neuquén, 2024-05-20](https://mase.lmneuquen.com/energia/cortes-gas-las-alternativas-del-sistema-evitar-una-crisis-n1114936),
   [Agendar, 2025-07-04](https://agendarweb.com.ar/2025/07/04/el-sistema-de-gas-natural-al-limite-ante-la-ola-polar-las-interrupciones-en-hogares-e-industrias/),
   [EconoJournal](https://econojournal.com.ar/energia/petrobras-enarsa-cortes-gas-industrias-crisis-servicio/).
-- **How low line pack can fall and still feed a city gate** (the
-  distribution networks' minimum inlet pressure) is **unconfirmed**.
+- **The Buenos Aires ring's delivery points have a contract pressure of
+  20 kg/cm² and a minimum of 17 kg/cm² in winter**, "to assure service
+  quality". The ring's points are Gutiérrez, Ezeiza, Pacheco, Buchanan I,
+  Rodríguez and Marcos Paz. For 18 hours a day the pressure is at the normal
+  figure or above; for the other 6 it may dip, but never below the minimum.
+  The transporters keep **automatic high/low pressure protection** there,
+  recalibrated when a distributor can't run at the minimum. **Primary**:
+  NAG-601 (above), §5.2 and §5.4.4, read 2026-10-02.
+  - This is a contractual and service-quality floor, not a physical one.
+  - No such figure was found for a delivery point off the ring, such as
+    Lima's.
+- **The city gates' measured minimum pressures** for each 06:00–06:00 day,
+  upstream (Pe) and downstream (Ps) of the regulators, in **bar**. **Primary**:
+  ENARGAS, *Parte Diario Operativo*, provisional data from the transporters,
+  read 2026-10-02:
+  [22 Jun 2017](https://www.enargas.gov.ar/secciones/transporte-y-distribucion/descarga.php?tipo=transporte&path=partes-diarios/transporte&file=20170623.pdf)
+  (found by Tom),
+  [3 Feb 2025](https://www.enargas.gov.ar/secciones/transporte-y-distribucion/descarga.php?tipo=transporte&path=partes-diarios/transporte&file=20250203.pdf),
+  [14 Feb 2025](https://www.enargas.gov.ar/secciones/transporte-y-distribucion/descarga.php?tipo=transporte&path=partes-diarios/transporte&file=20250214.pdf),
+  [24 Feb 2025](https://www.enargas.gov.ar/secciones/transporte-y-distribucion/descarga.php?tipo=transporte&path=partes-diarios/transporte&file=20250224.pdf).
+
+  | City gate | 22 Jun 2017 (winter) Pe / Ps | 3 Feb 2025 Pe / Ps | 14 Feb 2025 Pe / Ps | 24 Feb 2025 Pe / Ps |
+  |---|---|---|---|---|
+  | Pacheco Sur | 26.30 / 18.80 | 30.5 / 20.8 | 30.80 / 19.90 | 26.10 / 20.80 |
+  | Pacheco Norte | 27.90 / (a) | 26.0 / (a) | 31.20 / (a) | 25.20 / (a) |
+  | Rodríguez Sur | 31.50 / 18.80 | 33.4 / 21.4 | 33.40 / 20.60 | 32.10 / 20.70 |
+  | Rodríguez Norte | 31.60 / 18.40 | 29.1 / 0.0 | 33.20 / 0.00 | 28.00 / 0.00 |
+  | Ezeiza | 28.30 / 21.00 | 33.6 / 20.6 | 34.50 / 19.90 | 33.00 / 20.60 |
+  | Gutiérrez | 33.40 / 16.40 | 35.5 / 20.8 | 35.00 / 20.70 | 35.50 / 20.30 |
+  | La Plata | 33.70 / – | 39.7 / – | 38.90 / – | 38.10 / – |
+
+  (a) "Chamber with no transfer to the ring". Rodríguez Norte's Ps of 0.0
+  in 2025 is as printed.
+  - **In February 2025 the day's minimum upstream of a gate was 25 to
+    40 bar.**
+  - **Downstream, the gates hold about 19 to 21 bar**, close to the ring's
+    contract figure of 20. The winter day of 2017 went down to 16.4.
+  - **The same reports give the system's line pack as 334.9, 326.83 and
+    337.43 MMm³** on the three February days, which agrees with the table
+    above.
+  - **The reports cover only the ring around Buenos Aires.** Lima's gate
+    isn't in them.
 
 ## Production and processing
 
@@ -187,31 +401,58 @@ Line pack, the fields' power and TGN's control room were added for #348
 - **What happened to gas production in the 16 June 2019 blackout** was not
   found (2026-10-01).
 
-## Estimates — not facts (2026-10-01)
+## Estimates — not facts (2026-10-02)
 
 **Status: unconfirmed.** Reasoned from the facts above, for design use.
-Revises the estimate of 2026-09-30, which had no line-pack figures.
+Revises the estimate of 2026-10-01: Lima's line, the city gates' pressures
+and the house regulators' cut-off are now known (#404). The figure the
+estimate turns on, whether Lima's city gate trips on low pressure, is
+still open (#407).
 
-- **Once the grid fails, gas demand collapses**: power generation stops
+- **Once the grid fails, gas demand collapses.** Power generation stops
   burning it, industry is already shut, and most households are gone.
   What's left is a small summer load of cooking and water heating, well
   under the 14–17 MMm³/d of February's priority demand.
 - **Above the operating floor the system holds about 15–30 MMm³**: a few
   hours of normal February demand, or **one to two days** of residential
   demand alone.
-- **Below the floor, gas keeps flowing at falling pressure.** The floor is
-  set so that full demand still reaches the far ends, not a trickle. So a
-  large share of the **~330 MMm³** in the pipes can be drawn, how large
-  depending on the unconfirmed city-gate pressure. Against a load of a few
-  MMm³/d that is **weeks to months**, before leaks and broken pipes.
+- **Lima's pressure chain, by analogy with the Buenos Aires ring's gates:**
+  - TGN's lines, MAPO 40–60, normally 25–40 bar at a gate;
+  - the city gate, holding about 20 bar out;
+  - Naturgy BAN's "25" network;
+  - district regulators, down to 0.5–4 bar;
+  - house regulators, down to 19 mbar.
+- **Once TGN's pressure falls below the gate's ~20 bar set point, the
+  gate's regulator opens fully** and passes on whatever pressure the line
+  has. Gas keeps flowing until the pressure is too low for the district
+  regulators, a few bar. The exception is a gate with an under-pressure
+  slam-shut: that one shuts at its trip point, which is unknown, perhaps
+  near the ring's 17 bar floor.
+- **So how much of the ~330 MMm³ Lima can draw depends on that trip.**
+  - **With no trip**, the system can be drawn down to a few bar: roughly
+    **two-thirds to nine-tenths** of it. Against a load of a few MMm³/d,
+    that is **weeks to months**.
+  - **With a trip near 17–20 bar**, only the top **quarter to half**, very
+    roughly, against February's 25–40 bar at the gates. That is **days to
+    weeks**.
+  - Both are before leaks and broken pipes.
 - **Injection need not stop with the grid.** Fields with their own power,
   such as Fortín de Piedra, and compressors that burn the gas they move,
   keep going while their crews last and nothing trips them. Grid-fed
   operations, such as Vista's electric compressor, stop with the grid.
   Exports to Chile draw on the same pipes while anyone takes them.
-- **So Lima's gas most likely outlasts the grid by weeks, plausibly
-  months.** It **fades rather than stops**: the pressure falls, and a
-  cooker's flame shrinks before it goes out.
+- **Lima's gas most likely outlasts the grid by days to months**, depending
+  on the gate.
+- **It most likely stops rather than fades.** On a medium-pressure street,
+  house regulators cut off when the network falls below about 0.5 bar, as
+  in Mar del Plata (2025) and Paraná (2026). **They stay off until someone
+  resets each one by hand**, so the gas doesn't come back by itself even if
+  pressure recovers. A gate with a low-pressure trip cuts off the whole
+  town the same way.
+  - **On a low-pressure street, with no house regulator, a cooker's flame
+    shrinks before it goes out.** Which kind of street Lima has is
+    unconfirmed (#407).
 - **This disagrees with `Grid_AR.md`'s "gas pipelines hold pressure 1–3
   days unattended"**, an anonymous North American estimate. That figure
-  fits normal demand with no injection, not the collapse's small load.
+  fits normal demand with no injection, not the collapse's small load. It
+  comes closest to the case of a gate that trips early.
