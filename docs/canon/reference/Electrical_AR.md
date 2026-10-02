@@ -849,6 +849,8 @@ Argentine retail listings: **secondary** unless marked otherwise.
   listings, search summary). Its **temperature selector has 6 levels,
   including one for mate**, cutting out below the boil. The setting's
   temperature wasn't found.
+  Whether the cut-out comes at a full boil, and whether that makes water
+  safe: `Boiling_Water.md` (#421).
 - **A toaster pops up when the power goes.** "Newer electromagnetic style
   toasters won't stay down when unplugged because the electromagnet requires
   power"; at the end of the timer, "power to the magnet is cut, and a spring
