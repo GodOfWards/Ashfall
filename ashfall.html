@@ -1447,6 +1447,10 @@
   //   and `retail_stock_food` (0.30, 1–2). The dispenser jug is never pooled:
   //   full, it outweighs most containers, and rolls ignore capacity.
   //   Retunable.
+  //   So are the household screwdriver's (#367), in the shed or laundry box
+  //   (`tools_general`, 0.20) and the kitchen drawer (`kitchen_tools`,
+  //   0.10), so a blown fuse can usually be rewired from what the house
+  //   holds. Judgment calls, not sourced figures. Retunable.
   //   Replacing an item id keeps its entry's derived chance: the retired
   //   spoiled foods' entries now name the fresh food they were
   //   (rotten_leftovers → leftovers, and so on; the pot of spoiled stew is
@@ -1503,7 +1507,8 @@
       { itemId:"burnt_saucepan", chance:0.110947, qtyMin:1, qtyMax:1 },
       { itemId:"cooking_pot", chance:0.15, qtyMin:1, qtyMax:1 },
       { itemId:"roasting_pan", chance:0.10, qtyMin:1, qtyMax:1 },
-      { itemId:"mate_bombilla", chance:0.30, qtyMin:1, qtyMax:1 } ]},
+      { itemId:"mate_bombilla", chance:0.30, qtyMin:1, qtyMax:1 },
+      { itemId:"screwdriver", chance:0.10, qtyMin:1, qtyMax:1 } ]},
     hygiene: { emptyChance:0.15, entries:[
       { itemId:"toilet_paper", chance:0.236111, qtyMin:1, qtyMax:2 },
       { itemId:"bar_soap", chance:0.208116, qtyMin:1, qtyMax:1 },
@@ -1569,7 +1574,8 @@
       { itemId:"nails", chance:0.263672, qtyMin:1, qtyMax:3 },
       { itemId:"rope", chance:0.456543, qtyMin:1, qtyMax:1 },
       { itemId:"wrench", chance:0.222168, qtyMin:1, qtyMax:1 },
-      { itemId:"crowbar", chance:0.091797, qtyMin:1, qtyMax:1 } ]},
+      { itemId:"crowbar", chance:0.091797, qtyMin:1, qtyMax:1 },
+      { itemId:"screwdriver", chance:0.20, qtyMin:1, qtyMax:1 } ]},
     tools_workshop: { emptyChance:0.2, entries:[
       { itemId:"wrench", chance:0.242449, qtyMin:1, qtyMax:1 },
       { itemId:"metal_pipe", chance:0.204082, qtyMin:1, qtyMax:1 },
