@@ -14,11 +14,26 @@ town since 2026-09-26 (#237), replacing Henderson, Kentucky.
   legislature did the same in 2022. Secondary, 2026-09-26:
   [es.wikipedia](https://es.wikipedia.org/wiki/Lima_(Buenos_Aires)), OSM
   Nominatim.
-- **Population. The sources conflict:**
-  - **17,368 (INDEC, 2022)**, 12,375 (INDEC, 2010) and **8,375 (INDEC,
-    2001)**, per es.wikipedia. **This is the figure to use for the town
-    proper.** The article's own "22 % increase" doesn't match its figures
-    (17,368 over 12,375 is +40 %). Re-read 2026-09-28 (#288).
+- **Population. The game uses 17,368** (Tom, 2026-10-02, #288). **Unconfirmed:**
+  no source found states it, and what would confirm it is INDEC's own 2022
+  table by *localidad*, if one exists. The sources conflict:
+  - **17,368 (2022)**, 12,375 (2010) and **8,375 (INDEC, 2001)**, per
+    es.wikipedia, which attributes them to INDEC. **The 2022 and 2010 figures
+    have no citation behind them.** Traced through the article's revision
+    history (2026-10-01):
+    - one user added both on **2026-02-14**, citing nothing new; the chart's
+      only reference is INDEC's REDATAM for the **2010** census;
+    - that edit replaced **10,219 for 2010**, the figure Wikidata gives
+      (below);
+    - the article's "22 % increase" is left over from the 2001-to-2010
+      comparison (8,375 to 10,219 is +22 %), which is why it doesn't match
+      17,368 over 12,375 (+40 %).
+  - **INDEC hadn't published population by locality as of September 2024**:
+    "el INDEC aún no publicó los datos poblacionales por localidad"
+    ([Príncipe del Manicomio, 2024-09-19](https://principedelmanicomio.ar/2024/09/19/la-radiografia-mas-exhaustiva-de-zarate/),
+    read 2026-10-01; secondary). Whether it has since is unknown.
+    censo.gob.ar was unreachable on 2026-10-01 (a 503, and a TLS error).
+    INDEC's REDATAM portal for the 2022 census responds, but wasn't queried.
   - **32,996 (2022)**, per La Voz de Zárate on 15 June 2022, from the local
     census coordination: "Lima and its surroundings", before INDEC's final
     results. The paper also gave the Partido de Zárate as 138,022.
@@ -28,10 +43,10 @@ town since 2026-09-26 (#237), replacing Henderson, Kentucky.
     "Los datos del Censo dejan dudas sobre los habitantes de Lima" on
     2023-02-04; that page also returned 403 and wasn't read (#288,
     2026-09-28).
-  - **10,219 (2010)**, per Wikidata Q6548772, disagreeing with the 12,375
-    above.
-  - All secondary. What would confirm it: INDEC's final 2022 tables by
-    locality (#288).
+  - **10,219 (2010)**, per Wikidata Q6548772, and the Wikipedia article's own
+    figure until 2026-02-14 (above). **It is the last figure two sources
+    agree on.**
+  - All secondary.
 - **The era is February 2025** (canon), with the latest data for each subject
   as of then. For population and households that's INDEC's 2022 census, the
   *Censo Nacional de Población, Hogares y Viviendas 2022*, with reference date
@@ -250,8 +265,26 @@ Status: secondary unless marked; read 2026-09-27.
   - Source: [CEZ, "La Red Cooperativa"](https://cezarate.com/la-red-cooperativa/)
     (read directly: **confirmed** for the network figures; no date on the
     page; re-read 2026-09-28, #288).
-  - **Which of the three stations feeds Lima is unconfirmed.** The ET Las
-    Palmas (below) is the nearest candidate.
+  - **Lima is fed at 33 kV from two of the three stations, the ET Zárate and
+    the ET Las Palmas.** CEZ's *Memoria y Balance 2024 · 2025* (Ejercicio
+    Nº 90, the year to 30 June 2025, so it spans February 2025;
+    [PDF](https://cezarate.com/wp-content/uploads/2025/12/Memoria-y-Balance-90.pdf),
+    read 2026-10-01; **confirmed**) lists, under "Industrial y trasmisión en
+    33 kV": "los alimentadores 331 Quilmes, 332 Celulosa 333 Lima, 334
+    Monsanto, 335 Bayer, 336 Isenbeck que tienen su salida desde la ET
+    Zárate; de Lima 1, Lima 2, Quilmes 2, Parque Industrial 1 de la ET Las
+    Palmas, Petrobrás de la ET Corcemar".
+    - So **feeder 333 "Lima" leaves the ET Zárate, and feeders "Lima 1" and
+      "Lima 2" leave the ET Las Palmas.** The ET Corcemar has no Lima feeder.
+    - **That they serve the town is read from their names.** The report
+      doesn't say what each one supplies. Nothing CEZ publishes was found to
+      say it (its notices, and its account of the May 2025 storm, read
+      2026-10-02); only its network maps would.
+  - **CEZ's capacity at each station** (same report): ET Zárate 105 MVA at
+    132 kV, 100 at 33 kV, 75 at 13.2 kV; the ET Las Palmas and the ET
+    Corcemar 30, 25 and 5 MVA each.
+  - **The same year:** 8 transformers stolen, and 20 new street lights in
+    Lima's new neighbourhoods.
   - **Transmission:** Transba's 132 kV **Atucha–Zárate line** was sectioned
     into the **ET Las Palmas**, "between Zárate and Lima" (ENRE Resolución
     2/2018, search summary). Transba also operates the **500 kV ET Campana**.
@@ -305,9 +338,12 @@ Status: secondary unless marked; read 2026-09-27.
     **Primary** for the utility, page undated
     ([endeza.gob.ar/about](https://endeza.gob.ar/about/), read 2026-10-01).
     A search summary's "65 wells in Zárate and 8 in Lima" appears in neither
-    source and is not used.
-  - **All from groundwater wells:** **65 electric pumping wells** serve
-    Zárate and Lima, all running at their limit.
+    source and is not used. It came up again in search summaries on
+    2026-10-02, still with no page found that says it.
+  - **All from groundwater wells,** electrically pumped (ENDEZA, above).
+    **How many is unconfirmed.** An earlier line here, "65 electric pumping
+    wells serve Zárate and Lima, all running at their limit", had no source
+    recorded, and it matches the search summary set aside above (2026-10-02).
   - **No town tank (Tom, 2026-09-28).** An earlier note said Lima's system
     differs from Zárate's, with pumps lifting the water into a tank that feeds
     the town. Its only source was a search summary of La Voz de Zárate
@@ -325,6 +361,30 @@ Status: secondary unless marked; read 2026-09-27.
     distribution ring (Municipalidad de Zárate, search summary). Pressure is
     a chronic summer problem, with a "definitive solution" promised for 2027
     ([Municipalidad, 2025-10-09](https://zarate.gob.ar/programa-de-servicio-de-abastecimiento-de-agua/)).
+    That page (re-read 2026-10-02; primary for the municipality) claims
+    "más de 16 pozos nuevos" for the partido, and aims that "en el verano se
+    pueda llenar el tanque de cada domicilio de la zona urbana". It gives no
+    count of Lima's wells.
+  - **A well opened in Barrio Los Pinos, Lima, on 26 February 2026**, "el
+    pozo número 11 desde el inicio de la gestión de ENDEZA" (counting the
+    partido). It raised pressure "de 10 metros de presión en altura a 33
+    metros"
+    ([Enlace Crítico](https://www.enlacecritico.com/destacados/lima-mejora-el-servicio-de-agua-matzkin-inauguro-un-nuevo-pozo-en-el-barrio-los-pinos-que-beneficia-a-toda-la-ciudad/),
+    read 2026-10-02; secondary). **It postdates the era**, so it isn't in
+    the game. Whether it is the planned Calles 29 y 4 well is unknown.
+    - **On roof tanks:** if the 10 m was Lima's network pressure before the
+      well, it was enough to lift water to a low house's roof tank without a
+      pump. The article doesn't say where it was measured, so **this doesn't
+      settle it.**
+  - **ENDEZA's Plan Director hadn't been published by 2026-10-02.** It was
+    due before the council in March 2026 (ENDEZA's report, above). Opening
+    the council's session on 3 March 2026, the mayor said "se enviará un
+    Plan Director que proyecte el crecimiento de la ciudad para las próximas
+    décadas", with a scheme "para saldar la deuda con AYSA y sanear
+    definitivamente Aguas de Zárate"
+    ([Enlace Crítico, 2026-03-03](https://www.enlacecritico.com/destacados/marcelo-matzkin-dejo-inaugurado-el-periodo-de-sesiones-ordinarias-2026-en-el-honorable-concejo-deliberante/),
+    read 2026-10-02; secondary). **It is still the likeliest source for
+    Lima's well count and for how its roof tanks fill.**
   - **What it means for the game:** running water depends on electric well
     pumps, with no town storage between them and the pipes. When the grid
     fails, the network has nothing to hold it up, and a home has only what
@@ -345,9 +405,10 @@ Status: secondary unless marked; read 2026-09-27.
   - **In practice, many homes aren't on the network** (Tom, 2026-09-27,
     first-hand): "it's really common to not have network water, so each
     house would have its own tank and pump". A house's own pump fills its
-    own tank, and the house draws from the tank. How many houses are on the
-    network is unconfirmed, as are typical tank sizes and whether the pump
-    draws from a private well (*perforación*).
+    own tank, and the house draws from the tank. **Which houses are on the
+    network has since been settled:** those on paved streets (above,
+    2026-09-29). Typical tank sizes and whether the pump draws from a private
+    well (*perforación*) are unconfirmed.
   - **House tank sizes, from a guideline elsewhere in the country**
     (secondary, 2026-09-27, read through search summaries): Río Negro's
     water users' regulation requires every family home to have a raised
@@ -426,6 +487,9 @@ Named points in the town, with the address OSM gives. Status as of February
     hospital", for $3,300 million in three phases, paid from the
     municipality's taxes on nuclear activity. No bed count or completion
     date given.
+    The mayor's speech of 3 March 2026 (Enlace Crítico, under Water above)
+    still lists a "hospital intermedio" among the works planned for Lima,
+    which supports the reading below.
     [La Opinión](https://laopinionline.ar/articulo/zarate-comenzo-la-obra-del-hospital-intermedio-municipal-aurelio-aleotti-en-lima),
     read 2026-09-29; the page gave its date as 2026-09-03, which isn't
     verified. Secondary. **If that date holds, in February 2025 Lima had a
@@ -453,6 +517,32 @@ Named points in the town, with the address OSM gives. Status as of February
 - **Shops and services** (a sample): Laverap 10 (laundrette, Calle 10 446),
   Estilo Argentino (Calle 7 332), Alineación Esteban (wheel alignment,
   Calle 16 470), El Porvenir (Calle 6 665), Grupo Márquez (Calle 10).
+- **Re-queried 2026-10-02** (Overpass, the box 34.070–34.020 S,
+  59.230–59.160 W): about 45 tagged places, all but these already above. **OSM
+  has nothing more to give;** what stands block by block is Street View work
+  (#288).
+  - two *remís* (car-hire) stands: "Remis 24" (about 34.0466 S, 59.1948 W)
+    and "Remis coche al instante" (about 34.0474 S, 59.1958 W);
+  - a campsite, "Índigo Star", to the south-west (about 34.0630 S,
+    59.2111 W);
+  - an unnamed fuel station at about 34.0523 S, 59.1974 W: probably the
+    station south of D.A.P.S.A. (under Landmarks).
+- **Cospli, the Cooperativa de Obras y Servicios Públicos de Lima:**
+  - **it sold telephone and internet as well as medical care:** "Brinda
+    servicios médicos de emergencia y de enfermería a alrededor de 4300
+    asociados, como también servicios de telefonía e internet a más de 1000
+    usuarios"
+    ([argentina.gob.ar, 2020-04-15](https://www.argentina.gob.ar/noticias/nucleoelectrica-entrego-una-ambulancia-la-cooperativa-de-servicios-publicos-de-lima),
+    read 2026-10-02; primary for the government's notice, on Nucleoeléctrica
+    giving it an ambulance);
+  - it runs **SEMLIM**, Lima's emergency medical service, with its own
+    ambulances. Under CEZ's health service in 2024–2025 it gave 8,135
+    nursing visits, 1,658 emergency calls and 16 transfers (CEZ's
+    *Memoria y Balance*, under Electricity);
+  - **its address is unconfirmed:** nursing was given at "Calle 4 N° 656" in
+    2020 (El Debate, 2020-08-11, secondary), and a search summary puts its
+    seat on Calle 2;
+  - nothing found has it running water or electricity.
 - **Named neighbourhoods:** Barrio Cervecero, Citrus Lima, Villa del Pilar.
 - **Avenida 11's house numbers** run from 101 at its north end (by the
   railway) to 900 at its south end, so no. 835 is near its southern end.
