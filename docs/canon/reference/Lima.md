@@ -403,6 +403,12 @@ Status: secondary unless marked; read 2026-09-27.
     [Perfil](https://www.perfil.com/noticias/politica/el-gas-llega-al-country-de-de-vido-pero-pasa-de-largo-por-un-barrio-humilde-20130524-0050.phtml)).
     So the line came for the plant, and the plant's barrio is on it. OSM maps
     no gas pipeline in the area (2026-09-28).
+  - **The line itself is in ENARGAS's pipeline data** (#404, 2026-10-02).
+    Naturgy BAN's main "25.06 T" leaves TGN's Gasoducto Norte about 19 km
+    south of Lima, in the Partido de Exaltación de la Cruz. It runs through
+    the town and ends at Atucha I. Lima has natural gas service with
+    **2,150 users** (ENARGAS). Details, sources and the pressures are in
+    `Gas_AR.md`, "The line to Lima and Atucha".
 - **Fuel:**
   - **Zárate:** Shell (Justa Lima & Castelli), Axion (19 de Marzo &
     Ituzaingó) and YPF (Gallesio & Hipólito Yrigoyen), per La Voz de Zárate
