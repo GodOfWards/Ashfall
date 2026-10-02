@@ -1,9 +1,9 @@
 # 01 — Writing
 
 How the game's text reads, and what it may name. The home of the tone, the
-real-place rules, and language and naming. Read by a planning session when
-the discussion reaches game text; a handoff quotes whatever a coding session
-needs from here.
+real-place rules, and language and naming. Read by a planning or design
+session when the discussion reaches game text; a handoff quotes whatever a
+coding session needs from here.
 
 The examples below are illustrative, written for this guide. They are not
 game text: a guide that quotes the game goes stale the moment the game is

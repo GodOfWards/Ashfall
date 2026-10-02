@@ -1,8 +1,8 @@
 # 02 — Code practices
 
 How `ashfall.html` is written, and where knowledge about it lives. The home
-of the development rules. Read by a planning session when the discussion
-reaches mechanics or structure.
+of the development rules. Read by a planning or design session when the
+discussion reaches mechanics or structure.
 
 Section layout is not restated here, or anywhere else: the `ARCHITECTURE`
 comment at the top of the script is the source of truth for the sections

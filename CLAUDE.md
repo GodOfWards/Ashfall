@@ -29,6 +29,25 @@ Identify it **before reading anything else**. Each list is complete.
 - **Output:** issues filed as they surface and, only if it concludes, a
   handoff at `handoffs/<feature-name>.md`, landed on `main`.
 
+**Design session**: discusses and designs. Never writes game code, never
+writes a handoff, and has no wrap.
+
+- **Up front:** the open issues list. Nothing else.
+- **As the discussion needs it:** the same as a planning session.
+- **Output:** issues filed and edited as the discussion goes, and `designed`
+  applied when Tom confirms a design is done. Nothing else. A design session
+  can end mid-thread; an open question is a valid place to stop.
+
+**Research session**: looks up real-world facts, with full network access.
+Never writes game code.
+
+- **Up front:** the open `research` issues and
+  `docs/canon/reference/README.md`.
+- **As the research needs it:** the reference file a fact belongs in, and the
+  issues a `research` issue blocks.
+- **Output:** findings in the issue body as they're found, then one pull
+  request into `docs/canon/reference/` that says `Closes #NN`.
+
 **Coding session**: implements one handoff.
 
 - **Up front:** all of `ashfall.html`, the one handoff at the top level of
@@ -56,8 +75,8 @@ coding session's wrap without a handoff (`docs/03-workflow.md`).
   facts marked so. No real brand or business trading name appears. →
   `docs/01-writing.md`
 - **Facts are looked up in `docs/canon/reference/` first.** One that isn't
-  there is never guessed or searched for unasked: ask Tom for network access,
-  or file a `research` issue. → `docs/canon/reference/README.md`
+  there is never guessed, and is searched for only in a research session: ask
+  Tom for one, or file a `research` issue. → `docs/canon/reference/README.md`
 - **The canon is private.** `docs/canon/` is read by path, on purpose, never
   found by search (`.rgignore`). A coding session reads neither the canon nor
   the reference folder: its handoff quotes what it needs.

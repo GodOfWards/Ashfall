@@ -1,9 +1,9 @@
 # Systems docs
 
 One doc per game system: how it works across functions, which no single
-comment can say. The home of the format below. Read by a planning session for
-the systems a discussion touches, and by a coding session for the ones its
-handoff names.
+comment can say. The home of the format below. Read by a planning or design
+session for the systems a discussion touches, and by a coding session for the
+ones its handoff names.
 
 ## What goes where
 

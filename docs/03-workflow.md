@@ -6,17 +6,28 @@ session reads what is `CLAUDE.md`'s, and is not repeated here.
 
 ## Sessions
 
-Every version moves through a **planning session**, which designs a change
-and ends in a handoff, and a **coding session**, which implements one handoff
-and ends in one pull request. Both run against the repository. A claim about
-what the code already does is checked against the file when it is made,
-never recalled.
+Work moves through four kinds of session. A **coding session** implements
+one handoff and ends in one pull request. A **planning session** designs a
+change and may end in a handoff. A **design session** only designs. A
+**research session** only finds facts. All run against the repository. A
+claim about what the code already does is checked against the file when it
+is made, never recalled.
 
 **Planning.** Discusses scope, rules, trade-offs and open questions. Files
 issues as they surface (see Issues). Produces a handoff only if it reaches a
 conclusion ready to become code; an unresolved thread is better than a
 premature spec. The handoff carries only what was decided: not the
 discussion, not questions already answered, not what became issues.
+
+**Design.** Exists so a design can take as long as it needs. Nothing in it
+aims at a handoff or a wrap: the session ends when Tom ends it, and wherever
+the discussion stands is fine. Decisions go into issue bodies as they're
+made; what's still open stays open, written as an open question in the body.
+Never propose wrapping up, writing a handoff, or moving on to implementation.
+
+**Research.** The only session that searches the web. It works the open
+`research` issues, following `docs/canon/reference/README.md`; a fact no
+issue asks for gets one filed first.
 
 **Coding.** Implements exactly what the handoff specifies, resolving any
 "Design decisions to make during implementation" it left open. Works on a
@@ -88,7 +99,7 @@ Readiness: `designed` means every design decision is Tom's and made, the
 facts it needs are in `docs/canon/reference/` or quoted in the body, and the
 body is the spec: a handoff, or a pass from the spec, can be written from it
 without more discussion. Only implementation choices a coding session names
-are left. A planning session applies it when Tom confirms the design is done,
+are left. A planning or design session applies it when Tom confirms the design is done,
 and removes it if the scope reopens. It says nothing about whether the work
 can start: what an issue waits on is in GitHub's blocking links, and a
 `designed` issue may still be `deferred`.
