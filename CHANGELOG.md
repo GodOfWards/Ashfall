@@ -36,7 +36,7 @@ rendering code changed, and no save field.
   readout "Running" / "Stopped". No `startWatts`, `dutyCycle` or wash cycle:
   it draws its full 1,800 W while on (#385 is using it).
 - `APPLIANCES.tv`: 43 W at 220 V (Noblex's DM32X7000), `leftOnChance:0`,
-  `nameplate:{ printsWatts:true }`, readout "On" / "Dark". Standby left out.
+  `nameplate:{ printsWatts:true }`, readout "On" / "Off" (Tom). Standby left out.
 - `WIRING_TEMPLATES.row_house`: SOCKETS `rating:20`, `roles:["kitchen",
   "living", "laundry"]`; fixtures `tv` (living) and `washing_machine`
   (laundry) on `sockets`, after the microwave.
@@ -87,8 +87,9 @@ rendering code changed, and no save field.
 
 **Notes / assumptions**
 
-- The readout words ("Running" / "Stopped"; "On" / "Dark") and both
-  screwdriver chances are judgment calls, retunable. Adding pool entries
+- The washing machine's readout words ("Running" / "Stopped") and both
+  screwdriver chances are judgment calls, retunable. The TV's "On" / "Off"
+  is Tom's, per the handoff as amended on `main`. Adding pool entries
   changes what unrolled containers roll; nothing saved changes.
 
 **Version**: `GAME_CONFIG.VERSION` `"0.12.2"` → `"0.12.3"`

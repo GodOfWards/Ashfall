@@ -4784,9 +4784,8 @@ x_sn_9 m_sn_sn_sn sn p
   // The kettle, the toaster, the microwave, the washing machine and the TV
   // are found switched off (leftOnChance 0), and once switched on, draw
   // until switched off: switching themselves off, and being used, are
-  // #334's. The readout words of the washing machine (the kettle's) and of
-  // the TV ("On", "Dark", the room text's word) are judgment calls,
-  // retunable.
+  // #334's. The washing machine's readout words are the kettle's, a
+  // judgment call; the TV's, "On" and "Off", are Tom's. Retunable.
   // The hood is a motor, but its start surge is left unmodelled: it carries
   // no `startWatts`. Lima homes have no smoke alarm, and usually no bathroom
   // extractor fan (Tom, first-hand), so neither is an appliance.
@@ -4832,7 +4831,7 @@ x_sn_9 m_sn_sn_sn sn p
     washing_machine: { name:"Washing machine", watts:1800, volts:220, leftOnChance:0, nameplate:{ printsWatts:true },
       readout:{ on:"Running", off:"Stopped" } },
     tv:             { name:"TV",             watts:43,   volts:220, leftOnChance:0, nameplate:{ printsWatts:true },
-      readout:{ on:"On", off:"Dark" } },
+      readout:{ on:"On", off:"Off" } },
     water_heater:   { name:"Water heater",   watts:WATER_HEATER_WATTS, volts:220, leftOnChance:0.95,
       dutyCycle:WATER_HEATER_LOSS_KWH_DAY * 1000 / (WATER_HEATER_WATTS * MINUTES_PER_DAY / 60), cycleMinutes:120,
       nameplate:{ printsWatts:true }, readout:{ on:"Running", idle:"Standing by", off:"Stopped" } },
