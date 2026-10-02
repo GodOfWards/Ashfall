@@ -4040,8 +4040,8 @@ x_sn_9 m_sn_sn_sn sn p
     // room, headed by a diferencial (WIRING_TEMPLATES' `row_house`). The
     // board holds only its main: a real tablero principal has no feeder
     // breaker. The fixtures its text names but the wiring doesn't (the
-    // garrafa heater, the washing machine, the grill, the clothesline, the
-    // septic tank) are words only.
+    // garrafa heater, the grill, the clothesline, the septic tank) are words
+    // only.
     row_house: { label:"row house", entry:"living", water:{ tankL:HOUSE_TANK_L },
       wiring:{ board:{ name:"Meter box", role:"street", rating:32, direct:true },
         panels:[ { id:"house", name:"Breaker panel", role:"living", template:"row_house" } ] },
@@ -4751,6 +4751,13 @@ x_sn_9 m_sn_sn_sn sn p
   //                   "700 W", which is its output (BGH's B120M16, dial, 10 A
   //                   plug; the range is 1,050–1,150 W; secondary). Its
   //                   standby draw is unconfirmed (#332), so it has none.
+  //   washing_machine 1,800 W: Longvie's L8012, its "Potencia máxima
+  //                   consumida" at 220 V (Longvie's Cleanium manual,
+  //                   primary). Its motor (470 W) and heater (1,600 W) aren't
+  //                   modelled apart, and there is no wash cycle (#385): it
+  //                   draws its full 1,800 W the whole time it is on.
+  //   tv              43 W: a 32" LED TV on (Noblex's DM32X7000; secondary).
+  //                   Its 0.3 W standby is left out (Tom).
   //   water_heater    WATER_HEATER_WATTS, the element of Rheem's 85 L
   //                   TEC085RH (primary). Cycling on its thermostat to make
   //                   up its standing loss (WATER_HEATER_LOSS_KWH_DAY): its
@@ -4768,9 +4775,12 @@ x_sn_9 m_sn_sn_sn sn p
   //                   running current gives for these pumps (derived from
   //                   WEG's 60 Hz motors; secondary). Found switched on, as
   //                   the fridge is: 0.99 is a judgment call.
-  // The kettle, the toaster and the microwave are found switched off
-  // (leftOnChance 0), and once switched on, draw until switched off:
-  // switching themselves off, and being used, are #334's.
+  // The kettle, the toaster, the microwave, the washing machine and the TV
+  // are found switched off (leftOnChance 0), and once switched on, draw
+  // until switched off: switching themselves off, and being used, are
+  // #334's. The readout words of the washing machine (the kettle's) and of
+  // the TV ("On", "Dark", the room text's word) are judgment calls,
+  // retunable.
   // The hood is a motor, but its start surge is left unmodelled: it carries
   // no `startWatts`. Lima homes have no smoke alarm, and usually no bathroom
   // extractor fan (Tom, first-hand), so neither is an appliance.
@@ -4781,11 +4791,13 @@ x_sn_9 m_sn_sn_sn sn p
   //   range_hood      its own `watts`: Longvie prints its hoods in watts.
   //   gas_range       16 W, printed in watts: Domec's cooker with oven light
   //                   and ignition (Tabla 3, "Consumo eléctrico máximo").
-  //   kettle, toaster, microwave, water_heater  its own `watts`. IEC
-  //                   60335-1 §7.1 allows watts or amps on a plate, and
-  //                   every listing quotes watts, but which form an
-  //                   Argentine kettle's, toaster's or heater's plate uses is
-  //                   unconfirmed (#332).
+  //   kettle, toaster, microwave, water_heater, washing_machine, tv  its
+  //                   own `watts`. IEC 60335-1 §7.1 allows watts or amps on
+  //                   a plate, and every listing quotes watts, but which form
+  //                   an Argentine kettle's, toaster's, heater's or TV's
+  //                   plate uses is unconfirmed (#332). The washing
+  //                   machine's watts are Longvie's own figure; how its plate
+  //                   prints them is unconfirmed.
   //   house_pump      2.7 A: Rowa's RW-PR60 at 220 V (secondary).
   // One LED bulb's draw, for every appliance that is one: an E27 LED bulb
   // sold for 220 V draws 9–12 W (12 W gives about 840 lm, a 60 W
@@ -4811,6 +4823,10 @@ x_sn_9 m_sn_sn_sn sn p
       readout:{ on:"Running", off:"Stopped" } },
     microwave:      { name:"Microwave",      watts:1150, volts:220, leftOnChance:0, nameplate:{ printsWatts:true },
       readout:{ on:"Running", off:"Stopped" } },
+    washing_machine: { name:"Washing machine", watts:1800, volts:220, leftOnChance:0, nameplate:{ printsWatts:true },
+      readout:{ on:"Running", off:"Stopped" } },
+    tv:             { name:"TV",             watts:43,   volts:220, leftOnChance:0, nameplate:{ printsWatts:true },
+      readout:{ on:"On", off:"Dark" } },
     water_heater:   { name:"Water heater",   watts:WATER_HEATER_WATTS, volts:220, leftOnChance:0.95,
       dutyCycle:WATER_HEATER_LOSS_KWH_DAY * 1000 / (WATER_HEATER_WATTS * MINUTES_PER_DAY / 60), cycleMinutes:120,
       nameplate:{ printsWatts:true }, readout:{ on:"Running", idle:"Standing by", off:"Stopped" } },
@@ -4904,15 +4920,17 @@ x_sn_9 m_sn_sn_sn sn p
   // circuits: lights, sockets, and the water heater with the pump, both in
   // the laundry. Every terminal circuit sits behind a ≤ 30 mA RCD, which may
   // head the board (AEA 90364-7-770); AEA's worked example heads it with a
-  // 30 mA, 2 × 40 A one, whose 40 A this takes. The 30 mA isn't shown. The
-  // circuits' 10 A and 16 A are AEA's example's lighting and sockets figures
-  // (at most 16 A and 20 A); WATER's 16 A is a judgment call. No range hood,
-  // no garden light. All retunable.
+  // 30 mA, 2 × 40 A one, whose 40 A this takes. The 30 mA isn't shown.
+  // LIGHTS' 10 A is AEA's example's lighting figure (at most 16 A). SOCKETS
+  // is 20 A, AEA 770's cap for a general-socket circuit (Table 770.6.I), and
+  // serves the kitchen, the living room's TV and the laundry's washing
+  // machine. WATER's 16 A is a judgment call. No range hood, no garden
+  // light. All retunable.
   //
   // `casa`: the plain Lima house's panel (BUILDING TYPES' `casa`),
   // the row house's laid over the casa's rooms. Its figures are the row
-  // house's: the 40 A diferencial, the circuits' 10 A and 16 A, and the
-  // appliances. The water heater is in the kitchen and the pump on the
+  // house's: the 40 A diferencial, the lights' 10 A and the sockets' 20 A,
+  // and the appliances, the TV in the living room among them. The water heater is in the kitchen and the pump on the
   // patio: a Lima home heats its water with an electric tank heater, and an
   // electric pump lifts its water to the roof tank (Tom, first-hand). The
   // meter box is at the street, since the meter is on the property line,
@@ -4920,7 +4938,7 @@ x_sn_9 m_sn_sn_sn sn p
   // it and a bipolar main of at most 32 A on a Tarifa 1 supply (OCEBA,
   // Reglamento de Acometidas T1). The panel is indoors where it is easily
   // found, never in a bathroom (AEA 90364-7-770 §770.16.3.2). No patio
-  // light, no TV and no washing machine (#333). All retunable.
+  // light and no washing machine. All retunable.
   //
   // `casa_fuses`: an old fuse board in place of the casa's panel, for
   // the casas generatedHomes() gives one. A manual bipolar switch, then a
@@ -4954,7 +4972,7 @@ x_sn_9 m_sn_sn_sn sn p
       main: { rating:40, rcd:true },
       circuits: [
         { key:"lights",  label:"LIGHTS",  rating:10, volts:220, roles:["living", "kitchen", "laundry", "hallway", "bedroom", "bedroom2", "bathroom"] },
-        { key:"sockets", label:"SOCKETS", rating:16, volts:220, roles:["kitchen"] },
+        { key:"sockets", label:"SOCKETS", rating:20, volts:220, roles:["kitchen", "living", "laundry"] },
         { key:"water",   label:"WATER",   rating:16, volts:220, roles:["laundry"] }
       ],
       fixtures: [
@@ -4970,6 +4988,8 @@ x_sn_9 m_sn_sn_sn sn p
         { key:"kettle",         appliance:"kettle",         circuit:"sockets", role:"kitchen" },
         { key:"toaster",        appliance:"toaster",        circuit:"sockets", role:"kitchen" },
         { key:"microwave",      appliance:"microwave",      circuit:"sockets", role:"kitchen" },
+        { key:"tv",             appliance:"tv",             circuit:"sockets", role:"living" },
+        { key:"washing_machine", appliance:"washing_machine", circuit:"sockets", role:"laundry" },
         { key:"water_heater",   appliance:"water_heater",   circuit:"water",   role:"laundry" },
         { key:"pump",           appliance:"house_pump",     circuit:"water",   role:"laundry" }
       ]
@@ -4978,7 +4998,7 @@ x_sn_9 m_sn_sn_sn sn p
       main: { rating:40, rcd:true },
       circuits: [
         { key:"lights",  label:"LIGHTS",  rating:10, volts:220, roles:["living", "kitchen", "bedroom", "bathroom"] },
-        { key:"sockets", label:"SOCKETS", rating:16, volts:220, roles:["kitchen"] },
+        { key:"sockets", label:"SOCKETS", rating:20, volts:220, roles:["kitchen", "living"] },
         { key:"water",   label:"WATER",   rating:16, volts:220, roles:["kitchen", "patio"] }
       ],
       fixtures: [
@@ -4991,6 +5011,7 @@ x_sn_9 m_sn_sn_sn sn p
         { key:"kettle",        appliance:"kettle",         circuit:"sockets", role:"kitchen" },
         { key:"toaster",       appliance:"toaster",        circuit:"sockets", role:"kitchen" },
         { key:"microwave",     appliance:"microwave",      circuit:"sockets", role:"kitchen" },
+        { key:"tv",            appliance:"tv",             circuit:"sockets", role:"living" },
         { key:"water_heater",  appliance:"water_heater",   circuit:"water",   role:"kitchen" },
         { key:"pump",          appliance:"house_pump",     circuit:"water",   role:"patio" }
       ]
