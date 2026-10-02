@@ -14,7 +14,7 @@ both are designer knowledge the game never states outright.
   written there may not have merged here yet.
 - **If it isn't here, don't guess and don't go searching on your own.** Do one
   of two things:
-  - **ask Tom for network access** to research it now, if the work can't
+  - **ask Tom to run a research session** for it now, if the work can't
     move without it; or
   - **file an issue labelled `research`**, from its template, saying which
     fact is needed, why, and which issue it blocks, and carry on with the
@@ -46,8 +46,9 @@ both are designer knowledge the game never states outright.
 
 ## Who reads it
 
-A **planning session reads it whenever the discussion needs real-world facts**,
-not only for lore. The lore file (`../Ashfall_Canon.md`) keeps its stricter
+A **planning or design session reads it whenever the discussion needs
+real-world facts**, not only for lore. A **research session** reads it first
+and writes to it. The lore file (`../Ashfall_Canon.md`) keeps its stricter
 rule. A coding session reads neither.
 
 ## Files
