@@ -97,16 +97,15 @@ Add two entries in the kettle's form:
 washing_machine: { name:"Washing machine", watts:1800, volts:220, leftOnChance:0, nameplate:{ printsWatts:true },
   readout:{ on:"Running", off:"Stopped" } },
 tv:              { name:"TV", watts:43, volts:220, leftOnChance:0, nameplate:{ printsWatts:true },
-  readout:{ on:"On", off:"Dark" } },
+  readout:{ on:"On", off:"Off" } },
 ```
 
 - **No `startWatts`, no `dutyCycle`, no standby.** The washing machine draws
   its full 1,800 W the whole time it is switched on; no wash cycle (that is
   #385's).
-- **The readout words are this planning session's picks**, retunable:
+- **The readout words**, retunable:
   - the washing machine takes the kettle's "Running" / "Stopped";
-  - the TV takes "On" / "Dark". "Dark" matches the fridge's and the light's
-    off-word, and the room text's "The television is dark".
+  - the TV takes "On" / "Off" (Tom).
 - **The nameplate comment** adds `washing_machine` and `tv` to the "its own
   `watts`" line.
   - The TV's plate form is unconfirmed, as the kettle's is.
