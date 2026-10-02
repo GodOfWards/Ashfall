@@ -20,6 +20,77 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 <!-- New entries go directly below this line. -->
 
+## v0.12.2 — Street surfaces by quarter, Calle 42, and stop text that fits them
+
+Implements: handoffs/street-surfaces.md
+
+Implements #343 in full, per `handoffs/street-surfaces.md`. Content only:
+WORLD DATA, no rule changes. Nothing reads link surfaces yet; #300 (the water
+network) will be the first.
+
+**New content**
+
+- `LIMA_STREET_CODES` gains `c42 = Calle 42`. Its eight links, from
+  `x_c105` east to `m_sn_sn_sn_6`, take code `c42`, and its nine stops'
+  streets fields name it (`x_sn_18` and `x_sn_17` become `c42+sn`). No stop
+  id changed; `m_sn_sn_sn_6`–`x_sn_20` (Calle 44's unnamed continuation)
+  stays `sn`.
+- `LIMA_LINKS` surfaces follow Tom's Street View survey by quarter, per the
+  handoff's rules 2–3: paved in the north-west and south-east, on the barrio's
+  lanes, on `c111`, `c14`, `dg4` and `c15`, on `c16` and `c2` in the 15–17
+  column, and on Calle 107's two railway-side links; in the north-east paved
+  on `cbar`, `cp01`, `c50`, gravel on `c42`, `c44`, `c46`, `c109`, dirt
+  otherwise; in the south-west and the rest of the 15–17 column gravel on
+  `c44`, `c46`, dirt otherwise. Rail links, and links touching a rural, rail
+  or station stop or v ≥ 2000, are untouched.
+- `LIMA_STOPS` types: every `core`, `gravel` or `dirt` town stop takes the
+  best surface of its links (rule 4); `barrio` stops keep theirs.
+- `STOP_TEXT`'s `core` and `dirt` sets replaced with Tom's approved text
+  (three mids and two corners each). `gravel` and `barrio` unchanged.
+
+**Validation performed**
+
+- The handoff's expected results reproduced exactly, with no difference:
+  704 of 1,008 links changed (g→d 402, g→p 268, d→p 32, d→g 2; none from
+  paved); final `p` 475, `d` 500, `g` 28, `r` 5. 464 stops changed
+  (gravel→dirt 285, gravel→core 155, dirt→core 21, dirt→gravel 3; no `core`
+  stop changed); final `dirt` 356, `core` 324, `barrio` 54, `gravel` 32,
+  `rural` 7, `rail` 3, `station` 1. Home stop `m_c90b_c117_c119`: both links
+  paved. 201 of 427 casa sites have a paved link; all 21 barrio sites do.
+  Mixed-surface mids: `m_c24_acc_c17`, `m_sn_c111_sn`, `m_sn_sn_sn_6`.
+- Headless Chromium on `file://`: `validateLocations()` and
+  `validateBuildings()` clean; the four Calle 42 casas address "Calle 42"
+  and its corners read e.g. "Calle 101 & Calle 42"; a south-west dirt mid
+  (`m_c10_c19_c17`) shows the new dirt text; `?replay` ran with no problems
+  at any step and `?bench` completed.
+
+**Open questions / decisions resolved**
+
+- How the rewrite was produced: a throwaway Python script implementing rules
+  1–4 rewrote the `LIMA_STOPS` and `LIMA_LINKS` blocks in place, keeping line
+  order; nothing that computes surfaces ships.
+
+**Notes / assumptions**
+
+- Rule 4 (a stop's type from its best link surface) is an implementation
+  choice from #343, retunable.
+- A v0.12 save loads unchanged: stop ids are untouched, and stop text is
+  read, not saved.
+
+**Documentation**
+
+- The `LIMA_LINKS` format comment notes surfaces follow Tom's survey by
+  quarter; `STOP_TEXT`'s comment describes the quarters.
+- Nothing was deferred.
+
+**Sections touched**
+
+- WORLD DATA: `LIMA_STREET_CODES`, `LIMA_STOPS`, `LIMA_LINKS`, `STOP_TEXT`.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.12.1"` → `"0.12.2"`
+
+---
+
 ## v0.12.1 — Water holders: a bucket, a canteen, a water jug and a dispenser jug
 
 Implements: handoffs/water-holders.md
