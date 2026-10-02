@@ -425,6 +425,59 @@ Status: secondary unless marked; read 2026-09-27.
   - **House pumps:** a typical tank-filling pump sold in Argentina is
     **½ HP (about 370 W)**, moving on the order of **33 L a minute**
     (retail listings, secondary, 2026-09-27; figures vary by model).
+  - **How fast the network fills a pumpless roof tank (#412):** about
+    **1,000 L/h**, order of magnitude. Derived, not measured in Lima;
+    researched 2026-10-02.
+    - **Design pressure, about 10 m:** "Se debe asegurar una presión mínima
+      en cualquier punto de la red tendiente a 10 m de columna de agua"
+      (AySA, *Criterios de diseño hidráulico para proyectos de agua*,
+      February 2019,
+      [PDF](https://www.argentina.gob.ar/sites/default/files/2021/04/diseno_hidraulico.pdf)).
+      **Confirmed** for AySA, not ENDEZA. It matches Los Pinos' "10 metros"
+      before the 2026 well (above).
+    - **Filling straight from the network** (*suministro directo*) is
+      allowed with at least 8 m on the pavement; below that, a ground
+      cistern and pump (Czajkowski, Gómez, Calisto Aguilar,
+      *Instalaciones*, Anexo IS1, UNLP,
+      [PDF](https://sedici.unlp.edu.ar/bitstream/handle/10915/84466/Documento_completo.pdf-PDFA.pdf?sequence=1&isAllowed=y)).
+      **Secondary**: a teaching text restating the OSN norm.
+    - **Flow through a service connection**, in L/s, by available pressure
+      (the pavement's, minus the height up to the tank inlet). The same
+      table is in the UNLP text (Tabla 4) and in the national *Guía para
+      ejecución de instalaciones sanitarias domiciliarias* (Res. 641/2023,
+      Tabla Nº 1,
+      [PDF](https://www.argentina.gob.ar/sites/default/files/guia_para_ejecucion_de_instalaciones_sanitarias_domiciliarias_y_asimilables_a_domiciliarias.pdf)).
+      **Confirmed.**
+
+      | Available (m) | 13 mm | 19 mm | 25 mm |
+      |---|---|---|---|
+      | 4 | 0.24 | 0.52 | 1.06 |
+      | 5 | 0.28 | 0.60 | 1.18 |
+      | 6 | 0.33 | 0.66 | 1.30 |
+      | 8 | 0.37 | 0.75 | 1.48 |
+      | 10 | 0.42 | 0.81 | 1.63 |
+
+      The Guía sets **19 mm as the minimum connection** today. Whether
+      Lima's older, OSN-era connections are 13 mm or 19 mm is
+      **unconfirmed**.
+    - **The float valve:** a ½" equilibrium ballvalve passes **22.3 L/min
+      at 0.5 bar** and 31.4 at 1 bar (Masefield Beta, flow rate chart,
+      [PDF](https://www.masefield-beta.co.uk/storage/app/uploads/public/5a8/d46/9b8/5a8d469b8dced695729324.pdf)).
+      **Confirmed** for that UK maker. No Argentine *flotante*'s flow
+      figure was found.
+    - **Derived for Lima (unconfirmed, retunable):** 10 m on the pavement
+      and a one-storey roof tank's inlet 4–5 m up (an estimate, not
+      observed) leave 5–6 m. The connection alone passes about
+      **1,000–1,200 L/h at 13 mm** and **2,200–2,400 L/h at 19 mm**. With
+      the ½" float valve in series, about **800** and **1,100 L/h**. So an
+      empty 1,000 L tank refills in **about an hour** at full network
+      pressure, about half the house pump's rate (above).
+    - **It falls with the pressure:** flow goes roughly with the square
+      root of the available head (the table), and stops once the pavement
+      pressure drops below the tank inlet's height.
+    - **Not found:** ENDEZA's own pressure or connection size for Lima.
+      AySA's own copy of the Guía on aysa.com.ar returned errors
+      throughout.
   - **Sewers: on the paved streets only** (Tom, Street View captures of
     March 2026, 2026-09-29). Round cast-iron manhole covers lettered
     **"OSN"** sit in the roadway of every paved street; one is at Calle 52
