@@ -1754,7 +1754,9 @@
   //                      flagged, rural, rail or station stop reads its own
   //                      text (LIMA_STOP_TEXT).
   //   LIMA_LINKS         `a b street surface`, walkable both ways. Surface:
-  //                      p paved, g gravel (ripio), d dirt, r the railway.
+  //                      p paved, g gravel (ripio), d dirt, r the railway,
+  //                      by quarter from Tom's Street View survey (Lima.md,
+  //                      "Streets and surfaces"), not the imagery.
   //                      Only `r` is read today (the map's rail); the rest
   //                      is laid down ahead of a consumer.
   //   LIMA_RIVER         the Paraná de las Palmas near the plant: one polyline
@@ -3664,15 +3666,15 @@ x_sn_9 m_sn_sn_sn sn p
   // The text every other stop reads, by its type, a mid stop's and a
   // corner's: one variant per stop, picked by stableHash() of its id mod the
   // count, so a stop reads the same in every run. Each text is true of every
-  // stop of its type: paved around the plaza, on the main axis and along
-  // the railway; mostly gravel (ripio) elsewhere; dirt where the town meets
-  // the fields; the Barrio Atucha's lanes (reference: Lima.md, "Streets and
-  // surfaces", from imagery and Tom first-hand).
+  // stop of its type. The town is four quarters: paved in the north-west
+  // and south-east, mostly dirt in the north-east and south-west, with a few
+  // gravel streets; the Barrio Atucha's lanes are paved (reference: Lima.md,
+  // "Streets and surfaces", Tom first-hand from Street View).
   const STOP_TEXT = {
     core: {
       mid: [
-        "A paved block of low houses built wall to wall. Every window has bars, and every door is shut.",
-        "Low house fronts along the pavement, the paint faded. Nothing moves behind the bars.",
+        "A paved street of low houses. Most of the windows have bars, and every door is shut.",
+        "Low house fronts along the pavement, a water tank on every roof. Nothing moves behind the bars.",
         "The street is paved here, with kerbs and a line of trees. It is very quiet." ],
       corner: [
         "A paved corner. Nobody is waiting to cross.",
@@ -3687,10 +3689,12 @@ x_sn_9 m_sn_sn_sn sn p
         "A gravel corner, rutted where the cars used to turn." ] },
     dirt: {
       mid: [
-        "The street is packed earth here. Past the last houses, the fields begin.",
-        "A dirt street at the edge of town, the ruts baked hard. Beyond the fences, open ground." ],
+        "A dirt street, the ruts baked hard. Low houses on either side, a water tank on every roof.",
+        "Packed earth between low houses, dust along the edges. The gates are shut, the windows barred.",
+        "A dirt street under a line of trees. Nothing has driven through in a while." ],
       corner: [
-        "Two dirt tracks cross at the edge of town." ] },
+        "Two dirt streets cross. The ruts run straight through.",
+        "A dirt corner, worn bare where the cars turned." ] },
     barrio: {
       mid: [
         "A lane in the Barrio Atucha. Chalets with red-tile roofs sit back in wide gardens under tall trees.",
