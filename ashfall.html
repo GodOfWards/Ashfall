@@ -4774,6 +4774,23 @@ x_sn_9 m_sn_sn_sn sn p
   //   flowLph      a pump's flow in L/h; present on a load that fills its
   //                building's tank, drawing only while the tank's float calls
   //                (powerSnapshot(), settleTanks())
+  //   stops        present on an appliance that switches itself off: {
+  //                after | dial, dialMax?, atBoil, onPowerLoss, line,
+  //                lineOnPowerLoss?, noLatchLine? }, exactly one of `after`
+  //                (minutes after it is switched on), `dial` (the minutes the
+  //                player picks from when switching it on, each up to
+  //                `dialMax`) and `atBoil` (when the water it heats reaches
+  //                the boil, at once when it holds none: the electric kettle,
+  //                an item, KETTLES in POWER). `onPowerLoss` is what a resolve
+  //                that leaves it unpowered does (applyStopRules()): "off"
+  //                switches it off, and switching it on without power doesn't
+  //                latch and says `noLatchLine` instead; "pause" keeps its
+  //                time left until power returns. `line` is heard in its room
+  //                when it stops by itself, and on a power cut too with
+  //                `lineOnPowerLoss`. A timed one (`after`, `dial`) keeps when
+  //                it stops in state.power.stops (PLAYER STATE). Every one is
+  //                found switched off (leftOnChance 0, validateWiring()). The
+  //                lines are game text, Tom's.
   //   nameplate    what its rating label prints, in one of three
   //                forms: { amps }, printed as "<volts> V · <amps> A" at the
   //                entry's own `volts`; { printsWatts:true }, printed as its
@@ -4851,10 +4868,12 @@ x_sn_9 m_sn_sn_sn sn p
   //                   WEG's 60 Hz motors; secondary). Found switched on, as
   //                   the fridge is: 0.99 is a judgment call.
   // The kettle, the toaster, the microwave, the washing machine and the TV
-  // are found switched off (leftOnChance 0), and once switched on, draw
-  // until switched off: switching themselves off, and being used, are
-  // #334's. The washing machine's readout words are the kettle's, a
-  // judgment call; the TV's, "On" and "Off", are Tom's. Retunable.
+  // are found switched off (leftOnChance 0). The toaster and the microwave
+  // switch themselves off (`stops`); the washing machine and the TV draw
+  // until switched off (#424 is the wash cycle). Using any of them on food
+  // or clothes is #422's, #423's and #424's. The washing machine's readout
+  // words are the kettle's, a judgment call; the TV's, "On" and "Off", are
+  // Tom's. Retunable.
   // The hood is a motor, but its start surge is left unmodelled: it carries
   // no `startWatts`. Lima homes have no smoke alarm, and usually no bathroom
   // extractor fan (Tom, first-hand), so neither is an appliance.
@@ -4882,6 +4901,13 @@ x_sn_9 m_sn_sn_sn sn p
   // not split by fuel). 2.4 is a pick inside it, a judgment call, retunable.
   const WATER_HEATER_WATTS = 2000;
   const WATER_HEATER_LOSS_KWH_DAY = 2.4;
+  // The stop rules' times (`stops`): the toaster pops after TOASTER_RUN_MIN,
+  // a judgment call with no sourced cycle; the microwave runs what its dial
+  // is set to, picked from MICROWAVE_MINUTE_CHOICES, a UI judgment call, up
+  // to MICROWAVE_DIAL_MAX_MIN, the dial's top. Retunable.
+  const TOASTER_RUN_MIN = 3;
+  const MICROWAVE_DIAL_MAX_MIN = 35;
+  const MICROWAVE_MINUTE_CHOICES = [1, 2, 5, 10, 20, 35];
   const APPLIANCES = {
     fridge_freezer: { name:"Fridge-freezer", watts:100, startWatts:1300, volts:220, dutyCycle:0.35, cycleMinutes:60, leftOnChance:0.99,
       nameplate:{ amps:1.0 }, readout:{ on:"Light on", off:"Dark" } },
@@ -4894,9 +4920,12 @@ x_sn_9 m_sn_sn_sn sn p
     kettle:         { name:"Electric kettle", watts:2200, volts:220, leftOnChance:0, nameplate:{ printsWatts:true },
       readout:{ on:"Running", off:"Stopped" } },
     toaster:        { name:"Toaster",        watts:700,  volts:220, leftOnChance:0, nameplate:{ printsWatts:true },
-      readout:{ on:"Running", off:"Stopped" } },
+      readout:{ on:"Running", off:"Stopped" },
+      stops:{ after:TOASTER_RUN_MIN, onPowerLoss:"off", lineOnPowerLoss:true, line:"The toaster pops up.",
+        noLatchLine:"You push the lever down. It won't stay." } },
     microwave:      { name:"Microwave",      watts:1150, volts:220, leftOnChance:0, nameplate:{ printsWatts:true },
-      readout:{ on:"Running", off:"Stopped" } },
+      readout:{ on:"Running", off:"Stopped" },
+      stops:{ dial:MICROWAVE_MINUTE_CHOICES, dialMax:MICROWAVE_DIAL_MAX_MIN, onPowerLoss:"pause", line:"The microwave pings." } },
     washing_machine: { name:"Washing machine", watts:1800, volts:220, leftOnChance:0, nameplate:{ printsWatts:true },
       readout:{ on:"Running", off:"Stopped" } },
     tv:             { name:"TV",             watts:43,   volts:220, leftOnChance:0, nameplate:{ printsWatts:true },
@@ -5291,7 +5320,12 @@ x_sn_9 m_sn_sn_sn sn p
       //             at its appliance's leftOnChance, keyed and pure
       //             (switchOnIn()). A switchless appliance has no entry.
       //   breakers  { breakerId: { on, tripped } }. Default: on, untripped.
-      power:{ switches:{}, breakers:{} },
+      //   stops     { loadId: { at } | { left } } — when an appliance with a
+      //             timed stop rule (APPLIANCES' `stops`), switched on,
+      //             stops: `at`, a minute since the collapse, while it runs;
+      //             `left`, the minutes it still has, while it waits for
+      //             power. No other load ever has an entry.
+      power:{ switches:{}, breakers:{}, stops:{} },
       // One of ELECTRICAL_RULES, chosen when the run starts and never
       // changed during it. The Options choice applies at a restart.
       electricalRules:"detailed",
@@ -5339,6 +5373,10 @@ x_sn_9 m_sn_sn_sn sn p
   // resolveDeviceTarget() looks it up again on every render. UI-only and
   // never saved, like detailItem.
   let deviceTarget = null;
+  // The load whose dial the Electrical view is showing, its Switch on
+  // opened into the minutes to pick from (APPLIANCES' `stops.dial`), or null.
+  // UI-only and never saved, like deviceTarget.
+  let dialPickLoad = null;
   // Whether Walk to…'s list is open, and the map card's place and where it
   // was tapped ({ place, x, y }, client coordinates), or null when closed.
   // UI-only and never saved, like detailItem: both look their place up
@@ -7283,6 +7321,7 @@ x_sn_9 m_sn_sn_sn sn p
     if(entered && !state.enteredBuildings.includes(entered)) state.enteredBuildings.push(entered);
     worldTab = "floor";
     detailItem = null;
+    dialPickLoad = null;
     if(!walking) render();
   }
   // WALK TO… Travel to a known place along the shortest route, run
@@ -7563,15 +7602,32 @@ x_sn_9 m_sn_sn_sn sn p
   // A load's own switch, by hand: today from a fridge's or freezer's device
   // pop-up, and from the electrical view. Instant, and resolved at
   // once, as a breaker is: switching a fridge on starts it, surge and all.
-  // Nothing else in play writes state.power.switches. The line names the
-  // appliance; functional, retunable.
-  function doSwitchLoad(loadId, on){
+  // Nothing else in play writes state.power.switches but a stop
+  // (applyStopRules(), settleApplianceStops()). An appliance with a timed
+  // stop rule records when it stops: its `after`, or the dial's `minutes`,
+  // from now. One whose rule is "off" doesn't latch without power at its
+  // socket, and says so in place of the switch line; one whose rule is
+  // "pause" switches on and waits, its whole time kept (applyStopRules()).
+  // The line names the appliance; functional, retunable.
+  function doSwitchLoad(loadId, on, minutes){
     const l = POWER_NET.loads[loadId];
     const a = l && APPLIANCES[l.appliance];
     on = !!on;
-    if(!a || a.switchless || switchOnIn(state.power, state.seed, loadId, a) === on) return;
+    if(!a || a.switchless || l.plug || switchOnIn(state.power, state.seed, loadId, a) === on) return;
+    const rule = a.stops;
+    const run = on && rule ? (rule.dial ? minutes : rule.after) : undefined;
+    if(on && rule && rule.dial && !rule.dial.includes(run)) return;
+    if(on && rule && rule.onPowerLoss === "off" && !(loadSupplyVolts(loadId) > 0)){
+      log(rule.noLatchLine);
+      render();
+      return;
+    }
     log(`You switch the ${a.name.toLowerCase()} ${on ? "on" : "off"}.`);
-    changePower(POWER_INDEX.of[loadId], p=> setSwitchIn(p, state.seed, loadId, a, on));
+    changePower(POWER_INDEX.of[loadId], p=>{
+      setSwitchIn(p, state.seed, loadId, a, on);
+      if(run > 0) p.stops[loadId] = { at: minutesSinceCollapse() + run };
+      else delete p.stops[loadId];
+    });
     render();
   }
   // The meters, from the Electrical view. A reading takes
@@ -8157,12 +8213,13 @@ x_sn_9 m_sn_sn_sn sn p
     planNextDue();
   }
   // The next due minute, from what is lit or running now: a grid change not
-  // yet made, a tank coming full (tankFullDue()), a battery running out, a
-  // timer's end, a lit room's next event (heatRoomDue()), and every clock
-  // event not yet fired.
+  // yet made, a tank coming full (tankFullDue()), a battery running out, an
+  // appliance's timed stop, a timer's end, a lit room's next event
+  // (heatRoomDue()), and every clock event not yet fired.
   function planNextDue(){
     let due = settledAt + tankFullDue();
     batteryDeaths.forEach(t=>{ due = Math.min(due, t); });
+    Object.values(state.power.stops).forEach(e=>{ if(e.at !== undefined) due = Math.min(due, e.at); });
     GRID_CHANGES.forEach(g=>{ if(g > lastGrid) due = Math.min(due, g); });
     timerStoves.forEach(({ container })=>{ due = Math.min(due, settledAt + container.timerMinutes); });
     heatRooms.forEach(id=>{ due = Math.min(due, settledAt + heatRoomDue(world[id])); });
@@ -8173,6 +8230,7 @@ x_sn_9 m_sn_sn_sn sn p
   // settledAt, and does what is due there, in this order: the tanks
   // (settleTanks()), then a grid change at `m` (resolveGrid()), then a
   // tank come full resolves its building so its pump stops, then the
+  // appliances whose timed stop is due (settleApplianceStops()), then the
   // batteries out by `m` (settleBatteryDeaths()), then every running timer
   // in world order, then every lit room, its cooking and then its fire
   // (settleTimer(), settleHeat()). It never runs past an event
@@ -8186,6 +8244,7 @@ x_sn_9 m_sn_sn_sn sn p
     GRID_CHANGES.forEach(g=>{ if(lastGrid < g && g <= m) resolveGrid(g); });
     lastGrid = Math.max(lastGrid, m);
     filled.forEach(b=>{ if(TANK_PUMPS[b] !== undefined) resolveBuilding(b); });
+    settleApplianceStops(m);
     settleBatteryDeaths(m);
     timersInOrder().forEach(({ roomId, container })=> settleTimer(roomId, container, span));
     heatRoomsInOrder().forEach(id=> settleHeat(id, span));
@@ -8199,7 +8258,8 @@ x_sn_9 m_sn_sn_sn sn p
   // Every event due by now, each at its own minute and in time order: the
   // world settled to it, which does what is due there and logs it, then the
   // clock events up to it. At one minute the order is grid changes, tanks
-  // coming full, battery deaths, timers, cooking, fires, clock events. The cap guards against an event that never clears,
+  // coming full, appliance stops, battery deaths, timers, cooking, fires,
+  // clock events. The cap guards against an event that never clears,
   // which would otherwise hang the step: a bug, reported and cut short.
   const SCHEDULER_MAX_EVENTS_PER_STEP = 1000;
   function processDueEvents(){
@@ -8607,8 +8667,7 @@ x_sn_9 m_sn_sn_sn sn p
   // Only a trip changes what a look sees, so a look is kept until one
   // happens, and taken again at the next layer.
   function resolvePower(net, appliances, power, rules, gridLive, prevDrawing, seed, floats){
-    const p = { switches:Object.assign({}, power.switches), breakers:{} };
-    Object.keys(power.breakers).forEach(id=>{ p.breakers[id] = Object.assign({}, power.breakers[id]); });
+    const p = copyPower(power);
     const trips = [];
     let kept = null;
     const look = ()=> kept || (kept = powerSnapshot(net, appliances, p, rules, gridLive, prevDrawing, seed, floats));
@@ -8713,11 +8772,12 @@ x_sn_9 m_sn_sn_sn sn p
     });
     return (idx.memo.trippers[key] = out);
   }
-  // The busy buildings, in the index's order, for a power state and floats.
-  // An entry under an id the network lacks is nobody's.
+  // The busy buildings, in the index's order, for a power state and floats:
+  // a tripper, an entry in the power state (a switch, a breaker or a stop),
+  // or a float not full. An entry under an id the network lacks is nobody's.
   function busyBuildings(idx, power, rules, seed, floats){
     const busy = new Set(untouchedTrippers(idx, rules, seed));
-    ["switches", "breakers"].forEach(k=> Object.keys(power[k] || {}).forEach(id=>{
+    ["switches", "breakers", "stops"].forEach(k=> Object.keys(power[k] || {}).forEach(id=>{
       const b = idx.of[id];
       if(b !== undefined) busy.add(b);
     }));
@@ -8775,10 +8835,11 @@ x_sn_9 m_sn_sn_sn sn p
   let powerNow = null;
   function withLooks(result, gridLive, looks){ return powerResult(result.idx, result.rules, result.seed, gridLive, looks); }
   // A copy of a power state, for a change to be resolved before it is
-  // committed.
+  // committed: its switches, breakers and stops.
   function copyPower(power){
-    const p = { switches:Object.assign({}, power.switches), breakers:{} };
+    const p = { switches:Object.assign({}, power.switches), breakers:{}, stops:{} };
     Object.keys(power.breakers).forEach(id=>{ p.breakers[id] = Object.assign({}, power.breakers[id]); });
+    Object.keys(power.stops || {}).forEach(id=>{ p.stops[id] = Object.assign({}, power.stops[id]); });
     return p;
   }
   // Resolves building `b` on the power state `power`, from the look `before`
@@ -8804,10 +8865,10 @@ x_sn_9 m_sn_sn_sn sn p
     if(buildingPowerChanged(b, state.power, r.power)) settleColdStores(b, m);
     state.power = r.power;
   }
-  // A resolve's result committed now (adoptPower()), and its look made the
-  // building's in powerNow.
-  function commitResolve(b, r){
-    adoptPower(b, r, minutesSinceCollapse());
+  // A resolve's result committed at minute `m` (adoptPower()), and its look
+  // made the building's in powerNow.
+  function commitResolve(b, r, m){
+    adoptPower(b, r, m);
     const looks = new Map(powerNow.looks);
     const { power, trips, ...look } = r;
     looks.set(b, look);
@@ -8817,28 +8878,31 @@ x_sn_9 m_sn_sn_sn sn p
   // with no resolve before it, so nothing starts. A trip it finds (only an
   // imported save could hold one unresolved) is committed silently.
   function refreshPower(){
-    const gridLive = gridUp(), looks = new Map();
+    const gridLive = gridUp(), looks = new Map(), m = minutesSinceCollapse();
     powerNow = powerResult(POWER_INDEX, state.electricalRules, state.seed, gridLive, looks);
     busyBuildings(POWER_INDEX, state.power, state.electricalRules, state.seed, tankFloatsNow()).forEach(b=>{
       const r = resolveBuildingOn(b, state.power, gridLive, null);
-      adoptPower(b, r, minutesSinceCollapse());
+      adoptPower(b, r, m);
       const { power, trips, ...look } = r;
       looks.set(b, look);
     });
+    applyStopRules(Array.from(looks.keys()), m);
   }
-  // A change to building `b`'s power state, by an action: `change(power)` is
-  // made on a copy, the building resolved on it, and the result committed,
-  // so the action's trips happen, and are heard, with it (logTrips()).
-  // With no change it is a plain resolve: a tank's float moved by a draw
-  // (doFillAtSink()), or its tank come full (settleTanks()).
-  function changePower(b, change){
+  // A change to building `b`'s power state, by an action or an event at
+  // minute `m` (now by default): `change(power)` is made on a copy, the
+  // building resolved on it, and the result committed, so the action's trips
+  // happen, and are heard, with it (logTrips()), and then its stop rules
+  // (applyStopRules()). With no change it is a plain resolve: a tank's float
+  // moved by a draw (doFillAtSink()), or its tank come full (settleTanks()).
+  function changePower(b, change, m = minutesSinceCollapse()){
     if(!powerNow) refreshPower();
     if(b === undefined) return;
     const next = copyPower(state.power);
     if(change) change(next);
     const r = resolveBuildingOn(b, next, powerNow.gridLive, powerNow);
-    commitResolve(b, r);
+    commitResolve(b, r, m);
     logTrips(r.trips);
+    applyStopRules([b], m);
   }
   function resolveBuilding(b){ changePower(b, null); }
   // The grid failing or coming back at minute `m`, a scheduled event
@@ -8858,6 +8922,44 @@ x_sn_9 m_sn_sn_sn sn p
     powerNow = withLooks(before, gridLive, looks);
     logGridChange(m, before, powerNow);
     logTrips(trips);
+    applyStopRules(Array.from(looks.keys()), m);
+  }
+  // STOP RULES: an appliance that switches itself off (APPLIANCES' `stops`).
+  // After every resolve of a building (changePower(), resolveGrid(),
+  // refreshPower()), each of its loads with an entry in state.power.stops is
+  // set against the look the resolve left: left unpowered, one whose rule is
+  // "off" switches off, its entry gone, with its line in its room when it
+  // has `lineOnPowerLoss` (the toaster pops); one whose rule is "pause"
+  // keeps its time left; a paused one with power again runs on from now.
+  // Switching off a load that isn't drawing changes nothing the look shows,
+  // so it needs no resolve of its own.
+  function applyStopRules(buildings, m){
+    const stops = state.power.stops;
+    Object.keys(stops).forEach(id=>{
+      if(!buildings.includes(POWER_INDEX.of[id])) return;
+      const l = POWER_NET.loads[id], a = l && APPLIANCES[l.appliance], rule = a && a.stops, e = stops[id];
+      if(!rule){ delete stops[id]; return; }
+      if(powerRead(powerNow, "powered", id)){
+        if(e.left !== undefined) stops[id] = { at: m + e.left };
+      } else if(rule.onPowerLoss === "off"){
+        delete stops[id];
+        setSwitchIn(state.power, state.seed, id, a, false);
+        if(rule.lineOnPowerLoss && l.room === state.currentRoom) log(rule.line);
+      } else if(e.at !== undefined) stops[id] = { left: Math.max(0, e.at - m) };
+    });
+  }
+  // Every timed stop due by minute `m` (a scheduled event: planNextDue()):
+  // the load switched off, its entry gone, its building resolved, and its
+  // line heard in its room.
+  function settleApplianceStops(m){
+    Object.keys(state.power.stops).forEach(id=>{
+      const e = state.power.stops[id];
+      if(!e || e.at === undefined || e.at > m + TICK_EPSILON) return;
+      const l = POWER_NET.loads[id], a = l && APPLIANCES[l.appliance];
+      if(!a){ delete state.power.stops[id]; return; }
+      changePower(POWER_INDEX.of[id], p=>{ setSwitchIn(p, state.seed, id, a, false); delete p.stops[id]; }, m);
+      if(l.room === state.currentRoom) log(a.stops.line);
+    });
   }
   // What the player notices when something in their room stops or starts:
   // a trip's quiet (logTrips()) and the grid going down (logGridChange())
@@ -10073,13 +10175,22 @@ x_sn_9 m_sn_sn_sn sn p
   // before it (0.8) has no `power` or `electricalRules` and takes them from
   // makeDefaultState()'s spread in applyLoadedData(): an empty power state,
   // so every switch reads its rolled default, and "detailed". This makes
-  // sure a present one has the shape the resolver reads, two plain objects
+  // sure a present one has the shape the resolver reads, three plain objects
   // and a known rules value, dropping anything else, the `heat` an older
-  // save carries included. Idempotent.
+  // save carries included. A stop is kept only for a load with a timed stop
+  // rule, as `{ at }` or `{ left }`; a save from before stops (0.12) has
+  // none, so nothing is running. Idempotent.
   function backfillPowerState(){
     const obj = (v)=> v && typeof v === "object" && !Array.isArray(v) ? v : {};
-    const p = obj(state.power);
-    state.power = { switches:obj(p.switches), breakers:obj(p.breakers) };
+    const num = (v)=> typeof v === "number" && Number.isFinite(v);
+    const p = obj(state.power), stops = {};
+    Object.keys(obj(p.stops)).forEach(id=>{
+      const e = obj(p.stops[id]), l = POWER_NET.loads[id], rule = l && APPLIANCES[l.appliance] && APPLIANCES[l.appliance].stops;
+      if(!rule || !(rule.after || rule.dial)) return;
+      if(num(e.at)) stops[id] = { at:e.at };
+      else if(num(e.left)) stops[id] = { left:e.left };
+    });
+    state.power = { switches:obj(p.switches), breakers:obj(p.breakers), stops };
     if(!ELECTRICAL_RULES.includes(state.electricalRules)) state.electricalRules = "detailed";
   }
   // migrateCookingRelease(): brings a 0.7 save into the cooking release,
@@ -10223,6 +10334,7 @@ x_sn_9 m_sn_sn_sn sn p
     detailItem = null;
     openGroups.clear();
     deviceTarget = null;
+    dialPickLoad = null;
     nextRulesChoice = null;
     gameOver = false;
     invTab = "inventory";
@@ -10390,6 +10502,10 @@ x_sn_9 m_sn_sn_sn sn p
   //     another template one or with an authored one;
   //   every room a board, panel or role names exists, and every container a
   //     fixture names is in its room;
+  //   every appliance with a stop rule (`stops`) carries exactly one of
+  //     after, dial and atBoil, is found switched off (leftOnChance 0), has a
+  //     known onPowerLoss and a line, a noLatchLine when it switches off, and
+  //     a dial of minutes within its dialMax;
   //   every appliance id is in APPLIANCES, every APPLIANCES entry carries
   //     exactly one of leftOnChance and switchless, a readout with non-empty
   //     on and off words unless it is switchless, an `idle` word only when
@@ -10437,6 +10553,18 @@ x_sn_9 m_sn_sn_sn sn p
       else if(rated < a.watts) problems.push(`appliance ${id}: nameplate rated ${rated} W, below its own ${a.watts} W`);
       const forms = ["amps", "printsWatts", "watts"].filter(k=> a.nameplate && k in a.nameplate);
       if(forms.length > 1) problems.push(`appliance ${id}: nameplate carries more than one form (${forms.join(", ")})`);
+      const st = a.stops;
+      if(st){
+        const kinds = ["after", "dial", "atBoil"].filter(k=> k in st);
+        if(kinds.length !== 1) problems.push(`appliance ${id}: stops needs exactly one of after, dial and atBoil`);
+        if(a.leftOnChance !== 0) problems.push(`appliance ${id}: stops by itself, so must be found switched off (leftOnChance 0)`);
+        if(!["off", "pause"].includes(st.onPowerLoss)) problems.push(`appliance ${id}: stops.onPowerLoss is not "off" or "pause"`);
+        if(!worded(st.line)) problems.push(`appliance ${id}: stops needs a non-empty line`);
+        if(st.onPowerLoss === "off" && !worded(st.noLatchLine)) problems.push(`appliance ${id}: stops "off" needs a non-empty noLatchLine`);
+        if("after" in st && !(Number.isFinite(st.after) && st.after > 0)) problems.push(`appliance ${id}: stops.after is not a number above 0`);
+        if("dial" in st && !(Array.isArray(st.dial) && st.dial.length && st.dial.every(x=> Number.isFinite(x) && x > 0 && x <= st.dialMax)))
+          problems.push(`appliance ${id}: stops.dial is not a list of minutes above 0 and up to its dialMax`);
+      }
     });
     Object.values(net.boards).forEach(b=> roomExists(b.room, b.id));
     Object.values(net.panels).forEach(p=>{
@@ -11178,9 +11306,11 @@ x_sn_9 m_sn_sn_sn sn p
   // on and the stoves whose timer runs, against heatRooms and timerStoves;
   // a settle that was missed: settledAt, against now; and a power change
   // that was not resolved: every busy building (busyBuildings()) against the
-  // looks powerNow holds, and the grid it holds against gridUp(); and a
-  // device switched on without its running out scheduled, or a reachable
-  // list left unsettled.
+  // looks powerNow holds, and the grid it holds against gridUp(); a device
+  // switched on without its running out scheduled, or a reachable list left
+  // unsettled; and a timed stop (state.power.stops) on a load without a timed
+  // rule, on one switched off, running without power or waiting with it, or
+  // left past its minute.
   function replayProblems(){
     const problems = [];
     const now = minutesSinceCollapse();
@@ -11201,6 +11331,15 @@ x_sn_9 m_sn_sn_sn sn p
       if(!powerNow.looks.has(b)) problems.push(`building ${b} is busy, but no resolve has looked at it`);
     });
     if(powerNow.gridLive !== gridUp()) problems.push(`powerNow has the grid ${powerNow.gridLive ? "up" : "down"}, but it is ${gridUp() ? "up" : "down"}`);
+    Object.keys(state.power.stops).forEach(id=>{
+      const e = state.power.stops[id], l = POWER_NET.loads[id], a = l && APPLIANCES[l.appliance];
+      if(!a || !a.stops || !(a.stops.after || a.stops.dial)){ problems.push(`a stop is kept for ${id}, which has no timed stop rule`); return; }
+      if(!switchOnIn(state.power, state.seed, id, a)) problems.push(`a stop is kept for ${id}, which is switched off`);
+      const powered = !!powerRead(powerNow, "powered", id);
+      if(e.at !== undefined && !powered) problems.push(`${id} is running without power`);
+      if(e.left !== undefined && powered) problems.push(`${id} is waiting for power it has`);
+      if(e.at !== undefined && e.at < now - TICK_EPSILON) problems.push(`${id} should have stopped at minute ${e.at}`);
+    });
     const heat = new Set(), timers = new Map();
     roomIds().forEach(id=>{
       if(world[id].heatActive) heat.add(id);
@@ -11263,6 +11402,7 @@ x_sn_9 m_sn_sn_sn sn p
     detailItem = null;
     openGroups.clear();
     deviceTarget = null;
+    dialPickLoad = null;
     invTab = "inventory";
     worldTab = "floor";
     _uidCounter = 1;
@@ -13838,7 +13978,9 @@ x_sn_9 m_sn_sn_sn sn p
   // (roomLabel()), with no status and no control: they can't be seen from
   // here. A row here shows the appliance's name and, for a load with a
   // switch of its own, its readout (loadStatusText()) and one Switch on /
-  // Switch off (doSwitchLoad()). A switchless one (the smoke alarm, the gas
+  // Switch off (doSwitchLoad()); an appliance with a dial (the microwave)
+  // has its Switch on open into the dial's minutes, one button each, and
+  // Cancel (dialPickLoad). A switchless one (the smoke alarm, the gas
   // range) shows neither. Every row here shows its nameplate
   // (nameplateText()) and, while a meter is carried, Test (meterButtons()).
   // Watts appear nowhere but on a nameplate. Functional UI text,
@@ -13873,7 +14015,13 @@ x_sn_9 m_sn_sn_sn sn p
       };
       if(!a.switchless){
         const on = switchOnIn(state.power, state.seed, l.id, a);
-        row.appendChild(mini(on ? "Switch off" : "Switch on", ()=> doSwitchLoad(l.id, !on)));
+        const dial = a.stops && a.stops.dial;
+        if(on) row.appendChild(mini("Switch off", ()=> doSwitchLoad(l.id, false)));
+        else if(dial && dialPickLoad === l.id){
+          dial.forEach(min=> row.appendChild(mini(`${min} min`, ()=>{ dialPickLoad = null; doSwitchLoad(l.id, true, min); })));
+          row.appendChild(mini("Cancel", ()=>{ dialPickLoad = null; render(); }));
+        } else if(dial) row.appendChild(mini("Switch on", ()=>{ dialPickLoad = l.id; render(); }));
+        else row.appendChild(mini("Switch on", ()=> doSwitchLoad(l.id, true)));
       }
       meterButtons({ load:l.id }, mini).forEach(b=> row.appendChild(b));
       li.appendChild(row);
