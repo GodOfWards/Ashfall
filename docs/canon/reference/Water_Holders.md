@@ -5,7 +5,8 @@ records what's decided). See `README.md` for the status labels. Gathered
 2026-10-01 for #393: #47 needs the mate thermos's capacity, and #394 needs
 the bucket's, the canteen's and the water jug's capacities and empty weights.
 Brands are named here as sources only; none appears in the game. The
-kettles were added 2026-10-02 for #425 and #429, which #385 needs.
+kettles were added 2026-10-02 for #425 and #429, which #385 needs. Pouring was added
+2026-10-03 for #434, which refines #411.
 
 Most figures come from retail listings, not makers' spec sheets, so they are
 **Secondary** unless marked otherwise. Where several listings agree, the
@@ -188,6 +189,52 @@ fetched): **Secondary.** Small kettles are rare in Argentine listings.
   or 1 kg, which look like shipping placeholders and aren't used.
   [Centro Confort Deco](https://www.centroconfortdeco.com/productos/pava-enlozada-1-litro/),
   [Baibao](https://baibao.com.ar/productos/pava-pavo-enlozada-reforzada-15-lts-diseno-pico-matero-mate-te/).
+
+## Pouring from a holder (#434)
+
+Researched 2026-10-03. A free pour is far faster than a careful one, and
+no published figure was found for the careful one.
+
+- **A bottle turned over empties by "glugging"** (air and water taking
+  turns at the neck) at a near-constant rate set by the neck alone:
+  Q = α (π/4) √g D_N^{5/2}, whatever the bottle's width (Clanet and
+  Searby's model, restated in Schwefler, Nienaber and Mayer, "The Emptying
+  of a Perforated Bottle", *Fluids* 8 (2023) 225,
+  [doi](https://doi.org/10.3390/fluids8080225)). **Confirmed**
+  (peer-reviewed).
+- **Measured in the same paper (Table 2):** a 60 L drum turned straight
+  down empties in **118 s through a 37.5 mm neck**, 263 s through 25.3 mm
+  and 380 s through 21.7 mm. That is **about 30–34 L/min at 37.5 mm**
+  (60 L nominal, 66 L to the fill line). **Confirmed.** As a check, a 2 L
+  soda bottle (about 22 mm) comes out at about 12 s.
+- **Tilting helps:** a bottle empties fastest held at **about 40° from
+  horizontal**, not straight down (Kenton, Neufeld and Huppert, *Emptying
+  Bottles: A Study of Glugging*, Cambridge summer project, 2012,
+  [PDF](https://www.maths.cam.ac.uk/opportunities/careers-for-mathematicians/summer-research-mathematics/files/Kenton.pdf)).
+  **Secondary**: a student report.
+- **An open-topped container empties "in a much shorter time"**, by
+  jetting: no air has to get in through the outlet (Schwefler et al.,
+  above). **Confirmed**, qualitatively.
+- **The jugs' necks:** the 6 L PET jug takes a **Ø 45 mm** screw cap
+  ([Envapet](https://www.envapet.com.ar/bidon-descartable-pet-06l-rectangular/)),
+  **Confirmed** for the cap. The 12 L and 20 L dispenser jugs' press-on cap
+  is **5.5 cm** across
+  ([Dundalk](https://www.dundalk.com.ar/productos/tapa-para-bidon-12-y-20-litros-a-presion-17axs/)),
+  **Secondary**. The bores inside are **unconfirmed**: about 38–40 mm and
+  45–50 mm, estimated from the caps.
+- **Derived (unconfirmed, retunable),** scaled from the 37.5 mm
+  measurement by D_N^{5/2}:
+  - **6.25 L jug, turned over:** about **30–39 L/min**; empty in
+    **10–12 s**.
+  - **20 L dispenser jug, turned over:** about **47–70 L/min**; empty in
+    **20–25 s**, if it can be held so.
+  - **Open bucket:** **a few seconds.**
+- **Tom's first-hand figures** (2026-10-03, **Unconfirmed**): a 6.25 L
+  jug pours out in slightly under a minute, **about 7 L/min**; emptying a
+  bucket is almost instant. The bucket agrees with the physics. The jug is
+  3–5 times slower than a free pour, so it reads as **a controlled pour
+  into another holder**, where the receiving mouth and not spilling set
+  the pace. That is the case the game times.
 
 ## For the game
 
