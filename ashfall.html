@@ -500,7 +500,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.12.3" };
+  const GAME_CONFIG = { VERSION: "0.13.0" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -4935,11 +4935,11 @@ x_sn_9 m_sn_sn_sn sn p
   //                   the fridge is: 0.99 is a judgment call.
   // The kettle, the toaster, the microwave, the washing machine and the TV
   // are found switched off (leftOnChance 0). The toaster, the microwave and
-  // the kettle switch themselves off (`stops`); the washing machine and the TV draw
-  // until switched off (#424 is the wash cycle). Using any of them on food
-  // or clothes is #422's, #423's and #424's. The washing machine's readout
-  // words are the kettle's, a judgment call; the TV's, "On" and "Off", are
-  // Tom's. Retunable.
+  // the kettle switch themselves off (`stops`); the washing machine and the
+  // TV draw until switched off (#424 is the wash cycle). Using any of them
+  // on food or clothes is #422's, #423's and #424's. The washing machine's
+  // readout words are the kettle's, a judgment call; the TV's, "On" and
+  // "Off", are Tom's. Retunable.
   // The hood is a motor, but its start surge is left unmodelled: it carries
   // no `startWatts`. Lima homes have no smoke alarm, and usually no bathroom
   // extractor fan (Tom, first-hand), so neither is an appliance.
@@ -6720,7 +6720,7 @@ x_sn_9 m_sn_sn_sn sn p
   // first (changeOneUnit()). The kind and the temperature mix (addFluid()),
   // and a source keeps its boil. Returns the source unit after.
   function pourFluid(srcList, src, dstList, dst, ml){
-    const n = Math.min(ml, src.fluid.ml, fluidSpaceMl(dst));
+    const n = pourMl(src, dst, ml);
     const kind = src.fluid.kind, c = fluidTempC(src);
     const after = changeOneUnit(srcList, src, u=> takeFluid(u, n));
     changeOneUnit(dstList, dst, u=> addFluid(u, kind, n, c));
@@ -8340,8 +8340,9 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // The next due minute, from what is lit or running now: a grid change not
   // yet made, a tank coming full (tankFullDue()), a battery running out, an
-  // appliance's timed stop, a running kettle's cut-out, a timer's end, a lit room's next event
-  // (heatRoomDue()), and every clock event not yet fired.
+  // appliance's timed stop, a running kettle's cut-out (kettleCutOutDue()), a
+  // timer's end, a lit room's next event (heatRoomDue()), and every clock
+  // event not yet fired.
   function planNextDue(){
     let due = settledAt + tankFullDue();
     batteryDeaths.forEach(t=>{ due = Math.min(due, t); });
@@ -8358,8 +8359,8 @@ x_sn_9 m_sn_sn_sn sn p
   // (settleTanks()), then the running kettles' heating, at the power they
   // had over the span (settleRunningKettles()), then a grid change at `m`
   // (resolveGrid()), then a tank come full resolves its building so its pump
-  // stops, then the kettles at the boil cut out (settleKettleCutOuts()), then the
-  // appliances whose timed stop is due (settleApplianceStops()), then the
+  // stops, then the kettles at the boil cut out (settleKettleCutOuts()), then
+  // the appliances whose timed stop is due (settleApplianceStops()), then the
   // batteries out by `m` (settleBatteryDeaths()), then every running timer
   // in world order, then every lit room, its cooking and then its fire
   // (settleTimer(), settleHeat()). It never runs past an event

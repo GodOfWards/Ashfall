@@ -20,6 +20,207 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 <!-- New entries go directly below this line. -->
 
+## v0.13.0 — Water temperature, kettles, appliances that switch themselves off, timed transfers, and the canteen
+
+Implements: handoffs/water-temperature-and-kettles.md
+
+Implements #431, #334, #385, #411 and #415 in full, per
+`handoffs/water-temperature-and-kettles.md`. New persistent state
+(`state.power.stops`, a fluid's `temp`, a dish's `water`, the electric
+kettle's `on`): MINOR, and `SAVE_KEY` rotates. No migration of saved state is
+needed beyond a made campfire's `heatSource`: an absent temperature is the
+room's, a dish without `water` cooks by the span as before, and no stops is
+nothing running.
+
+**New**
+
+- Water temperature (FLUIDS, WATER TEMPERATURE; `docs/systems/fluids.md`). A
+  fluid's `temp: { c, at }` is true at a minute and read by `waterTempOf()`:
+  `ROOM_TEMP_C + (c − ROOM_TEMP_C) · e^(−k · (m − at))`, `k` the holder's new
+  `holdsFluid.coolPerMin`, absent meaning `ROOM_TEMP_C`. Never ticked or
+  scheduled. Every writer goes through `setWaterTemp()`, stamping at
+  `settledAt`, and drops a temperature within `TEMP_MERGE_TOLERANCE_C` of the
+  room's. Cooling constants come from `holderCoolPerMin(litres, closed)`:
+  `OPEN_PAN_COOL_PER_MIN × litres^(−⅓)`, times `CLOSED_HOLDER_COOL_FACTOR` for
+  a closed holder; the thermos is `THERMOS_COOL_PER_MIN`.
+- A sink fills at `TANK_WATER_C` off a tank and `MAINS_WATER_C` off the mains
+  (unused in play: every sink has a tank). `addFluid()` takes the incoming
+  temperature and mixes to the volume-weighted mean; `pourFluid()` carries the
+  source's. `sameStackState()` stacks holders only within
+  `TEMP_MERGE_TOLERANCE_C`, and `mergeRows()` takes the mean by units.
+- Heating (FIRE / COOKING, HEATING). Cookware marked `holdsFluid.heats` (the
+  saucepans, the pot, the stovetop kettle) heats in a lit heat container at
+  its container's source, `heatKwOf()` over the new CONTAINER SCHEMA
+  `heatSource` (`STOVE_HEAT_KW`, `CAMPFIRE_HEAT_KW` in `HEAT_SOURCES`), each
+  holder at full power, linearly at `kW × 60 / (L × WATER_HEAT_KJ_PER_L_K)` °C
+  a minute to `WATER_BOIL_C` (`heatOver()`, `minutesToBoil()`). Any other
+  holder in a heat container only cools. `settleVessel()` takes the
+  container's power and room, reads the water at the span's start, and stamps
+  it at the span's end, so water off the heat in between reads as cooled.
+- The boil: `BOIL_MINUTES` 5 → 3, counted only at the boil and lost whenever
+  the water starts a span below it or is mixed below it; water at the boil
+  poured into water at the boil keeps it.
+- Water dishes keep their water (`formDish()`, `dishFrom()`): a dish's
+  `water: { ml, temp? }` heats and cools by the vessel's rules, its volume the
+  water at the part of the dish left (`dishWaterL()`), and its `cookMinutes`
+  count only at the boil, pausing below it.
+- `soonestIn()` and the Wait button count the time to the boil: tainted
+  water's remaining time is its time to the boil plus what it still needs at
+  it; a water dish's, and one that will form, add the time to the boil.
+- Timed transfers (#411): `transferMinutes()` — a fill or pour moving more
+  than `FLUID_INSTANT_MAX_ML` takes `max(1, L / rate)` minutes at
+  `TAP_FLOW_L_PER_MIN` or `POUR_L_PER_MIN`, after the water moves and any tank
+  draw resolves. Pour out and drinking stay instant.
+- Appliance stop rules (#334; POWER, STOP RULES). `APPLIANCES` entries may
+  carry `stops`: the toaster's `after: TOASTER_RUN_MIN`, the microwave's
+  `dial: MICROWAVE_MINUTE_CHOICES` up to `MICROWAVE_DIAL_MAX_MIN`, the
+  kettle's `atBoil`. A timed stop is kept in the new `state.power.stops`
+  (`{ at }` running, `{ left }` waiting), carried by `copyPower()`,
+  `resolvePower()`, `backfillPowerState()` and `busyBuildings()`, and is a
+  scheduled event (`settleApplianceStops()`). After every resolve
+  (`changePower()`, `resolveGrid()`, `refreshPower()`), `applyStopRules()`
+  switches off an unpowered "off" appliance (the toaster pops, heard in its
+  room), pauses a "pause" one and resumes it with power. Switched on without
+  power, the toaster doesn't latch (`noLatchLine`); the microwave waits.
+- Plug loads and the electric kettle (#385; POWER, KETTLES). A template
+  circuit's new `sockets` gives each room it serves a plug load
+  (`<panel>.plug.<role>`, `PLUG_APPLIANCE`, `net.plugLoad`), with no switch:
+  powered while its circuit is live, drawing n × its watts for the n kettles
+  in `powerSnapshot()`'s new `plugs` argument (`plugsNow()`). The electric
+  kettle (registry `appliance`) is plugged in on such a room's floor
+  (`plugFor()`), runs from its pop-up (`doSwitchKettle()`), heats at
+  `APPLIANCES.kettle.watts × KETTLE_EFFICIENCY` (`settleRunningKettles()`), and
+  cuts out at the boil or at once when empty, a scheduled event
+  (`kettleCutOutDue()`, `settleKettleCutOuts()`), cleaning nothing. A resolve
+  that leaves its plug unpowered switches it off silently; a Take switches it
+  off first (`liftKettle()`); poured or drunk empty it cuts out with its line
+  (`kettleWaterTaken()`). Running kettles are a runtime list
+  (`runningKettles`, `liveKettles()`), rebuilt from the room floors by
+  `refreshPower()`.
+- The stovetop kettle heats as a saucepan does and, by its registry
+  `whistleLog`, says "The kettle starts to whistle." when its water reaches
+  the boil from below, heard in its room; reaching the boil is an event for it
+  (`whistleDue()` in `heatRoomDue()`).
+- `settleWorld()`'s order: tanks, the running kettles' heating, grid changes,
+  tanks come full, kettle cut-outs, appliance stops, batteries, timers, lit
+  rooms. `changePower()` and `commitResolve()` take the minute.
+
+**New content**
+
+- `electric_kettle` (Electronics, 0.9 kg, 1,200 mL, `on:false`,
+  `appliance:"kettle"`) and `stovetop_kettle` (Misc, 0.2 kg, 1,200 mL, heats,
+  `whistleLog`). Every holder gains `coolPerMin`.
+- `APPLIANCES` gains `stops` on the toaster, the microwave and the kettle;
+  the kettle's figures comment is the 1–1.2 L range and the 88 %.
+- `WIRING_TEMPLATES`: the `kettle` fixtures leave `row_house` and `casa` (and
+  so `casa_fuses`); SOCKETS (`row_house`, `casa`, `apartment`) and
+  `casa_fuses`' `fuses` carry `sockets:true`.
+- `KITCHEN_CONTAINERS`' stove carries `heatSource:"stove"`; `doBuildFire()`'s
+  campfire `heatSource:"campfire"`.
+- The player's kitchen floor holds an empty electric kettle beside the
+  dispenser jug. Every other home kitchen (the generated casas and
+  `row_neighbour`) rolls `stableHash(id + KEY_SEP + "kettle") % 100`
+  (`kitchenKettle()`, `KITCHEN_KETTLES`): below `KETTLE_ELECTRIC_PCT` an
+  electric kettle on the floor, below that plus `KETTLE_STOVETOP_PCT` a
+  stovetop one on the stove, which keeps `spawnRolled:false` so its pools
+  still roll; otherwise none.
+- The canteen in the goods shed's Padlocked crate 1 (#415).
+- `SPAWN_POOLS`: `electric_kettle` in `office_supplies` (0.20) and
+  `hardware_store` (0.20); `stovetop_kettle` in `hardware_store` (0.20), which
+  still never rolls (#133).
+
+**UI**
+
+- Rows holding water, and pots whose dish has water, are tinted by
+  temperature (`waterTint()`, tokens `--tint-hot` and `--tint-cold`): warm
+  above the room, cool below, none at it; group headers and the pop-up never.
+- Fill at the sink and the pour submenu's Pour show their time when timed.
+- The electric kettle's pop-up offers Switch on / Switch off while plugged
+  in; its row reads "(On)" while running. The Electrical view lists no kettle
+  and no plug load; the microwave's Switch on opens its dial's minutes and
+  Cancel (`dialPickLoad`).
+- Log lines (Tom): "The kettle clicks off.", "The kettle starts to whistle.",
+  "The toaster pops up.", "The microwave pings.", "You push the lever down. It
+  won't stay.", "You press the switch. It clicks straight back up."; and "You
+  switch the kettle on." / "You switch the kettle off."
+
+**Documentation**
+
+- ITEM DATA SCHEMA (`holdsFluid`, `fluid.temp`, a dish's `water`,
+  `boilMinutes`, `appliance`, `whistleLog`), CONTAINER SCHEMA (`heatSource`),
+  POWER SCHEMA (`stops`, `sockets`), `expandWiring()`'s node comment (plug
+  loads, `plugLoad`), PLAYER STATE (`state.power.stops`), the thermos and
+  `APPLIANCES` comments.
+- `docs/systems/fluids.md`: temperature, mixing and stacking, heating, the
+  boil, dishes' water, timed transfers, the tint, costs, constants.
+- `docs/systems/time.md`: the kettles' heating and cut-outs, appliance stops,
+  the whistle, the order at one minute, the runtime list, the saved fields.
+- `docs/systems/power.md`: stop rules and `state.power.stops`, plug loads and
+  the kettle, what makes a building busy, the invariants.
+- Deferred: #437, drinking hot water.
+
+**Validation performed**
+
+- `validateItemRegistry()`, `validateWiring()` and `validateBuildings()`
+  report no problems; each checks the new fields (`coolPerMin`, `whistleLog`,
+  `appliance`; `stops`, leftOnChance 0 for a stop rule; `heatSource`).
+  `validateReachability()` needed no change: the canteen and the kettles are
+  counted as hand-placed, and the new pool entries as any other.
+- `replayProblems()` now checks `state.power.stops` and the running kettles;
+  the replay page runs every step with no problems. Its tank draws use a
+  saucepan, 400 fills (`REPLAY_PAN_FILLS`), so each stays instant. Every step
+  logs the lines it did on v0.12.3 but step 3, whose stew waits twice more:
+  for its water to boil clean, then to cook at the boil.
+- Played through the hook: a 2 L tainted pot boils clean after 18.7 + 3
+  minutes and its pasta cooks only at the boil; a 1.2 L electric kettle cuts
+  out after 3.3 minutes, drawing 10 A on SOCKETS; the grid failing switches
+  it off and pauses the microwave, which resumes with the recovery; the
+  toaster pops on its own and on a power cut; save and load keep a running
+  kettle and a stop.
+- The benchmark page: sleep, action, `render()` and `serializeGame()` within
+  noise of v0.12.3.
+
+**Sections touched**
+
+- CONFIG / CONSTANTS; ITEM DATA SCHEMA and ITEM DATA; WORLD DATA (SPAWN
+  POOLS, BUILDING TYPES and instances, POWER SCHEMA); PLAYER STATE; INVENTORY
+  / ITEM SYSTEM (FLUIDS, WATER TEMPERATURE, the sink, pouring, Take, the
+  kettle's actions); WORLD INTERACTION (`doSwitchLoad()`, `doSwitchKettle()`);
+  SURVIVAL / TIME SIMULATION (the scheduler; POWER: plug loads, the resolve,
+  STOP RULES, KETTLES); FIRE / COOKING (HEATING, VESSELS AND DISHES);
+  PERSISTENCE (`backfillPowerState()`, `migrateWaterTemperatureRelease()`, the
+  validators, the replay); RENDERING (the tint, button costs, the Electrical
+  view's dial).
+
+**Open questions / decisions resolved**
+
+- How a running kettle enters the resolve: (a), a static plug load per
+  socket-served room, its count passed to the pure resolve as `plugs`.
+- The temperature's shape: `fluid.temp = { c, at }`, and a dish's `water: {
+  ml, temp? }`.
+- `TEMP_MERGE_TOLERANCE_C` 0.5, and a water within it of the room drops its
+  stamp.
+- The tint: rgba of `--tint-hot` or `--tint-cold` at `TINT_MAX_ALPHA` × share
+  of the way to the boil or to freezing, raised to `TINT_CURVE` (0.32, 0.5).
+- A heat container names its power by `heatSource`, a `HEAT_SOURCES` key.
+- The microwave's dial: its Switch on opens into one button per minute
+  choice, and Cancel.
+- `state.power.stops`, `{ at }` or `{ left }` per load id.
+- Categories: the electric kettle Electronics, the stovetop kettle Misc.
+
+**Notes / assumptions**
+
+- The running kettles are rebuilt by `refreshPower()`, not
+  `rebuildSchedule()`: the resolve it makes needs them first.
+- A dish's water heats at its portion left (`dishWaterL()`), an
+  implementation call. The switch lines say "the kettle", as Tom wrote them.
+- Retunable judgment calls: `TINT_MAX_ALPHA`, `TINT_CURVE`, the tint colours,
+  `TEMP_MERGE_TOLERANCE_C`, `REPLAY_PAN_FILLS`.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.12.3"` → `"0.13.0"`
+
+---
+
 ## v0.12.3 — The homes' TV and washing machine, 20 A sockets, and a household screwdriver
 
 Implements: handoffs/home-appliances-and-screwdriver.md
