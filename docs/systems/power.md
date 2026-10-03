@@ -1,12 +1,14 @@
 # Power
 
 ARCHITECTURE sections: SURVIVAL / TIME SIMULATION, its POWER sub-section (the
-network's expansion, the resolve, and the game's reads of it); WORLD DATA
-(POWER SCHEMA: `APPLIANCES`, `WIRING_TEMPLATES`, `WIRING`, `GAME_WIRING`, and
-BUILDING TYPES' `wiring` and `water`); PLAYER STATE (`state.power`,
-`state.tankDrawn`); WORLD INTERACTION (the power actions, the meters);
-INVENTORY / ITEM SYSTEM (the sink's draw on a tank, `drawFromTank()`);
-RENDERING (the device pop-up, the Electrical view, the readouts).
+network's expansion, the resolve, the game's reads of it, the stop rules and
+KETTLES); WORLD DATA (POWER SCHEMA: `APPLIANCES`, `WIRING_TEMPLATES`, `WIRING`,
+`GAME_WIRING`, and BUILDING TYPES' `wiring` and `water`); PLAYER STATE
+(`state.power`, `state.tankDrawn`); WORLD INTERACTION (the power actions, the
+kettle's switch, the meters); INVENTORY / ITEM SYSTEM (the sink's draw on a
+tank, `drawFromTank()`; the kettle's pop-up actions, and a running kettle
+lifted); RENDERING (the device pop-up, the Electrical view and the
+microwave's dial, the readouts).
 
 ## Purpose
 
@@ -29,7 +31,8 @@ one question, `isPowered()`.
 
 **A look** (`powerSnapshot()`) is a pure function of a network, a power
 state, the electrical rules, whether the grid is live, the previous
-resolve's drawing, the seed and each tank's float (`tankFloat()`). It works
+resolve's drawing, the seed, each tank's float (`tankFloat()`) and how many
+items run through each plug load (`plugsNow()`). It works
 out, lowest layer first (`BREAKER_LAYERS`), what is live, what each load's
 switch and path give it (powered), what draws, what starts, and the current
 through every breaker. Simplified rules skip feeders and circuits, but never
@@ -39,7 +42,8 @@ a fuse (`consultsBreaker()`, `circuitSkipped()`).
 `dutyCycle`, whenever it has power (`loadDrawWatts()`). A pump (`flowLph`)
 draws while its tank's float calls: the tank below `TANK_FLOAT_START`, or the
 pump drawing in the previous resolve and the tank not yet full; never on a
-full tank. Any other load draws its watts while it has power. A breaker's
+full tank. A plug load draws its watts times the items running through it,
+while there are any. Any other load draws its watts while it has power. A breaker's
 running current is its loads' draw over its volts; its momentary current
 counts a starting load at its `startWatts`.
 
@@ -73,6 +77,8 @@ with the loads its breaker fed that were drawing.
   once, so its pump starts or stops calling.
 - **A tank coming full** is a scheduled event (`docs/systems/time.md`): its
   building resolves, so the pump stops and its latch clears.
+- **An appliance's timed stop and a kettle switching on, off or cutting out**
+  resolve its building, at their minute (below).
 - **The grid failing or returning**, at every bound of `GRID_UP_SPANS`, is a
   scheduled event (`resolveGrid()`): the world is settled to that minute,
   then every busy building resolves at the grid's new state, then the
@@ -81,11 +87,13 @@ with the loads its breaker fed that were drawing.
 **POWER RUNS.** Buildings share nothing but the grid, so each resolves on its
 own, and one nobody has touched needs no resolving at all: with no entry in
 the power state, its breakers closed, its switches at their rolled defaults
-(`switchOnIn()`) and its tank full, its look is a pure function of the seed,
-the rules and the grid (`stillLook()`). A building is busy when it has an
-entry in the power state, a float that is not full, or default-on loads that
-could overload one of its breakers (`untouchedTrippers()`, which sums a
-superset of what can draw). `powerNow` holds the grid's state and, per
+(`switchOnIn()`), its tank full and nothing running through its plugs, its
+look is a pure function of the seed, the rules and the grid (`stillLook()`).
+A building is busy when it has an entry in the power state (a switch, a
+breaker or a stop), a float that is not full, a plug with an item running
+through it, or default-on loads that could overload one of its breakers
+(`untouchedTrippers()`, which sums a superset of what can draw; a plug load,
+having nothing running, draws nothing there). `powerNow` holds the grid's state and, per
 building, the look its last resolve left; every other building is still,
 and its values are worked out when read (`powerRead()`). Nothing is
 approximated: a still building's look is exactly what a resolve would give
@@ -114,6 +122,38 @@ resolves are settle points.
 `breakerLoadSideVolts()`, `breakerCurrent()`): a cycling load reads its
 average draw.
 
+**Stop rules.** An appliance with `stops` (POWER SCHEMA) switches itself off.
+A timed one (the toaster's `TOASTER_RUN_MIN`, the microwave's dial, picked
+from `MICROWAVE_MINUTE_CHOICES` in the Electrical view) records when it stops
+on switching on (`doSwitchLoad()`): `state.power.stops`, `{ at }` while it
+runs and `{ left }` while it waits for power. The stop is a scheduled event
+(`settleApplianceStops()`): its switch goes off, its entry goes, its building
+resolves, and its line is heard in its room. After every resolve of a
+building (`changePower()`, `resolveGrid()`, `refreshPower()`), its stops are
+set against the look the resolve left (`applyStopRules()`): one left
+unpowered whose rule is "off" switches off (the toaster pops, heard in its
+room), one whose rule is "pause" keeps its time left, and a paused one with
+power again runs on from then. A load switched off that isn't drawing
+changes nothing a look shows, so the rule needs no resolve of its own.
+Switched on without power at its socket, an "off" appliance doesn't latch,
+and says so; a "pause" one switches on and waits.
+
+**Plugs and the electric kettle** (KETTLES). A socket circuit (a template
+circuit's `sockets`) gives every room it serves a plug load, the first such
+circuit in panel order taking it, of `PLUG_APPLIANCE`, with no switch and no
+fixture: the Electrical view lists none (`expandWiring()`). An item with an
+`appliance` (the electric kettle) is plugged in while it lies on the floor of
+such a room (`plugFor()`), and while it runs (`on`) it draws through that
+room's plug, so its circuit and every breaker upstream carry it, and it can
+trip them; a trip or the grid going down is heard and noticed in its room as
+any load's is. It heats its water at its appliance's watts ×
+`KETTLE_EFFICIENCY` and cuts out at the boil, at once when empty, a scheduled
+event ([Time](time.md)). Running means powered: a resolve that leaves its plug
+unpowered switches it off, silently, and it is off when power returns
+(`applyStopRules()`). Lifted off its floor, it switches off first; poured or
+drunk empty, it cuts out with its line. The running kettles are a runtime
+list, rebuilt from the room floors by `refreshPower()` before its resolves.
+
 ## Invariants
 
 - **Every change to `state.power` in play goes through a resolve**:
@@ -125,8 +165,14 @@ average draw.
   are settled** under the power state as it stood (`adoptPower()`,
   `docs/systems/spoilage.md`).
 - **Only the grid changes power over a span.** Every other change happens at
-  a settle point. A new source of power (#245) breaks this, and with it
-  spoilage's rule for a span.
+  a settle point: an appliance's stop and a kettle's cut-out are scheduled
+  events, each a settle point. A new source of power (#245) breaks this, and
+  with it spoilage's rule for a span.
+- **A running kettle has power**: every resolve applies the stop rules, which
+  switch off a kettle whose plug it left unpowered.
+- **Only a load with a timed stop rule, switched on, has a stop entry**, and
+  one that runs has power while one that waits has none (`replayProblems()`
+  checks both).
 - **A still building is never stored.** Its look is always derived from its
   own nodes, so a building wired after a run started needs nothing written.
 - **Starts need a previous resolve.** Nothing starts on boot, restart or
@@ -138,7 +184,10 @@ average draw.
   room descriptions read it.
 - `loadRunningNow()`: whether a load is running, for its readout.
 - `changePower()`, `resolveBuilding()`: an action's or an event's resolve of
-  one building.
+  one building, its stop rules applied after (`applyStopRules()`).
+- `doSwitchLoad()`, `doSwitchKettle()`: a fixture's switch and the kettle's.
+- `plugFor()`, `plugsNow()`: whether an item is plugged in, and what runs
+  through the plugs.
 - `resolveGrid()`: a grid change, from the scheduler.
 - `refreshPower()`: the network rebuilt on boot, restart and load.
 - `simulatePower()`: the dev seam's test network, resolved every minute.
@@ -153,6 +202,10 @@ average draw.
 - `OLD_BOARD_PCT`, `OLD_BOARD_FUSE_A`, `REWIRE_FUSE_MIN`: the old fuse
   boards.
 - `TANK_FLOAT_START`, `HOUSE_PUMP_FLOW_LPH`, `HOUSE_TANK_L`: tanks and pumps.
+- `TOASTER_RUN_MIN`, `MICROWAVE_MINUTE_CHOICES`, `MICROWAVE_DIAL_MAX_MIN`: the
+  stop rules' times.
+- `PLUG_APPLIANCE`, `KETTLE_EFFICIENCY`: what a plug load is, and how much of
+  a kettle's draw reaches its water.
 - `GRID_UP_SPANS` (from `POWER_FAILS_DAY`, `POWER_FAILS_HOUR`,
   `GRID_RECOVERY_AFTER_MIN`, `GRID_RECOVERY_MIN`): when the grid is up.
 - `METER_READING_MIN`: a meter reading's time.
@@ -161,7 +214,9 @@ average draw.
 
 - **Per game minute:** nothing.
 - **Per power action or float change:** one building resolved.
-- **Per tank coming full:** one building resolved.
+- **Per tank coming full, appliance stop or kettle cut-out:** one building
+  resolved. After a resolve, the stop rules walk that building's stop entries
+  (none in an untouched building) and the running kettles.
 - **Per grid change:** every busy building resolved; still buildings cost
   nothing until read.
 - **Per read of a still building:** its look, kept per rules, seed and grid.

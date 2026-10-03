@@ -10,6 +10,10 @@
     --ink:#e5e5e0; --ink-dim:#9a9fa6; --ink-faint:#888e97;
     --accent:#3b82f6; --accent-dim:#25508f; --warn:#d97b3f; --danger:#c76552; --good:#7a9463;
     --divider:rgba(51,56,63,.6);
+    /* The water-temperature row tint's two colours, as r, g, b, so a row
+       takes either at its own strength (waterTint()). Judgment calls,
+       retunable; the game has one theme, this dark one. */
+    --tint-hot:224,96,58; --tint-cold:74,136,226;
   }
   *{box-sizing:border-box;}
   body{ margin:0; min-height:100vh; background:var(--bg); color:var(--ink);
@@ -496,7 +500,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.12.3" };
+  const GAME_CONFIG = { VERSION: "0.13.0" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -631,6 +635,12 @@
   // standing on the floor, in percent, by a stable roll of the building's id
   // (generatedHomes()). Tom's figure, retunable.
   const DISPENSER_JUG_PCT = 30;
+  // The shares of home kitchens, the player's aside, with an electric kettle
+  // on the floor and with a stovetop one on the stove, in percent, by a
+  // stable roll of the building's id (kitchenKettle()); the rest have none.
+  // Tom's first-hand estimate, retunable.
+  const KETTLE_ELECTRIC_PCT = 49;
+  const KETTLE_STOVETOP_PCT = 48;
   // The spoilage rate in a powered fridge, as a multiple of the rate food
   // ages at room temperature (see spoilageRate()). A powered freezer stops
   // ageing; anything unpowered ages at 1 at once. Balance value, retunable.
@@ -654,9 +664,57 @@
   // Pour by the measure pours, in mL: a glass. The pour button's label reads
   // it. Retunable.
   const MEASURE_ML = 250;
-  // Minutes tainted water must sit in a heated vessel to come out clean,
-  // whatever its volume. Retunable.
-  const BOIL_MINUTES = 5;
+  // TIMED TRANSFERS (transferMinutes()). A fill or a pour that moves no more
+  // than FLUID_INSTANT_MAX_ML is instant, judged by what it moves, not by the
+  // holder's size; a larger one takes its litres over the rate, a minute at
+  // least. A kitchen tap fed from the roof tank runs about 6 L a minute
+  // (derived, unconfirmed); a careful pour between holders is about 7 L a
+  // minute first-hand, taken as 10 (Tom, unconfirmed). Two rates, retunable
+  // apart; the threshold is a judgment call, retunable.
+  const FLUID_INSTANT_MAX_ML = 1000;
+  const TAP_FLOW_L_PER_MIN = 6;
+  const POUR_L_PER_MIN = 10;
+  // Minutes tainted water must spend at the boil, without a break, to come
+  // out clean, whatever its volume: ANMAT's "Hervila durante 3 minutos"
+  // (confirmed). Only time at WATER_BOIL_C counts (settleVessel()).
+  const BOIL_MINUTES = 3;
+  // WATER TEMPERATURE: docs/systems/fluids.md has the model. Every room's
+  // temperature, indoors and out, until weather (#58): San Fernando Aero's
+  // February mean (confirmed as the station's figure; as Lima's indoor
+  // temperature, unconfirmed). A water with no temperature of its own is at
+  // this one.
+  const ROOM_TEMP_C = 23.5;
+  // What a fill at a sink runs at: off a roof tank, February's mean plus the
+  // about 5 °C an exposed tank runs above the air (derived from a Resistencia
+  // measurement, unconfirmed); off the mains, well water (derived,
+  // unconfirmed). Every sink is in a building with a tank, so MAINS_WATER_C
+  // ships unused in play. Retunable.
+  const TANK_WATER_C = 28.5;
+  const MAINS_WATER_C = 18;
+  const WATER_BOIL_C = 100;
+  const WATER_FREEZE_C = 0;
+  // Water's specific heat, in kJ per litre per kelvin.
+  const WATER_HEAT_KJ_PER_L_K = 4.186;
+  // How fast a holder's water cools toward ROOM_TEMP_C, Newton's constant
+  // per minute: each holder's holdsFluid.coolPerMin, written from these
+  // (holderCoolPerMin()). A litre in an open saucepan falls 100 → 70 °C in
+  // very roughly 10–15 minutes, about 0.03–0.04 a minute (a physics
+  // estimate, unconfirmed); another size scales by its litres to the −⅓
+  // power, its surface against its volume; a lid should roughly halve the
+  // rate (unconfirmed). The thermos is EN 12546-1's floor for an 801–1,200 mL
+  // vacuum flask, at most 0.043 an hour (secondary). All retunable.
+  const OPEN_PAN_COOL_PER_MIN = 0.035;
+  const CLOSED_HOLDER_COOL_FACTOR = 0.5;
+  const THERMOS_COOL_PER_MIN = 0.043 / 60;
+  function holderCoolPerMin(litres, closed){
+    return (closed ? CLOSED_HOLDER_COOL_FACTOR : 1) * OPEN_PAN_COOL_PER_MIN * Math.pow(litres, -1 / 3);
+  }
+  // Two holder rows stack only when their water's temperatures differ by
+  // less than this, and a water within it of ROOM_TEMP_C drops its own
+  // (setWaterTemp()). An implementation call, retunable.
+  const TEMP_MERGE_TOLERANCE_C = 0.5;
+  // The float a temperature worked out by arithmetic may miss the boil by.
+  const TEMP_EPSILON_C = 1e-6;
   // A dish restores the sum of its ingredients' contributions times
   // (1 + this). Retunable.
   const DISH_RESTORES_BONUS = 0.25;
@@ -862,6 +920,10 @@
   //               reads "(Frozen)" meanwhile. No coasting either (#217).
   //     A container carrying both heat and device is the room's stove
   //     (roomStove()).
+  //   Optional: heatSource — on a `heat` container, the HEAT_SOURCES entry
+  //     (FIRE / COOKING) whose power its cookware's water heats at
+  //     (heatKwOf()): "stove" on a kitchen's, "campfire" on the one
+  //     doBuildFire() makes.
   //   Optional: timerMinutes — a stove's wind-up timer, minutes left (absent
   //     = 0). It needs neither power nor a battery. Set from its device
   //     pop-up, run down by the scheduler (settleTimer()) whether or not
@@ -995,9 +1057,15 @@
   //                   instance carries what its ingredients decided, genuine
   //                   per-instance state the `overrides` rule allows: its
   //                   `name`, `restores`, `foodPoisoning` ({ raw, cooked })
-  //                   and `unitWeight` (buildDish()).
-  //     boilMinutes   instance: how long a vessel's tainted water has boiled,
-  //                   toward BOIL_MINUTES.
+  //                   and `unitWeight` (buildDish()). A dish that took water
+  //                   (a template with `water`) keeps it as `water`: { ml,
+  //                   temp? }, its volume and temperature, the temperature
+  //                   shaped as a fluid's (formDish(), dishFrom()). Absent on
+  //                   a dish without water, and on one from an older save,
+  //                   which cooks by the span as it always did.
+  //     boilMinutes   instance: how long a heating holder's tainted water has
+  //                   been at the boil without a break, toward BOIL_MINUTES.
+  //                   Gone once it is below the boil (settleVessel()).
   //     on            powered-equipment on/off state
   //     hasBatteries  powered-equipment battery-installed state
   //     drainRate     durability loss per minute while `on`
@@ -1041,16 +1109,23 @@
   //                   `ages` sets it, and a row read without one is taken as
   //                   true now. Ageing is worked out when the row's list is
   //                   next settled (settleList()).
-  //     holdsFluid    { capacityMl } — the item holds a fluid, up to
-  //                   capacityMl millilitres, part-way at any level: a
-  //                   bottle, a saucepan, the pot. Definition data, read by
-  //                   itemId (capacityMlOf()).
-  //     fluid         instance: { kind, ml } — the fluid a holder holds: its
-  //                   kind ("clean" or "tainted" water today, open-ended)
-  //                   and how much, a positive whole number of millilitres.
-  //                   Absent when empty, never ml 0. Two kinds mix only as
-  //                   mixKinds() says. Shown as its kind and a meter; weighs
-  //                   1 kg a litre (fluidWeightOf()).
+  //     holdsFluid    { capacityMl, coolPerMin, heats? } — the item holds a
+  //                   fluid, up to capacityMl millilitres, part-way at any
+  //                   level: a bottle, a saucepan, the pot. `coolPerMin` is
+  //                   how fast its water cools toward ROOM_TEMP_C, Newton's
+  //                   constant per minute (holderCoolPerMin()); `heats` marks
+  //                   cookware, whose water heats in a lit heat container
+  //                   (settleVessel()). Definition data, read by itemId
+  //                   (capacityMlOf(), coolPerMinOf(), heatsWater()).
+  //     fluid         instance: { kind, ml, temp? } — the fluid a holder
+  //                   holds: its kind ("clean" or "tainted" water today,
+  //                   open-ended) and how much, a positive whole number of
+  //                   millilitres. Absent when empty, never ml 0. Two kinds
+  //                   mix only as mixKinds() says. Shown as its kind and a
+  //                   meter; weighs 1 kg a litre (fluidWeightOf()). `temp`,
+  //                   { c, at }, is its temperature in °C, true at minute
+  //                   `at` since the collapse, worked out when read
+  //                   (waterTempOf()); absent, it is at ROOM_TEMP_C.
   //     portion       instance: how much of one unit of food is left — 1,
   //                   0.75, 0.5 or 0.25, absent = 1 — after Eat 1/2 or 1/4.
   //                   Shown as a meter and its words ("½ left",
@@ -1062,6 +1137,16 @@
   //     fuseRating    on `fuse-wire`, the fuse rating in A it is calibrated
   //                   for: it rewires only a fuse of that rating
   //                   (fuseWireFor()). Definition data, read by itemId.
+  //     appliance     the APPLIANCES entry an item that plugs in runs as: the
+  //                   electric kettle's "kettle". It is plugged in while it
+  //                   lies on the floor of a room a socket circuit serves,
+  //                   switched from its item pop-up, and its `on` is whether
+  //                   it runs (KETTLES in POWER). Definition data, read by
+  //                   itemId (itemAppliance()).
+  //     whistleLog    the line a holder whose water heats says when its water
+  //                   reaches the boil from below, heard in its room: the
+  //                   stovetop kettle's (settleVessel()). Definition data,
+  //                   read by itemId.
   //   Prefer data/capabilities (tags, `use` strings) over hard-coded item
   //   names in mechanics code; the existing tag system is the primary
   //   mechanism for tool checks (see hasTool()).
@@ -1086,7 +1171,7 @@
     leftovers: { name:"Leftovers", category:"Food", unitWeight:0.8, restores:{hunger:25}, verb:"Eat",
       spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
     plastic_bottle: { name:"Plastic bottle", category:"Food", unitWeight:0.05, verb:"Drink",
-      holdsFluid:{ capacityMl:500 } },
+      holdsFluid:{ capacityMl:500, coolPerMin:holderCoolPerMin(0.5, true) } },
     granola_bars: { name:"Granola bars", category:"Food", unitWeight:0.1, restores:{hunger:15}, verb:"Eat" },
     painkillers: { name:"Painkillers", category:"Medical", unitWeight:0.1 },
     toilet_paper: { name:"Toilet paper", category:"Materials", unitWeight:0.2 },
@@ -1108,7 +1193,7 @@
       ingredient:{ role:"vegetable", label:"Bean" } },
     board_games: { name:"Board games", category:"Misc", unitWeight:1.0 },
     burnt_saucepan: { name:"Burnt saucepan", category:"Tool", unitWeight:0.6,
-      vessel:{ kind:"saucepan", capacityKg:1.5 }, holdsFluid:{ capacityMl:1000 } },
+      vessel:{ kind:"saucepan", capacityKg:1.5 }, holdsFluid:{ capacityMl:1000, coolPerMin:holderCoolPerMin(1, false), heats:true } },
     canned_corn: { name:"Canned corn", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat", sealed:true, opensWith:"can-opening",
       spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY },
       ingredient:{ role:"vegetable", label:"Corn" } },
@@ -1125,9 +1210,9 @@
     scrap_metal: { name:"Scrap metal", category:"Materials", unitWeight:0.5 },
     metal_pipe: { name:"Metal pipe", category:"Tool", unitWeight:1.3, tags:["blunt"] },
     dented_saucepan: { name:"Dented saucepan", category:"Tool", unitWeight:0.7,
-      vessel:{ kind:"saucepan", capacityKg:1.5 }, holdsFluid:{ capacityMl:1000 } },
+      vessel:{ kind:"saucepan", capacityKg:1.5 }, holdsFluid:{ capacityMl:1000, coolPerMin:holderCoolPerMin(1, false), heats:true } },
     cooking_pot: { name:"Cooking pot", category:"Tool", unitWeight:1.2,
-      vessel:{ kind:"pot", capacityKg:3 }, holdsFluid:{ capacityMl:2000 } },
+      vessel:{ kind:"pot", capacityKg:3 }, holdsFluid:{ capacityMl:2000, coolPerMin:holderCoolPerMin(2, false), heats:true } },
     roasting_pan: { name:"Roasting pan", category:"Tool", unitWeight:1.5,
       vessel:{ kind:"roasting_pan", capacityKg:3 } },
     crowbar: { name:"Crowbar", category:"Tool", unitWeight:2.5, tags:["blunt","prying"] },
@@ -1174,21 +1259,33 @@
     // A car's registration card, kept in its glovebox.
     cedula_verde: { name:"Vehicle registration card", category:"Misc", unitWeight:0.02 },
     // A stainless mate thermos: 1,000 mL, the most common size sold for mate,
-    // at 0.65 kg (secondary). It holds water; keeping it hot is not modelled.
-    thermos: { name:"Thermos", category:"Misc", unitWeight:0.65, holdsFluid:{ capacityMl:1000 } },
+    // at 0.65 kg (secondary). It keeps its water hot (THERMOS_COOL_PER_MIN).
+    thermos: { name:"Thermos", category:"Misc", unitWeight:0.65, holdsFluid:{ capacityMl:1000, coolPerMin:THERMOS_COOL_PER_MIN } },
     // A household bucket: 10 L, the standard size, 0.4–0.5 kg with no lid
     // (secondary). The weight is a judgment call, retunable.
-    bucket: { name:"Bucket", category:"Misc", unitWeight:0.45, holdsFluid:{ capacityMl:10000 } },
+    bucket: { name:"Bucket", category:"Misc", unitWeight:0.45, holdsFluid:{ capacityMl:10000, coolPerMin:holderCoolPerMin(10, true) } },
     // A military-style plastic canteen with its cup and cloth cover: 1,000 mL,
     // 0.35–0.4 kg (secondary). The weight is a judgment call, retunable.
-    canteen: { name:"Canteen", category:"Misc", unitWeight:0.4, holdsFluid:{ capacityMl:1000 } },
+    canteen: { name:"Canteen", category:"Misc", unitWeight:0.4, holdsFluid:{ capacityMl:1000, coolPerMin:holderCoolPerMin(1, true) } },
     // A single-use jug of still water, the size a household keeps: 6.25 L
     // (confirmed), about 0.1 kg empty with its handle and cap (unconfirmed).
     // The weight is a judgment call, retunable.
-    water_jug: { name:"Water jug", category:"Food", unitWeight:0.1, holdsFluid:{ capacityMl:6250 } },
+    water_jug: { name:"Water jug", category:"Food", unitWeight:0.1, holdsFluid:{ capacityMl:6250, coolPerMin:holderCoolPerMin(6.25, true) } },
     // A returnable 20 L jug, delivered full for a water dispenser: 0.75–0.82 kg
     // empty (secondary). The weight is a judgment call, retunable.
-    dispenser_jug: { name:"Dispenser jug", category:"Food", unitWeight:0.8, holdsFluid:{ capacityMl:20000 } },
+    dispenser_jug: { name:"Dispenser jug", category:"Food", unitWeight:0.8, holdsFluid:{ capacityMl:20000, coolPerMin:holderCoolPerMin(20, true) } },
+    // An electric kettle of 1.2 L, 0.8–1.0 kg empty with its base
+    // (secondary). Its load is APPLIANCES' kettle, drawn through the plug of
+    // the room whose floor it stands on (KETTLES in POWER). The weight is a
+    // judgment call, retunable.
+    electric_kettle: { name:"Electric kettle", category:"Electronics", unitWeight:0.9, on:false, appliance:"kettle",
+      holdsFluid:{ capacityMl:1200, coolPerMin:holderCoolPerMin(1.2, true) } },
+    // An aluminium stovetop kettle, N° 14: 1.2 L, about 0.2 kg empty (0.21 kg,
+    // secondary). Water only: it heats on a stove or a campfire, as a
+    // saucepan does, and whistles at the boil.
+    stovetop_kettle: { name:"Stovetop kettle", category:"Misc", unitWeight:0.2,
+      holdsFluid:{ capacityMl:1200, coolPerMin:holderCoolPerMin(1.2, true), heats:true },
+      whistleLog:"The kettle starts to whistle." },
     house_key: { name:"House key", category:"Key", unitWeight:0.03, doorId:"home-front" },
     bandage: { name:"Bandage", category:"Medical", unitWeight:0.05 },
     campfire_kit: { name:"Campfire Kit", category:"Materials", unitWeight:2.4, tags:["disassemble"],
@@ -1352,7 +1449,7 @@
   // leaves them off the instance. A retune then reaches every save, and no
   // stale copy on an instance is there to be read by mistake.
   const REGISTRY_ONLY_FIELDS = ["carryFactor", "foodPoisoningChance", "disassembleLog", "cooks", "spoils", "holdsFluid",
-    "vessel", "ingredient", "dish", "fuseRating"];
+    "vessel", "ingredient", "dish", "fuseRating", "appliance", "whistleLog"];
   // An item's (or a slot's) registry entry, by its itemId, or null for
   // anything without one: the keychain, an item from a save the registry no
   // longer knows. The one lookup every registry-read field goes through.
@@ -1447,6 +1544,9 @@
   //   and `retail_stock_food` (0.30, 1–2). The dispenser jug is never pooled:
   //   full, it outweighs most containers, and rolls ignore capacity.
   //   Retunable.
+  //   So are the kettles' (#385): the electric kettle in `office_supplies`
+  //   (0.20) and `hardware_store` (0.20), and the stovetop kettle in
+  //   `hardware_store` (0.20), which never rolls until #133. Retunable.
   //   So are the household screwdriver's (#367), in the shed or laundry box
   //   (`tools_general`, 0.20) and the kitchen drawer (`kitchen_tools`,
   //   0.10), so a blown fuse can usually be rewired from what the house
@@ -1596,7 +1696,8 @@
       { itemId:"dead_cellphone", chance:0.136054, qtyMin:1, qtyMax:1 },
       { itemId:"disposable_camera", chance:0.103316, qtyMin:1, qtyMax:1 },
       { itemId:"walkie_talkie", chance:0.069728, qtyMin:1, qtyMax:1 },
-      { itemId:"portable_radio", chance:0.069728, qtyMin:1, qtyMax:1 } ]},
+      { itemId:"portable_radio", chance:0.069728, qtyMin:1, qtyMax:1 },
+      { itemId:"electric_kettle", chance:0.20, qtyMin:1, qtyMax:1 } ]},
     retail_stock_food: { emptyChance:0.1, entries:[
       { itemId:"plastic_bottle", state:{ fluid:{ kind:"clean", ml:500 } }, chance:0.309252, qtyMin:1, qtyMax:3 },
       { itemId:"candy_bar", chance:0.274647, qtyMin:1, qtyMax:2 },
@@ -1629,7 +1730,9 @@
       { itemId:"hand_axe", chance:0.081043, qtyMin:1, qtyMax:1 },
       { itemId:"propane_torch", chance:0.081043, qtyMin:1, qtyMax:1 },
       { itemId:"fuse_wire", chance:0.25, qtyMin:1, qtyMax:3 },
-      { itemId:"bucket", chance:0.20, qtyMin:1, qtyMax:1 } ]},
+      { itemId:"bucket", chance:0.20, qtyMin:1, qtyMax:1 },
+      { itemId:"electric_kettle", chance:0.20, qtyMin:1, qtyMax:1 },
+      { itemId:"stovetop_kettle", chance:0.20, qtyMin:1, qtyMax:1 } ]},
     // The spare lengths of fuse wire kept by an old fuse board: only the
     // kitchen drawers of a casa that has one draw from it (generatedHomes()).
     old_board_spares: { emptyChance:0, entries:[
@@ -4006,7 +4109,7 @@ x_sn_9 m_sn_sn_sn sn p
   // retunable.
   const HEAT_CONTAINER_CAPACITY_KG = 8;   // stove and campfire alike
   const KITCHEN_CONTAINERS = [
-    { id:"stove", name:"Stove", capacityKg:HEAT_CONTAINER_CAPACITY_KG, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"] },
+    { id:"stove", name:"Stove", capacityKg:HEAT_CONTAINER_CAPACITY_KG, tags:["device","heat"], heatSource:"stove", spawnPools:["kitchen_perishable","kitchen_tools"] },
     { id:"cupboards", name:"Cupboards", capacityKg:15, spawnPools:["kitchen_nonperishable","kitchen_tools"] },
     { id:"drawers", name:"Drawers", capacityKg:10, spawnPools:["kitchen_tools"] },
     { id:"fridge", name:"Fridge", capacityKg:30, tags:["fridge"], spawnPools:["kitchen_perishable"] },
@@ -4201,7 +4304,8 @@ x_sn_9 m_sn_sn_sn sn p
     return landmarkInstances().concat(generatedHomes());
   }
   function landmarkInstances(){
-    const neighbourDoor = { locked: stableHash("row_neighbour") % 100 < HOME_LOCKED_PCT };
+    const neighbour = { doors:{ front:{ locked: stableHash("row_neighbour") % 100 < HOME_LOCKED_PCT } } };
+    addKitchenKettle("row_neighbour", neighbour);
     return [
       // The player's home: a row house on the Barrio Atucha's courtyard
       // (canon), its front door locked and its back door bolted, with what
@@ -4215,7 +4319,7 @@ x_sn_9 m_sn_sn_sn sn p
               sideboard:[ { id:"tv_remote", qty:1 }, { id:"paperback_novel", qty:1 } ],
               bookshelf:[ { id:"box_of_matches", qty:1 }, { id:"photo_album", qty:1 } ] } },
           kitchen:{ desc:"Your kitchen. The gas bottle under the cooker is the one you changed last week.",
-            floor:[ { id:"dispenser_jug", qty:1, overrides:{ fluid:{ kind:"clean", ml:12000 } } } ],
+            floor:[ { id:"dispenser_jug", qty:1, overrides:{ fluid:{ kind:"clean", ml:12000 } } }, { id:"electric_kettle", qty:1 } ],
             items:{
               stove:[ { id:"cooking_pot", qty:1, overrides:{ contents:[ dishFrom("stew", "cooking_pot", ["meat", "vegetables"], "cooked") ] } } ],
               cupboards:[ { id:"canned_soup", qty:3 }, { id:"pasta", qty:2 }, { id:"frying_pan", qty:1 },
@@ -4234,11 +4338,12 @@ x_sn_9 m_sn_sn_sn sn p
               chest:[ { id:"folded_clothes", qty:1 }, { id:"crumpled_cash", qty:1 }, { id:"cloth", qty:3 } ] } },
           garden:{ desc:"Your back garden. The grill is still greasy from the last asado.",
             items:{ shedbox:[ { id:"duct_tape", qty:1 }, { id:"rope", qty:1 } ] } } } } },
-      // The neighbours' row house on the same courtyard: pools only. A home,
-      // so its door starts locked or not by HOME_LOCKED_PCT.
+      // The neighbours' row house on the same courtyard: pools only, and the
+      // kettle a home kitchen rolls. A home, so its door starts locked or not
+      // by HOME_LOCKED_PCT.
       { id:"row_neighbour", type:"row_house", site:HOME_STOP, name:"Row house", address:"Calle 90 Bis", marker:true,
         enter:"Enter the neighbours' house", leave:"Go out to the courtyard",
-        overrides:{ doors:{ front:neighbourDoor } } },
+        overrides:neighbour },
       // The Pharmacy's shop and flat.
       { id:"pharmacy", type:"shop_home", site:"m_c7_c10_c8", name:"Pharmacy", address:"Calle 7", marker:true,
         enter:"Enter the pharmacy",
@@ -4329,7 +4434,7 @@ x_sn_9 m_sn_sn_sn sn p
           floor:{ desc:"The railway's goods shed. Brick walls, a high roof, a loading door onto the tracks.",
             containers:[
               { id:"unit1", name:"Padlocked crate 1", capacityKg:30, locked:true, breakTag:"cutting", spawnPools:["outdoor_camping"], items:[
-                { id:"camping_tent", qty:1 }, { id:"sleeping_bag", qty:1 } ] },
+                { id:"camping_tent", qty:1 }, { id:"sleeping_bag", qty:1 }, { id:"canteen", qty:1 } ] },
               { id:"unit2", name:"Padlocked crate 2", capacityKg:30, locked:true, breakTag:"cutting", spawnPools:["recreation","residential_personal"], items:[
                 { id:"old_furniture", qty:1 }, { id:"board_games", qty:1 } ] },
               { id:"unit3", name:"Crate 3", capacityKg:30, spawnPools:["outdoor_camping"], items:[
@@ -4373,6 +4478,32 @@ x_sn_9 m_sn_sn_sn sn p
   function hasDispenserJug(id){
     return stableHash(id + KEY_SEP + "jug") % 100 < DISPENSER_JUG_PCT;
   }
+  //   Every home kitchen but the player's, the row's neighbours' included,
+  // has a kettle by a roll of its id and "kettle", independent of the
+  // others (KITCHEN_KETTLES): an electric one on its kitchen floor, beside a
+  // jug's, or a stovetop one on its stove, unlit, or none. A stove given a
+  // kettle by hand still rolls its pools: it is marked spawnRolled:false,
+  // which the hand-placed rule would otherwise set true (buildBuilding()),
+  // and an old board's kitchen keeps its own containers.
+  const KITCHEN_KETTLES = [
+    { id:"electric_kettle", pct:KETTLE_ELECTRIC_PCT, place:"floor" },
+    { id:"stovetop_kettle", pct:KETTLE_STOVETOP_PCT, place:"stove" }
+  ];
+  function kitchenKettle(id){
+    let r = stableHash(id + KEY_SEP + "kettle") % 100;
+    return KITCHEN_KETTLES.find(k=> (r -= k.pct) < 0) || null;
+  }
+  function addKitchenKettle(id, overrides){
+    const kettle = kitchenKettle(id);
+    if(!kettle) return;
+    overrides.rooms = overrides.rooms || {};
+    const kitchen = overrides.rooms.kitchen = Object.assign({}, overrides.rooms.kitchen);
+    if(kettle.place === "floor") kitchen.floor = (kitchen.floor || []).concat([{ id:kettle.id, qty:1 }]);
+    else {
+      kitchen.containers = (kitchen.containers || KITCHEN_CONTAINERS).map(c=> c.id === "stove" ? Object.assign({}, c, { spawnRolled:false }) : c);
+      kitchen.items = { stove:[{ id:kettle.id, qty:1 }] };
+    }
+  }
   function generatedHomes(){
     return LIMA.stops.filter(s=> s.kind === "m" && s.id !== HOME_STOP).map(s=>{
       const id = "h_" + s.id;
@@ -4383,6 +4514,7 @@ x_sn_9 m_sn_sn_sn sn p
         overrides.rooms.kitchen = Object.assign({}, overrides.rooms.kitchen,
           { floor:[ { id:"dispenser_jug", qty:1, overrides:{ fluid:{ kind:"clean", ml:10000 } } } ] });
       }
+      addKitchenKettle(id, overrides);
       return { id, type:"casa", site:s.id, name:"House", address:streetName(s.street) || UNNAMED_STREET,
         seed:stableHash(s.id), enter:"Enter a house", overrides };
     });
@@ -4705,6 +4837,23 @@ x_sn_9 m_sn_sn_sn sn p
   //   flowLph      a pump's flow in L/h; present on a load that fills its
   //                building's tank, drawing only while the tank's float calls
   //                (powerSnapshot(), settleTanks())
+  //   stops        present on an appliance that switches itself off: {
+  //                after | dial, dialMax?, atBoil, onPowerLoss, line,
+  //                lineOnPowerLoss?, noLatchLine? }, exactly one of `after`
+  //                (minutes after it is switched on), `dial` (the minutes the
+  //                player picks from when switching it on, each up to
+  //                `dialMax`) and `atBoil` (when the water it heats reaches
+  //                the boil, at once when it holds none: the electric kettle,
+  //                an item, KETTLES in POWER). `onPowerLoss` is what a resolve
+  //                that leaves it unpowered does (applyStopRules()): "off"
+  //                switches it off, and switching it on without power doesn't
+  //                latch and says `noLatchLine` instead; "pause" keeps its
+  //                time left until power returns. `line` is heard in its room
+  //                when it stops by itself, and on a power cut too with
+  //                `lineOnPowerLoss`. A timed one (`after`, `dial`) keeps when
+  //                it stops in state.power.stops (PLAYER STATE). Every one is
+  //                found switched off (leftOnChance 0, validateWiring()). The
+  //                lines are game text, Tom's.
   //   nameplate    what its rating label prints, in one of three
   //                forms: { amps }, printed as "<volts> V · <amps> A" at the
   //                entry's own `volts`; { printsWatts:true }, printed as its
@@ -4749,8 +4898,11 @@ x_sn_9 m_sn_sn_sn sn p
   //                   plugged in and has no power switch. The oven and its
   //                   lamp (15–25 W while lit; Orbis's C9500 lists 25 W,
   //                   primary) aren't modelled.
-  //   kettle          2,200 W: a 1.7 L kettle's most common figure (the
-  //                   range is 1,850–2,200 W; secondary).
+  //   kettle          2,200 W: 1–1.2 L kettles draw 1,800–2,400 W, most
+  //                   commonly 2,200–2,400 W (secondary), and
+  //                   KETTLE_EFFICIENCY of it reaches the water. It is never
+  //                   a fixture: it is what the electric kettle, an item,
+  //                   draws as, through a plug load (PLUG_APPLIANCE).
   //   toaster         700 W: a two-slot toaster (Atma's TO8020i and TO2180;
   //                   the range is 700–850 W; secondary).
   //   microwave       1,150 W: the input of a small 20 L microwave sold as
@@ -4782,10 +4934,12 @@ x_sn_9 m_sn_sn_sn sn p
   //                   WEG's 60 Hz motors; secondary). Found switched on, as
   //                   the fridge is: 0.99 is a judgment call.
   // The kettle, the toaster, the microwave, the washing machine and the TV
-  // are found switched off (leftOnChance 0), and once switched on, draw
-  // until switched off: switching themselves off, and being used, are
-  // #334's. The washing machine's readout words are the kettle's, a
-  // judgment call; the TV's, "On" and "Off", are Tom's. Retunable.
+  // are found switched off (leftOnChance 0). The toaster, the microwave and
+  // the kettle switch themselves off (`stops`); the washing machine and the
+  // TV draw until switched off (#424 is the wash cycle). Using any of them
+  // on food or clothes is #422's, #423's and #424's. The washing machine's
+  // readout words are the kettle's, a judgment call; the TV's, "On" and
+  // "Off", are Tom's. Retunable.
   // The hood is a motor, but its start surge is left unmodelled: it carries
   // no `startWatts`. Lima homes have no smoke alarm, and usually no bathroom
   // extractor fan (Tom, first-hand), so neither is an appliance.
@@ -4813,6 +4967,20 @@ x_sn_9 m_sn_sn_sn sn p
   // not split by fuel). 2.4 is a pick inside it, a judgment call, retunable.
   const WATER_HEATER_WATTS = 2000;
   const WATER_HEATER_LOSS_KWH_DAY = 2.4;
+  // The stop rules' times (`stops`): the toaster pops after TOASTER_RUN_MIN,
+  // a judgment call with no sourced cycle; the microwave runs what its dial
+  // is set to, picked from MICROWAVE_MINUTE_CHOICES, a UI judgment call, up
+  // to MICROWAVE_DIAL_MAX_MIN, the dial's top. Retunable.
+  const TOASTER_RUN_MIN = 3;
+  const MICROWAVE_DIAL_MAX_MIN = 35;
+  const MICROWAVE_MINUTE_CHOICES = [1, 2, 5, 10, 20, 35];
+  // What of a kettle's draw reaches its water: kettles are typically 80–90 %
+  // efficient, 88 % used (secondary). Retunable.
+  const KETTLE_EFFICIENCY = 0.88;
+  // The appliance every plug load is (expandWiring()): what an item that
+  // plugs in draws as. The electric kettle is the only such item; cords, and
+  // anything else plugged in, are #243's and #244's.
+  const PLUG_APPLIANCE = "kettle";
   const APPLIANCES = {
     fridge_freezer: { name:"Fridge-freezer", watts:100, startWatts:1300, volts:220, dutyCycle:0.35, cycleMinutes:60, leftOnChance:0.99,
       nameplate:{ amps:1.0 }, readout:{ on:"Light on", off:"Dark" } },
@@ -4823,11 +4991,16 @@ x_sn_9 m_sn_sn_sn sn p
       readout:{ on:"Running", off:"Silent" } },
     gas_range:      { name:"Gas range",      watts:0,   volts:220, switchless:true, nameplate:{ watts:16 } },
     kettle:         { name:"Electric kettle", watts:2200, volts:220, leftOnChance:0, nameplate:{ printsWatts:true },
-      readout:{ on:"Running", off:"Stopped" } },
+      readout:{ on:"Running", off:"Stopped" },
+      stops:{ atBoil:true, onPowerLoss:"off", line:"The kettle clicks off.",
+        noLatchLine:"You press the switch. It clicks straight back up." } },
     toaster:        { name:"Toaster",        watts:700,  volts:220, leftOnChance:0, nameplate:{ printsWatts:true },
-      readout:{ on:"Running", off:"Stopped" } },
+      readout:{ on:"Running", off:"Stopped" },
+      stops:{ after:TOASTER_RUN_MIN, onPowerLoss:"off", lineOnPowerLoss:true, line:"The toaster pops up.",
+        noLatchLine:"You push the lever down. It won't stay." } },
     microwave:      { name:"Microwave",      watts:1150, volts:220, leftOnChance:0, nameplate:{ printsWatts:true },
-      readout:{ on:"Running", off:"Stopped" } },
+      readout:{ on:"Running", off:"Stopped" },
+      stops:{ dial:MICROWAVE_MINUTE_CHOICES, dialMax:MICROWAVE_DIAL_MAX_MIN, onPowerLoss:"pause", line:"The microwave pings." } },
     washing_machine: { name:"Washing machine", watts:1800, volts:220, leftOnChance:0, nameplate:{ printsWatts:true },
       readout:{ on:"Running", off:"Stopped" } },
     tv:             { name:"TV",             watts:43,   volts:220, leftOnChance:0, nameplate:{ printsWatts:true },
@@ -4872,6 +5045,10 @@ x_sn_9 m_sn_sn_sn sn p
   //   circuits  in panel order: { key, label, rating, volts, curve?, fuse?,
   //             roles:[role] }. `label` is the hand-written one on the panel
   //             door ("KITCHEN"); `roles` are the rooms, by role, it serves.
+  //   sockets   on a circuit, optional: true marks a socket circuit. Every
+  //             room it serves gets a plug load (expandWiring()), so an item
+  //             that plugs in is plugged in on that room's floor (KETTLES in
+  //             POWER).
   //   fuse      on a circuit, optional: true makes it a fuse, not a breaker.
   //             It has no curve and no instant trip; it blows when
   //             its running current passes its rating (resolvePower()), and
@@ -4960,7 +5137,7 @@ x_sn_9 m_sn_sn_sn sn p
       main: { rating:32 },
       circuits: [
         { key:"lights",  label:"LIGHTS",  rating:10, volts:220, roles:["living", "kitchen", "bathroom", "bedroom", "balcony"] },
-        { key:"sockets", label:"SOCKETS", rating:16, volts:220, roles:["kitchen"] }
+        { key:"sockets", label:"SOCKETS", rating:16, volts:220, sockets:true, roles:["kitchen"] }
       ],
       fixtures: [
         { key:"fridge",        appliance:"fridge_freezer", circuit:"sockets", role:"kitchen", containers:["fridge", "freezer"] },
@@ -4977,7 +5154,7 @@ x_sn_9 m_sn_sn_sn sn p
       main: { rating:40, rcd:true },
       circuits: [
         { key:"lights",  label:"LIGHTS",  rating:10, volts:220, roles:["living", "kitchen", "laundry", "hallway", "bedroom", "bedroom2", "bathroom"] },
-        { key:"sockets", label:"SOCKETS", rating:20, volts:220, roles:["kitchen", "living", "laundry"] },
+        { key:"sockets", label:"SOCKETS", rating:20, volts:220, sockets:true, roles:["kitchen", "living", "laundry"] },
         { key:"water",   label:"WATER",   rating:16, volts:220, roles:["laundry"] }
       ],
       fixtures: [
@@ -4990,7 +5167,6 @@ x_sn_9 m_sn_sn_sn sn p
         { key:"light_bath",     appliance:"led_light",      circuit:"lights",  role:"bathroom" },
         { key:"fridge",         appliance:"fridge_freezer", circuit:"sockets", role:"kitchen", containers:["fridge", "freezer"] },
         { key:"stove",          appliance:"gas_range",      circuit:"sockets", role:"kitchen", containers:["stove"] },
-        { key:"kettle",         appliance:"kettle",         circuit:"sockets", role:"kitchen" },
         { key:"toaster",        appliance:"toaster",        circuit:"sockets", role:"kitchen" },
         { key:"microwave",      appliance:"microwave",      circuit:"sockets", role:"kitchen" },
         { key:"tv",             appliance:"tv",             circuit:"sockets", role:"living" },
@@ -5003,7 +5179,7 @@ x_sn_9 m_sn_sn_sn sn p
       main: { rating:40, rcd:true },
       circuits: [
         { key:"lights",  label:"LIGHTS",  rating:10, volts:220, roles:["living", "kitchen", "bedroom", "bathroom"] },
-        { key:"sockets", label:"SOCKETS", rating:20, volts:220, roles:["kitchen", "living"] },
+        { key:"sockets", label:"SOCKETS", rating:20, volts:220, sockets:true, roles:["kitchen", "living"] },
         { key:"water",   label:"WATER",   rating:16, volts:220, roles:["kitchen", "patio"] }
       ],
       fixtures: [
@@ -5013,7 +5189,6 @@ x_sn_9 m_sn_sn_sn sn p
         { key:"light_bath",    appliance:"led_light",      circuit:"lights",  role:"bathroom" },
         { key:"fridge",        appliance:"fridge_freezer", circuit:"sockets", role:"kitchen", containers:["fridge", "freezer"] },
         { key:"stove",         appliance:"gas_range",      circuit:"sockets", role:"kitchen", containers:["stove"] },
-        { key:"kettle",        appliance:"kettle",         circuit:"sockets", role:"kitchen" },
         { key:"toaster",       appliance:"toaster",        circuit:"sockets", role:"kitchen" },
         { key:"microwave",     appliance:"microwave",      circuit:"sockets", role:"kitchen" },
         { key:"tv",            appliance:"tv",             circuit:"sockets", role:"living" },
@@ -5025,7 +5200,7 @@ x_sn_9 m_sn_sn_sn sn p
   WIRING_TEMPLATES.casa_fuses = {
     main: { cutoff:true },
     circuits: [
-      { key:"fuses", label:"Fuses", rating:OLD_BOARD_FUSE_A, volts:220, fuse:true, roles:BUILDING_TYPES.casa.rooms.map(r=> r.role) }
+      { key:"fuses", label:"Fuses", rating:OLD_BOARD_FUSE_A, volts:220, fuse:true, sockets:true, roles:BUILDING_TYPES.casa.rooms.map(r=> r.role) }
     ],
     fixtures: WIRING_TEMPLATES.casa.fixtures.map(fx=> Object.assign({}, fx, { circuit:"fuses" }))
   };
@@ -5222,7 +5397,12 @@ x_sn_9 m_sn_sn_sn sn p
       //             at its appliance's leftOnChance, keyed and pure
       //             (switchOnIn()). A switchless appliance has no entry.
       //   breakers  { breakerId: { on, tripped } }. Default: on, untripped.
-      power:{ switches:{}, breakers:{} },
+      //   stops     { loadId: { at } | { left } } — when an appliance with a
+      //             timed stop rule (APPLIANCES' `stops`), switched on,
+      //             stops: `at`, a minute since the collapse, while it runs;
+      //             `left`, the minutes it still has, while it waits for
+      //             power. No other load ever has an entry.
+      power:{ switches:{}, breakers:{}, stops:{} },
       // One of ELECTRICAL_RULES, chosen when the run starts and never
       // changed during it. The Options choice applies at a restart.
       electricalRules:"detailed",
@@ -5270,6 +5450,10 @@ x_sn_9 m_sn_sn_sn sn p
   // resolveDeviceTarget() looks it up again on every render. UI-only and
   // never saved, like detailItem.
   let deviceTarget = null;
+  // The load whose dial the Electrical view is showing, its Switch on
+  // opened into the minutes to pick from (APPLIANCES' `stops.dial`), or null.
+  // UI-only and never saved, like deviceTarget.
+  let dialPickLoad = null;
   // Whether Walk to…'s list is open, and the map card's place and where it
   // was tapped ({ place, x, y }, client coordinates), or null when closed.
   // UI-only and never saved, like detailItem: both look their place up
@@ -5598,7 +5782,8 @@ x_sn_9 m_sn_sn_sn sn p
   // two rows until both are cooked. A perishable's rows merge only when every
   // unit of both is in the same freshness state. Part-eaten units merge only
   // with units as eaten as they are, never with whole ones, and holders only
-  // with holders holding the same fluid to the same millilitre.
+  // with holders holding the same fluid to the same millilitre, at
+  // temperatures read now within TEMP_MERGE_TOLERANCE_C of each other.
   function sameStackState(a, b){
     return STACKABLE.has(a.category) && a.itemId === b.itemId && a.category === b.category
       && !a.durability && !b.durability && !!a.sealed === !!b.sealed
@@ -5606,15 +5791,19 @@ x_sn_9 m_sn_sn_sn sn p
       && (cookStateOf(a) !== "raw" || (a.cookMinutes || 0) === (b.cookMinutes || 0))
       && rowFreshness(a) === rowFreshness(b) && rowFreshness(a) !== "mixed"
       && portionOf(a) === portionOf(b)
-      && fluidKindOf(a) === fluidKindOf(b) && (a.fluid ? a.fluid.ml : 0) === (b.fluid ? b.fluid.ml : 0);
+      && fluidKindOf(a) === fluidKindOf(b) && (a.fluid ? a.fluid.ml : 0) === (b.fluid ? b.fluid.ml : 0)
+      && (!a.fluid || Math.abs(fluidTempC(a) - fluidTempC(b)) < TEMP_MERGE_TOLERANCE_C);
   }
   // Folds `row` into `target`, an existing row sameStackState() accepts. The
   // one place two rows become one: the units' ages come along, re-sorted
   // oldest first. Both rows are always settled to the same minute, so their
   // ages join as they are: anything that moves or merges rows acts on lists
   // already settled (settleReachable(), settleHeat()), and a settle folds
-  // only rows of its own list.
+  // only rows of its own list. Holders' water takes the mean of the two
+  // temperatures, read now, by units.
   function mergeRows(target, row){
+    if(target.fluid && row.fluid)
+      setWaterTemp(target.fluid, (fluidTempC(target) * target.qty + fluidTempC(row) * row.qty) / (target.qty + row.qty));
     target.qty += row.qty;
     if(Array.isArray(target.ages) || Array.isArray(row.ages))
       target.ages = (target.ages || []).concat(row.ages || []).sort((x, y)=> y - x);
@@ -5717,7 +5906,8 @@ x_sn_9 m_sn_sn_sn sn p
   // What makes rows one group: the same item, sealed or not, cook state,
   // fluid kind and freshness (a container's Frozen is every row's), and the
   // same contents, so a pot of stew never groups with an empty pot. Rows of
-  // a group differ only by their level, raw cookMinutes, or `on`.
+  // a group differ only by their level, their water's temperature, raw
+  // cookMinutes, or `on`.
   // `kind` stands for the fluid's kind where it is asked as it would be.
   function groupKeyOf(it, kind = fluidKindOf(it)){
     return JSON.stringify([it.itemId || null, it.name, !!it.sealed, cookStateOf(it), kind, rowFreshness(it),
@@ -5999,8 +6189,11 @@ x_sn_9 m_sn_sn_sn sn p
     if(!it) return; // stale reference — nothing to take, fail silently and let render() resync
     const moveQty = normalizeQty(qty, it.qty);
     if(moveQty == null) return;
-    const result = addToDestination(unitsOf(it, moveQty));
+    const units = unitsOf(it, moveQty);
+    if(itemAppliance(units)) units.on = false;
+    const result = addToDestination(units);
     if(!result.ok){ logTakeRefusal(result.reason); return; }
+    liftKettle(it);
     dropUnits(src.items, index, moveQty);
     // No log line: the item visibly moves between the Here and Inventory
     // panels, so the line only repeated what the screen already showed.
@@ -6015,7 +6208,9 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // A group's Take and Store: `qty` of its units (all when null), least left
   // first across its rows (groupPicks()). All or nothing: when the whole
-  // amount won't fit, nothing moves and the row's warning speaks.
+  // amount won't fit, nothing moves and the row's warning speaks. A running
+  // kettle taken off its floor, by a row's Take or a group's, switches off
+  // first, silently (liftKettle()).
   function doTakeGroup(rows, qty){
     const src = worldSlot(world[state.currentRoom], worldTab);
     if(!src || !rows.length || rows.some(r=> !src.items.includes(r))) return;
@@ -6025,7 +6220,7 @@ x_sn_9 m_sn_sn_sn sn p
     const reason = destinationRefusal(rows[0], picksWeight(picks), picks.length);
     if(reason){ logTakeRefusal(reason); return; }
     const dst = invSlot(invTab);
-    picks.forEach(p=> addToList(dst.items, dropUnits(src.items, src.items.indexOf(p.row), p.n)));
+    picks.forEach(p=>{ liftKettle(p.row); addToList(dst.items, dropUnits(src.items, src.items.indexOf(p.row), p.n)); });
     render();
   }
   function doStoreGroup(rows, qty){
@@ -6189,12 +6384,55 @@ x_sn_9 m_sn_sn_sn sn p
     const pair = [a, b].sort().join("+");
     return pair === "clean+tainted" ? "tainted" : null;
   }
-  // `ml` of `kind` into one unit, mixed with what it holds (mixKinds()). New
-  // water in a vessel starts its boil over. A caller never adds more than
-  // fluidSpaceMl().
-  function addFluid(unit, kind, ml){
-    unit.fluid = { kind: mixKinds(fluidKindOf(unit), kind), ml: (unit.fluid ? unit.fluid.ml : 0) + ml };
-    delete unit.boilMinutes;
+  // `ml` of `kind` at `c` °C into one unit, mixed with what it holds
+  // (mixKinds()), its temperature the volume-weighted mean of the two, each
+  // read now, stamped now. Water mixed to below the boil loses its boil; water
+  // at the boil poured into water at the boil keeps it. A caller never adds
+  // more than fluidSpaceMl().
+  function addFluid(unit, kind, ml, c){
+    const had = unit.fluid ? unit.fluid.ml : 0;
+    const mixed = had ? (fluidTempC(unit) * had + c * ml) / (had + ml) : c;
+    unit.fluid = { kind: mixKinds(fluidKindOf(unit), kind), ml: had + ml };
+    setWaterTemp(unit.fluid, mixed);
+    if(!atBoil(mixed)) delete unit.boilMinutes;
+  }
+  // WATER TEMPERATURE: docs/systems/fluids.md has the model. A water's
+  // temperature is true at a minute, `temp: { c, at }`, on a holder's fluid
+  // or a dish's water, and worked out when read: never ticked, never
+  // scheduled. Absent, it is ROOM_TEMP_C. Everything that needs one reads it
+  // here, and every writer stamps it through setWaterTemp(), at `settledAt`,
+  // which an action shares with now and a settle sets to its own minute.
+  //   A holder's cooling constant, and whether its water heats.
+  function coolPerMinOf(it){
+    const def = registryEntryOf(it);
+    return def && def.holdsFluid ? def.holdsFluid.coolPerMin : 0;
+  }
+  function heatsWater(it){
+    const def = registryEntryOf(it);
+    return !!(def && def.holdsFluid && def.holdsFluid.heats);
+  }
+  //   A water's temperature at minute `m`, by Newton's law in closed form:
+  // ROOM_TEMP_C + (c − ROOM_TEMP_C) · e^(−k · (m − at)), `k` its holder's
+  // constant.
+  function waterTempOf(temp, k, m = settledAt){
+    if(!temp) return ROOM_TEMP_C;
+    return ROOM_TEMP_C + (temp.c - ROOM_TEMP_C) * Math.exp(-k * Math.max(0, m - temp.at));
+  }
+  function fluidTempC(unit, m = settledAt){ return waterTempOf(unit.fluid && unit.fluid.temp, coolPerMinOf(unit), m); }
+  //   Stamps `water` (a fluid, or a dish's water) at `c` °C, true at `m`. One
+  // within TEMP_MERGE_TOLERANCE_C of ROOM_TEMP_C is at the room's, and drops
+  // its own.
+  function setWaterTemp(water, c, m = settledAt){
+    if(Math.abs(c - ROOM_TEMP_C) < TEMP_MERGE_TOLERANCE_C) delete water.temp;
+    else water.temp = { c, at: m };
+  }
+  function atBoil(c){ return c >= WATER_BOIL_C - TEMP_EPSILON_C; }
+  //   The temperature of the water a row shows, or null for one with none: a
+  // holder's fluid, or the water of the dish its vessel holds.
+  function unitWaterTempC(it){
+    if(it.fluid) return fluidTempC(it);
+    const dish = vesselDefOf(it) && dishIn(it);
+    return dish && dish.water ? waterTempOf(dish.water.temp, coolPerMinOf(it)) : null;
   }
   // `ml` out of one unit; emptied, it holds nothing, and has nothing to boil.
   function takeFluid(unit, ml){
@@ -6225,6 +6463,7 @@ x_sn_9 m_sn_sn_sn sn p
     const after = changeOneUnit(list, unit, u=> takeFluid(u, ml));
     const line = !after.fluid ? `You drink the last of the water in the ${name}.` : `You drink from the ${name}.`;
     log(line, "good", "drink:" + line);
+    kettleWaterTaken(after);
     if(kind === "tainted") rollFoodPoisoning(TAINTED_WATER_POISONING_CHANCE * ml / TAINTED_WATER_DOSE_ML);
     return after;
   }
@@ -6243,12 +6482,14 @@ x_sn_9 m_sn_sn_sn sn p
   // water runs (waterRunningIn()), while it has room, part-way or from
   // empty alike. One unit fills, as far as it has room; the water is clean,
   // and mixes with what is there (mixKinds()), so tainted water already in it
-  // taints it. Instant. After the water fails the sink gives nothing, and
+  // taints it. Over FLUID_INSTANT_MAX_ML it takes time at TAP_FLOW_L_PER_MIN
+  // (transferMinutes()). After the water fails the sink gives nothing, and
   // whatever was left in the pipes is #300's.
   // Off a tank, at any time, a fill draws the litres it adds and takes only
   // what the tank has left, to the millilitre: a holder fills part-way on the
   // last of it. A sink without a tank draws on the mains, and draws nothing
-  // down. The lines are functional, retunable.
+  // down. The water runs at TANK_WATER_C off a tank, MAINS_WATER_C off the
+  // mains. The lines are functional, retunable.
   function canFillAtSink(it){
     const room = world[state.currentRoom];
     return !!room.sink && waterRunningIn(state.currentRoom) && fluidSpaceMl(it) > 0
@@ -6262,21 +6503,39 @@ x_sn_9 m_sn_sn_sn sn p
   // litres are kept to the millilitre; the nudge takes back the float noise
   // that would floor 0.3 L to 299 mL.
   function tankLeftMl(){ return Math.floor(tankLeft(state.currentRoom) * 1000 + 1e-6); }
+  // What filling `it` at the current room's sink would add, in mL: its room,
+  // or what the tank has left when less.
+  function fillMlFor(it){
+    return tankOf(state.currentRoom) > 0 ? Math.min(fluidSpaceMl(it), tankLeftMl()) : fluidSpaceMl(it);
+  }
+  // How long moving `ml` takes at `lPerMin` (TIMED TRANSFERS): 0 up to
+  // FLUID_INSTANT_MAX_ML, else its litres over the rate, a minute at least,
+  // exact above that floor.
+  function transferMinutes(ml, lPerMin){
+    return ml > FLUID_INSTANT_MAX_ML ? Math.max(1, ml / 1000 / lPerMin) : 0;
+  }
+  // A timed transfer's cost on its button, rounded up to the whole minute,
+  // or null for an instant one.
+  function transferCost(minutes){ return minutes > 0 ? fmtDuration(Math.ceil(minutes)) : null; }
+  // The water moves first, and a tank draw resolves its building with it;
+  // then a timed fill's minutes pass.
   function doFillAtSink(sourceKind, index){
     const room = world[state.currentRoom];
     const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
     const it = getItemAt(src && src.items, index);
     if(!it || !canFillAtSink(it)) return;
     const fromTank = tankOf(state.currentRoom) > 0;
-    const ml = fromTank ? Math.min(fluidSpaceMl(it), tankLeftMl()) : fluidSpaceMl(it);
+    const ml = fillMlFor(it);
     if(!(ml > 0)) return;
-    const filled = changeOneUnit(src.items, it, unit=> addFluid(unit, "clean", ml));
+    const filled = changeOneUnit(src.items, it, unit=> addFluid(unit, "clean", ml, fromTank ? TANK_WATER_C : MAINS_WATER_C));
     const moved = fromTank ? drawFromTank(ml) : null;
     // The pop-up follows the filled bottle, as doOpen()'s follows the opened can.
     detailItem = { uid: ensureUid(filled), side: sourceKind };
     log(fromTank && tankLeft(state.currentRoom) <= 0 ? "The tap coughs, spits, and runs dry."
       : `You fill the ${it.name.toLowerCase()} at the sink.`);
     if(moved) resolveBuilding(moved);
+    const minutes = transferMinutes(ml, TAP_FLOW_L_PER_MIN);
+    if(minutes > 0) advanceTime(minutes);
     render();
   }
   // `ml` drawn from the current room's tank. Returns its building when the
@@ -6290,8 +6549,8 @@ x_sn_9 m_sn_sn_sn sn p
     state.tankDrawn[b] = Math.round(((state.tankDrawn[b] || 0) + ml / 1000) * 1000) / 1000;
     return floatNow() !== floatBefore ? b : null;
   }
-  // Drinking at the tap, MEASURE_ML at a time, while the water runs. The water is clean. Instant, as
-  // filling is, and drawn as a fill draws: off a tank, the litres drunk,
+  // Drinking at the tap, MEASURE_ML at a time, while the water runs. The
+  // water is clean. Instant, and drawn as a fill draws: off a tank, the litres drunk,
   // only what is left on the last of it; a sink on the mains draws nothing
   // down. The lines are game text, retunable.
   function canDrinkAtSink(){ return !!world[state.currentRoom].sink && waterRunningIn(state.currentRoom); }
@@ -6458,20 +6717,21 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // Moves min(`ml`, what the source has, what the target has room for) from
   // one unit of `src` into one unit of `dst`, each unit split off its row
-  // first (changeOneUnit()). The kind mixes, a vessel target's boil starts
-  // over, and a source keeps its boil. Returns the source unit after.
+  // first (changeOneUnit()). The kind and the temperature mix (addFluid()),
+  // and a source keeps its boil. Returns the source unit after.
   function pourFluid(srcList, src, dstList, dst, ml){
-    const n = Math.min(ml, src.fluid.ml, fluidSpaceMl(dst));
-    const kind = src.fluid.kind;
+    const n = pourMl(src, dst, ml);
+    const kind = src.fluid.kind, c = fluidTempC(src);
     const after = changeOneUnit(srcList, src, u=> takeFluid(u, n));
-    changeOneUnit(dstList, dst, u=> addFluid(u, kind, n));
+    changeOneUnit(dstList, dst, u=> addFluid(u, kind, n, c));
     return after;
   }
   // Pour (`ml` null: as much as fits) or Pour by the measure from row
   // `index` of the side's tab into the entry keyed `key`, found again now.
   // The pop-up follows the source, its submenu open while it still holds
   // fluid. Pouring tainted water into clean is allowed: the entry's label
-  // says so. The line's wording is retunable.
+  // says so. A pour over FLUID_INSTANT_MAX_ML takes time at POUR_L_PER_MIN,
+  // after the water has moved. The line's wording is retunable.
   function doPour(sourceKind, index, key, ml){
     const room = world[state.currentRoom];
     const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
@@ -6480,19 +6740,28 @@ x_sn_9 m_sn_sn_sn sn p
     const target = pourTargets(src.items, it).find(e=> e.key === key);
     if(!target) return;
     const name = target.unit.name.toLowerCase();
+    const moved = pourMl(it, target.unit, ml);
     const after = pourFluid(src.items, it, target.list, target.unit, ml == null ? Infinity : ml);
     log(`You pour the water into the ${name}.`);
+    kettleWaterTaken(after);
     detailItem = { uid: ensureUid(after), side: sourceKind, pour: drinkable(after) };
+    const minutes = transferMinutes(moved, POUR_L_PER_MIN);
+    if(minutes > 0) advanceTime(minutes);
     render();
   }
+  // What a pour of `ml` (null: as much as fits) from `src` into `dst` would
+  // move, as pourFluid() takes it.
+  function pourMl(src, dst, ml){ return Math.min(ml == null ? Infinity : ml, src.fluid.ml, fluidSpaceMl(dst)); }
   // Pour out the water, on any holder with fluid and no dish: one unit is
-  // emptied, and the water is gone. Silent: its label and meter go.
+  // emptied, and the water is gone. Silent: its label and meter go. A
+  // running kettle poured out cuts out (kettleWaterTaken()).
   function doPourOut(sourceKind, index){
     const room = world[state.currentRoom];
     const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
     const it = getItemAt(src && src.items, index);
     if(!it || !drinkable(it)) return;
     const after = changeOneUnit(src.items, it, u=> takeFluid(u, u.fluid.ml));
+    kettleWaterTaken(after);
     detailItem = { uid: ensureUid(after), side: sourceKind };
     render();
   }
@@ -6618,7 +6887,8 @@ x_sn_9 m_sn_sn_sn sn p
   // validates defensively (getItemAt) so a future caller that passes a stale
   // pair fails safe instead of throwing on `undefined.qty`. An entry with
   // `note` is not an action: a line shown in one's place, as "The tap is
-  // dry." stands where Fill at the sink would.
+  // dry." stands where Fill at the sink would. An entry's `cost` is its time,
+  // shown dim after its label, as every timed action's is.
   function getItemActions(list, index, side){
     const it = getItemAt(list, index);
     if(!it) return [];
@@ -6678,7 +6948,8 @@ x_sn_9 m_sn_sn_sn sn p
     }
     if(it.sealed && (!it.opensWith || hasTool(it.opensWith)))
       actions.push({ label:"Open", onClick:()=>doOpen(side, index) });
-    if(canFillAtSink(it)) actions.push({ label:"Fill at the sink", onClick:()=>doFillAtSink(side, index) });
+    if(canFillAtSink(it)) actions.push({ label:"Fill at the sink", onClick:()=>doFillAtSink(side, index),
+      cost: transferCost(transferMinutes(fillMlFor(it), TAP_FLOW_L_PER_MIN)) });
     else if(tapDryFor(it)) actions.push({ label:"The tap is dry.", note:true });
     if(it.category==="Container" && it.slotType && !state[it.slotType])
       actions.push({ label:"Equip", onClick:()=>doEquip(side, index) });
@@ -6696,8 +6967,18 @@ x_sn_9 m_sn_sn_sn sn p
     // Anything that runs on batteries (the flashlight, the radio) keeps its
     // controls here.
     batteryActions(it).forEach(a=> actions.push(a));
+    kettleActions(list, index, side).forEach(a=> actions.push(a));
     if(disassemblyRecipe(it)) actions.push({ label:"Disassemble", onClick:()=> doDisassemble(list, index) });
     return actions;
+  }
+  // An item that plugs in (the electric kettle): Switch on, or Switch off
+  // while it runs, offered while it is plugged in (plugFor()), its pop-up
+  // opened from the Floor tab.
+  function kettleActions(list, index, side){
+    const it = getItemAt(list, index);
+    if(!it || side !== "world" || !plugFor(it, list, state.currentRoom)) return [];
+    return [it.on ? { label:"Switch off", onClick:()=> doSwitchKettle(list, index, false) }
+      : { label:"Switch on", onClick:()=> doSwitchKettle(list, index, true) }];
   }
   // Eat, by the whole and the part, on row `index` of `list` (its verb: milk
   // is drunk by it too): what it eats is the unit eatTarget() picks, so a
@@ -7136,6 +7417,7 @@ x_sn_9 m_sn_sn_sn sn p
     if(entered && !state.enteredBuildings.includes(entered)) state.enteredBuildings.push(entered);
     worldTab = "floor";
     detailItem = null;
+    dialPickLoad = null;
     if(!walking) render();
   }
   // WALK TO… Travel to a known place along the shortest route, run
@@ -7416,15 +7698,62 @@ x_sn_9 m_sn_sn_sn sn p
   // A load's own switch, by hand: today from a fridge's or freezer's device
   // pop-up, and from the electrical view. Instant, and resolved at
   // once, as a breaker is: switching a fridge on starts it, surge and all.
-  // Nothing else in play writes state.power.switches. The line names the
-  // appliance; functional, retunable.
-  function doSwitchLoad(loadId, on){
+  // Nothing else in play writes state.power.switches but a stop
+  // (applyStopRules(), settleApplianceStops()). An appliance with a timed
+  // stop rule records when it stops: its `after`, or the dial's `minutes`,
+  // from now. One whose rule is "off" doesn't latch without power at its
+  // socket, and says so in place of the switch line; one whose rule is
+  // "pause" switches on and waits, its whole time kept (applyStopRules()).
+  // The line names the appliance; functional, retunable.
+  function doSwitchLoad(loadId, on, minutes){
     const l = POWER_NET.loads[loadId];
     const a = l && APPLIANCES[l.appliance];
     on = !!on;
-    if(!a || a.switchless || switchOnIn(state.power, state.seed, loadId, a) === on) return;
+    if(!a || a.switchless || l.plug || switchOnIn(state.power, state.seed, loadId, a) === on) return;
+    const rule = a.stops;
+    const run = on && rule ? (rule.dial ? minutes : rule.after) : undefined;
+    if(on && rule && rule.dial && !rule.dial.includes(run)) return;
+    if(on && rule && rule.onPowerLoss === "off" && !(loadSupplyVolts(loadId) > 0)){
+      log(rule.noLatchLine);
+      render();
+      return;
+    }
     log(`You switch the ${a.name.toLowerCase()} ${on ? "on" : "off"}.`);
-    changePower(POWER_INDEX.of[loadId], p=> setSwitchIn(p, state.seed, loadId, a, on));
+    changePower(POWER_INDEX.of[loadId], p=>{
+      setSwitchIn(p, state.seed, loadId, a, on);
+      if(run > 0) p.stops[loadId] = { at: minutesSinceCollapse() + run };
+      else delete p.stops[loadId];
+    });
+    render();
+  }
+  // The electric kettle's switch, from its item pop-up while it is plugged in
+  // (kettleActions()). Switched on: with no power at its plug it doesn't
+  // latch, and says so in place of the switch line; empty, or already at the
+  // boil, it cuts out at once with its line; otherwise its water is stamped
+  // now, it runs, and its building resolves with it drawing. Switched off:
+  // its building resolves without it. The no-power and cut-out lines are its
+  // appliance's (`stops`); the switch lines are functional, retunable.
+  function doSwitchKettle(list, index, on){
+    const it = getItemAt(list, index);
+    const plug = it && plugFor(it, list, state.currentRoom);
+    if(!plug || !!it.on === on) return;
+    const rule = APPLIANCES[itemAppliance(it)].stops;
+    if(!on){
+      log("You switch the kettle off.");
+      const k = liveKettles().find(x=> x.item === it);
+      if(k) kettleOff(k, minutesSinceCollapse(), false);
+      else it.on = false;
+    } else if(!isPowered(plug)) log(rule.noLatchLine);
+    else {
+      log("You switch the kettle on.");
+      if(!it.fluid || atBoil(fluidTempC(it))) log(rule.line);
+      else {
+        setWaterTemp(it.fluid, fluidTempC(it));
+        it.on = true;
+        runningKettles.push({ roomId: state.currentRoom, item: it });
+        changePower(POWER_INDEX.of[plug], null);
+      }
+    }
     render();
   }
   // The meters, from the Electrical view. A reading takes
@@ -7736,7 +8065,7 @@ x_sn_9 m_sn_sn_sn sn p
     const loadId = POWER_NET.containerLoad[roomId + KEY_SEP + container.id];
     if(!loadId) return true;
     const b = POWER_INDEX.of[loadId];
-    return !!powerSnapshot(POWER_INDEX.sub[b], APPLIANCES, state.power, state.electricalRules, true, null, state.seed, null)
+    return !!powerSnapshot(POWER_INDEX.sub[b], APPLIANCES, state.power, state.electricalRules, true, null, state.seed, null, null)
       .powered[loadId];
   }
   // One list (not its nested contents) settled to minute `m`: each perishable
@@ -8010,12 +8339,15 @@ x_sn_9 m_sn_sn_sn sn p
     planNextDue();
   }
   // The next due minute, from what is lit or running now: a grid change not
-  // yet made, a tank coming full (tankFullDue()), a battery running out, a
+  // yet made, a tank coming full (tankFullDue()), a battery running out, an
+  // appliance's timed stop, a running kettle's cut-out (kettleCutOutDue()), a
   // timer's end, a lit room's next event (heatRoomDue()), and every clock
   // event not yet fired.
   function planNextDue(){
     let due = settledAt + tankFullDue();
     batteryDeaths.forEach(t=>{ due = Math.min(due, t); });
+    Object.values(state.power.stops).forEach(e=>{ if(e.at !== undefined) due = Math.min(due, e.at); });
+    liveKettles().forEach(k=>{ due = Math.min(due, settledAt + kettleCutOutDue(k)); });
     GRID_CHANGES.forEach(g=>{ if(g > lastGrid) due = Math.min(due, g); });
     timerStoves.forEach(({ container })=>{ due = Math.min(due, settledAt + container.timerMinutes); });
     heatRooms.forEach(id=>{ due = Math.min(due, settledAt + heatRoomDue(world[id])); });
@@ -8024,8 +8356,11 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // Brings the scheduled systems to minute `m`, each by the span since
   // settledAt, and does what is due there, in this order: the tanks
-  // (settleTanks()), then a grid change at `m` (resolveGrid()), then a
-  // tank come full resolves its building so its pump stops, then the
+  // (settleTanks()), then the running kettles' heating, at the power they
+  // had over the span (settleRunningKettles()), then a grid change at `m`
+  // (resolveGrid()), then a tank come full resolves its building so its pump
+  // stops, then the kettles at the boil cut out (settleKettleCutOuts()), then
+  // the appliances whose timed stop is due (settleApplianceStops()), then the
   // batteries out by `m` (settleBatteryDeaths()), then every running timer
   // in world order, then every lit room, its cooking and then its fire
   // (settleTimer(), settleHeat()). It never runs past an event
@@ -8036,9 +8371,12 @@ x_sn_9 m_sn_sn_sn sn p
     const from = settledAt, span = Math.max(0, m - from);
     settledAt = Math.max(from, m);
     const filled = settleTanks(from, span);
+    settleRunningKettles(span);
     GRID_CHANGES.forEach(g=>{ if(lastGrid < g && g <= m) resolveGrid(g); });
     lastGrid = Math.max(lastGrid, m);
     filled.forEach(b=>{ if(TANK_PUMPS[b] !== undefined) resolveBuilding(b); });
+    settleKettleCutOuts(m);
+    settleApplianceStops(m);
     settleBatteryDeaths(m);
     timersInOrder().forEach(({ roomId, container })=> settleTimer(roomId, container, span));
     heatRoomsInOrder().forEach(id=> settleHeat(id, span));
@@ -8051,8 +8389,10 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // Every event due by now, each at its own minute and in time order: the
   // world settled to it, which does what is due there and logs it, then the
-  // clock events up to it. At one minute the order is grid changes, tanks
-  // coming full, battery deaths, timers, cooking, fires, clock events. The cap guards against an event that never clears,
+  // clock events up to it. At one minute the order is the kettles' heating,
+  // grid changes, tanks coming full, kettle cut-outs, appliance stops,
+  // battery deaths, timers, cooking, fires, clock events. The cap guards
+  // against an event that never clears,
   // which would otherwise hang the step: a bug, reported and cut short.
   const SCHEDULER_MAX_EVENTS_PER_STEP = 1000;
   function processDueEvents(){
@@ -8127,13 +8467,21 @@ x_sn_9 m_sn_sn_sn sn p
   //             the board main's the board's. A panel or board is
   //             single-phase, so its current is its loads' total watts ÷
   //             its volts.
-  //   loads     { id: { id, appliance, panel, circuit, room, containers } }
+  //   loads     { id: { id, appliance, panel, circuit, room, containers,
+  //             plug? } }. `plug` marks a room's plug load: one per room a
+  //             socket circuit (a template circuit's `sockets`) serves, the
+  //             first such circuit in panel order taking it, of
+  //             PLUG_APPLIANCE, id `<panel>.plug.<role>`, after the panel's
+  //             fixtures. It has no switch: it is powered while its circuit
+  //             is live, and draws for the items running through it
+  //             (powerSnapshot()'s `plugs`).
   //   containerLoad  { roomId + KEY_SEP + containerId: loadId }
+  //   plugLoad  { roomId: loadId } — each socket-served room's plug load
   //   devices   { roomId: [{ kind:"board"|"panel", id }] } — what hangs there
   //   byLayer   { layer: [breakerId] }
   function breakerCurve(def){ return (def && def.curve) || DEFAULT_BREAKER_CURVE; }
   function expandWiring(wiring, templates){
-    const net = { boards:{}, panels:{}, breakers:{}, loads:{}, containerLoad:{}, devices:{}, byLayer:{}, problems:[] };
+    const net = { boards:{}, panels:{}, breakers:{}, loads:{}, containerLoad:{}, plugLoad:{}, devices:{}, byLayer:{}, problems:[] };
     const seen = new Set();
     const claim = (id)=>{
       if(seen.has(id)) net.problems.push(`duplicate id: ${id}`);
@@ -8204,6 +8552,19 @@ x_sn_9 m_sn_sn_sn sn p
           panel.loads.push(loadId);
           [circuit && circuitId, panelMain, feederId, boardMain].forEach(id=>{ if(id) net.breakers[id].loads.push(loadId); });
           if(roomId) (fx.containers || []).forEach(cid=>{ net.containerLoad[roomId + KEY_SEP + cid] = loadId; });
+        });
+        (layout.circuits || []).filter(c=> c.sockets).forEach(c=>{
+          const circuitId = `${panelId}.${c.key}`;
+          (c.roles || []).forEach(role=>{
+            const roomId = rooms[role];
+            if(!roomId || net.plugLoad[roomId]) return;
+            const loadId = claim(`${panelId}.plug.${role}`);
+            net.loads[loadId] = { id:loadId, appliance:PLUG_APPLIANCE, panel:panelId, circuit:circuitId, room:roomId,
+              containers:[], plug:true };
+            panel.loads.push(loadId);
+            [circuitId, panelMain, feederId, boardMain].forEach(id=>{ if(id) net.breakers[id].loads.push(loadId); });
+            net.plugLoad[roomId] = loadId;
+          });
         });
       });
       feeders.forEach(f=>{
@@ -8366,8 +8727,11 @@ x_sn_9 m_sn_sn_sn sn p
   // expanded network, the appliances, a power state, the rules, whether the
   // grid is live, the previous resolve's `drawing`, the seed, and `floats`,
   // { loadId: { low, full } }, the float switch of each tank a pump fills
-  // (tankFloat()). A pump (`flowLph`) with no entry in `floats` has no tank
-  // to fill, and never draws.
+  // (tankFloat()), and `plugs`, { loadId: n }, how many items run through
+  // each plug load (plugsNow()). A pump (`flowLph`) with no entry in
+  // `floats` has no tank to fill, and never draws. A plug load has no
+  // switch: it is powered while its circuit is live, and draws n × its
+  // appliance's watts while n is above 0.
   //   live      board, panel and circuit ids: whether power reaches past
   //             their breaker. A board is live when the grid is and its
   //             main is closed; a panel when its board is, and its feeder
@@ -8375,9 +8739,9 @@ x_sn_9 m_sn_sn_sn sn p
   //             breaker is closed. Simplified rules skip feeders and
   //             circuits, but never a fuse (circuitSkipped()).
   //   supplied  panel ids: whether power reaches its main (live but for it)
-  //   powered   load ids: its switch is on and its circuit (simplified: its
-  //             panel, unless the circuit is a fuse) is live. What spoilage
-  //             asks, through isPowered().
+  //   powered   load ids: its switch is on (a plug load has none) and its
+  //             circuit (simplified: its panel, unless the circuit is a
+  //             fuse) is live. What spoilage asks, through isPowered().
   //   drawing   load ids: powered, and a pump only while its float calls:
   //             its tank is below TANK_FLOAT_START, or the pump was drawing
   //             in `prevDrawing` and the tank is not yet full. It never
@@ -8402,7 +8766,7 @@ x_sn_9 m_sn_sn_sn sn p
     if(r === undefined){ r = rollValueFor(seed, ["power", "cycle", loadId]); cycleRolls.byLoad.set(loadId, r); }
     return r;
   }
-  function powerSnapshot(net, appliances, power, rules, gridLive, prevDrawing, seed, floats){
+  function powerSnapshot(net, appliances, power, rules, gridLive, prevDrawing, seed, floats, plugs){
     const simple = rules === "simplified";
     const closed = (id)=> breakerClosedIn(power, id);
     const live = {}, supplied = {};
@@ -8416,8 +8780,9 @@ x_sn_9 m_sn_sn_sn sn p
     Object.values(net.loads).forEach(l=>{
       const a = appliances[l.appliance];
       const via = circuitSkipped(net.breakers[l.circuit], rules) ? l.panel : l.circuit;
-      powered[l.id] = !!live[via] && switchOnIn(power, seed, l.id, a);
+      powered[l.id] = !!live[via] && (!!l.plug || switchOnIn(power, seed, l.id, a));
       if(!powered[l.id] || !a) return;
+      if(l.plug && !(plugs && plugs[l.id] > 0)) return;
       if(a.flowLph !== undefined){
         const f = floats && floats[l.id];
         if(!f || f.full || !(f.low || (prevDrawing && prevDrawing[l.id]))) return;
@@ -8430,9 +8795,9 @@ x_sn_9 m_sn_sn_sn sn p
       let run = 0, mom = 0;
       br.loads.forEach(id=>{
         if(!drawing[id]) return;
-        const a = appliances[net.loads[id].appliance];
-        run += loadDrawWatts(a);
-        mom += starting[id] ? a.startWatts : loadDrawWatts(a);
+        const l = net.loads[id], a = appliances[l.appliance], n = l.plug ? plugs[id] : 1;
+        run += loadDrawWatts(a) * n;
+        mom += (starting[id] ? a.startWatts : loadDrawWatts(a)) * n;
       });
       running[br.id] = run / br.volts;
       momentary[br.id] = mom / br.volts;
@@ -8459,12 +8824,11 @@ x_sn_9 m_sn_sn_sn sn p
   // neither check touches under either rules: neither trips on overcurrent.
   // Only a trip changes what a look sees, so a look is kept until one
   // happens, and taken again at the next layer.
-  function resolvePower(net, appliances, power, rules, gridLive, prevDrawing, seed, floats){
-    const p = { switches:Object.assign({}, power.switches), breakers:{} };
-    Object.keys(power.breakers).forEach(id=>{ p.breakers[id] = Object.assign({}, power.breakers[id]); });
+  function resolvePower(net, appliances, power, rules, gridLive, prevDrawing, seed, floats, plugs){
+    const p = copyPower(power);
     const trips = [];
     let kept = null;
-    const look = ()=> kept || (kept = powerSnapshot(net, appliances, p, rules, gridLive, prevDrawing, seed, floats));
+    const look = ()=> kept || (kept = powerSnapshot(net, appliances, p, rules, gridLive, prevDrawing, seed, floats, plugs));
     const trip = (id, cause, snap)=>{
       setBreakerIn(p, id, breakerStateIn(p, id).on, true);
       trips.push({ id, cause, running: net.breakers[id].loads.filter(l=> snap.drawing[l]) });
@@ -8566,11 +8930,13 @@ x_sn_9 m_sn_sn_sn sn p
     });
     return (idx.memo.trippers[key] = out);
   }
-  // The busy buildings, in the index's order, for a power state and floats.
-  // An entry under an id the network lacks is nobody's.
-  function busyBuildings(idx, power, rules, seed, floats){
+  // The busy buildings, in the index's order, for a power state, floats and
+  // plugs: a tripper, an entry in the power state (a switch, a breaker or a
+  // stop), a float not full, or a plug with an item running through it. An
+  // entry under an id the network lacks is nobody's.
+  function busyBuildings(idx, power, rules, seed, floats, plugs){
     const busy = new Set(untouchedTrippers(idx, rules, seed));
-    ["switches", "breakers"].forEach(k=> Object.keys(power[k] || {}).forEach(id=>{
+    ["switches", "breakers", "stops"].forEach(k=> Object.keys(power[k] || {}).forEach(id=>{
       const b = idx.of[id];
       if(b !== undefined) busy.add(b);
     }));
@@ -8578,11 +8944,16 @@ x_sn_9 m_sn_sn_sn sn p
       const b = idx.of[id];
       if(b !== undefined && floats[id] && !floats[id].full) busy.add(b);
     });
+    Object.keys(plugs || {}).forEach(id=>{
+      const b = idx.of[id];
+      if(b !== undefined && plugs[id] > 0) busy.add(b);
+    });
     return idx.buildings.filter(b=> busy.has(b));
   }
   // A still building's look, with nothing stored: its own nodes at the
-  // untouched power state, with no floats (every one of its tanks is full)
-  // and no resolve before (nothing starts). Kept per rules, seed and grid.
+  // untouched power state, with no floats (every one of its tanks is full),
+  // nothing running through its plugs, and no resolve before (nothing
+  // starts). Kept per rules, seed and grid.
   function stillLook(idx, b, rules, gridLive, seed){
     const key = rules + "|" + seed + "|" + !!gridLive;
     if(!idx.memo.still[key]){
@@ -8590,7 +8961,7 @@ x_sn_9 m_sn_sn_sn sn p
       idx.memo.still[key] = {};
     }
     const kept = idx.memo.still[key];
-    return kept[b] || (kept[b] = powerSnapshot(idx.sub[b], idx.appliances, UNTOUCHED_POWER, rules, gridLive, null, seed, null));
+    return kept[b] || (kept[b] = powerSnapshot(idx.sub[b], idx.appliances, UNTOUCHED_POWER, rules, gridLive, null, seed, null, null));
   }
   // The network as it stands, { idx, rules, seed, gridLive, looks }: the
   // grid's state, and `looks`, the look each resolved building's last
@@ -8611,13 +8982,14 @@ x_sn_9 m_sn_sn_sn sn p
   // and in the on part of its cycle, ((m + phase) mod cycleMinutes) <
   // dutyCycle × cycleMinutes, its phase fixed per load by a keyed roll
   // (cycleRoll()) so the kitchens don't all cycle together; a pump while its
-  // float calls (drawing); anything else while it is powered. The readouts'
+  // float calls (drawing), and a plug load while something runs through it
+  // (drawing); anything else while it is powered. The readouts'
   // idle word (loadStatusText()) and the grid's lines (logGridChange()) read
   // it.
   function loadRunningAt(result, loadId, m){
     const l = result.idx.net.loads[loadId], a = l && result.idx.appliances[l.appliance];
     if(!a || !powerRead(result, "powered", loadId)) return false;
-    if(a.flowLph !== undefined) return !!powerRead(result, "drawing", loadId);
+    if(l.plug || a.flowLph !== undefined) return !!powerRead(result, "drawing", loadId);
     if(a.dutyCycle !== undefined && a.cycleMinutes > 0)
       return (m + cycleRoll(result.seed, loadId) * a.cycleMinutes) % a.cycleMinutes < a.dutyCycle * a.cycleMinutes;
     return true;
@@ -8628,10 +9000,11 @@ x_sn_9 m_sn_sn_sn sn p
   let powerNow = null;
   function withLooks(result, gridLive, looks){ return powerResult(result.idx, result.rules, result.seed, gridLive, looks); }
   // A copy of a power state, for a change to be resolved before it is
-  // committed.
+  // committed: its switches, breakers and stops.
   function copyPower(power){
-    const p = { switches:Object.assign({}, power.switches), breakers:{} };
+    const p = { switches:Object.assign({}, power.switches), breakers:{}, stops:{} };
     Object.keys(power.breakers).forEach(id=>{ p.breakers[id] = Object.assign({}, power.breakers[id]); });
+    Object.keys(power.stops || {}).forEach(id=>{ p.stops[id] = Object.assign({}, power.stops[id]); });
     return p;
   }
   // Resolves building `b` on the power state `power`, from the look `before`
@@ -8639,7 +9012,7 @@ x_sn_9 m_sn_sn_sn sn p
   // returns what resolvePower() does. Pure.
   function resolveBuildingOn(b, power, gridLive, before){
     return resolvePower(POWER_INDEX.sub[b], APPLIANCES, power, state.electricalRules, gridLive,
-      before ? lookOf(before, b).drawing : null, state.seed, tankFloatsNow());
+      before ? lookOf(before, b).drawing : null, state.seed, tankFloatsNow(), plugsNow());
   }
   // Whether building `b`'s switches or breakers differ between two power
   // states.
@@ -8657,41 +9030,46 @@ x_sn_9 m_sn_sn_sn sn p
     if(buildingPowerChanged(b, state.power, r.power)) settleColdStores(b, m);
     state.power = r.power;
   }
-  // A resolve's result committed now (adoptPower()), and its look made the
-  // building's in powerNow.
-  function commitResolve(b, r){
-    adoptPower(b, r, minutesSinceCollapse());
+  // A resolve's result committed at minute `m` (adoptPower()), and its look
+  // made the building's in powerNow.
+  function commitResolve(b, r, m){
+    adoptPower(b, r, m);
     const looks = new Map(powerNow.looks);
     const { power, trips, ...look } = r;
     looks.set(b, look);
     powerNow = withLooks(powerNow, powerNow.gridLive, looks);
   }
-  // The network on boot, restart and load: every busy building resolved,
-  // with no resolve before it, so nothing starts. A trip it finds (only an
-  // imported save could hold one unresolved) is committed silently.
+  // The network on boot, restart and load: the running kettles found, then
+  // every busy building resolved, with no resolve before it, so nothing
+  // starts. A trip it finds (only an imported save could hold one
+  // unresolved) is committed silently.
   function refreshPower(){
-    const gridLive = gridUp(), looks = new Map();
+    const gridLive = gridUp(), looks = new Map(), m = minutesSinceCollapse();
     powerNow = powerResult(POWER_INDEX, state.electricalRules, state.seed, gridLive, looks);
-    busyBuildings(POWER_INDEX, state.power, state.electricalRules, state.seed, tankFloatsNow()).forEach(b=>{
+    rebuildRunningKettles();
+    busyBuildings(POWER_INDEX, state.power, state.electricalRules, state.seed, tankFloatsNow(), plugsNow()).forEach(b=>{
       const r = resolveBuildingOn(b, state.power, gridLive, null);
-      adoptPower(b, r, minutesSinceCollapse());
+      adoptPower(b, r, m);
       const { power, trips, ...look } = r;
       looks.set(b, look);
     });
+    applyStopRules(Array.from(looks.keys()), m);
   }
-  // A change to building `b`'s power state, by an action: `change(power)` is
-  // made on a copy, the building resolved on it, and the result committed,
-  // so the action's trips happen, and are heard, with it (logTrips()).
-  // With no change it is a plain resolve: a tank's float moved by a draw
-  // (doFillAtSink()), or its tank come full (settleTanks()).
-  function changePower(b, change){
+  // A change to building `b`'s power state, by an action or an event at
+  // minute `m` (now by default): `change(power)` is made on a copy, the
+  // building resolved on it, and the result committed, so the action's trips
+  // happen, and are heard, with it (logTrips()), and then its stop rules
+  // (applyStopRules()). With no change it is a plain resolve: a tank's float
+  // moved by a draw (doFillAtSink()), or its tank come full (settleTanks()).
+  function changePower(b, change, m = minutesSinceCollapse()){
     if(!powerNow) refreshPower();
     if(b === undefined) return;
     const next = copyPower(state.power);
     if(change) change(next);
     const r = resolveBuildingOn(b, next, powerNow.gridLive, powerNow);
-    commitResolve(b, r);
+    commitResolve(b, r, m);
     logTrips(r.trips);
+    applyStopRules([b], m);
   }
   function resolveBuilding(b){ changePower(b, null); }
   // The grid failing or coming back at minute `m`, a scheduled event
@@ -8701,7 +9079,7 @@ x_sn_9 m_sn_sn_sn sn p
   function resolveGrid(m){
     if(!powerNow) refreshPower();
     const before = powerNow, gridLive = gridUp(m), looks = new Map(), trips = [];
-    busyBuildings(POWER_INDEX, state.power, state.electricalRules, state.seed, tankFloatsNow()).forEach(b=>{
+    busyBuildings(POWER_INDEX, state.power, state.electricalRules, state.seed, tankFloatsNow(), plugsNow()).forEach(b=>{
       const r = resolveBuildingOn(b, state.power, gridLive, before);
       adoptPower(b, r, m);
       const { power, trips:t, ...look } = r;
@@ -8711,6 +9089,140 @@ x_sn_9 m_sn_sn_sn sn p
     powerNow = withLooks(before, gridLive, looks);
     logGridChange(m, before, powerNow);
     logTrips(trips);
+    applyStopRules(Array.from(looks.keys()), m);
+  }
+  // STOP RULES: an appliance that switches itself off (APPLIANCES' `stops`).
+  // After every resolve of a building (changePower(), resolveGrid(),
+  // refreshPower()), each of its loads with an entry in state.power.stops is
+  // set against the look the resolve left: left unpowered, one whose rule is
+  // "off" switches off, its entry gone, with its line in its room when it
+  // has `lineOnPowerLoss` (the toaster pops); one whose rule is "pause"
+  // keeps its time left; a paused one with power again runs on from now.
+  // Switching off a load that isn't drawing changes nothing the look shows,
+  // so it needs no resolve of its own. A running kettle whose plug the
+  // resolve left unpowered switches off the same way, silently, and is off
+  // when power returns (KETTLES).
+  function applyStopRules(buildings, m){
+    const stops = state.power.stops;
+    Object.keys(stops).forEach(id=>{
+      if(!buildings.includes(POWER_INDEX.of[id])) return;
+      const l = POWER_NET.loads[id], a = l && APPLIANCES[l.appliance], rule = a && a.stops, e = stops[id];
+      if(!rule){ delete stops[id]; return; }
+      if(powerRead(powerNow, "powered", id)){
+        if(e.left !== undefined) stops[id] = { at: m + e.left };
+      } else if(rule.onPowerLoss === "off"){
+        delete stops[id];
+        setSwitchIn(state.power, state.seed, id, a, false);
+        if(rule.lineOnPowerLoss && l.room === state.currentRoom) log(rule.line);
+      } else if(e.at !== undefined) stops[id] = { left: Math.max(0, e.at - m) };
+    });
+    liveKettles().slice().forEach(k=>{
+      const plug = POWER_NET.plugLoad[k.roomId];
+      if(buildings.includes(POWER_INDEX.of[plug]) && !powerRead(powerNow, "powered", plug)) kettleOff(k, m, false, false);
+    });
+  }
+  // Every timed stop due by minute `m` (a scheduled event: planNextDue()):
+  // the load switched off, its entry gone, its building resolved, and its
+  // line heard in its room.
+  function settleApplianceStops(m){
+    Object.keys(state.power.stops).forEach(id=>{
+      const e = state.power.stops[id];
+      if(!e || e.at === undefined || e.at > m + TICK_EPSILON) return;
+      const l = POWER_NET.loads[id], a = l && APPLIANCES[l.appliance];
+      if(!a){ delete state.power.stops[id]; return; }
+      changePower(POWER_INDEX.of[id], p=>{ setSwitchIn(p, state.seed, id, a, false); delete p.stops[id]; }, m);
+      if(l.room === state.currentRoom) log(a.stops.line);
+    });
+  }
+  // KETTLES: docs/systems/power.md has the model. The electric kettle is an
+  // item whose load is a plug load (POWER SCHEMA): it is plugged in while it
+  // lies on the floor of a room a socket circuit serves (plugFor()), and
+  // while it runs (`on`) it draws its appliance through that room's plug, so
+  // its circuit and every breaker upstream carry it, and can trip. Running
+  // means powered: a resolve that leaves its plug unpowered switches it off
+  // (applyStopRules()). It heats its water at its appliance's watts ×
+  // KETTLE_EFFICIENCY (heatOver()), and cuts out at the boil, at once when
+  // empty: a scheduled event (kettleCutOutDue()). Its cut-out cleans nothing:
+  // no boil count runs in it.
+  //   The running kettles, runtime only, { roomId, item }: rebuilt from one
+  // walk of the floors by refreshPower(), whose resolves need them, on boot,
+  // restart and load, and kept by every switching on and off. An entry whose
+  // kettle has gone off or left its floor is dropped when next read
+  // (liveKettles()).
+  let runningKettles = [];
+  function itemAppliance(it){ const def = registryEntryOf(it); return def && def.appliance || null; }
+  function rebuildRunningKettles(){
+    runningKettles = [];
+    roomIds().forEach(roomId=> world[roomId].floor.forEach(it=>{
+      if(it.on && itemAppliance(it)) runningKettles.push({ roomId, item:it });
+    }));
+  }
+  function liveKettles(){
+    runningKettles = runningKettles.filter(k=> k.item.on && world[k.roomId] && world[k.roomId].floor.includes(k.item));
+    return runningKettles;
+  }
+  // The plug load `it`, in `list` in room `roomId`, is plugged into, or
+  // null: an item that plugs in, on the floor of a room a plug serves.
+  function plugFor(it, list, roomId){
+    return itemAppliance(it) && world[roomId] && list === world[roomId].floor ? POWER_NET.plugLoad[roomId] || null : null;
+  }
+  // How many items run through each plug load now (powerSnapshot()'s
+  // `plugs`): { loadId: n }.
+  function plugsNow(){
+    const out = {};
+    liveKettles().forEach(k=>{
+      const id = POWER_NET.plugLoad[k.roomId];
+      if(id) out[id] = (out[id] || 0) + k.item.qty;
+    });
+    return out;
+  }
+  // The power a running kettle gives its water, in kW.
+  function kettleKw(it){ return APPLIANCES[itemAppliance(it)].watts * KETTLE_EFFICIENCY / 1000; }
+  // Minutes from settledAt to a running kettle's cut-out (planNextDue()): its
+  // water's time to the boil, 0 when it holds none.
+  function kettleCutOutDue(k){
+    const it = k.item;
+    return it.fluid ? minutesToBoil(fluidTempC(it), kettleKw(it), it.fluid.ml / 1000) : 0;
+  }
+  // Every running kettle's water heated over the `span` minutes to
+  // settledAt, at the power it had at the span's start, and stamped there,
+  // as a heating holder in a lit room is (settleWorld()).
+  function settleRunningKettles(span){
+    liveKettles().forEach(k=>{
+      const it = k.item;
+      if(it.fluid) setWaterTemp(it.fluid, heatOver(fluidTempC(it, settledAt - span), kettleKw(it), it.fluid.ml / 1000, span).c);
+    });
+  }
+  // Every running kettle at the boil, or empty, at minute `m` cuts out.
+  function settleKettleCutOuts(m){
+    liveKettles().slice().forEach(k=>{
+      if(!k.item.fluid || atBoil(fluidTempC(k.item, m))) kettleOff(k, m, true);
+    });
+  }
+  // Kettle `k` switched off at minute `m`: its water stamped as it stands,
+  // off the list, and its building resolved without it, unless `resolve` is
+  // false (a stop rule's: its plug has no power, so nothing the look shows
+  // changes). `clicks`: its line (APPLIANCES' `stops`), heard in its room.
+  function kettleOff(k, m, clicks, resolve = true){
+    const it = k.item;
+    if(it.fluid) setWaterTemp(it.fluid, fluidTempC(it, m), m);
+    it.on = false;
+    runningKettles = runningKettles.filter(x=> x !== k);
+    if(resolve) changePower(POWER_INDEX.of[POWER_NET.plugLoad[k.roomId]], null, m);
+    if(clicks && k.roomId === state.currentRoom) log(APPLIANCES[itemAppliance(it)].stops.line);
+  }
+  // A unit whose water an action just took: a running kettle left empty
+  // cuts out at once, with its line.
+  function kettleWaterTaken(unit){
+    if(!unit.on || unit.fluid) return;
+    const k = liveKettles().find(x=> x.item === unit);
+    if(k) kettleOff(k, minutesSinceCollapse(), true);
+  }
+  // A running kettle lifted off its floor (a Take) switches off first,
+  // silently.
+  function liftKettle(it){
+    const k = it.on && liveKettles().find(x=> x.item === it);
+    if(k) kettleOff(k, minutesSinceCollapse(), false);
   }
   // What the player notices when something in their room stops or starts:
   // a trip's quiet (logTrips()) and the grid going down (logGridChange())
@@ -9072,13 +9584,13 @@ x_sn_9 m_sn_sn_sn sn p
     }
     render();
   }
-  // Creates the container with `tags` when the room has none with this id.
-  // One that already exists is returned as it is. Its only caller is
-  // doBuildFire(): a stove's container is authored, and lighting it creates
-  // nothing (see doLightStove()).
-  function ensureHeatContainer(room, id, name, capacityKg, tags){
+  // Creates the container with `tags` and `heatSource` when the room has
+  // none with this id. One that already exists is returned as it is. Its
+  // only caller is doBuildFire(): a stove's container is authored, and
+  // lighting it creates nothing (see doLightStove()).
+  function ensureHeatContainer(room, id, name, capacityKg, tags, heatSource){
     let c = room.containers.find(x=>x.id===id);
-    if(!c){ c = { id, name, capacityKg, tags, items:[] }; room.containers.push(c); }
+    if(!c){ c = { id, name, capacityKg, tags, heatSource, items:[] }; room.containers.push(c); }
     return c;
   }
   // How the stove in `roomId` would light now: "self" with power, its
@@ -9135,7 +9647,7 @@ x_sn_9 m_sn_sn_sn sn p
       consumeFromPools("firewood", FIRE_BUILD_WOOD);
       room.fireMinutesLeft = FIRE_BUILD_WOOD * FIRE_MINUTES_PER_WOOD;
     }
-    ensureHeatContainer(room, "campfire", "Campfire", HEAT_CONTAINER_CAPACITY_KG, ["heat"]);
+    ensureHeatContainer(room, "campfire", "Campfire", HEAT_CONTAINER_CAPACITY_KG, ["heat"], "campfire");
     room.heatActive = true;
     scheduleHeat(state.currentRoom);
     advanceTime(BUILD_FIRE_MIN);
@@ -9208,11 +9720,14 @@ x_sn_9 m_sn_sn_sn sn p
   // Every container of a room tagged `heat`, in the room's order: a stove's
   // or a campfire's.
   function heatContainersOf(room){ return room.containers.filter(c=> hasTag(c, "heat")); }
-  // `dt` minutes of a lit room's cooking, everything in its heat containers.
-  function cookInHeat(room, dt){
+  // `dt` minutes of a lit room's cooking, everything in its heat containers:
+  // a vessel, or anything else whose water heats, at its container's power
+  // (settleVessel()), and anything else by its own `cooks`.
+  function cookInHeat(roomId, room, dt){
     heatContainersOf(room).forEach(c=>{
+      const kw = heatKwOf(c);
       c.items.slice().forEach(it=>{
-        if(vesselDefOf(it)) settleVessel(it, dt);
+        if(vesselDefOf(it) || heatsWater(it)) settleVessel(it, dt, kw, roomId);
         else cookItem(c.items, it, dt);
       });
     });
@@ -9225,7 +9740,7 @@ x_sn_9 m_sn_sn_sn sn p
   function settleHeat(roomId, span){
     const r = world[roomId];
     heatContainersOf(r).forEach(c=> settleListDeep(c.items, roomId, c, settledAt));
-    cookInHeat(r, span);
+    cookInHeat(roomId, r, span);
     if(r.fireMinutesLeft == null) return;
     r.fireMinutesLeft -= span;
     if(r.fireMinutesLeft > TICK_EPSILON) return;
@@ -9235,11 +9750,29 @@ x_sn_9 m_sn_sn_sn sn p
     if(roomId === state.currentRoom) log("The fire burns down and goes out.", "warn");
   }
   // Minutes from settledAt to a lit room's next event: its fire going out,
-  // or the soonest cooking to finish in any of its heat containers.
+  // the soonest cooking to finish in any of its heat containers, or a kettle
+  // starting to whistle.
   function heatRoomDue(room){
-    const next = soonestIn(heatContainersOf(room));
-    const cooking = next ? next.remaining : Infinity;
+    const containers = heatContainersOf(room);
+    const next = soonestIn(containers);
+    const cooking = Math.min(next ? next.remaining : Infinity, whistleDue(containers));
     return room.fireMinutesLeft != null ? Math.min(cooking, room.fireMinutesLeft) : cooking;
+  }
+  // The line a holder says when its water reaches the boil, or null.
+  function whistleLogOf(it){ const def = registryEntryOf(it); return def && def.whistleLog || null; }
+  // Minutes from settledAt until the first holder among `containers` that
+  // whistles reaches the boil from below; Infinity when none will.
+  function whistleDue(containers){
+    let due = Infinity;
+    containers.forEach(heat=>{
+      const kw = heatKwOf(heat);
+      heat.items.forEach(it=>{
+        if(!it.fluid || !heatsWater(it) || !whistleLogOf(it)) return;
+        const c = fluidTempC(it);
+        if(!atBoil(c)) due = Math.min(due, minutesToBoil(c, kw, it.fluid.ml / 1000));
+      });
+    });
+    return due;
   }
   function cookItem(list, it, dt){
     if(cookStateOf(it) !== "raw") return;
@@ -9256,6 +9789,45 @@ x_sn_9 m_sn_sn_sn sn p
   }
   function cookMinutesOf(it){ return registryEntryOf(it).cooks.minutes; }
   function cookRemaining(it){ return Math.max(0, cookMinutesOf(it) - (it.cookMinutes || 0)); }
+  // HEATING: docs/systems/fluids.md has the model. Every holder whose water
+  // heats (holdsFluid.heats) in a lit room's heat containers gets its
+  // source's full power, each as if on its own burner (Tom), and its water
+  // rises linearly to WATER_BOIL_C and stays there, at the boil. Evaporation
+  // and the vessel's own heat are not modelled. A heating holder in a lit
+  // room is stamped at every settle (settleVessel()).
+  //   The power that reaches the water, in kW. The stove: ENARGAS's medium
+  // burner, 1,400 kcal/h = 1.63 kW (confirmed), on a hob 49 % efficient with
+  // a lidded pot (confirmed), an open one taking about 1.4 × the energy:
+  // 1.63 × 0.49 / 1.4 ≈ 0.57 (derived). The campfire: a litre from 20 °C to
+  // the boil on a going fire in about 6–19 minutes (derived); the middle,
+  // about 11, is 0.45 kW (unconfirmed). Both retunable. A heat container
+  // names its source (CONTAINER SCHEMA's `heatSource`).
+  const STOVE_HEAT_KW = 0.57;
+  const CAMPFIRE_HEAT_KW = 0.45;
+  const HEAT_SOURCES = { stove:{ kw:STOVE_HEAT_KW }, campfire:{ kw:CAMPFIRE_HEAT_KW } };
+  function heatKwOf(container){
+    const src = HEAT_SOURCES[container.heatSource];
+    return src ? src.kw : 0;
+  }
+  // °C a minute that `kw` gives `litres` of water.
+  function heatRatePerMin(kw, litres){ return kw * 60 / (litres * WATER_HEAT_KJ_PER_L_K); }
+  // Minutes until water at `c` °C is at the boil on `kw`: 0 at it, Infinity
+  // with no power.
+  function minutesToBoil(c, kw, litres){
+    if(atBoil(c)) return 0;
+    return kw > 0 ? (WATER_BOIL_C - c) / heatRatePerMin(kw, litres) : Infinity;
+  }
+  // `span` minutes of heating from `c` °C: { c, atBoilMin, reached }, the
+  // temperature after, the minutes of the span spent at the boil, and
+  // whether the span reached the boil from below.
+  function heatOver(c, kw, litres, span){
+    const toBoil = minutesToBoil(c, kw, litres);
+    if(span >= toBoil - TICK_EPSILON) return { c: WATER_BOIL_C, atBoilMin: Math.max(0, span - toBoil), reached: !atBoil(c) };
+    return { c: c + heatRatePerMin(kw, litres) * span, atBoilMin: 0, reached: false };
+  }
+  // A dish's water in litres: what it took, at the part of the dish left (an
+  // implementation call: a half-eaten stew heats as half the water).
+  function dishWaterL(dish){ return dish.water.ml * portionOf(dish) / 1000; }
   // VESSELS AND DISHES. A vessel (registry `vessel`: kind, capacityKg)
   // holds ingredients in its `contents` — or, once a dish has formed, that
   // one dish — and, when it is a holder too (`holdsFluid`), water, from a
@@ -9378,20 +9950,26 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // A dish made from fresh units of `ids` for template `templateId`, in the
   // named vessel full of water, in `cookState`: the world's pots of stew. It
-  // gets its age like any world item, from stampMissingAges().
+  // gets its age like any world item, from stampMissingAges(), and its water
+  // is at the room's temperature.
   function dishFrom(templateId, vesselId, ids, cookState){
     const t = DISH_TEMPLATES.find(x=> x.id === templateId);
     const dish = buildDish(t, ids.map(id=> itemFromRegistry({ id, qty:1 })),
       t.water ? ITEM_REGISTRY[vesselId].holdsFluid.capacityMl / 1000 : 0);
+    if(t.water) dish.water = { ml: ITEM_REGISTRY[vesselId].holdsFluid.capacityMl };
     dish.cookState = cookState;
     if(cookState === "raw") dish.cookMinutes = 0;
     return dish;
   }
   // Formation: the contents and all the water become one raw dish, the
   // vessel's only content, new and Fresh. From then on nothing can be taken
-  // out.
+  // out. A dish that takes water keeps its volume and temperature (`water`).
   function formDish(v, t){
     const dish = buildDish(t, v.contents || [], fluidWeightOf(v));
+    if(t.water && v.fluid){
+      dish.water = { ml: v.fluid.ml };
+      if(v.fluid.temp) dish.water.temp = Object.assign({}, v.fluid.temp);
+    }
     dish.ages = [0];
     dish.agedAt = settledAt;
     dish.cookState = "raw";
@@ -9400,57 +9978,103 @@ x_sn_9 m_sn_sn_sn sn p
     delete v.fluid;
     delete v.boilMinutes;
   }
-  // `span` minutes of a vessel in a lit heat container, in order:
+  // `span` minutes of a vessel, or of a holder whose water heats, in a lit
+  // heat container of `kw`, in room `roomId`, in order:
   //   1. With no dish, it forms one if its contents and water already make
   //      one (formDish()).
-  //   2. Still without one, tainted water boils: BOIL_MINUTES make it clean,
-  //      and the count holds when the heat stops. Water that comes clean
+  //   2. A water dish's water heats (heatOver()), and the dish cooks only for
+  //      the part of the span its water spends at the boil: below it, the
+  //      count pauses, and nothing is lost. A dish without water, or one from
+  //      an older save, cooks by the span.
+  //   3. Without a dish, its water heats. Tainted water counts only its time
+  //      at the boil, without a break (`boilMinutes`). A heating holder in a
+  //      lit room is stamped at every settle, at its minute, so water that
+  //      starts a span below the boil (taken off the heat since, the heat out
+  //      or put out, cooler water poured in) reads as having cooled, and has
+  //      lost its count. BOIL_MINUTES make it clean; water that comes clean
   //      forms the dish it now makes, and the settle stops there: the dish
-  //      cooks from the next span, since the boiling finishing is an event
-  //      and the span ends at it.
-  //   3. Whatever it holds cooks by the span: the dish, or, when nothing
-  //      matched, each ingredient by its own `cooks`.
-  // Nothing is logged.
-  function settleVessel(v, span){
-    if(!dishIn(v)){
+  //      cooks from the next span, since the boil finishing is an event and
+  //      the span ends at it.
+  //   4. Whatever it holds cooks by the span: each ingredient by its own
+  //      `cooks` when no dish matched.
+  // A vessel whose water doesn't heat (a frying pan holds none) skips the
+  // water. Nothing is logged but a whistle (`whistleLog`), heard in its room
+  // when its water reaches the boil from below: once a boil, since it
+  // whistles again only from below. Reaching the boil is an event only for
+  // a holder that whistles (whistleDue()).
+  function settleVessel(v, span, kw, roomId){
+    const from = settledAt - span, heats = heatsWater(v);
+    if(vesselDefOf(v) && !dishIn(v)){
       const ready = matchingTemplate(v);
       if(ready) formDish(v, ready);
     }
-    if(!dishIn(v) && fluidKindOf(v) === "tainted"){
-      v.boilMinutes = (v.boilMinutes || 0) + span;
-      if(v.boilMinutes >= BOIL_MINUTES - TICK_EPSILON){
-        v.fluid.kind = "clean";
-        delete v.boilMinutes;
-        const t = matchingTemplate(v);
-        if(t){ formDish(v, t); return; }
+    const dish = vesselDefOf(v) && dishIn(v);
+    if(dish){
+      let cooks = span;
+      if(dish.water){
+        const h = heats ? heatOver(waterTempOf(dish.water.temp, coolPerMinOf(v), from), kw, dishWaterL(dish), span) : null;
+        if(h) setWaterTemp(dish.water, h.c);
+        cooks = h ? h.atBoilMin : 0;
+      }
+      cookItem(v.contents, dish, cooks);
+      return;
+    }
+    if(v.fluid && heats){
+      const c0 = fluidTempC(v, from);
+      const h = heatOver(c0, kw, v.fluid.ml / 1000, span);
+      setWaterTemp(v.fluid, h.c);
+      const whistle = whistleLogOf(v);
+      if(whistle && h.reached && roomId === state.currentRoom) log(whistle);
+      if(v.fluid.kind === "tainted"){
+        if(!atBoil(c0)) delete v.boilMinutes;
+        if(h.atBoilMin > 0) v.boilMinutes = (v.boilMinutes || 0) + h.atBoilMin;
+        if(v.boilMinutes >= BOIL_MINUTES - TICK_EPSILON){
+          v.fluid.kind = "clean";
+          delete v.boilMinutes;
+          const t = vesselDefOf(v) && matchingTemplate(v);
+          if(t){ formDish(v, t); return; }
+        }
       }
     }
     const list = v.contents || [];
     list.slice().forEach(it=> cookItem(list, it, span));
   }
   // What the heat containers `containers` are cooking that will finish
-  // soonest: { name, remaining, water } for whatever has the least time left
-  // among everything still progressing in them — a raw cookable item, a
-  // vessel's raw dish, one that will form, the ingredients cooking alone in a
-  // vessel no dish matches, or tainted water boiling (`water` true) — or null
+  // soonest, read at settledAt: { name, remaining, water } for whatever has
+  // the least time left among everything still progressing in them — a raw
+  // cookable item; a vessel's raw dish, a water dish after its water's time
+  // to the boil; one that will form, likewise; the ingredients cooking alone
+  // in a vessel no dish matches; or tainted water boiling clean (`water`
+  // true), its time to the boil and then what it still needs at it — or null
   // when nothing is. On a tie, the first found. The scheduler reads it over
   // a room's every heat container (heatRoomDue()).
   function soonestIn(containers){
     let best = null;
     const consider = (name, remaining, water)=>{
-      if(!best || remaining < best.remaining) best = { name, remaining, water:!!water };
+      if(Number.isFinite(remaining) && (!best || remaining < best.remaining)) best = { name, remaining, water:!!water };
     };
     const rawRows = (list)=> list.forEach(it=>{ if(cookStateOf(it) === "raw") consider(it.name.toLowerCase(), cookRemaining(it)); });
-    containers.forEach(heat=> heat.items.forEach(it=>{
-      if(!vesselDefOf(it)){ rawRows([it]); return; }
-      const dish = dishIn(it);
-      if(dish){ rawRows([dish]); return; }
-      if(fluidKindOf(it) === "tainted") consider("water", Math.max(0, BOIL_MINUTES - (it.boilMinutes || 0)), true);
-      const t = matchingTemplate(it);
-      if(t){
-        consider(buildDish(t, it.contents || [], fluidWeightOf(it)).name.toLowerCase(), cookMinutesOf({ itemId:t.item }));
-      } else rawRows(it.contents || []);
-    }));
+    containers.forEach(heat=>{
+      const kw = heatKwOf(heat);
+      heat.items.forEach(it=>{
+        if(!vesselDefOf(it) && !heatsWater(it)){ rawRows([it]); return; }
+        const heats = heatsWater(it);
+        const dish = vesselDefOf(it) && dishIn(it);
+        if(dish){
+          if(cookStateOf(dish) !== "raw") return;
+          const toBoil = !dish.water ? 0
+            : heats ? minutesToBoil(waterTempOf(dish.water.temp, coolPerMinOf(it)), kw, dishWaterL(dish)) : Infinity;
+          consider(dish.name.toLowerCase(), toBoil + cookRemaining(dish));
+          return;
+        }
+        const toBoil = it.fluid && heats ? minutesToBoil(fluidTempC(it), kw, it.fluid.ml / 1000) : Infinity;
+        if(fluidKindOf(it) === "tainted")
+          consider("water", toBoil + Math.max(0, BOIL_MINUTES - (toBoil > 0 ? 0 : (it.boilMinutes || 0))), true);
+        const t = vesselDefOf(it) && matchingTemplate(it);
+        if(t) consider(buildDish(t, it.contents || [], fluidWeightOf(it)).name.toLowerCase(), (t.water ? toBoil : 0) + cookMinutesOf({ itemId:t.item }));
+        else rawRows(it.contents || []);
+      });
+    });
     return best;
   }
   // What the room's heat container is cooking that will finish soonest
@@ -9837,13 +10461,22 @@ x_sn_9 m_sn_sn_sn sn p
   // before it (0.8) has no `power` or `electricalRules` and takes them from
   // makeDefaultState()'s spread in applyLoadedData(): an empty power state,
   // so every switch reads its rolled default, and "detailed". This makes
-  // sure a present one has the shape the resolver reads, two plain objects
+  // sure a present one has the shape the resolver reads, three plain objects
   // and a known rules value, dropping anything else, the `heat` an older
-  // save carries included. Idempotent.
+  // save carries included. A stop is kept only for a load with a timed stop
+  // rule, as `{ at }` or `{ left }`; a save from before stops (0.12) has
+  // none, so nothing is running. Idempotent.
   function backfillPowerState(){
     const obj = (v)=> v && typeof v === "object" && !Array.isArray(v) ? v : {};
-    const p = obj(state.power);
-    state.power = { switches:obj(p.switches), breakers:obj(p.breakers) };
+    const num = (v)=> typeof v === "number" && Number.isFinite(v);
+    const p = obj(state.power), stops = {};
+    Object.keys(obj(p.stops)).forEach(id=>{
+      const e = obj(p.stops[id]), l = POWER_NET.loads[id], rule = l && APPLIANCES[l.appliance] && APPLIANCES[l.appliance].stops;
+      if(!rule || !(rule.after || rule.dial)) return;
+      if(num(e.at)) stops[id] = { at:e.at };
+      else if(num(e.left)) stops[id] = { left:e.left };
+    });
+    state.power = { switches:obj(p.switches), breakers:obj(p.breakers), stops };
     if(!ELECTRICAL_RULES.includes(state.electricalRules)) state.electricalRules = "detailed";
   }
   // migrateCookingRelease(): brings a 0.7 save into the cooking release,
@@ -9928,6 +10561,22 @@ x_sn_9 m_sn_sn_sn sn p
     forEachItemList(list=> list.forEach(migrate));
     CONTAINER_SLOTS.forEach(slotKey=> migrate(state[slotKey]));
   }
+  // migrateWaterTemperatureRelease(): brings a 0.12 save into the water
+  // temperature release, run on every load after migrateFluidRelease(). A
+  // browser save from 0.12 never reaches it, but an imported one does.
+  // Idempotent. Nothing else needs it: an absent temperature is the room's,
+  // a dish with no `water` cooks by the span as it did, and no
+  // state.power.stops is none running.
+  //   A campfire made in play is saved whole (savedRoomState()), so one made
+  //   before heat containers named their source has none: it takes the
+  //   campfire's. By id, as doDismantleCampfire() finds it: doBuildFire()
+  //   gives it that id, and nothing authors one.
+  function migrateWaterTemperatureRelease(){
+    roomIds().forEach(id=>{
+      const c = world[id].containers.find(x=> x.id === "campfire");
+      if(c && hasTag(c, "heat") && !c.heatSource) c.heatSource = "campfire";
+    });
+  }
   // A save from before room definitions and saved state split (every save
   // before 0.10) carries `world` and no `rooms`. Its rooms can't be mapped
   // onto the rebuilt world, so it is refused, whole, with its own line.
@@ -9971,6 +10620,7 @@ x_sn_9 m_sn_sn_sn sn p
     detailItem = null;
     openGroups.clear();
     deviceTarget = null;
+    dialPickLoad = null;
     nextRulesChoice = null;
     gameOver = false;
     invTab = "inventory";
@@ -9991,6 +10641,7 @@ x_sn_9 m_sn_sn_sn sn p
     backfillInventoryCap();
     migrateCookingRelease();
     migrateFluidRelease();
+    migrateWaterTemperatureRelease();
     rebuildSchedule();
     render();
     return true;
@@ -10021,6 +10672,11 @@ x_sn_9 m_sn_sn_sn sn p
   // number above 0, a `holdsWater` or a `vessel.waterKg` left on an entry,
   // and a spawn pool entry's `state` or a placement's `overrides` carrying
   // `water` rather than `fluid`.
+  //
+  // And the water temperature release's: a `holdsFluid` without a
+  // coolPerMin above 0, a `whistleLog` on a holder whose water doesn't heat,
+  // and an `appliance` that is not PLUG_APPLIANCE with an atBoil stop rule,
+  // or is on an item that holds no water, heats on a stove, or stacks.
   const INGREDIENT_ROLES = ["meat", "vegetable", "grain"];
   function validateItemRegistry(){
     const missing = [];
@@ -10045,6 +10701,17 @@ x_sn_9 m_sn_sn_sn sn p
         missing.push(`ITEM_REGISTRY.${id}.ingredient.role: "${def.ingredient.role}" is not one of ${INGREDIENT_ROLES.join("/")}`);
       if(def.holdsFluid && !(Number.isInteger(def.holdsFluid.capacityMl) && def.holdsFluid.capacityMl > 0))
         missing.push(`ITEM_REGISTRY.${id}.holdsFluid.capacityMl: ${def.holdsFluid.capacityMl} is not a whole number above 0`);
+      if(def.holdsFluid && !(Number.isFinite(def.holdsFluid.coolPerMin) && def.holdsFluid.coolPerMin > 0))
+        missing.push(`ITEM_REGISTRY.${id}.holdsFluid.coolPerMin: ${def.holdsFluid.coolPerMin} is not a number above 0`);
+      if(def.whistleLog && !(def.holdsFluid && def.holdsFluid.heats))
+        missing.push(`ITEM_REGISTRY.${id}.whistleLog: only a holder whose water heats can whistle`);
+      if(def.appliance !== undefined){
+        const a = APPLIANCES[def.appliance];
+        if(def.appliance !== PLUG_APPLIANCE || !a || !a.stops || !a.stops.atBoil)
+          missing.push(`ITEM_REGISTRY.${id}.appliance: "${def.appliance}" is not PLUG_APPLIANCE with an atBoil stop rule`);
+        if(!def.holdsFluid || def.holdsFluid.heats) missing.push(`ITEM_REGISTRY.${id}.appliance: an item that plugs in holds water, and doesn't heat on a stove`);
+        if(STACKABLE.has(def.category)) missing.push(`ITEM_REGISTRY.${id}.appliance: an item that plugs in must not stack (${def.category})`);
+      }
       if(def.holdsWater) missing.push(`ITEM_REGISTRY.${id}.holdsWater: retired, holdsFluid holds water now`);
       if(def.vessel && "waterKg" in def.vessel) missing.push(`ITEM_REGISTRY.${id}.vessel.waterKg: retired, holdsFluid holds water now`);
     });
@@ -10071,7 +10738,7 @@ x_sn_9 m_sn_sn_sn sn p
       if(!def || !def.dish || !def.cooks) missing.push(`DISH_TEMPLATES[${t.id}].item: ${t.item} is not a dish entry with cooks`);
     });
     if(missing.length) console.warn("validateItemRegistry: problems", missing);
-    else console.log("validateItemRegistry: all recipe and dish ids resolve in ITEM_REGISTRY, every foodPoisoningChance is in [0,1], every cooks.minutes is above 0, every spoils is ordered, every ingredient role is known, every bag's carryFactor is in (0,1], every holdsFluid's capacityMl is a whole number above 0, and no water is left in the retired shapes");
+    else console.log("validateItemRegistry: all recipe and dish ids resolve in ITEM_REGISTRY, every foodPoisoningChance is in [0,1], every cooks.minutes is above 0, every spoils is ordered, every ingredient role is known, every bag's carryFactor is in (0,1], every holdsFluid's capacityMl is a whole number above 0 and its coolPerMin above 0, every whistle and appliance is well placed, and no water is left in the retired shapes");
     return missing;
   }
   // validateLocations(): dev-only console helper (not wired to any button
@@ -10137,6 +10804,10 @@ x_sn_9 m_sn_sn_sn sn p
   //     another template one or with an authored one;
   //   every room a board, panel or role names exists, and every container a
   //     fixture names is in its room;
+  //   every appliance with a stop rule (`stops`) carries exactly one of
+  //     after, dial and atBoil, is found switched off (leftOnChance 0), has a
+  //     known onPowerLoss and a line, a noLatchLine when it switches off, and
+  //     a dial of minutes within its dialMax;
   //   every appliance id is in APPLIANCES, every APPLIANCES entry carries
   //     exactly one of leftOnChance and switchless, a readout with non-empty
   //     on and off words unless it is switchless, an `idle` word only when
@@ -10184,6 +10855,18 @@ x_sn_9 m_sn_sn_sn sn p
       else if(rated < a.watts) problems.push(`appliance ${id}: nameplate rated ${rated} W, below its own ${a.watts} W`);
       const forms = ["amps", "printsWatts", "watts"].filter(k=> a.nameplate && k in a.nameplate);
       if(forms.length > 1) problems.push(`appliance ${id}: nameplate carries more than one form (${forms.join(", ")})`);
+      const st = a.stops;
+      if(st){
+        const kinds = ["after", "dial", "atBoil"].filter(k=> k in st);
+        if(kinds.length !== 1) problems.push(`appliance ${id}: stops needs exactly one of after, dial and atBoil`);
+        if(a.leftOnChance !== 0) problems.push(`appliance ${id}: stops by itself, so must be found switched off (leftOnChance 0)`);
+        if(!["off", "pause"].includes(st.onPowerLoss)) problems.push(`appliance ${id}: stops.onPowerLoss is not "off" or "pause"`);
+        if(!worded(st.line)) problems.push(`appliance ${id}: stops needs a non-empty line`);
+        if(st.onPowerLoss === "off" && !worded(st.noLatchLine)) problems.push(`appliance ${id}: stops "off" needs a non-empty noLatchLine`);
+        if("after" in st && !(Number.isFinite(st.after) && st.after > 0)) problems.push(`appliance ${id}: stops.after is not a number above 0`);
+        if("dial" in st && !(Array.isArray(st.dial) && st.dial.length && st.dial.every(x=> Number.isFinite(x) && x > 0 && x <= st.dialMax)))
+          problems.push(`appliance ${id}: stops.dial is not a list of minutes above 0 and up to its dialMax`);
+      }
     });
     Object.values(net.boards).forEach(b=> roomExists(b.room, b.id));
     Object.values(net.panels).forEach(p=>{
@@ -10237,8 +10920,9 @@ x_sn_9 m_sn_sn_sn sn p
   // window or entry naming a role with no room, a clashing id, a wired
   // instance whose id WIRING already names; and every
   // instance whose site is not a room or has no Location, every door whose
-  // `lock` is a latch or a bolt without an `inside` among its sides, and every
-  // door side that is not a room. Call it as
+  // `lock` is a latch or a bolt without an `inside` among its sides, every
+  // door side that is not a room, and every heat container whose
+  // `heatSource` is not in HEAT_SOURCES. Call it as
   // `ashfallDev.validateBuildings()` from the browser console when auditing.
   function validateBuildings(){
     const built = expandBuildings();
@@ -10248,6 +10932,9 @@ x_sn_9 m_sn_sn_sn sn p
       if(!rooms[inst.site]) problems.push(`building ${inst.id}: site "${inst.site}" is not a room`);
       if(!LOCATIONS[inst.id + "_f0"]) problems.push(`building ${inst.id}: no Location ${inst.id}_f0`);
     });
+    Object.keys(built.rooms).forEach(id=> built.rooms[id].containers.forEach(c=>{
+      if(hasTag(c, "heat") && !HEAT_SOURCES[c.heatSource]) problems.push(`room ${id}: heat container "${c.id}" names no HEAT_SOURCES entry`);
+    }));
     Object.keys(built.doors).forEach(id=>{
       const d = built.doors[id];
       if(doorLockKind(d) !== "key" && !d.sides.includes(d.inside)) problems.push(`door ${id}: a ${d.lock} with no inside room`);
@@ -10576,6 +11263,8 @@ x_sn_9 m_sn_sn_sn sn p
   //                     no float calls, so no pump draws.
   //            mains    true / false, or a function of the minute (default
   //                     mainsWaterUp())
+  //            plugs    { loadId: n }: how many items run through each plug
+  //                     load, every step (default none)
   // Returns { problems, steps, power, tanks }: the expansion's problems, then
   // one row per step, { minute, running, momentary, trips:[{ id, cause }],
   // powered, drawing:[loadId], starting:[loadId], tanks:{ loadId: litres
@@ -10604,7 +11293,8 @@ x_sn_9 m_sn_sn_sn sn p
       Object.keys(tankDefs).forEach(id=>{ out[id] = tankFloat(tankDefs[id].tankL, drawn[id]); });
       return out;
     };
-    let prev = options.running ? powerSnapshot(net, appliances, power, rules, grid(start), null, seed, floats()).drawing : {};
+    const plugs = options.plugs || null;
+    let prev = options.running ? powerSnapshot(net, appliances, power, rules, grid(start), null, seed, floats(), plugs).drawing : {};
     const script = options.script || {};
     const steps = [];
     for(let t = 0; t < minutes; t++){
@@ -10618,7 +11308,7 @@ x_sn_9 m_sn_sn_sn sn p
         else if("rewire" in c) rewireFuseIn(power, c.rewire);
       });
       const m = start + t + 1;
-      const r = resolvePower(net, appliances, power, rules, grid(m), prev, seed, floats());
+      const r = resolvePower(net, appliances, power, rules, grid(m), prev, seed, floats(), plugs);
       power = r.power;
       prev = r.drawing;
       Object.keys(tankDefs).forEach(id=>{
@@ -10778,8 +11468,9 @@ x_sn_9 m_sn_sn_sn sn p
   // failure falls in step 6 without a day of play before it; step 6 then
   // advances to REPLAY_DRAW_BEFORE_FAIL_MIN before it. The tank is drawn
   // to REPLAY_TANK_MARGIN_L above its float's start level in code and then
-  // below it by a real fill, and REPLAY_POT_FILLS more fills leave the pump
+  // below it by a real fill, and REPLAY_PAN_FILLS more fills leave the pump
   // refilling as the grid goes, and still called for when it comes back.
+  // Each fill is a saucepan's litre, so it stays instant (FLUID_INSTANT_MAX_ML).
   const REPLAY_SEED = 372;
   const REPLAY_START_BEFORE_FAIL_MIN = 6 * 60;
   const REPLAY_WALK = [HOME_STOP, "x_c117_c90b", "x_c117_c90", "x_c117_c90b", HOME_STOP];
@@ -10791,7 +11482,7 @@ x_sn_9 m_sn_sn_sn sn p
   const REPLAY_RADIO_WAIT_MIN = 30;
   const REPLAY_DRAW_BEFORE_FAIL_MIN = 8;
   const REPLAY_TANK_MARGIN_L = 0.25;
-  const REPLAY_POT_FILLS = 200;
+  const REPLAY_PAN_FILLS = 400;
   const REPLAY_SLEEP_ENERGY = 25;
   const REPLAY_AFTER_SLEEP_MIN = 180;
   // A move to the neighbouring room `to`, by the exit the player would take.
@@ -10881,11 +11572,11 @@ x_sn_9 m_sn_sn_sn sn p
       invTab = "inventory";
       const items = state.inventory.items;
       const bottle = replayPlace(items, { id:"plastic_bottle", qty:1 });
-      const pot = replayPlace(items, { id:"cooking_pot", qty:1 });
+      const pan = replayPlace(items, { id:"dented_saucepan", qty:1 });
       doFillAtSink("inv", items.indexOf(bottle));
-      for(let n = 0; n < REPLAY_POT_FILLS; n++){
-        doFillAtSink("inv", items.indexOf(pot));
-        doPourOut("inv", items.indexOf(pot));
+      for(let n = 0; n < REPLAY_PAN_FILLS; n++){
+        doFillAtSink("inv", items.indexOf(pan));
+        doPourOut("inv", items.indexOf(pan));
       }
       replayMove("home_living");
       state.vitals.energy = REPLAY_SLEEP_ENERGY;
@@ -10924,9 +11615,12 @@ x_sn_9 m_sn_sn_sn sn p
   // on and the stoves whose timer runs, against heatRooms and timerStoves;
   // a settle that was missed: settledAt, against now; and a power change
   // that was not resolved: every busy building (busyBuildings()) against the
-  // looks powerNow holds, and the grid it holds against gridUp(); and a
-  // device switched on without its running out scheduled, or a reachable
-  // list left unsettled.
+  // looks powerNow holds, and the grid it holds against gridUp(); a device
+  // switched on without its running out scheduled, or a reachable list left
+  // unsettled; a timed stop (state.power.stops) on a load without a timed
+  // rule, on one switched off, running without power or waiting with it, or
+  // left past its minute; and a kettle running but not plugged in, missing
+  // from runningKettles, or not drawing through its plug.
   function replayProblems(){
     const problems = [];
     const now = minutesSinceCollapse();
@@ -10943,10 +11637,26 @@ x_sn_9 m_sn_sn_sn sn p
         if(isPerishable(it) && !(Math.abs(it.agedAt - now) <= TICK_EPSILON)) problems.push(`${it.name}, within reach, is settled to ${it.agedAt}, not ${now}`);
       });
     });
-    busyBuildings(POWER_INDEX, state.power, state.electricalRules, state.seed, tankFloatsNow()).forEach(b=>{
+    busyBuildings(POWER_INDEX, state.power, state.electricalRules, state.seed, tankFloatsNow(), plugsNow()).forEach(b=>{
       if(!powerNow.looks.has(b)) problems.push(`building ${b} is busy, but no resolve has looked at it`);
     });
+    forEachItemList((list, roomId)=> list.forEach(it=>{
+      if(!it.on || !itemAppliance(it)) return;
+      const plug = roomId !== null && plugFor(it, list, roomId);
+      if(!plug){ problems.push(`${it.name} in ${roomId === null ? "the inventory" : roomId} is on, but not plugged in`); return; }
+      if(!runningKettles.some(k=> k.item === it && k.roomId === roomId)) problems.push(`${it.name} runs in ${roomId}, which runningKettles lacks`);
+      if(!powerRead(powerNow, "drawing", plug)) problems.push(`${it.name} runs in ${roomId}, but its plug isn't drawing`);
+    }));
     if(powerNow.gridLive !== gridUp()) problems.push(`powerNow has the grid ${powerNow.gridLive ? "up" : "down"}, but it is ${gridUp() ? "up" : "down"}`);
+    Object.keys(state.power.stops).forEach(id=>{
+      const e = state.power.stops[id], l = POWER_NET.loads[id], a = l && APPLIANCES[l.appliance];
+      if(!a || !a.stops || !(a.stops.after || a.stops.dial)){ problems.push(`a stop is kept for ${id}, which has no timed stop rule`); return; }
+      if(!switchOnIn(state.power, state.seed, id, a)) problems.push(`a stop is kept for ${id}, which is switched off`);
+      const powered = !!powerRead(powerNow, "powered", id);
+      if(e.at !== undefined && !powered) problems.push(`${id} is running without power`);
+      if(e.left !== undefined && powered) problems.push(`${id} is waiting for power it has`);
+      if(e.at !== undefined && e.at < now - TICK_EPSILON) problems.push(`${id} should have stopped at minute ${e.at}`);
+    });
     const heat = new Set(), timers = new Map();
     roomIds().forEach(id=>{
       if(world[id].heatActive) heat.add(id);
@@ -11009,6 +11719,7 @@ x_sn_9 m_sn_sn_sn sn p
     detailItem = null;
     openGroups.clear();
     deviceTarget = null;
+    dialPickLoad = null;
     invTab = "inventory";
     worldTab = "floor";
     _uidCounter = 1;
@@ -12200,6 +12911,23 @@ x_sn_9 m_sn_sn_sn sn p
     return { name: shown.name, state: labels.map(l=> ` (${l})`).join(""),
       category: shown.category, vessel: dish ? it : null };
   }
+  // The row tint (#431): a row whose unit holds water, or whose vessel's
+  // dish has water, is tinted in its own background by the water's
+  // temperature, warm above ROOM_TEMP_C and cool below, untinted at it, with
+  // no threshold. Its strength is the share of the way from the room's to
+  // the boil (warm) or to freezing (cool), raised to TINT_CURVE, times
+  // TINT_MAX_ALPHA: the boil is the strongest warm tint and WATER_FREEZE_C
+  // the strongest cool one, and the curve lets a tank-warm bottle show,
+  // faintly. The colours are --tint-hot and --tint-cold. Colour only, on the
+  // row only. Judgment calls, retunable.
+  const TINT_MAX_ALPHA = 0.32;
+  const TINT_CURVE = 0.5;
+  function waterTint(c){
+    const hot = c >= ROOM_TEMP_C;
+    const share = hot ? (c - ROOM_TEMP_C) / (WATER_BOIL_C - ROOM_TEMP_C) : (ROOM_TEMP_C - c) / (ROOM_TEMP_C - WATER_FREEZE_C);
+    const alpha = TINT_MAX_ALPHA * Math.pow(Math.min(1, share), TINT_CURVE);
+    return alpha > 0 ? `rgba(var(${hot ? "--tint-hot" : "--tint-cold"}), ${alpha.toFixed(3)})` : "";
+  }
   // A meter at or below this share of full draws in the warning colour, so a
   // bottle a quarter full already warns. A balance value, retunable.
   const LEVEL_WARN_BELOW = 0.25;
@@ -12292,6 +13020,9 @@ x_sn_9 m_sn_sn_sn sn p
     nameEl.addEventListener("click", ()=>{ detailItem = { uid: ensureUid(it), side }; render(); });
     li.appendChild(itemMeta(nameEl, itemDisplay(it, ctx), it.qty, itemWeight(it)));
     li.appendChild(quickButtons(buttons, it, b=> b.onClick(list.indexOf(it))));
+    // A row with water is tinted by its temperature; a group's header never is.
+    const c = unitWaterTempC(it);
+    if(c !== null) li.style.background = waterTint(c);
     // The meter along the bottom edge, in the divider's place.
     const lvl = unitLevel(it);
     if(lvl){
@@ -12447,6 +13178,12 @@ x_sn_9 m_sn_sn_sn sn p
         const btn = document.createElement("button");
         btn.className = "action" + (a.disabled ? " blocked" : "");
         btn.textContent = a.label;
+        if(a.cost){
+          const span = document.createElement("span");
+          span.className = "cost";
+          span.textContent = " " + a.cost;
+          btn.appendChild(span);
+        }
         if(a.disabled){ btn.disabled = true; }
         else { btn.addEventListener("click", a.onClick); }
         actions.appendChild(btn);
@@ -12467,7 +13204,8 @@ x_sn_9 m_sn_sn_sn sn p
   // row `index` of `list`: a heading, Back to the actions, then one entry per
   // target (pourTargets()): its name and labels, its place where two entries
   // would otherwise read the same, its meter, and Pour (as much as fits) and
-  // Pour by the measure. Functional UI text, retunable.
+  // Pour by the measure, each with its time when it would take some.
+  // Functional UI text, retunable.
   function renderPourMenu(box, list, index, side){
     const head = document.createElement("div");
     head.className = "detailBox";
@@ -12489,8 +13227,11 @@ x_sn_9 m_sn_sn_sn sn p
       line.appendChild(text);
       const btns = document.createElement("span");
       btns.className = "btnrow";
-      btns.appendChild(actionButton("Pour", ()=> doPour(side, index, t.key, null)));
-      btns.appendChild(actionButton(`Pour ${groupedNumber(MEASURE_ML)} mL`, ()=> doPour(side, index, t.key, MEASURE_ML)));
+      const src = list[index];
+      btns.appendChild(actionButton("Pour", ()=> doPour(side, index, t.key, null),
+        { cost: transferCost(transferMinutes(pourMl(src, t.unit, null), POUR_L_PER_MIN)) }));
+      btns.appendChild(actionButton(`Pour ${groupedNumber(MEASURE_ML)} mL`, ()=> doPour(side, index, t.key, MEASURE_ML),
+        { cost: transferCost(transferMinutes(pourMl(src, t.unit, MEASURE_ML), POUR_L_PER_MIN)) }));
       line.appendChild(btns);
       entry.appendChild(line);
       const lvl = unitLevel(t.unit);
@@ -13554,13 +14295,16 @@ x_sn_9 m_sn_sn_sn sn p
   // (roomLabel()), with no status and no control: they can't be seen from
   // here. A row here shows the appliance's name and, for a load with a
   // switch of its own, its readout (loadStatusText()) and one Switch on /
-  // Switch off (doSwitchLoad()). A switchless one (the smoke alarm, the gas
+  // Switch off (doSwitchLoad()); an appliance with a dial (the microwave)
+  // has its Switch on open into the dial's minutes, one button each, and
+  // Cancel (dialPickLoad). A switchless one (the smoke alarm, the gas
   // range) shows neither. Every row here shows its nameplate
   // (nameplateText()) and, while a meter is carried, Test (meterButtons()).
-  // Watts appear nowhere but on a nameplate. Functional UI text,
-  // retunable.
+  // Watts appear nowhere but on a nameplate. A room's plug load is no
+  // fixture, and is never listed: what runs through it is an item, switched
+  // from its own pop-up. Functional UI text, retunable.
   function renderCircuitTab(list, circuitId, roomId){
-    const loads = POWER_NET.breakers[circuitId].loads.map(id=> POWER_NET.loads[id]);
+    const loads = POWER_NET.breakers[circuitId].loads.map(id=> POWER_NET.loads[id]).filter(l=> !l.plug);
     const line = (parent, text)=>{
       const span = document.createElement("span");
       span.className = "line";
@@ -13589,7 +14333,13 @@ x_sn_9 m_sn_sn_sn sn p
       };
       if(!a.switchless){
         const on = switchOnIn(state.power, state.seed, l.id, a);
-        row.appendChild(mini(on ? "Switch off" : "Switch on", ()=> doSwitchLoad(l.id, !on)));
+        const dial = a.stops && a.stops.dial;
+        if(on) row.appendChild(mini("Switch off", ()=> doSwitchLoad(l.id, false)));
+        else if(dial && dialPickLoad === l.id){
+          dial.forEach(min=> row.appendChild(mini(`${min} min`, ()=>{ dialPickLoad = null; doSwitchLoad(l.id, true, min); })));
+          row.appendChild(mini("Cancel", ()=>{ dialPickLoad = null; render(); }));
+        } else if(dial) row.appendChild(mini("Switch on", ()=>{ dialPickLoad = l.id; render(); }));
+        else row.appendChild(mini("Switch on", ()=> doSwitchLoad(l.id, true)));
       }
       meterButtons({ load:l.id }, mini).forEach(b=> row.appendChild(b));
       li.appendChild(row);

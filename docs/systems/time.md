@@ -1,9 +1,10 @@
 # Time
 
 ARCHITECTURE sections: SURVIVAL / TIME SIMULATION (the clock and the
-scheduler, and the batteries beside them); FIRE / COOKING (the settles of
-cooking, fires and stove timers); PERSISTENCE (the rebuild on new game,
-restart and load, and the replay page).
+scheduler, and the batteries beside them; in POWER, the appliance stops and
+the running kettles); FIRE / COOKING (the settles of cooking and heating,
+fires and stove timers); PERSISTENCE (the rebuild on new game, restart and
+load, and the replay page).
 
 ## Purpose
 
@@ -34,6 +35,8 @@ is asked for:
 - food: a perishable row's `agedAt` (`docs/systems/spoilage.md`);
 - batteries: a device's `durability.asOf` while it is on, its charge
   `batteryCharge()`;
+- water temperature: a fluid's `temp`, true at its `at`, cooling read by
+  `waterTempOf()` ([Fluids](fluids.md));
 - everything the scheduler owns (below): `settledAt`.
 
 **Settling.** `settledAt` is the minute the scheduled systems stand at.
@@ -49,14 +52,24 @@ settled to the present, and every reader reads current state.
 
 - tanks refill (`settleTanks()`); event: a tank coming full
   (`tankFullDue()`), which resolves its building so its pump stops;
+- running electric kettles heat (`settleRunningKettles()`); event: a kettle's
+  cut-out at the boil, or at once when empty (`kettleCutOutDue()`,
+  `settleKettleCutOuts()`), which resolves its building
+  ([Power](power.md), KETTLES);
 - the grid; event: each bound of `GRID_UP_SPANS`, a failure or a return
   (`resolveGrid()`, `docs/systems/power.md`);
+- appliance stops; event: a timed stop's minute in `state.power.stops`, the
+  toaster's or the microwave's (`settleApplianceStops()`), which switches it
+  off and resolves its building ([Power](power.md), stop rules);
 - batteries; event: a device switched on running out (`batteryDeaths`,
   `settleBatteryDeaths()`);
 - stove timers (`settleTimer()`); event: a timer running down, which rings;
-- cooking, in every heat container of a lit room (`cookInHeat()`,
+- cooking and heating, in every heat container of a lit room (`cookInHeat()`,
   `settleVessel()`); event: the soonest completion (`soonestIn()`): a raw row
-  cooked, a dish cooked, water boiled;
+  cooked, a dish cooked (a water dish after its water's time to the boil),
+  tainted water boiled clean (its time to the boil, then what it still needs
+  at it); and a kettle that whistles reaching the boil (`whistleDue()`). Plain
+  water reaching the boil is no event: nothing happens at it;
 - fires (`settleHeat()`); event: a fire going out;
 - `CLOCK_EVENTS` (`fireClockEvents()`); event: its own minute.
 
@@ -72,15 +85,23 @@ the end of the step that crosses them, and several inside one step happen in
 time order. A waking clock event sets `wokenUp`, which ends a sleep or a
 blackout after that step.
 
-**Order at one minute:** grid changes, tanks coming full, battery deaths,
-stove timers, cooking, fires, clock events. Timers settle in world order,
-then lit rooms in world order, each room's cooking before its fire.
+**Order at one minute:** the running kettles' heating over the span, grid
+changes, tanks coming full, kettle cut-outs, appliance stops, battery deaths,
+stove timers, cooking, fires, clock events. A kettle heats over a span at the
+power it had at the span's start, since power changes only at settle points,
+so its heating settles before anything at that minute changes power. Timers
+settle in world order, then lit rooms in world order, each room's cooking
+before its fire.
 
-**A vessel over a span** (`settleVessel()`): a dish forms first if the
-contents and water already make one; otherwise tainted water boils, and
-water that comes clean forms the dish it now makes and stops the span there,
-so the dish cooks from the next one; then whatever the vessel holds cooks by
-the span.
+**A vessel over a span** (`settleVessel()`), or any holder whose water heats:
+a dish forms first if the contents and water already make one; a water
+dish's water heats, and the dish cooks only for the part of the span its
+water is at the boil; otherwise the water heats, tainted water counts only
+its time at the boil without a break, and water that comes clean forms the
+dish it now makes and stops the span there, so the dish cooks from the next
+one; then whatever the vessel holds cooks by the span. Every heating holder
+in a lit room is stamped at the settle's minute, which is how a span knows
+whether the water was off the heat in between ([Fluids](fluids.md)).
 
 **The runtime lists.** The rooms whose heat is on (`heatRooms`) and the
 stoves whose timer runs (`timerStoves`) are sets walked in world order
@@ -89,7 +110,12 @@ list of minutes, dropped once due; a minute left behind by a device switched
 off since finds nothing, and it is not keyed by item, since moving an item
 strips its `_uid`. All three, `settledAt`, `lastClock` and `lastGrid` are
 runtime only: `rebuildSchedule()` rebuilds them from one walk of the world,
-and sets the clock marks to now, on a new game, restart and load.
+and sets the clock marks to now, on a new game, restart and load. The running
+kettles (`runningKettles`) are runtime only too, rebuilt from one walk of the
+room floors by `refreshPower()`, which runs before it on all three and whose
+resolves need them; an entry whose kettle has gone off or left its floor is
+dropped when next read (`liveKettles()`). Appliance stops need no list: they
+are saved state, `state.power.stops`.
 
 **Batteries.** A device on batteries (durability mode "time") drains only
 while it is on. Turning it on (`switchDevice()`) makes its charge true from
@@ -114,7 +140,9 @@ is out by then, and says so where the player can hear it.
   minute or for now, and every completion inside a span is an event.
 - **Nothing scheduled is saved.** The saved fields are the systems' own
   (`timerMinutes`, `fireMinutesLeft`, `cookMinutes`, `boilMinutes`,
-  `tankDrawn`, `agedAt`, `asOf`); the lists and marks are rebuilt on load.
+  `tankDrawn`, `agedAt`, `asOf`, a fluid's or a dish's water's `temp`, a
+  kettle's `on`, `state.power.stops`); the lists and marks are rebuilt on
+  load.
 - **A clock event fires once**: `lastClock` marks how far they have fired,
   and a load starts it at now, so a save from before one hears it again.
 
@@ -128,7 +156,9 @@ is out by then, and says so where the player can hear it.
 - `rebuildSchedule()`: after anything writes the world wholesale (new game,
   restart, load, the benchmark's setup).
 - `scheduleHeat()`, `scheduleTimer()`, `switchDevice()`,
-  `scheduleBatteryDeath()`: what a writer of scheduled state calls.
+  `scheduleBatteryDeath()`: what a writer of scheduled state calls. A kettle
+  is switched only through `doSwitchKettle()` and `kettleOff()`, and an
+  appliance's stop through `doSwitchLoad()` and the stop rules.
 - `batteryCharge()`: a device's charge at a minute.
 
 ## Constants
@@ -137,23 +167,27 @@ is out by then, and says so where the player can hear it.
 - `SCHEDULER_MAX_EVENTS_PER_STEP`: a guard against an event that never
   clears; hitting it is a bug, reported in the console.
 - `CLOCK_EVENTS`, `GRID_UP_SPANS`: the fixed events on the collapse clock.
-- `BOIL_MINUTES`: how long tainted water boils before it comes clean.
+- `BOIL_MINUTES`: how long tainted water must be at the boil, without a
+  break, to come clean.
 
 ## Costs
 
 - **Per step:** the vitals, one comparison of Thirst before and after for
-  auto-drink, and one comparison of now with the next due minute. Nothing
-  about fluid is scheduled: a fluid changes only by an action or a drink.
-- **Per advance of time:** planning the next due minute over the lit rooms,
-  the running timers, the refilling tanks, the battery minutes, the grid's
+  auto-drink, and one comparison of now with the next due minute. A water's
+  temperature is worked out when read, never stepped.
+- **Per advance of time:** planning the next due minute over the lit rooms
+  (with their times to the boil), the running timers, the refilling tanks, the
+  battery minutes, the appliance stops, the running kettles, the grid's
   changes and the clock events; settling to now; settling the lists the
   player can reach.
 - **Per event:** a timer, cooking or a fire settles the lit rooms and running
-  timers; a tank coming full or a power action resolves one building; a grid
-  change resolves the busy buildings; a battery running out walks every item
-  list once.
+  timers, each heating holder by one line of arithmetic; a running kettle's
+  settle is one holder; a tank coming full, a kettle's cut-out, an appliance
+  stop or a power action resolves one building; a grid change resolves the
+  busy buildings; a battery running out walks every item list once.
 - **On a new game, restart and load:** one walk of the world to rebuild the
-  lists and the battery minutes.
+  lists and the battery minutes, and one of the room floors for the running
+  kettles.
 
 What remains proportional to the world is the load-time rebuild and one walk
 per battery death.
