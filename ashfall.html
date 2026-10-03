@@ -654,6 +654,16 @@
   // Pour by the measure pours, in mL: a glass. The pour button's label reads
   // it. Retunable.
   const MEASURE_ML = 250;
+  // TIMED TRANSFERS (transferMinutes()). A fill or a pour that moves no more
+  // than FLUID_INSTANT_MAX_ML is instant, judged by what it moves, not by the
+  // holder's size; a larger one takes its litres over the rate, a minute at
+  // least. A kitchen tap fed from the roof tank runs about 6 L a minute
+  // (derived, unconfirmed); a careful pour between holders is about 7 L a
+  // minute first-hand, taken as 10 (Tom, unconfirmed). Two rates, retunable
+  // apart; the threshold is a judgment call, retunable.
+  const FLUID_INSTANT_MAX_ML = 1000;
+  const TAP_FLOW_L_PER_MIN = 6;
+  const POUR_L_PER_MIN = 10;
   // Minutes tainted water must sit in a heated vessel to come out clean,
   // whatever its volume. Retunable.
   const BOIL_MINUTES = 5;
@@ -4329,7 +4339,7 @@ x_sn_9 m_sn_sn_sn sn p
           floor:{ desc:"The railway's goods shed. Brick walls, a high roof, a loading door onto the tracks.",
             containers:[
               { id:"unit1", name:"Padlocked crate 1", capacityKg:30, locked:true, breakTag:"cutting", spawnPools:["outdoor_camping"], items:[
-                { id:"camping_tent", qty:1 }, { id:"sleeping_bag", qty:1 } ] },
+                { id:"camping_tent", qty:1 }, { id:"sleeping_bag", qty:1 }, { id:"canteen", qty:1 } ] },
               { id:"unit2", name:"Padlocked crate 2", capacityKg:30, locked:true, breakTag:"cutting", spawnPools:["recreation","residential_personal"], items:[
                 { id:"old_furniture", qty:1 }, { id:"board_games", qty:1 } ] },
               { id:"unit3", name:"Crate 3", capacityKg:30, spawnPools:["outdoor_camping"], items:[
@@ -6243,7 +6253,8 @@ x_sn_9 m_sn_sn_sn sn p
   // water runs (waterRunningIn()), while it has room, part-way or from
   // empty alike. One unit fills, as far as it has room; the water is clean,
   // and mixes with what is there (mixKinds()), so tainted water already in it
-  // taints it. Instant. After the water fails the sink gives nothing, and
+  // taints it. Over FLUID_INSTANT_MAX_ML it takes time at TAP_FLOW_L_PER_MIN
+  // (transferMinutes()). After the water fails the sink gives nothing, and
   // whatever was left in the pipes is #300's.
   // Off a tank, at any time, a fill draws the litres it adds and takes only
   // what the tank has left, to the millilitre: a holder fills part-way on the
@@ -6262,13 +6273,29 @@ x_sn_9 m_sn_sn_sn sn p
   // litres are kept to the millilitre; the nudge takes back the float noise
   // that would floor 0.3 L to 299 mL.
   function tankLeftMl(){ return Math.floor(tankLeft(state.currentRoom) * 1000 + 1e-6); }
+  // What filling `it` at the current room's sink would add, in mL: its room,
+  // or what the tank has left when less.
+  function fillMlFor(it){
+    return tankOf(state.currentRoom) > 0 ? Math.min(fluidSpaceMl(it), tankLeftMl()) : fluidSpaceMl(it);
+  }
+  // How long moving `ml` takes at `lPerMin` (TIMED TRANSFERS): 0 up to
+  // FLUID_INSTANT_MAX_ML, else its litres over the rate, a minute at least,
+  // exact above that floor.
+  function transferMinutes(ml, lPerMin){
+    return ml > FLUID_INSTANT_MAX_ML ? Math.max(1, ml / 1000 / lPerMin) : 0;
+  }
+  // A timed transfer's cost on its button, rounded up to the whole minute,
+  // or null for an instant one.
+  function transferCost(minutes){ return minutes > 0 ? fmtDuration(Math.ceil(minutes)) : null; }
+  // The water moves first, and a tank draw resolves its building with it;
+  // then a timed fill's minutes pass.
   function doFillAtSink(sourceKind, index){
     const room = world[state.currentRoom];
     const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
     const it = getItemAt(src && src.items, index);
     if(!it || !canFillAtSink(it)) return;
     const fromTank = tankOf(state.currentRoom) > 0;
-    const ml = fromTank ? Math.min(fluidSpaceMl(it), tankLeftMl()) : fluidSpaceMl(it);
+    const ml = fillMlFor(it);
     if(!(ml > 0)) return;
     const filled = changeOneUnit(src.items, it, unit=> addFluid(unit, "clean", ml));
     const moved = fromTank ? drawFromTank(ml) : null;
@@ -6277,6 +6304,8 @@ x_sn_9 m_sn_sn_sn sn p
     log(fromTank && tankLeft(state.currentRoom) <= 0 ? "The tap coughs, spits, and runs dry."
       : `You fill the ${it.name.toLowerCase()} at the sink.`);
     if(moved) resolveBuilding(moved);
+    const minutes = transferMinutes(ml, TAP_FLOW_L_PER_MIN);
+    if(minutes > 0) advanceTime(minutes);
     render();
   }
   // `ml` drawn from the current room's tank. Returns its building when the
@@ -6290,8 +6319,8 @@ x_sn_9 m_sn_sn_sn sn p
     state.tankDrawn[b] = Math.round(((state.tankDrawn[b] || 0) + ml / 1000) * 1000) / 1000;
     return floatNow() !== floatBefore ? b : null;
   }
-  // Drinking at the tap, MEASURE_ML at a time, while the water runs. The water is clean. Instant, as
-  // filling is, and drawn as a fill draws: off a tank, the litres drunk,
+  // Drinking at the tap, MEASURE_ML at a time, while the water runs. The
+  // water is clean. Instant, and drawn as a fill draws: off a tank, the litres drunk,
   // only what is left on the last of it; a sink on the mains draws nothing
   // down. The lines are game text, retunable.
   function canDrinkAtSink(){ return !!world[state.currentRoom].sink && waterRunningIn(state.currentRoom); }
@@ -6471,7 +6500,8 @@ x_sn_9 m_sn_sn_sn sn p
   // `index` of the side's tab into the entry keyed `key`, found again now.
   // The pop-up follows the source, its submenu open while it still holds
   // fluid. Pouring tainted water into clean is allowed: the entry's label
-  // says so. The line's wording is retunable.
+  // says so. A pour over FLUID_INSTANT_MAX_ML takes time at POUR_L_PER_MIN,
+  // after the water has moved. The line's wording is retunable.
   function doPour(sourceKind, index, key, ml){
     const room = world[state.currentRoom];
     const src = sourceKind === "world" ? worldSlot(room, worldTab) : invSlot(invTab);
@@ -6480,11 +6510,17 @@ x_sn_9 m_sn_sn_sn sn p
     const target = pourTargets(src.items, it).find(e=> e.key === key);
     if(!target) return;
     const name = target.unit.name.toLowerCase();
+    const moved = pourMl(it, target.unit, ml);
     const after = pourFluid(src.items, it, target.list, target.unit, ml == null ? Infinity : ml);
     log(`You pour the water into the ${name}.`);
     detailItem = { uid: ensureUid(after), side: sourceKind, pour: drinkable(after) };
+    const minutes = transferMinutes(moved, POUR_L_PER_MIN);
+    if(minutes > 0) advanceTime(minutes);
     render();
   }
+  // What a pour of `ml` (null: as much as fits) from `src` into `dst` would
+  // move, as pourFluid() takes it.
+  function pourMl(src, dst, ml){ return Math.min(ml == null ? Infinity : ml, src.fluid.ml, fluidSpaceMl(dst)); }
   // Pour out the water, on any holder with fluid and no dish: one unit is
   // emptied, and the water is gone. Silent: its label and meter go.
   function doPourOut(sourceKind, index){
@@ -6618,7 +6654,8 @@ x_sn_9 m_sn_sn_sn sn p
   // validates defensively (getItemAt) so a future caller that passes a stale
   // pair fails safe instead of throwing on `undefined.qty`. An entry with
   // `note` is not an action: a line shown in one's place, as "The tap is
-  // dry." stands where Fill at the sink would.
+  // dry." stands where Fill at the sink would. An entry's `cost` is its time,
+  // shown dim after its label, as every timed action's is.
   function getItemActions(list, index, side){
     const it = getItemAt(list, index);
     if(!it) return [];
@@ -6678,7 +6715,8 @@ x_sn_9 m_sn_sn_sn sn p
     }
     if(it.sealed && (!it.opensWith || hasTool(it.opensWith)))
       actions.push({ label:"Open", onClick:()=>doOpen(side, index) });
-    if(canFillAtSink(it)) actions.push({ label:"Fill at the sink", onClick:()=>doFillAtSink(side, index) });
+    if(canFillAtSink(it)) actions.push({ label:"Fill at the sink", onClick:()=>doFillAtSink(side, index),
+      cost: transferCost(transferMinutes(fillMlFor(it), TAP_FLOW_L_PER_MIN)) });
     else if(tapDryFor(it)) actions.push({ label:"The tap is dry.", note:true });
     if(it.category==="Container" && it.slotType && !state[it.slotType])
       actions.push({ label:"Equip", onClick:()=>doEquip(side, index) });
@@ -10778,8 +10816,9 @@ x_sn_9 m_sn_sn_sn sn p
   // failure falls in step 6 without a day of play before it; step 6 then
   // advances to REPLAY_DRAW_BEFORE_FAIL_MIN before it. The tank is drawn
   // to REPLAY_TANK_MARGIN_L above its float's start level in code and then
-  // below it by a real fill, and REPLAY_POT_FILLS more fills leave the pump
+  // below it by a real fill, and REPLAY_PAN_FILLS more fills leave the pump
   // refilling as the grid goes, and still called for when it comes back.
+  // Each fill is a saucepan's litre, so it stays instant (FLUID_INSTANT_MAX_ML).
   const REPLAY_SEED = 372;
   const REPLAY_START_BEFORE_FAIL_MIN = 6 * 60;
   const REPLAY_WALK = [HOME_STOP, "x_c117_c90b", "x_c117_c90", "x_c117_c90b", HOME_STOP];
@@ -10791,7 +10830,7 @@ x_sn_9 m_sn_sn_sn sn p
   const REPLAY_RADIO_WAIT_MIN = 30;
   const REPLAY_DRAW_BEFORE_FAIL_MIN = 8;
   const REPLAY_TANK_MARGIN_L = 0.25;
-  const REPLAY_POT_FILLS = 200;
+  const REPLAY_PAN_FILLS = 400;
   const REPLAY_SLEEP_ENERGY = 25;
   const REPLAY_AFTER_SLEEP_MIN = 180;
   // A move to the neighbouring room `to`, by the exit the player would take.
@@ -10881,11 +10920,11 @@ x_sn_9 m_sn_sn_sn sn p
       invTab = "inventory";
       const items = state.inventory.items;
       const bottle = replayPlace(items, { id:"plastic_bottle", qty:1 });
-      const pot = replayPlace(items, { id:"cooking_pot", qty:1 });
+      const pan = replayPlace(items, { id:"dented_saucepan", qty:1 });
       doFillAtSink("inv", items.indexOf(bottle));
-      for(let n = 0; n < REPLAY_POT_FILLS; n++){
-        doFillAtSink("inv", items.indexOf(pot));
-        doPourOut("inv", items.indexOf(pot));
+      for(let n = 0; n < REPLAY_PAN_FILLS; n++){
+        doFillAtSink("inv", items.indexOf(pan));
+        doPourOut("inv", items.indexOf(pan));
       }
       replayMove("home_living");
       state.vitals.energy = REPLAY_SLEEP_ENERGY;
@@ -12447,6 +12486,12 @@ x_sn_9 m_sn_sn_sn sn p
         const btn = document.createElement("button");
         btn.className = "action" + (a.disabled ? " blocked" : "");
         btn.textContent = a.label;
+        if(a.cost){
+          const span = document.createElement("span");
+          span.className = "cost";
+          span.textContent = " " + a.cost;
+          btn.appendChild(span);
+        }
         if(a.disabled){ btn.disabled = true; }
         else { btn.addEventListener("click", a.onClick); }
         actions.appendChild(btn);
@@ -12467,7 +12512,8 @@ x_sn_9 m_sn_sn_sn sn p
   // row `index` of `list`: a heading, Back to the actions, then one entry per
   // target (pourTargets()): its name and labels, its place where two entries
   // would otherwise read the same, its meter, and Pour (as much as fits) and
-  // Pour by the measure. Functional UI text, retunable.
+  // Pour by the measure, each with its time when it would take some.
+  // Functional UI text, retunable.
   function renderPourMenu(box, list, index, side){
     const head = document.createElement("div");
     head.className = "detailBox";
@@ -12489,8 +12535,11 @@ x_sn_9 m_sn_sn_sn sn p
       line.appendChild(text);
       const btns = document.createElement("span");
       btns.className = "btnrow";
-      btns.appendChild(actionButton("Pour", ()=> doPour(side, index, t.key, null)));
-      btns.appendChild(actionButton(`Pour ${groupedNumber(MEASURE_ML)} mL`, ()=> doPour(side, index, t.key, MEASURE_ML)));
+      const src = list[index];
+      btns.appendChild(actionButton("Pour", ()=> doPour(side, index, t.key, null),
+        { cost: transferCost(transferMinutes(pourMl(src, t.unit, null), POUR_L_PER_MIN)) }));
+      btns.appendChild(actionButton(`Pour ${groupedNumber(MEASURE_ML)} mL`, ()=> doPour(side, index, t.key, MEASURE_ML),
+        { cost: transferCost(transferMinutes(pourMl(src, t.unit, MEASURE_ML), POUR_L_PER_MIN)) }));
       line.appendChild(btns);
       entry.appendChild(line);
       const lvl = unitLevel(t.unit);
