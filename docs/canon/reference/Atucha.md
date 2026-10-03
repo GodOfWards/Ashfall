@@ -104,7 +104,177 @@ The road from Lima ends at the plant's entrance:
 - A switchyard of poles and transformers stands to the right of the
   entrance, with small white buildings beside it.
 
-Which unit's dome is which isn't identified from the image.
+Which unit's dome is which isn't identified from the image. From above,
+Atucha I's is the western one (below).
+
+## The site, from imagery and OSM (#440; 2026-10-03)
+
+Tom's Street View captures (March 2026) and Google Maps satellite imagery
+(© 2026 Airbus, Maxar), with OSM read directly (API 0.6, the box
+33.985–33.955 S, 59.225–59.185 W). **Everything read off imagery or OSM is
+Secondary.** OSM positions are approximate centroids.
+
+### The approach and the guard post (Street View)
+
+- **The road from Lima comes up from the south along the switchyard's west
+  side, then turns north to the entrance.** It has mown verges. Fields
+  are fenced with chain-link topped with barbed wire, with transmission
+  towers beyond and cranes and buildings in the distance. A guardrail runs
+  along part of the road.
+- **The switchyard is east of the road, just before the guard post**:
+  steel gantries and transformers behind their own chain-link and
+  barbed-wire fence, with a round green tank or pond at its north-east
+  corner.
+- **West of the road is a car park full of cars** (a working day), with a
+  white minibus at the front, and a blue gazebo and white trailers beyond.
+- **The guard post** is a booth with a flat, overhanging roof, on an island
+  between the two lanes. The island is marked with yellow hatching and
+  orange cones, and a yellow-and-black striped post stands at the booth's
+  foot. **No barrier arm is visible.** Just to its right is a small white
+  building with a blue door, and wire fences line both sides of the road.
+- **Ahead of the post:** the grey dome, red-brick blocks, a tall lattice mast
+  on the left, a water tower on the right, streetlamps and utility poles.
+  A tower crane stands left of the dome, toward CAREM. Whether the crane
+  belongs to CAREM or to Atucha I's overhaul is unclear.
+- *Unclear:* a red vehicle half-hidden by a tree, and a sign on two posts
+  seen from behind.
+
+### Inside the entrance (satellite)
+
+- **"Estacionamiento Complejo Nuclear Atucha"**, the main car park, is west
+  of the road past the post, under rows of long blue-roofed shelters, and
+  full of cars in the imagery. A smaller car park sits east of the road,
+  beside a loop near the switchyard.
+- **"Portería Sitio"**, the site's gatehouse, is at the main car park's
+  north-east corner. **The booth on the road is only the first
+  checkpoint.**
+- **The south-east, east of the switchyard:**
+  - A tree-lined road runs north–south there. On its east side is **a
+    second car park, nearly empty in the imagery**: a handful of cars, with
+    a crosswalk at its south end.
+  - Beside it are long, narrow structures with green strips between them,
+    and workshops and sheds to the north.
+  - **"UG-PN IV CENTRAL"** is labelled at the south end (below).
+  - The switchyard hides all of this from the guard post.
+
+### The site from above (satellite)
+
+- **Atucha I's dome is in the west of the reactor area, and Atucha II's is
+  east of it**, with its red-brick turbine hall beside it.
+- **CAREM is to the west:** a construction site, with the reactor building
+  half-built around a circular structure, tower cranes, and laydown yards of
+  materials and pipe.
+- **On the river, at the north edge:** channels from the Paraná de las
+  Palmas with structures that look like pumphouses, orange floating booms
+  across their mouths, and a jetty.
+- **The north-east corner** is an area of its own, inside a loop of road
+  between the easternmost channel and the site's east edge. It holds
+  laydown yards (stacked pipe, materials, containers, sheds), a few small
+  plants or works, and the pond. A road runs along the site's east
+  boundary, with woodland beyond it.
+- **The pond** is dark and rectangular with rounded corners, set in a
+  grassed bank beside the east boundary road. Two straight walkways or
+  pipes run out from its east bank, each ending in a pointed or triangular
+  head about halfway across. A structure with a short pipe into the water
+  stands on the north bank, and there's a small pipe or post at the south
+  end.
+
+### What OSM maps
+
+- **The roads in:**
+  - The **Camino provincial secundario 038-03** (concrete, 60 km/h) runs
+    from Lima's north edge (about 34.04 S) north and then north-west, to a
+    junction at about 33.9765 S, 59.1995 W.
+  - The **038-09** comes up from the south-south-west (from about 34.022 S,
+    59.216 W).
+  - They meet in a one-way loop around grassed islands, about
+    33.9754–33.9765 S, 59.1995–59.2019 W, roughly 900 m south of Atucha II.
+  - **No road is mapped north of the loop, inside the site.** OSM doesn't
+    place the guard post, so how the loop relates to the approach seen on
+    Street View isn't settled.
+- **The reactor buildings:** "Reactor nuclear Atucha I" (33.9668 S,
+  59.2074 W; CAMMESA code ATUC) and "Reactor nuclear Atucha II" (33.9671 S,
+  59.2049 W; ATU2). **Atucha I is about 230 m west of Atucha II.**
+- **The switchyard** is a fenced generation substation named "Atucha",
+  about 230 × 355 m, between the reactors and the loop (centre 33.9717 S,
+  59.2051 W).
+  - It has a 220/132 kV transformer and lines named "Atucha 132kV",
+    "Atucha 220kV" and "2ATVL1Y2", plus Transener's 500 kV line and a
+    132 kV underground cable.
+  - A second, smaller generation substation sits beside the plant at
+    33.9684 S, 59.2059 W.
+- **Car parks:** four are mapped:
+  - **the largest, about 20,500 m²**, at 33.975–33.977 S,
+    59.2016–59.2035 W, just west of the loop, where the 038-09 arrives.
+    **Probably the main "Estacionamiento"** (derived from its size and
+    position);
+  - about 4,500 m², between the loop and the switchyard (33.9725 S,
+    59.2029 W);
+  - a street-side strip (33.9747 S, 59.2039 W);
+  - about 3,300 m², just south-west of the plant (33.968 S, 59.207 W).
+- **The pond is likely OSM's `natural=water` + `water=reservoir`** (mapped
+  2013): **about 50 × 60 m (2,000 m²)** at 33.9654 S, 59.2009 W, about
+  400 m east and 170 m north of Atucha II. **That it's the same pond is
+  derived** from its position. OSM gives no purpose.
+- **East of the site is a wetland of about 54 ha** (`natural=wetland`),
+  from about 59.198 W to 59.192 W.
+- **Masts and towers:**
+  - a `man_made=tower` just east of Atucha II (33.9668 S, 59.2028 W),
+    possibly the water tower seen from the gate (unconfirmed);
+  - communication towers at 33.9697 S, 59.2073 W (with mobile antennas),
+    33.9722 S, 59.2037 W, and 33.9752 S, 59.2028 W.
+- **On the river:** red starboard buoys (IALA-B) off the site, and a
+  "km 135" distance mark. **DeltaDock S.A.**, an industrial site, is about
+  1.6 km east (33.968 S, 59.188 W).
+- **The river flows east-south-east past the site**: OSM draws its waterway
+  downstream, from 33.943 S, 59.258 W to 33.973 S, 59.174 W. **Downstream is
+  east.**
+- **OSM doesn't map** CAREM, the intake channels, Portería Sitio, or
+  "UG-PN IV CENTRAL".
+
+### "UG-PN IV CENTRAL": the fourth plant's project unit
+
+- **UGPN is NA-SA's *Unidad de Gestión Proyectos Nucleares*.**
+  - NA-SA created it when the IV and V plants were announced, from the
+    **Unidad de Gestión Central Nuclear Atucha II**, the unit that finished
+    building and commissioning Atucha II.
+  - It had 618 employees, and 259 were laid off later.
+  - Secondary, search summaries of Agencia Paco Urondo ("259 despidos en
+    Atucha: la unidad de gestión tenía 618 empleados, y no van a quedar ni
+    100") and U-238 ("Asistencia técnica made in Argentina"), 2026-10-03.
+    The articles couldn't be opened and their dates weren't read.
+- **It was recreated later**, by decision of NA-SA's shareholders,
+  reporting to the board, for Atucha I's refurbishment, CAREM 25 and the
+  dry store. Secondary, search summary of argentina.gob.ar, "Nucleoeléctrica
+  Argentina reactivará obras en el complejo nuclear Atucha" (undated).
+- **"IV Central" is the fourth nuclear plant, Atucha III.**
+  - Its EPC contract with CNNC (an HPR-1000, 1,200 MWe, US$8.3 billion) was
+    signed on 1 February 2022, for a plant inside the Atucha complex.
+  - In December 2024, the government spoke of a fourth plant in Patagonia
+    instead.
+  - Secondary, search summaries of Ámbito, FIE-UNDEF and Infobae
+    (2024-12-20).
+- **So the label most likely means "UGPN – IV Central": the project unit's
+  offices for the fourth plant.** **Derived:** no source names the
+  building.
+  - The barrio's depot sign "UG CNA II – IV CN" (`Lima.md`) uses the same
+    naming.
+  - A project office with a nearly empty car park fits a plant that hadn't
+    started.
+
+### The intakes and outfalls
+
+- **The two units take about 100 m³/s from the river in normal operation**,
+  and Atucha II alone 40 m³/s, in an open circuit. The water goes back
+  **downstream of the intakes**, several degrees warmer. Secondary, search
+  summaries of Huella del Sur (2021-08-08 and 2021-08-31). Another summary
+  gives 60,000 L/s for both, which disagrees.
+- **Each unit has its own intake channel.** In the 2021 low water, NA-SA
+  dredged the access canal, put sensors on the intake pumps, and planned
+  floating pumps to feed "the water intake channels of both units". Same
+  source.
+- **Downstream is east (OSM), so the eastern channels are most likely the
+  outfalls and the western ones the intakes.** Derived, unconfirmed.
 
 ## Emergency power, and what was added after Fukushima
 
@@ -627,3 +797,15 @@ ARN's stress-test report or NA-SA's safety reports, neither of them public.
   Atucha I's GOTHIC simulations.
 - **Atucha I's heavy-water inventory.**
 - Whether **241, 250 or 252** is right for Atucha I's core.
+
+From #440 (2026-10-03):
+- **What the north-east pond is for.** Searches for a lagoon, a fire-water
+  reserve, effluent or sewage treatment, or demineralised water found
+  nothing. From the imagery, its two walkways with pointed heads could be
+  floating aerators or pump intakes, as in a treatment lagoon. **That's a
+  guess.** It would be in Atucha I's life-extension environmental impact
+  study (by the INA, for the province's environment ministry) or Atucha
+  III's.
+- **Which river channels are intakes and which are outfalls**, from a site
+  plan. An inference is above.
+- **The guard post's exact position** against OSM's road loop.
