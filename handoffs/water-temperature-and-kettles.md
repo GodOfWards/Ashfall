@@ -659,11 +659,10 @@ view, button costs).
 - The Electrical view no longer lists a kettle; the microwave's Switch on
   asks for minutes; the toaster and microwave readouts go back to "Stopped"
   when they stop.
-- Log lines (Tom, 2026-10-03, except the two marked): "The kettle clicks
-  off.", "The kettle starts to whistle.", "The toaster pops up.", "The
-  microwave pings."; switching on without power: "You push the lever down.
-  It won't stay." and "You press the switch. It clicks straight back up."
-  (proposed in planning; confirm with Tom if unsure). The kettle's switch-on
+- Log lines (Tom, 2026-10-03): "The kettle clicks off.", "The kettle
+  starts to whistle.", "The toaster pops up.", "The microwave pings."; and
+  switching on without power, "You push the lever down. It won't stay." and
+  "You press the switch. It clicks straight back up." The kettle's switch-on
   line is functional: "You switch the kettle on." / "You switch the kettle
   off."
 
@@ -678,5 +677,4 @@ view, button costs).
 
 ## Open questions for Tom
 
-None, other than the two switch-on-without-power lines in UI changes, which
-the planning session proposed and Tom confirms before this lands.
+None.
