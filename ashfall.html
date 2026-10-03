@@ -10,6 +10,10 @@
     --ink:#e5e5e0; --ink-dim:#9a9fa6; --ink-faint:#888e97;
     --accent:#3b82f6; --accent-dim:#25508f; --warn:#d97b3f; --danger:#c76552; --good:#7a9463;
     --divider:rgba(51,56,63,.6);
+    /* The water-temperature row tint's two colours, as r, g, b, so a row
+       takes either at its own strength (waterTint()). Judgment calls,
+       retunable; the game has one theme, this dark one. */
+    --tint-hot:224,96,58; --tint-cold:74,136,226;
   }
   *{box-sizing:border-box;}
   body{ margin:0; min-height:100vh; background:var(--bg); color:var(--ink);
@@ -664,9 +668,47 @@
   const FLUID_INSTANT_MAX_ML = 1000;
   const TAP_FLOW_L_PER_MIN = 6;
   const POUR_L_PER_MIN = 10;
-  // Minutes tainted water must sit in a heated vessel to come out clean,
-  // whatever its volume. Retunable.
-  const BOIL_MINUTES = 5;
+  // Minutes tainted water must spend at the boil, without a break, to come
+  // out clean, whatever its volume: ANMAT's "Hervila durante 3 minutos"
+  // (confirmed). Only time at WATER_BOIL_C counts (settleVessel()).
+  const BOIL_MINUTES = 3;
+  // WATER TEMPERATURE: docs/systems/fluids.md has the model. Every room's
+  // temperature, indoors and out, until weather (#58): San Fernando Aero's
+  // February mean (confirmed as the station's figure; as Lima's indoor
+  // temperature, unconfirmed). A water with no temperature of its own is at
+  // this one.
+  const ROOM_TEMP_C = 23.5;
+  // What a fill at a sink runs at: off a roof tank, February's mean plus the
+  // about 5 °C an exposed tank runs above the air (derived from a Resistencia
+  // measurement, unconfirmed); off the mains, well water (derived,
+  // unconfirmed). Every sink is in a building with a tank, so MAINS_WATER_C
+  // ships unused in play. Retunable.
+  const TANK_WATER_C = 28.5;
+  const MAINS_WATER_C = 18;
+  const WATER_BOIL_C = 100;
+  const WATER_FREEZE_C = 0;
+  // Water's specific heat, in kJ per litre per kelvin.
+  const WATER_HEAT_KJ_PER_L_K = 4.186;
+  // How fast a holder's water cools toward ROOM_TEMP_C, Newton's constant
+  // per minute: each holder's holdsFluid.coolPerMin, written from these
+  // (holderCoolPerMin()). A litre in an open saucepan falls 100 → 70 °C in
+  // very roughly 10–15 minutes, about 0.03–0.04 a minute (a physics
+  // estimate, unconfirmed); another size scales by its litres to the −⅓
+  // power, its surface against its volume; a lid should roughly halve the
+  // rate (unconfirmed). The thermos is EN 12546-1's floor for an 801–1,200 mL
+  // vacuum flask, at most 0.043 an hour (secondary). All retunable.
+  const OPEN_PAN_COOL_PER_MIN = 0.035;
+  const CLOSED_HOLDER_COOL_FACTOR = 0.5;
+  const THERMOS_COOL_PER_MIN = 0.043 / 60;
+  function holderCoolPerMin(litres, closed){
+    return (closed ? CLOSED_HOLDER_COOL_FACTOR : 1) * OPEN_PAN_COOL_PER_MIN * Math.pow(litres, -1 / 3);
+  }
+  // Two holder rows stack only when their water's temperatures differ by
+  // less than this, and a water within it of ROOM_TEMP_C drops its own
+  // (setWaterTemp()). An implementation call, retunable.
+  const TEMP_MERGE_TOLERANCE_C = 0.5;
+  // The float a temperature worked out by arithmetic may miss the boil by.
+  const TEMP_EPSILON_C = 1e-6;
   // A dish restores the sum of its ingredients' contributions times
   // (1 + this). Retunable.
   const DISH_RESTORES_BONUS = 0.25;
@@ -872,6 +914,10 @@
   //               reads "(Frozen)" meanwhile. No coasting either (#217).
   //     A container carrying both heat and device is the room's stove
   //     (roomStove()).
+  //   Optional: heatSource — on a `heat` container, the HEAT_SOURCES entry
+  //     (FIRE / COOKING) whose power its cookware's water heats at
+  //     (heatKwOf()): "stove" on a kitchen's, "campfire" on the one
+  //     doBuildFire() makes.
   //   Optional: timerMinutes — a stove's wind-up timer, minutes left (absent
   //     = 0). It needs neither power nor a battery. Set from its device
   //     pop-up, run down by the scheduler (settleTimer()) whether or not
@@ -1005,9 +1051,15 @@
   //                   instance carries what its ingredients decided, genuine
   //                   per-instance state the `overrides` rule allows: its
   //                   `name`, `restores`, `foodPoisoning` ({ raw, cooked })
-  //                   and `unitWeight` (buildDish()).
-  //     boilMinutes   instance: how long a vessel's tainted water has boiled,
-  //                   toward BOIL_MINUTES.
+  //                   and `unitWeight` (buildDish()). A dish that took water
+  //                   (a template with `water`) keeps it as `water`: { ml,
+  //                   temp? }, its volume and temperature, the temperature
+  //                   shaped as a fluid's (formDish(), dishFrom()). Absent on
+  //                   a dish without water, and on one from an older save,
+  //                   which cooks by the span as it always did.
+  //     boilMinutes   instance: how long a heating holder's tainted water has
+  //                   been at the boil without a break, toward BOIL_MINUTES.
+  //                   Gone once it is below the boil (settleVessel()).
   //     on            powered-equipment on/off state
   //     hasBatteries  powered-equipment battery-installed state
   //     drainRate     durability loss per minute while `on`
@@ -1051,16 +1103,23 @@
   //                   `ages` sets it, and a row read without one is taken as
   //                   true now. Ageing is worked out when the row's list is
   //                   next settled (settleList()).
-  //     holdsFluid    { capacityMl } — the item holds a fluid, up to
-  //                   capacityMl millilitres, part-way at any level: a
-  //                   bottle, a saucepan, the pot. Definition data, read by
-  //                   itemId (capacityMlOf()).
-  //     fluid         instance: { kind, ml } — the fluid a holder holds: its
-  //                   kind ("clean" or "tainted" water today, open-ended)
-  //                   and how much, a positive whole number of millilitres.
-  //                   Absent when empty, never ml 0. Two kinds mix only as
-  //                   mixKinds() says. Shown as its kind and a meter; weighs
-  //                   1 kg a litre (fluidWeightOf()).
+  //     holdsFluid    { capacityMl, coolPerMin, heats? } — the item holds a
+  //                   fluid, up to capacityMl millilitres, part-way at any
+  //                   level: a bottle, a saucepan, the pot. `coolPerMin` is
+  //                   how fast its water cools toward ROOM_TEMP_C, Newton's
+  //                   constant per minute (holderCoolPerMin()); `heats` marks
+  //                   cookware, whose water heats in a lit heat container
+  //                   (settleVessel()). Definition data, read by itemId
+  //                   (capacityMlOf(), coolPerMinOf(), heatsWater()).
+  //     fluid         instance: { kind, ml, temp? } — the fluid a holder
+  //                   holds: its kind ("clean" or "tainted" water today,
+  //                   open-ended) and how much, a positive whole number of
+  //                   millilitres. Absent when empty, never ml 0. Two kinds
+  //                   mix only as mixKinds() says. Shown as its kind and a
+  //                   meter; weighs 1 kg a litre (fluidWeightOf()). `temp`,
+  //                   { c, at }, is its temperature in °C, true at minute
+  //                   `at` since the collapse, worked out when read
+  //                   (waterTempOf()); absent, it is at ROOM_TEMP_C.
   //     portion       instance: how much of one unit of food is left — 1,
   //                   0.75, 0.5 or 0.25, absent = 1 — after Eat 1/2 or 1/4.
   //                   Shown as a meter and its words ("½ left",
@@ -1096,7 +1155,7 @@
     leftovers: { name:"Leftovers", category:"Food", unitWeight:0.8, restores:{hunger:25}, verb:"Eat",
       spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY } },
     plastic_bottle: { name:"Plastic bottle", category:"Food", unitWeight:0.05, verb:"Drink",
-      holdsFluid:{ capacityMl:500 } },
+      holdsFluid:{ capacityMl:500, coolPerMin:holderCoolPerMin(0.5, true) } },
     granola_bars: { name:"Granola bars", category:"Food", unitWeight:0.1, restores:{hunger:15}, verb:"Eat" },
     painkillers: { name:"Painkillers", category:"Medical", unitWeight:0.1 },
     toilet_paper: { name:"Toilet paper", category:"Materials", unitWeight:0.2 },
@@ -1118,7 +1177,7 @@
       ingredient:{ role:"vegetable", label:"Bean" } },
     board_games: { name:"Board games", category:"Misc", unitWeight:1.0 },
     burnt_saucepan: { name:"Burnt saucepan", category:"Tool", unitWeight:0.6,
-      vessel:{ kind:"saucepan", capacityKg:1.5 }, holdsFluid:{ capacityMl:1000 } },
+      vessel:{ kind:"saucepan", capacityKg:1.5 }, holdsFluid:{ capacityMl:1000, coolPerMin:holderCoolPerMin(1, false), heats:true } },
     canned_corn: { name:"Canned corn", category:"Food", unitWeight:0.4, restores:{hunger:20}, verb:"Eat", sealed:true, opensWith:"can-opening",
       spoils:{ staleAfter:1*MINUTES_PER_DAY, rottenAfter:3*MINUTES_PER_DAY },
       ingredient:{ role:"vegetable", label:"Corn" } },
@@ -1135,9 +1194,9 @@
     scrap_metal: { name:"Scrap metal", category:"Materials", unitWeight:0.5 },
     metal_pipe: { name:"Metal pipe", category:"Tool", unitWeight:1.3, tags:["blunt"] },
     dented_saucepan: { name:"Dented saucepan", category:"Tool", unitWeight:0.7,
-      vessel:{ kind:"saucepan", capacityKg:1.5 }, holdsFluid:{ capacityMl:1000 } },
+      vessel:{ kind:"saucepan", capacityKg:1.5 }, holdsFluid:{ capacityMl:1000, coolPerMin:holderCoolPerMin(1, false), heats:true } },
     cooking_pot: { name:"Cooking pot", category:"Tool", unitWeight:1.2,
-      vessel:{ kind:"pot", capacityKg:3 }, holdsFluid:{ capacityMl:2000 } },
+      vessel:{ kind:"pot", capacityKg:3 }, holdsFluid:{ capacityMl:2000, coolPerMin:holderCoolPerMin(2, false), heats:true } },
     roasting_pan: { name:"Roasting pan", category:"Tool", unitWeight:1.5,
       vessel:{ kind:"roasting_pan", capacityKg:3 } },
     crowbar: { name:"Crowbar", category:"Tool", unitWeight:2.5, tags:["blunt","prying"] },
@@ -1184,21 +1243,21 @@
     // A car's registration card, kept in its glovebox.
     cedula_verde: { name:"Vehicle registration card", category:"Misc", unitWeight:0.02 },
     // A stainless mate thermos: 1,000 mL, the most common size sold for mate,
-    // at 0.65 kg (secondary). It holds water; keeping it hot is not modelled.
-    thermos: { name:"Thermos", category:"Misc", unitWeight:0.65, holdsFluid:{ capacityMl:1000 } },
+    // at 0.65 kg (secondary). It keeps its water hot (THERMOS_COOL_PER_MIN).
+    thermos: { name:"Thermos", category:"Misc", unitWeight:0.65, holdsFluid:{ capacityMl:1000, coolPerMin:THERMOS_COOL_PER_MIN } },
     // A household bucket: 10 L, the standard size, 0.4–0.5 kg with no lid
     // (secondary). The weight is a judgment call, retunable.
-    bucket: { name:"Bucket", category:"Misc", unitWeight:0.45, holdsFluid:{ capacityMl:10000 } },
+    bucket: { name:"Bucket", category:"Misc", unitWeight:0.45, holdsFluid:{ capacityMl:10000, coolPerMin:holderCoolPerMin(10, true) } },
     // A military-style plastic canteen with its cup and cloth cover: 1,000 mL,
     // 0.35–0.4 kg (secondary). The weight is a judgment call, retunable.
-    canteen: { name:"Canteen", category:"Misc", unitWeight:0.4, holdsFluid:{ capacityMl:1000 } },
+    canteen: { name:"Canteen", category:"Misc", unitWeight:0.4, holdsFluid:{ capacityMl:1000, coolPerMin:holderCoolPerMin(1, true) } },
     // A single-use jug of still water, the size a household keeps: 6.25 L
     // (confirmed), about 0.1 kg empty with its handle and cap (unconfirmed).
     // The weight is a judgment call, retunable.
-    water_jug: { name:"Water jug", category:"Food", unitWeight:0.1, holdsFluid:{ capacityMl:6250 } },
+    water_jug: { name:"Water jug", category:"Food", unitWeight:0.1, holdsFluid:{ capacityMl:6250, coolPerMin:holderCoolPerMin(6.25, true) } },
     // A returnable 20 L jug, delivered full for a water dispenser: 0.75–0.82 kg
     // empty (secondary). The weight is a judgment call, retunable.
-    dispenser_jug: { name:"Dispenser jug", category:"Food", unitWeight:0.8, holdsFluid:{ capacityMl:20000 } },
+    dispenser_jug: { name:"Dispenser jug", category:"Food", unitWeight:0.8, holdsFluid:{ capacityMl:20000, coolPerMin:holderCoolPerMin(20, true) } },
     house_key: { name:"House key", category:"Key", unitWeight:0.03, doorId:"home-front" },
     bandage: { name:"Bandage", category:"Medical", unitWeight:0.05 },
     campfire_kit: { name:"Campfire Kit", category:"Materials", unitWeight:2.4, tags:["disassemble"],
@@ -4016,7 +4075,7 @@ x_sn_9 m_sn_sn_sn sn p
   // retunable.
   const HEAT_CONTAINER_CAPACITY_KG = 8;   // stove and campfire alike
   const KITCHEN_CONTAINERS = [
-    { id:"stove", name:"Stove", capacityKg:HEAT_CONTAINER_CAPACITY_KG, tags:["device","heat"], spawnPools:["kitchen_perishable","kitchen_tools"] },
+    { id:"stove", name:"Stove", capacityKg:HEAT_CONTAINER_CAPACITY_KG, tags:["device","heat"], heatSource:"stove", spawnPools:["kitchen_perishable","kitchen_tools"] },
     { id:"cupboards", name:"Cupboards", capacityKg:15, spawnPools:["kitchen_nonperishable","kitchen_tools"] },
     { id:"drawers", name:"Drawers", capacityKg:10, spawnPools:["kitchen_tools"] },
     { id:"fridge", name:"Fridge", capacityKg:30, tags:["fridge"], spawnPools:["kitchen_perishable"] },
@@ -5608,7 +5667,8 @@ x_sn_9 m_sn_sn_sn sn p
   // two rows until both are cooked. A perishable's rows merge only when every
   // unit of both is in the same freshness state. Part-eaten units merge only
   // with units as eaten as they are, never with whole ones, and holders only
-  // with holders holding the same fluid to the same millilitre.
+  // with holders holding the same fluid to the same millilitre, at
+  // temperatures read now within TEMP_MERGE_TOLERANCE_C of each other.
   function sameStackState(a, b){
     return STACKABLE.has(a.category) && a.itemId === b.itemId && a.category === b.category
       && !a.durability && !b.durability && !!a.sealed === !!b.sealed
@@ -5616,15 +5676,19 @@ x_sn_9 m_sn_sn_sn sn p
       && (cookStateOf(a) !== "raw" || (a.cookMinutes || 0) === (b.cookMinutes || 0))
       && rowFreshness(a) === rowFreshness(b) && rowFreshness(a) !== "mixed"
       && portionOf(a) === portionOf(b)
-      && fluidKindOf(a) === fluidKindOf(b) && (a.fluid ? a.fluid.ml : 0) === (b.fluid ? b.fluid.ml : 0);
+      && fluidKindOf(a) === fluidKindOf(b) && (a.fluid ? a.fluid.ml : 0) === (b.fluid ? b.fluid.ml : 0)
+      && (!a.fluid || Math.abs(fluidTempC(a) - fluidTempC(b)) < TEMP_MERGE_TOLERANCE_C);
   }
   // Folds `row` into `target`, an existing row sameStackState() accepts. The
   // one place two rows become one: the units' ages come along, re-sorted
   // oldest first. Both rows are always settled to the same minute, so their
   // ages join as they are: anything that moves or merges rows acts on lists
   // already settled (settleReachable(), settleHeat()), and a settle folds
-  // only rows of its own list.
+  // only rows of its own list. Holders' water takes the mean of the two
+  // temperatures, read now, by units.
   function mergeRows(target, row){
+    if(target.fluid && row.fluid)
+      setWaterTemp(target.fluid, (fluidTempC(target) * target.qty + fluidTempC(row) * row.qty) / (target.qty + row.qty));
     target.qty += row.qty;
     if(Array.isArray(target.ages) || Array.isArray(row.ages))
       target.ages = (target.ages || []).concat(row.ages || []).sort((x, y)=> y - x);
@@ -5727,7 +5791,8 @@ x_sn_9 m_sn_sn_sn sn p
   // What makes rows one group: the same item, sealed or not, cook state,
   // fluid kind and freshness (a container's Frozen is every row's), and the
   // same contents, so a pot of stew never groups with an empty pot. Rows of
-  // a group differ only by their level, raw cookMinutes, or `on`.
+  // a group differ only by their level, their water's temperature, raw
+  // cookMinutes, or `on`.
   // `kind` stands for the fluid's kind where it is asked as it would be.
   function groupKeyOf(it, kind = fluidKindOf(it)){
     return JSON.stringify([it.itemId || null, it.name, !!it.sealed, cookStateOf(it), kind, rowFreshness(it),
@@ -6199,12 +6264,55 @@ x_sn_9 m_sn_sn_sn sn p
     const pair = [a, b].sort().join("+");
     return pair === "clean+tainted" ? "tainted" : null;
   }
-  // `ml` of `kind` into one unit, mixed with what it holds (mixKinds()). New
-  // water in a vessel starts its boil over. A caller never adds more than
-  // fluidSpaceMl().
-  function addFluid(unit, kind, ml){
-    unit.fluid = { kind: mixKinds(fluidKindOf(unit), kind), ml: (unit.fluid ? unit.fluid.ml : 0) + ml };
-    delete unit.boilMinutes;
+  // `ml` of `kind` at `c` °C into one unit, mixed with what it holds
+  // (mixKinds()), its temperature the volume-weighted mean of the two, each
+  // read now, stamped now. Water mixed to below the boil loses its boil; water
+  // at the boil poured into water at the boil keeps it. A caller never adds
+  // more than fluidSpaceMl().
+  function addFluid(unit, kind, ml, c){
+    const had = unit.fluid ? unit.fluid.ml : 0;
+    const mixed = had ? (fluidTempC(unit) * had + c * ml) / (had + ml) : c;
+    unit.fluid = { kind: mixKinds(fluidKindOf(unit), kind), ml: had + ml };
+    setWaterTemp(unit.fluid, mixed);
+    if(!atBoil(mixed)) delete unit.boilMinutes;
+  }
+  // WATER TEMPERATURE: docs/systems/fluids.md has the model. A water's
+  // temperature is true at a minute, `temp: { c, at }`, on a holder's fluid
+  // or a dish's water, and worked out when read: never ticked, never
+  // scheduled. Absent, it is ROOM_TEMP_C. Everything that needs one reads it
+  // here, and every writer stamps it through setWaterTemp(), at `settledAt`,
+  // which an action shares with now and a settle sets to its own minute.
+  //   A holder's cooling constant, and whether its water heats.
+  function coolPerMinOf(it){
+    const def = registryEntryOf(it);
+    return def && def.holdsFluid ? def.holdsFluid.coolPerMin : 0;
+  }
+  function heatsWater(it){
+    const def = registryEntryOf(it);
+    return !!(def && def.holdsFluid && def.holdsFluid.heats);
+  }
+  //   A water's temperature at minute `m`, by Newton's law in closed form:
+  // ROOM_TEMP_C + (c − ROOM_TEMP_C) · e^(−k · (m − at)), `k` its holder's
+  // constant.
+  function waterTempOf(temp, k, m = settledAt){
+    if(!temp) return ROOM_TEMP_C;
+    return ROOM_TEMP_C + (temp.c - ROOM_TEMP_C) * Math.exp(-k * Math.max(0, m - temp.at));
+  }
+  function fluidTempC(unit, m = settledAt){ return waterTempOf(unit.fluid && unit.fluid.temp, coolPerMinOf(unit), m); }
+  //   Stamps `water` (a fluid, or a dish's water) at `c` °C, true at `m`. One
+  // within TEMP_MERGE_TOLERANCE_C of ROOM_TEMP_C is at the room's, and drops
+  // its own.
+  function setWaterTemp(water, c, m = settledAt){
+    if(Math.abs(c - ROOM_TEMP_C) < TEMP_MERGE_TOLERANCE_C) delete water.temp;
+    else water.temp = { c, at: m };
+  }
+  function atBoil(c){ return c >= WATER_BOIL_C - TEMP_EPSILON_C; }
+  //   The temperature of the water a row shows, or null for one with none: a
+  // holder's fluid, or the water of the dish its vessel holds.
+  function unitWaterTempC(it){
+    if(it.fluid) return fluidTempC(it);
+    const dish = vesselDefOf(it) && dishIn(it);
+    return dish && dish.water ? waterTempOf(dish.water.temp, coolPerMinOf(it)) : null;
   }
   // `ml` out of one unit; emptied, it holds nothing, and has nothing to boil.
   function takeFluid(unit, ml){
@@ -6259,7 +6367,8 @@ x_sn_9 m_sn_sn_sn sn p
   // Off a tank, at any time, a fill draws the litres it adds and takes only
   // what the tank has left, to the millilitre: a holder fills part-way on the
   // last of it. A sink without a tank draws on the mains, and draws nothing
-  // down. The lines are functional, retunable.
+  // down. The water runs at TANK_WATER_C off a tank, MAINS_WATER_C off the
+  // mains. The lines are functional, retunable.
   function canFillAtSink(it){
     const room = world[state.currentRoom];
     return !!room.sink && waterRunningIn(state.currentRoom) && fluidSpaceMl(it) > 0
@@ -6297,7 +6406,7 @@ x_sn_9 m_sn_sn_sn sn p
     const fromTank = tankOf(state.currentRoom) > 0;
     const ml = fillMlFor(it);
     if(!(ml > 0)) return;
-    const filled = changeOneUnit(src.items, it, unit=> addFluid(unit, "clean", ml));
+    const filled = changeOneUnit(src.items, it, unit=> addFluid(unit, "clean", ml, fromTank ? TANK_WATER_C : MAINS_WATER_C));
     const moved = fromTank ? drawFromTank(ml) : null;
     // The pop-up follows the filled bottle, as doOpen()'s follows the opened can.
     detailItem = { uid: ensureUid(filled), side: sourceKind };
@@ -6487,13 +6596,13 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // Moves min(`ml`, what the source has, what the target has room for) from
   // one unit of `src` into one unit of `dst`, each unit split off its row
-  // first (changeOneUnit()). The kind mixes, a vessel target's boil starts
-  // over, and a source keeps its boil. Returns the source unit after.
+  // first (changeOneUnit()). The kind and the temperature mix (addFluid()),
+  // and a source keeps its boil. Returns the source unit after.
   function pourFluid(srcList, src, dstList, dst, ml){
     const n = Math.min(ml, src.fluid.ml, fluidSpaceMl(dst));
-    const kind = src.fluid.kind;
+    const kind = src.fluid.kind, c = fluidTempC(src);
     const after = changeOneUnit(srcList, src, u=> takeFluid(u, n));
-    changeOneUnit(dstList, dst, u=> addFluid(u, kind, n));
+    changeOneUnit(dstList, dst, u=> addFluid(u, kind, n, c));
     return after;
   }
   // Pour (`ml` null: as much as fits) or Pour by the measure from row
@@ -9110,13 +9219,13 @@ x_sn_9 m_sn_sn_sn sn p
     }
     render();
   }
-  // Creates the container with `tags` when the room has none with this id.
-  // One that already exists is returned as it is. Its only caller is
-  // doBuildFire(): a stove's container is authored, and lighting it creates
-  // nothing (see doLightStove()).
-  function ensureHeatContainer(room, id, name, capacityKg, tags){
+  // Creates the container with `tags` and `heatSource` when the room has
+  // none with this id. One that already exists is returned as it is. Its
+  // only caller is doBuildFire(): a stove's container is authored, and
+  // lighting it creates nothing (see doLightStove()).
+  function ensureHeatContainer(room, id, name, capacityKg, tags, heatSource){
     let c = room.containers.find(x=>x.id===id);
-    if(!c){ c = { id, name, capacityKg, tags, items:[] }; room.containers.push(c); }
+    if(!c){ c = { id, name, capacityKg, tags, heatSource, items:[] }; room.containers.push(c); }
     return c;
   }
   // How the stove in `roomId` would light now: "self" with power, its
@@ -9173,7 +9282,7 @@ x_sn_9 m_sn_sn_sn sn p
       consumeFromPools("firewood", FIRE_BUILD_WOOD);
       room.fireMinutesLeft = FIRE_BUILD_WOOD * FIRE_MINUTES_PER_WOOD;
     }
-    ensureHeatContainer(room, "campfire", "Campfire", HEAT_CONTAINER_CAPACITY_KG, ["heat"]);
+    ensureHeatContainer(room, "campfire", "Campfire", HEAT_CONTAINER_CAPACITY_KG, ["heat"], "campfire");
     room.heatActive = true;
     scheduleHeat(state.currentRoom);
     advanceTime(BUILD_FIRE_MIN);
@@ -9246,11 +9355,14 @@ x_sn_9 m_sn_sn_sn sn p
   // Every container of a room tagged `heat`, in the room's order: a stove's
   // or a campfire's.
   function heatContainersOf(room){ return room.containers.filter(c=> hasTag(c, "heat")); }
-  // `dt` minutes of a lit room's cooking, everything in its heat containers.
-  function cookInHeat(room, dt){
+  // `dt` minutes of a lit room's cooking, everything in its heat containers:
+  // a vessel, or anything else whose water heats, at its container's power
+  // (settleVessel()), and anything else by its own `cooks`.
+  function cookInHeat(roomId, room, dt){
     heatContainersOf(room).forEach(c=>{
+      const kw = heatKwOf(c);
       c.items.slice().forEach(it=>{
-        if(vesselDefOf(it)) settleVessel(it, dt);
+        if(vesselDefOf(it) || heatsWater(it)) settleVessel(it, dt, kw, roomId);
         else cookItem(c.items, it, dt);
       });
     });
@@ -9263,7 +9375,7 @@ x_sn_9 m_sn_sn_sn sn p
   function settleHeat(roomId, span){
     const r = world[roomId];
     heatContainersOf(r).forEach(c=> settleListDeep(c.items, roomId, c, settledAt));
-    cookInHeat(r, span);
+    cookInHeat(roomId, r, span);
     if(r.fireMinutesLeft == null) return;
     r.fireMinutesLeft -= span;
     if(r.fireMinutesLeft > TICK_EPSILON) return;
@@ -9294,6 +9406,45 @@ x_sn_9 m_sn_sn_sn sn p
   }
   function cookMinutesOf(it){ return registryEntryOf(it).cooks.minutes; }
   function cookRemaining(it){ return Math.max(0, cookMinutesOf(it) - (it.cookMinutes || 0)); }
+  // HEATING: docs/systems/fluids.md has the model. Every holder whose water
+  // heats (holdsFluid.heats) in a lit room's heat containers gets its
+  // source's full power, each as if on its own burner (Tom), and its water
+  // rises linearly to WATER_BOIL_C and stays there, at the boil. Evaporation
+  // and the vessel's own heat are not modelled. A heating holder in a lit
+  // room is stamped at every settle (settleVessel()).
+  //   The power that reaches the water, in kW. The stove: ENARGAS's medium
+  // burner, 1,400 kcal/h = 1.63 kW (confirmed), on a hob 49 % efficient with
+  // a lidded pot (confirmed), an open one taking about 1.4 × the energy:
+  // 1.63 × 0.49 / 1.4 ≈ 0.57 (derived). The campfire: a litre from 20 °C to
+  // the boil on a going fire in about 6–19 minutes (derived); the middle,
+  // about 11, is 0.45 kW (unconfirmed). Both retunable. A heat container
+  // names its source (CONTAINER SCHEMA's `heatSource`).
+  const STOVE_HEAT_KW = 0.57;
+  const CAMPFIRE_HEAT_KW = 0.45;
+  const HEAT_SOURCES = { stove:{ kw:STOVE_HEAT_KW }, campfire:{ kw:CAMPFIRE_HEAT_KW } };
+  function heatKwOf(container){
+    const src = HEAT_SOURCES[container.heatSource];
+    return src ? src.kw : 0;
+  }
+  // °C a minute that `kw` gives `litres` of water.
+  function heatRatePerMin(kw, litres){ return kw * 60 / (litres * WATER_HEAT_KJ_PER_L_K); }
+  // Minutes until water at `c` °C is at the boil on `kw`: 0 at it, Infinity
+  // with no power.
+  function minutesToBoil(c, kw, litres){
+    if(atBoil(c)) return 0;
+    return kw > 0 ? (WATER_BOIL_C - c) / heatRatePerMin(kw, litres) : Infinity;
+  }
+  // `span` minutes of heating from `c` °C: { c, atBoilMin, reached }, the
+  // temperature after, the minutes of the span spent at the boil, and
+  // whether the span reached the boil from below.
+  function heatOver(c, kw, litres, span){
+    const toBoil = minutesToBoil(c, kw, litres);
+    if(span >= toBoil - TICK_EPSILON) return { c: WATER_BOIL_C, atBoilMin: Math.max(0, span - toBoil), reached: !atBoil(c) };
+    return { c: c + heatRatePerMin(kw, litres) * span, atBoilMin: 0, reached: false };
+  }
+  // A dish's water in litres: what it took, at the part of the dish left (an
+  // implementation call: a half-eaten stew heats as half the water).
+  function dishWaterL(dish){ return dish.water.ml * portionOf(dish) / 1000; }
   // VESSELS AND DISHES. A vessel (registry `vessel`: kind, capacityKg)
   // holds ingredients in its `contents` — or, once a dish has formed, that
   // one dish — and, when it is a holder too (`holdsFluid`), water, from a
@@ -9416,20 +9567,26 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // A dish made from fresh units of `ids` for template `templateId`, in the
   // named vessel full of water, in `cookState`: the world's pots of stew. It
-  // gets its age like any world item, from stampMissingAges().
+  // gets its age like any world item, from stampMissingAges(), and its water
+  // is at the room's temperature.
   function dishFrom(templateId, vesselId, ids, cookState){
     const t = DISH_TEMPLATES.find(x=> x.id === templateId);
     const dish = buildDish(t, ids.map(id=> itemFromRegistry({ id, qty:1 })),
       t.water ? ITEM_REGISTRY[vesselId].holdsFluid.capacityMl / 1000 : 0);
+    if(t.water) dish.water = { ml: ITEM_REGISTRY[vesselId].holdsFluid.capacityMl };
     dish.cookState = cookState;
     if(cookState === "raw") dish.cookMinutes = 0;
     return dish;
   }
   // Formation: the contents and all the water become one raw dish, the
   // vessel's only content, new and Fresh. From then on nothing can be taken
-  // out.
+  // out. A dish that takes water keeps its volume and temperature (`water`).
   function formDish(v, t){
     const dish = buildDish(t, v.contents || [], fluidWeightOf(v));
+    if(t.water && v.fluid){
+      dish.water = { ml: v.fluid.ml };
+      if(v.fluid.temp) dish.water.temp = Object.assign({}, v.fluid.temp);
+    }
     dish.ages = [0];
     dish.agedAt = settledAt;
     dish.cookState = "raw";
@@ -9438,57 +9595,98 @@ x_sn_9 m_sn_sn_sn sn p
     delete v.fluid;
     delete v.boilMinutes;
   }
-  // `span` minutes of a vessel in a lit heat container, in order:
+  // `span` minutes of a vessel, or of a holder whose water heats, in a lit
+  // heat container of `kw`, in room `roomId`, in order:
   //   1. With no dish, it forms one if its contents and water already make
   //      one (formDish()).
-  //   2. Still without one, tainted water boils: BOIL_MINUTES make it clean,
-  //      and the count holds when the heat stops. Water that comes clean
+  //   2. A water dish's water heats (heatOver()), and the dish cooks only for
+  //      the part of the span its water spends at the boil: below it, the
+  //      count pauses, and nothing is lost. A dish without water, or one from
+  //      an older save, cooks by the span.
+  //   3. Without a dish, its water heats. Tainted water counts only its time
+  //      at the boil, without a break (`boilMinutes`). A heating holder in a
+  //      lit room is stamped at every settle, at its minute, so water that
+  //      starts a span below the boil (taken off the heat since, the heat out
+  //      or put out, cooler water poured in) reads as having cooled, and has
+  //      lost its count. BOIL_MINUTES make it clean; water that comes clean
   //      forms the dish it now makes, and the settle stops there: the dish
-  //      cooks from the next span, since the boiling finishing is an event
-  //      and the span ends at it.
-  //   3. Whatever it holds cooks by the span: the dish, or, when nothing
-  //      matched, each ingredient by its own `cooks`.
-  // Nothing is logged.
-  function settleVessel(v, span){
-    if(!dishIn(v)){
+  //      cooks from the next span, since the boil finishing is an event and
+  //      the span ends at it.
+  //   4. Whatever it holds cooks by the span: each ingredient by its own
+  //      `cooks` when no dish matched.
+  // A vessel whose water doesn't heat (a frying pan holds none) skips the
+  // water. Nothing is logged.
+  function settleVessel(v, span, kw, roomId){
+    const from = settledAt - span, heats = heatsWater(v);
+    if(vesselDefOf(v) && !dishIn(v)){
       const ready = matchingTemplate(v);
       if(ready) formDish(v, ready);
     }
-    if(!dishIn(v) && fluidKindOf(v) === "tainted"){
-      v.boilMinutes = (v.boilMinutes || 0) + span;
-      if(v.boilMinutes >= BOIL_MINUTES - TICK_EPSILON){
-        v.fluid.kind = "clean";
-        delete v.boilMinutes;
-        const t = matchingTemplate(v);
-        if(t){ formDish(v, t); return; }
+    const dish = vesselDefOf(v) && dishIn(v);
+    if(dish){
+      let cooks = span;
+      if(dish.water){
+        const h = heats ? heatOver(waterTempOf(dish.water.temp, coolPerMinOf(v), from), kw, dishWaterL(dish), span) : null;
+        if(h) setWaterTemp(dish.water, h.c);
+        cooks = h ? h.atBoilMin : 0;
+      }
+      cookItem(v.contents, dish, cooks);
+      return;
+    }
+    if(v.fluid && heats){
+      const c0 = fluidTempC(v, from);
+      const h = heatOver(c0, kw, v.fluid.ml / 1000, span);
+      setWaterTemp(v.fluid, h.c);
+      if(v.fluid.kind === "tainted"){
+        if(!atBoil(c0)) delete v.boilMinutes;
+        if(h.atBoilMin > 0) v.boilMinutes = (v.boilMinutes || 0) + h.atBoilMin;
+        if(v.boilMinutes >= BOIL_MINUTES - TICK_EPSILON){
+          v.fluid.kind = "clean";
+          delete v.boilMinutes;
+          const t = vesselDefOf(v) && matchingTemplate(v);
+          if(t){ formDish(v, t); return; }
+        }
       }
     }
     const list = v.contents || [];
     list.slice().forEach(it=> cookItem(list, it, span));
   }
   // What the heat containers `containers` are cooking that will finish
-  // soonest: { name, remaining, water } for whatever has the least time left
-  // among everything still progressing in them — a raw cookable item, a
-  // vessel's raw dish, one that will form, the ingredients cooking alone in a
-  // vessel no dish matches, or tainted water boiling (`water` true) — or null
+  // soonest, read at settledAt: { name, remaining, water } for whatever has
+  // the least time left among everything still progressing in them — a raw
+  // cookable item; a vessel's raw dish, a water dish after its water's time
+  // to the boil; one that will form, likewise; the ingredients cooking alone
+  // in a vessel no dish matches; or tainted water boiling clean (`water`
+  // true), its time to the boil and then what it still needs at it — or null
   // when nothing is. On a tie, the first found. The scheduler reads it over
   // a room's every heat container (heatRoomDue()).
   function soonestIn(containers){
     let best = null;
     const consider = (name, remaining, water)=>{
-      if(!best || remaining < best.remaining) best = { name, remaining, water:!!water };
+      if(Number.isFinite(remaining) && (!best || remaining < best.remaining)) best = { name, remaining, water:!!water };
     };
     const rawRows = (list)=> list.forEach(it=>{ if(cookStateOf(it) === "raw") consider(it.name.toLowerCase(), cookRemaining(it)); });
-    containers.forEach(heat=> heat.items.forEach(it=>{
-      if(!vesselDefOf(it)){ rawRows([it]); return; }
-      const dish = dishIn(it);
-      if(dish){ rawRows([dish]); return; }
-      if(fluidKindOf(it) === "tainted") consider("water", Math.max(0, BOIL_MINUTES - (it.boilMinutes || 0)), true);
-      const t = matchingTemplate(it);
-      if(t){
-        consider(buildDish(t, it.contents || [], fluidWeightOf(it)).name.toLowerCase(), cookMinutesOf({ itemId:t.item }));
-      } else rawRows(it.contents || []);
-    }));
+    containers.forEach(heat=>{
+      const kw = heatKwOf(heat);
+      heat.items.forEach(it=>{
+        if(!vesselDefOf(it) && !heatsWater(it)){ rawRows([it]); return; }
+        const heats = heatsWater(it);
+        const dish = vesselDefOf(it) && dishIn(it);
+        if(dish){
+          if(cookStateOf(dish) !== "raw") return;
+          const toBoil = !dish.water ? 0
+            : heats ? minutesToBoil(waterTempOf(dish.water.temp, coolPerMinOf(it)), kw, dishWaterL(dish)) : Infinity;
+          consider(dish.name.toLowerCase(), toBoil + cookRemaining(dish));
+          return;
+        }
+        const toBoil = it.fluid && heats ? minutesToBoil(fluidTempC(it), kw, it.fluid.ml / 1000) : Infinity;
+        if(fluidKindOf(it) === "tainted")
+          consider("water", toBoil + Math.max(0, BOIL_MINUTES - (toBoil > 0 ? 0 : (it.boilMinutes || 0))), true);
+        const t = vesselDefOf(it) && matchingTemplate(it);
+        if(t) consider(buildDish(t, it.contents || [], fluidWeightOf(it)).name.toLowerCase(), (t.water ? toBoil : 0) + cookMinutesOf({ itemId:t.item }));
+        else rawRows(it.contents || []);
+      });
+    });
     return best;
   }
   // What the room's heat container is cooking that will finish soonest
@@ -9966,6 +10164,22 @@ x_sn_9 m_sn_sn_sn sn p
     forEachItemList(list=> list.forEach(migrate));
     CONTAINER_SLOTS.forEach(slotKey=> migrate(state[slotKey]));
   }
+  // migrateWaterTemperatureRelease(): brings a 0.12 save into the water
+  // temperature release, run on every load after migrateFluidRelease(). A
+  // browser save from 0.12 never reaches it, but an imported one does.
+  // Idempotent. Nothing else needs it: an absent temperature is the room's,
+  // a dish with no `water` cooks by the span as it did, and no
+  // state.power.stops is none running.
+  //   A campfire made in play is saved whole (savedRoomState()), so one made
+  //   before heat containers named their source has none: it takes the
+  //   campfire's. By id, as doDismantleCampfire() finds it: doBuildFire()
+  //   gives it that id, and nothing authors one.
+  function migrateWaterTemperatureRelease(){
+    roomIds().forEach(id=>{
+      const c = world[id].containers.find(x=> x.id === "campfire");
+      if(c && hasTag(c, "heat") && !c.heatSource) c.heatSource = "campfire";
+    });
+  }
   // A save from before room definitions and saved state split (every save
   // before 0.10) carries `world` and no `rooms`. Its rooms can't be mapped
   // onto the rebuilt world, so it is refused, whole, with its own line.
@@ -10029,6 +10243,7 @@ x_sn_9 m_sn_sn_sn sn p
     backfillInventoryCap();
     migrateCookingRelease();
     migrateFluidRelease();
+    migrateWaterTemperatureRelease();
     rebuildSchedule();
     render();
     return true;
@@ -12239,6 +12454,23 @@ x_sn_9 m_sn_sn_sn sn p
     return { name: shown.name, state: labels.map(l=> ` (${l})`).join(""),
       category: shown.category, vessel: dish ? it : null };
   }
+  // The row tint (#431): a row whose unit holds water, or whose vessel's
+  // dish has water, is tinted in its own background by the water's
+  // temperature, warm above ROOM_TEMP_C and cool below, untinted at it, with
+  // no threshold. Its strength is the share of the way from the room's to
+  // the boil (warm) or to freezing (cool), raised to TINT_CURVE, times
+  // TINT_MAX_ALPHA: the boil is the strongest warm tint and WATER_FREEZE_C
+  // the strongest cool one, and the curve lets a tank-warm bottle show,
+  // faintly. The colours are --tint-hot and --tint-cold. Colour only, on the
+  // row only. Judgment calls, retunable.
+  const TINT_MAX_ALPHA = 0.32;
+  const TINT_CURVE = 0.5;
+  function waterTint(c){
+    const hot = c >= ROOM_TEMP_C;
+    const share = hot ? (c - ROOM_TEMP_C) / (WATER_BOIL_C - ROOM_TEMP_C) : (ROOM_TEMP_C - c) / (ROOM_TEMP_C - WATER_FREEZE_C);
+    const alpha = TINT_MAX_ALPHA * Math.pow(Math.min(1, share), TINT_CURVE);
+    return alpha > 0 ? `rgba(var(${hot ? "--tint-hot" : "--tint-cold"}), ${alpha.toFixed(3)})` : "";
+  }
   // A meter at or below this share of full draws in the warning colour, so a
   // bottle a quarter full already warns. A balance value, retunable.
   const LEVEL_WARN_BELOW = 0.25;
@@ -12331,6 +12563,9 @@ x_sn_9 m_sn_sn_sn sn p
     nameEl.addEventListener("click", ()=>{ detailItem = { uid: ensureUid(it), side }; render(); });
     li.appendChild(itemMeta(nameEl, itemDisplay(it, ctx), it.qty, itemWeight(it)));
     li.appendChild(quickButtons(buttons, it, b=> b.onClick(list.indexOf(it))));
+    // A row with water is tinted by its temperature; a group's header never is.
+    const c = unitWaterTempC(it);
+    if(c !== null) li.style.background = waterTint(c);
     // The meter along the bottom edge, in the divider's place.
     const lvl = unitLevel(it);
     if(lvl){
