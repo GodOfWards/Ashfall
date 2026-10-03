@@ -478,6 +478,61 @@ Status: secondary unless marked; read 2026-09-27.
     - **Not found:** ENDEZA's own pressure or connection size for Lima.
       AySA's own copy of the Guía on aysa.com.ar returned errors
       throughout.
+  - **A kitchen tap's flow, fully open (#434):** about **6 L a minute
+    fed from the roof tank** and **about 10 L a minute on the mains**.
+    Derived, not measured in Lima; researched 2026-10-03.
+    - **Design flow of a kitchen sink (*pileta de cocina*): 0.20 L/s,
+      12 L/min** (0.08 cold, 0.12 hot). A kitchen sink needs at least
+      **0.60 bar (6 m)** at the tap. Homes, ground floor included, are
+      fed from a tank "obligatoriamente", except a minimum-service
+      building whose plumbing is all on the ground floor, which may be fed
+      straight from the network. Guía,
+      Res. 641/2023, §2.9.1.2, §2.9.1.4 and §2.8 (PDF above).
+      **Confirmed.**
+    - **The OSN norm, as taught:** on a ground floor, "indistintamente
+      agua corriente directa o de tanque"; upper floors from the tank
+      only. A *canilla de servicio*'s mean flow is **0.13 L/s, about
+      8 L/min** (UNLP *Instalaciones*, PDF above). **Secondary.** Whether
+      Lima's kitchens draw from the network or the tank is
+      **unconfirmed**: the older norm allows either, today's Guía mostly
+      the tank.
+    - **An Argentine maker's flows at 0.4 bar static (4 m):** kitchen
+      mixers pass **6.6 L/min** (Compacta 0411.01/M4) and **7.7 L/min**
+      (Kansas 0411.04/24, with at least 20 L/min feeding it) (FV,
+      [Compacta](https://fvsa.com/productos/0411-01-m4-compacta-juego-monocomando-para-mesada-de-cocina/),
+      [Kansas](https://fvsa.com/productos/24-kansas-monocomando-juego-monocomando-para-mesada-de-cocina/)).
+      **Confirmed.** Other FV models give 4–7 L/min at 0.4 bar, the
+      lower ones with a water-saving aerator (search summaries of
+      fvsa.com, **Secondary**). FV recommends at least 4 m.c.a. for most
+      of its taps and no more than 25
+      ([FV, preguntas frecuentes](https://fvsa.com/instaladores/preguntas-frecuentes/)),
+      **Confirmed**.
+    - **Another maker's maximum:** "El caudal máximo de la grifería es de
+      12 L/min", with 0.5 bar minimum; the pressure behind the 12 L/min
+      isn't stated (Peirano Betis 20-134, through
+      [Merlino](https://www.merlinosrl.com.ar/griferia-canilla-cocina-monocomando-betis-peirano-20-134/p)).
+      **Secondary**: a retailer quoting the maker's sheet.
+    - **Elsewhere, for context:** the UK's design flow for a DN 15 sink
+      tap is also **0.20 L/s**, minimum 0.10 L/s (BS 6700, through BSI's
+      BIP 2177 sample, Table 5.1,
+      [PDF](https://www.heatweb.co.uk/w/images/3/31/BIP2177sample.pdf)),
+      **Secondary**. The US caps kitchen faucets at **8.3 L/min at
+      4.1 bar** ([10 CFR 430.32(o)](https://www.ecfr.gov/current/title-10/section-430.32)),
+      **Confirmed**. EN 200's flow classes weren't found in a readable
+      source.
+    - **Derived for Lima (unconfirmed, retunable):** flow goes roughly
+      with the square root of the head.
+      - **From the roof tank:** a one-storey tank's outlet 3–4 m up and
+        the spout about 1 m up leave **2–3 m (0.2–0.3 bar)**. FV's
+        0.4 bar figures scale to **about 5–6 L/min**.
+      - **On the mains:** about 10 m at the pavement (above), less the
+        metre up to the spout, scales FV's figures to **10–11.5 L/min**,
+        against the Guía's and Peirano's 12. **About 10 L/min**, which is
+        Tom's first-hand figure: a 20 L bucket in about 2 minutes (Tom,
+        2026-10-03, supply not stated).
+      - It falls with the network's pressure, like the roof tank's
+        filling (above); a tank-fed tap keeps its flow until the tank
+        runs low.
   - **Sewers: on the paved streets only** (Tom, Street View captures of
     March 2026, 2026-09-29). Round cast-iron manhole covers lettered
     **"OSN"** sit in the roadway of every paved street; one is at Calle 52
