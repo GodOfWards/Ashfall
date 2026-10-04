@@ -500,7 +500,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.13.0" };
+  const GAME_CONFIG = { VERSION: "0.13.1" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -6590,8 +6590,8 @@ x_sn_9 m_sn_sn_sn sn p
   // taints it. Over FLUID_INSTANT_MAX_ML it takes time at TAP_FLOW_L_PER_MIN
   // (transferMinutes()). After the water fails the sink gives nothing: a
   // tank's taps run while it holds water, and a sink without one on the
-  // mains, while they run (waterRunningIn()). What is left in the pipes is
-  // not modelled.
+  // mains, while they run (waterRunningIn()). Nothing is left in the pipes:
+  // the town has no storage of its own (#300).
   // Off a tank, at any time, a fill draws the litres it adds and takes only
   // what the tank has left, to the millilitre: a holder fills part-way on the
   // last of it. A sink without a tank draws on the mains, and draws nothing
@@ -11734,7 +11734,7 @@ x_sn_9 m_sn_sn_sn sn p
   // the grid and the mains fail, and it stays drawn down through the false
   // recovery, which brings back the lights and not the water. Each fill is a
   // saucepan's litre, so it stays instant (FLUID_INSTANT_MAX_ML). No step
-  // drives a well's pump.
+  // drives a well's pump (#460).
   const REPLAY_SEED = 372;
   const REPLAY_START_BEFORE_FAIL_MIN = 6 * 60;
   const REPLAY_WALK = [HOME_STOP, "x_c117_c90b", "x_c117_c90", "x_c117_c90b", HOME_STOP];

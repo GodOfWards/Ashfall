@@ -110,13 +110,30 @@ change and at it.
 
 **Tanks.** A building with a tank (BUILDING TYPES' `water`) runs its sinks
 while the tank holds water (`waterRunningIn()`); `state.tankDrawn` holds the
-litres drawn, with an entry only while below full. While the mains run
-(`mainsWaterUp()`), a tank refills at its pump's `flowLph` while that pump
-draws, or, in a building with no pump load (the unwired fallback), at
-`HOUSE_PUMP_FLOW_LPH` whenever it is below full (`tankRefillLph()`). Refilling
-is settled, not ticked (`settleTanks()`), rounded to the millilitre once per
-settle; neither condition changes inside a span, since grid changes and
-resolves are settle points.
+litres drawn, with an entry only while below full. How a tank refills is
+its building's fill, decided at world build from its site stop's links
+(`tankFillOf()`, `BUILDING_INFO`'s `tankFill`), and never saved:
+
+- **network**, when any link at the site is paved (`PAVED_STOPS`): the town's
+  water network runs under paved streets only. The tank refills at
+  `NETWORK_FILL_LPH` whenever it is below full while the mains run
+  (`mainsWaterUp()`), through a float valve: no `TANK_FLOAT_START`, no latch,
+  no power. The building has **no pump**: at build, every fixture whose
+  appliance has `flowLph` is taken out of its panels, whatever template the
+  instance's overrides leave them (`withoutPumps()`). Its other fixtures and
+  their load ids are the template's, and the WATER circuit keeps the heater.
+- **well**, on a gravel or dirt street: the tank refills from the building's
+  own well at its pump's `flowLph` while that pump draws, **whether or not
+  the mains run**; or, in a building with no pump load (the unwired
+  fallback, none today), at `HOUSE_PUMP_FLOW_LPH` whenever it is below full
+  while the grid is up (`tankRefillLph()`).
+
+The mains run while the grid does, and come back after an outage only once
+the grid has been back `MAINS_REPRESSURE_FACTOR` times as long as the outage
+(`MAINS_UP_SPANS`): the false recovery brings back lights, not water.
+Refilling is settled, not ticked (`settleTanks()`), rounded to the millilitre
+once per settle; no rate changes inside a span, since the grid's and the
+mains' changes and every resolve are settle points ([Time](time.md)).
 
 **The meters** read the network as it stands (`loadSupplyVolts()`,
 `breakerLoadSideVolts()`, `breakerCurrent()`): a cycling load reads its
@@ -191,7 +208,9 @@ list, rebuilt from the room floors by `refreshPower()` before its resolves.
 - `resolveGrid()`: a grid change, from the scheduler.
 - `refreshPower()`: the network rebuilt on boot, restart and load.
 - `simulatePower()`: the dev seam's test network, resolved every minute.
-- `validateWiring()`: the dev seam's check of every wiring reference.
+- `validateWiring()`: the dev seam's check of every wiring reference, and of
+  each tank's pumps by its fill: none in a network building, exactly one in a
+  wired well building, and none in a building with no tank.
 
 ## Constants
 
@@ -202,6 +221,8 @@ list, rebuilt from the room floors by `refreshPower()` before its resolves.
 - `OLD_BOARD_PCT`, `OLD_BOARD_FUSE_A`, `REWIRE_FUSE_MIN`: the old fuse
   boards.
 - `TANK_FLOAT_START`, `HOUSE_PUMP_FLOW_LPH`, `HOUSE_TANK_L`: tanks and pumps.
+- `NETWORK_FILL_LPH`, `MAINS_REPRESSURE_FACTOR` (`MAINS_UP_SPANS`): the water
+  network's fill, and how long it takes to come back.
 - `TOASTER_RUN_MIN`, `MICROWAVE_MINUTE_CHOICES`, `MICROWAVE_DIAL_MAX_MIN`: the
   stop rules' times.
 - `PLUG_APPLIANCE`, `KETTLE_EFFICIENCY`: what a plug load is, and how much of

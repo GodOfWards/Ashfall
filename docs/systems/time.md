@@ -39,6 +39,25 @@ is asked for:
   `waterTempOf()` ([Fluids](fluids.md));
 - everything the scheduler owns (below): `settledAt`.
 
+**The calendar and the dark.** The clock is a real date: the collapse day is
+`DAY_ZERO_DATE` (Wednesday 19 February 2025), and minute 0 of the collapse
+clock is `DAY_START_MIN` on it, local time. `calendarOf()` gives a minute's
+date, by whole days in the real calendar (leap days included, by UTC
+arithmetic), and its minutes into the day; `minutesIntoDay()` reads it, so
+the clock and the calendar can't disagree. Darkness is worked out when read:
+`isDark()` is true before the date's civil dawn or at or after its civil
+dusk, from `DAYLIGHT_TABLE` (Lima's, by calendar date), interpolated between
+the two rows around the date by the real days between them (`daylightOn()`).
+A run longer than a year reads the table by date. Nothing stores it, and
+nothing changes when it changes: it is the game's one darkness rule.
+`TIME_OF_DAY_BANDS` are the vague clock's words, and nothing else reads them.
+
+**Atucha's phase** (`atuchaPhase()`) is derived the same way: "grid" while
+the grid is up, the false recovery included, then "diesels" until
+`DIESELS_STOP_MIN`, then "silent". The diesels stopping is no event: the
+gate's text and the north end's horizon line simply read differently from
+then on.
+
 **Settling.** `settledAt` is the minute the scheduled systems stand at.
 `settleWorld()` brings them to a minute `m`, each by the span since
 `settledAt`, and does what is due at `m`. It is only ever asked for the next
@@ -58,6 +77,9 @@ settled to the present, and every reader reads current state.
   ([Power](power.md), KETTLES);
 - the grid; event: each bound of `GRID_UP_SPANS`, a failure or a return
   (`resolveGrid()`, `docs/systems/power.md`);
+- the mains; event: each bound of `MAINS_UP_SPANS` (`MAINS_CHANGES`), at
+  which the world settles, so the tanks the water network fills settle to
+  it; nothing resolves, since mains water powers nothing;
 - appliance stops; event: a timed stop's minute in `state.power.stops`, the
   toaster's or the microwave's (`settleApplianceStops()`), which switches it
   off and resolves its building ([Power](power.md), stop rules);
@@ -86,7 +108,8 @@ time order. A waking clock event sets `wokenUp`, which ends a sleep or a
 blackout after that step.
 
 **Order at one minute:** the running kettles' heating over the span, grid
-changes, tanks coming full, kettle cut-outs, appliance stops, battery deaths,
+changes and mains changes (one on the same minute is the same settle), tanks
+coming full, kettle cut-outs, appliance stops, battery deaths,
 stove timers, cooking, fires, clock events. A kettle heats over a span at the
 power it had at the span's start, since power changes only at settle points,
 so its heating settles before anything at that minute changes power. Timers
@@ -108,8 +131,8 @@ stoves whose timer runs (`timerStoves`) are sets walked in world order
 through an index built once per world (`roomOrder()`). `batteryDeaths` is a
 list of minutes, dropped once due; a minute left behind by a device switched
 off since finds nothing, and it is not keyed by item, since moving an item
-strips its `_uid`. All three, `settledAt`, `lastClock` and `lastGrid` are
-runtime only: `rebuildSchedule()` rebuilds them from one walk of the world,
+strips its `_uid`. The three lists, `settledAt`, `lastClock`, `lastGrid` and
+`lastMains` are runtime only: `rebuildSchedule()` rebuilds them from one walk of the world,
 and sets the clock marks to now, on a new game, restart and load. The running
 kettles (`runningKettles`) are runtime only too, rebuilt from one walk of the
 room floors by `refreshPower()`, which runs before it on all three and whose
@@ -166,25 +189,32 @@ is out by then, and says so where the player can hear it.
 - `TICK_EPSILON`: the float a completion is allowed to fall short by.
 - `SCHEDULER_MAX_EVENTS_PER_STEP`: a guard against an event that never
   clears; hitting it is a bug, reported in the console.
-- `CLOCK_EVENTS`, `GRID_UP_SPANS`: the fixed events on the collapse clock.
+- `CLOCK_EVENTS`, `GRID_UP_SPANS`, `MAINS_UP_SPANS`: the fixed events on the
+  collapse clock.
+- `DAY_ZERO_DATE`, `DAYLIGHT_TABLE`: the calendar and civil dawn and dusk.
+- `DIESELS_STOP_DAY`, `DIESELS_STOP_HOUR` (`DIESELS_STOP_MIN`): when Atucha's
+  diesels stop.
 - `BOIL_MINUTES`: how long tainted water must be at the boil, without a
   break, to come clean.
 
 ## Costs
 
+- **Per read:** the calendar and `isDark()` are a date and a lookup in a
+  table of 48 rows, only when something asks; per render, one set lookup for
+  the horizon line, and the phase and the dark only on a match.
 - **Per step:** the vitals, one comparison of Thirst before and after for
   auto-drink, and one comparison of now with the next due minute. A water's
   temperature is worked out when read, never stepped.
 - **Per advance of time:** planning the next due minute over the lit rooms
   (with their times to the boil), the running timers, the refilling tanks, the
-  battery minutes, the appliance stops, the running kettles, the grid's
-  changes and the clock events; settling to now; settling the lists the
+  battery minutes, the appliance stops, the running kettles, the grid's and
+  the mains' changes and the clock events; settling to now; settling the lists the
   player can reach.
 - **Per event:** a timer, cooking or a fire settles the lit rooms and running
   timers, each heating holder by one line of arithmetic; a running kettle's
   settle is one holder; a tank coming full, a kettle's cut-out, an appliance
   stop or a power action resolves one building; a grid change resolves the
-  busy buildings; a battery running out walks every item list once.
+  busy buildings; a mains change settles and resolves nothing; a battery running out walks every item list once.
 - **On a new game, restart and load:** one walk of the world to rebuild the
   lists and the battery minutes, and one of the room floors for the running
   kettles.
