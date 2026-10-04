@@ -31,8 +31,8 @@ adopts it.
   for population and households that's the 2022 national census (*Censo
   Nacional de Población, Hogares y Viviendas*, 18 May 2022). A source written
   later still counts if it shows what was there by February 2025. **Day zero
-  is the day the airborne wave broke in Lima** (below); its exact date is
-  open.
+  is the day the airborne wave broke in Lima: Wednesday 19 February 2025**
+  (below).
 - **The collapse is a zombie apocalypse** (Tom, 2026-09-27). The game never
   says so; the threat itself is #12. What it was, and how it played out in
   Lima, is under "The collapse" below.
@@ -116,11 +116,14 @@ real-world facts behind each part.
 ### How Lima emptied
 
 - **Day zero is the day the airborne wave broke in Lima**: the first wave
-  of deaths and risings in town, in **mid-to-late February 2025**. The exact
-  date needn't be fixed yet. It has to fit the summer: two-week holidays
-  fall between the second half of January and the first half of February,
-  the 2025 school year began on 5 March, and secondary schools were open
-  for students owing subjects on 14–27 February (`reference/Calendar_AR.md`).
+  of deaths and risings in town, on **Wednesday 19 February 2025** (Tom,
+  2026-10-03, #445). It fits the summer (`reference/Calendar_AR.md`):
+  - **It's a weekday**, so the shops still open under the lockdown were
+    trading when they stopped mid-day (below).
+  - **The two-week holidays were over.** They fall between the second half
+    of January and the first half of February.
+  - **Secondary schools were partly open**, for students owing subjects
+    (14–27 February). The 2025 school year began on 5 March.
 - **Before it:** about one to two weeks of COVID-like news. **Most people
   were back from their holidays and went to work as normal,** with
   precautions at first, **then a lockdown**, as in 2020.
@@ -239,7 +242,6 @@ plant's facts, and the estimates behind every timescale here, are in
 
 ## Open
 
-- **Day zero's exact date** in mid-to-late February 2025.
 - **What share of people the airborne strain infected.** It sets how many
   dead are in Lima (#12).
 - **How the airborne strain was kept out** by those who did (sealed rooms,
