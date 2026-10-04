@@ -572,12 +572,15 @@
   // which is Day 20, 22:00 on the player's clock (POWER_FAILS_MIN, derived
   // beside gridUp(), since it needs DAY_START_MIN). Nothing is stored:
   // minutesSinceCollapse() derives the clock from state.totalMinutes. Running
-  // water has no day of its own: the town's pumps run on the grid, so the
-  // mains stop with it (mainsWaterUp()). A house's own tank keeps its taps
-  // running while it holds water, and its own pump refills it only while that
-  // pump has power (waterRunningIn(), settleTanks(), HOUSE_TANK_L). #149's
-  // separate water option is moot while that holds. Both are retunable; the
-  // Day N clock still counts from the start of the run.
+  // water has no day of its own: the town's wells run on the grid, so the
+  // mains stop with it, and come back only MAINS_REPRESSURE_FACTOR times as
+  // long after it returns as they were stopped (mainsWaterUp()). A house's
+  // own tank keeps its taps running while it holds water. On a paved street
+  // the network refills it while the mains run; on an unpaved one its own
+  // well's pump does, while that pump has power (waterRunningIn(),
+  // tankRefillLph(), HOUSE_TANK_L). #149's separate water option is moot
+  // while that holds. All retunable; the Day N clock still counts from the
+  // start of the run.
   const START_DAYS_AFTER_COLLAPSE = 2;
   const POWER_FAILS_DAY = 21;
   const POWER_FAILS_HOUR = 22;
@@ -586,6 +589,11 @@
   // (UTC−3, no daylight saving), so the run starts on Friday 21 February and
   // the grid fails on Wednesday 12 March. calendarOf() reads it.
   const DAY_ZERO_DATE = { year:2025, month:2, day:19 };
+  // How much longer than it was stopped the water network takes to come
+  // back once its wells have power again: ENDEZA's "como mínimo, duplica el
+  // tiempo de parada" (primary; docs/canon/reference/Lima.md, Water), at
+  // least twice, taken as twice (MAINS_UP_SPANS). Retunable.
+  const MAINS_REPRESSURE_FACTOR = 2;
   // The night the grid fails, counted from the failure: Atucha's
   // siren sounds once SIREN_AFTER_FAIL_MIN later, and the power comes back
   // GRID_RECOVERY_AFTER_MIN later for GRID_RECOVERY_MIN, once, then fails for
@@ -1888,8 +1896,9 @@
   //                      p paved, g gravel (ripio), d dirt, r the railway,
   //                      by quarter from Tom's Street View survey (Lima.md,
   //                      "Streets and surfaces"), not the imagery.
-  //                      Only `r` is read today (the map's rail); the rest
-  //                      is laid down ahead of a consumer.
+  //                      `r` draws the map's rail, and `p` is where the
+  //                      water network runs (PAVED_STOPS, tankFillOf());
+  //                      gravel and dirt are read only as not paved.
   //   LIMA_RIVER         the Paraná de las Palmas near the plant: one polyline
   //                      of `u,v` pairs per line, simplified to 25 m. Drawn
   //                      only.
@@ -3896,6 +3905,11 @@ x_sn_9 m_sn_sn_sn sn p
   // never a room inside a building. Built once.
   const ATUCHA_HORIZON_STOPS = new Set(LIMA.stops
     .filter(s=> (s.kind === "c" || s.kind === "m") && s.y >= ATUCHA_HORIZON_MIN_Y).map(s=> s.id));
+  // Every stop a paved link touches. The town's water network runs under
+  // paved streets only (Tom, first-hand), so a building sited on one of
+  // these fills its tank from it (tankFillOf()). Built once.
+  const PAVED_STOPS = new Set();
+  LIMA.links.forEach(l=>{ if(l.surface === "p"){ PAVED_STOPS.add(l.a); PAVED_STOPS.add(l.b); } });
   // A code's street name, or null.
   function streetName(code){ return LIMA.codes[code] || null; }
   // A stop's address and `room` (ROOM SCHEMA): a corner is at its streets,
@@ -4096,11 +4110,17 @@ x_sn_9 m_sn_sn_sn sn p
   //            closed (WINDOW SCHEMA).
   //   water    optional, { tankL }: the building has its own water tank of
   //            that many litres, and its sinks run while it holds water
-  //            (waterRunningIn()). It is refilled by the building's pump (a
-  //            load whose appliance has `flowLph`) while that pump has power
-  //            and its float calls, or, where the building is unwired, while
-  //            the mains run (settleTanks(), mainsWaterUp()). Absent: its
-  //            sinks run on the mains alone.
+  //            (waterRunningIn()). Its site decides how it refills
+  //            (tankFillOf(), BUILDING_INFO's `tankFill`): "network" on a
+  //            paved street, from the water network while the mains run
+  //            (mainsWaterUp()), at NETWORK_FILL_LPH through a float valve,
+  //            with no pump; "well" on a gravel or dirt one, from its own
+  //            well by its own pump (a load whose appliance has `flowLph`)
+  //            while that pump has power and its float calls, whether or not
+  //            the mains run, or, where the building is unwired, at
+  //            HOUSE_PUMP_FLOW_LPH while the grid is up (tankRefillLph()).
+  //            A network building's wiring has its pumps taken out at build
+  //            (withoutPumps()). Absent: its sinks run on the mains alone.
   //   wiring   optional, { board:{ name, role, rating, curve?, direct?,
   //            feeders? }, panels:[{ id, name, role, template | layout }] }:
   //            the building's own network, in WIRING's shape (POWER SCHEMA)
@@ -4169,18 +4189,33 @@ x_sn_9 m_sn_sn_sn sn p
     { id:"underbasin", name:"Under-basin cupboard", capacityKg:10, spawnPools:["hygiene","cleaning_supplies"] }
   ];
   const SHED_BOX = { id:"shedbox", name:"Shed box", capacityKg:15, spawnPools:["fuel_fire","tools_general"] };
-  // A home's own water tank, in litres. Many Lima homes have a tank
-  // and a pump of their own (Tom, first-hand); the figure is a guideline, at
-  // least 800 L per dwelling and about 1,000 L for a family of four at 250 L
-  // per person per day (Río Negro's water authority, secondary). The
-  // Barrio Atucha's own tanks are unconfirmed. Retunable.
+  // A home's own water tank, in litres. Many Lima homes have a tank of
+  // their own, and one off the water network, on an unpaved street, a well
+  // and a pump too (Tom, first-hand); the figure is a guideline, at least
+  // 800 L per dwelling and about 1,000 L for a family of four at 250 L per
+  // person per day (Río Negro's water authority, secondary). The Barrio
+  // Atucha's own tanks are unconfirmed. Retunable.
   const HOUSE_TANK_L = 1000;
   // A house pump's flow, in L/h: a 0.5 hp peripheral pump for a roof
   // tank moves 1,800–2,400 L/h (Czerweny's QB60-L1, 40 L/min, and Rowa's
   // RW-PR60; secondary). 2,400 is Tom's pick, which refills a 1,000 L tank
   // from empty in 25 minutes. The house_pump appliance's `flowLph`, and the
-  // rate an unwired building's tank refills at (tankRefillLph()). Retunable.
+  // rate an unwired well building's tank refills at while the grid is up
+  // (tankRefillLph()). Retunable.
   const HOUSE_PUMP_FLOW_LPH = 2400;
+  // How fast the water network's pressure fills a tank through its float
+  // valve, in L/h: Tom's 600, which fills a 1,000 L tank from empty in 100
+  // minutes (tankRefillLph()). Unconfirmed, a judgment call that #412's
+  // research will replace. Retunable.
+  const NETWORK_FILL_LPH = 600;
+  // How a building of `type` sited at stop `site` fills its tank: "network"
+  // when any link at its site is paved, one whose links differ included
+  // (Tom), "well" otherwise, and null when it has no tank (BUILDING TYPES'
+  // `water`). Derived at world build, never saved.
+  function tankFillOf(type, site){
+    if(!type || !type.water) return null;
+    return PAVED_STOPS.has(site) ? "network" : "well";
+  }
   // The tank's float switch starts its pump when the tank holds less than
   // this fraction of it, and the pump then fills it to full (powerSnapshot(),
   // tankFloat()). Tom's figure, not researched. Retunable.
@@ -4208,7 +4243,7 @@ x_sn_9 m_sn_sn_sn sn p
           desc:"A narrow kitchen, open to the living room. The cooker runs off a gas bottle in the cupboard beneath it.",
           containers:KITCHEN_CONTAINERS },
         { role:"laundry", room:"Laundry", shelter:"full", sink:true, cannotHaveFire:true, floorCap:40,
-          desc:"A washing machine, a deep sink, and the pump that fills the house's water tank. The back door opens onto the garden.",
+          desc:"A washing machine and a deep sink. The back door opens onto the garden.",
           containers:[ { id:"shelf", name:"Shelf", capacityKg:15, spawnPools:["cleaning_supplies","tools_general"] } ] },
         { role:"hallway", room:"Hallway", shelter:"full", cannotHaveFire:true, floorCap:50,
           desc:"A short hallway. A calendar still hangs on the wall by the bathroom door.",
@@ -4649,8 +4684,26 @@ x_sn_9 m_sn_sn_sn sn p
       if(!rooms[roomId(w.role)]){ problems.push(`building ${inst.id}: window in role "${w.role}", which has no room`); return; }
       windows[`${inst.id}-${w.role}-window`] = { state:"closed", rooms:[roomId(w.role)], breakTag:w.breakTag, label:w.label };
     });
-    const wiring = mergeWiring(type.wiring, ov.wiring, inst.id, problems);
+    const merged = mergeWiring(type.wiring, ov.wiring, inst.id, problems);
+    const wiring = tankFillOf(type, inst.site) === "network" ? withoutPumps(merged) : merged;
     return { rooms, doors, windows, streetExit, wiring:buildWiring(wiring, roomId, specs.map(r=> r.role)), problems };
+  }
+  // A network building's wiring (tankFillOf()), which has no pump: each
+  // panel's layout, its template's once the instance's overrides are laid,
+  // less every fixture whose appliance has `flowLph`, as an inline `layout`.
+  // Its circuits and its other fixtures, their keys and so their load ids,
+  // are the template's. A panel whose template doesn't resolve is left for
+  // expandWiring() to report.
+  function withoutPumps(w){
+    if(!w) return w;
+    const pump = (fx)=> !!APPLIANCES[fx.appliance] && APPLIANCES[fx.appliance].flowLph !== undefined;
+    return Object.assign({}, w, { panels:(w.panels || []).map(p=>{
+      const layout = p.layout || WIRING_TEMPLATES[p.template];
+      if(!layout) return p;
+      const out = Object.assign({}, p, { layout:Object.assign({}, layout, { fixtures:(layout.fixtures || []).filter(fx=> !pump(fx)) }) });
+      delete out.template;
+      return out;
+    }) });
   }
   // A type's `wiring` with an instance's `overrides.wiring` laid over it:
   // each panel it names by id takes its fields over the type's. A panel id
@@ -4968,8 +5021,10 @@ x_sn_9 m_sn_sn_sn sn p
   //                   heater nobody switches off is: 0.95 is a judgment call.
   //                   The 120-minute cycle is a judgment call too.
   //   house_pump      370 W: a 0.5 hp peripheral pump, Rowa's RW-PR60, 0.37
-  //                   kW (secondary). It fills its building's tank at
-  //                   HOUSE_PUMP_FLOW_LPH, on an automatic float switch (Tom,
+  //                   kW (secondary). It fills a well building's tank
+  //                   from its well (tankFillOf(); a building on the water
+  //                   network has none) at HOUSE_PUMP_FLOW_LPH, on an
+  //                   automatic float switch (Tom,
   //                   first-hand): it starts when the tank drops below
   //                   TANK_FLOAT_START and fills it to full, drawing only
   //                   while it fills. Starting 3,300 W: 2.7 A × about 5.5 ×
@@ -5144,7 +5199,9 @@ x_sn_9 m_sn_sn_sn sn p
   // TYPES' `row_house`), as Tom describes his own (first-hand, 2026-09-28):
   // a diferencial over every circuit, as the head device, and three
   // circuits: lights, sockets, and the water heater with the pump, both in
-  // the laundry. Every terminal circuit sits behind a ≤ 30 mA RCD, which may
+  // the laundry. A row house on the water network, as both of the barrio's
+  // are, has no pump: the build takes it out (withoutPumps()), and WATER
+  // holds the heater alone. Every terminal circuit sits behind a ≤ 30 mA RCD, which may
   // head the board (AEA 90364-7-770); AEA's worked example heads it with a
   // 30 mA, 2 × 40 A one, whose 40 A this takes. The 30 mA isn't shown.
   // LIGHTS' 10 A is AEA's example's lighting figure (at most 16 A). SOCKETS
@@ -5157,8 +5214,10 @@ x_sn_9 m_sn_sn_sn sn p
   // the row house's laid over the casa's rooms. Its figures are the row
   // house's: the 40 A diferencial, the lights' 10 A and the sockets' 20 A,
   // and the appliances, the TV in the living room among them. The water heater is in the kitchen and the pump on the
-  // patio: a Lima home heats its water with an electric tank heater, and an
-  // electric pump lifts its water to the roof tank (Tom, first-hand). The
+  // patio: a Lima home heats its water with an electric tank heater, and,
+  // off the water network, an electric pump lifts its own well's water to
+  // the roof tank (Tom, first-hand). A casa on the network has no pump: the
+  // build takes it out (withoutPumps()), whichever panel it has. The
   // meter box is at the street, since the meter is on the property line,
   // reachable from the street at any hour, with the main board within 1 m of
   // it and a bipolar main of at most 32 A on a Tarifa 1 supply (OCEBA,
@@ -5386,13 +5445,15 @@ x_sn_9 m_sn_sn_sn sn p
   // actually get a marker, and where the label sits relative to the dot.
   const BUILDINGS = Object.assign(Object.fromEntries(landmarkInstances().filter(b=> b.marker)
     .map(b=> [b.id, { name:b.name, anchor:b.id + "_f0" }])), NAMED_SCENERY);
-  // Every building, by id: { name, site, entry, tankL } — its name, its site
-  // stop, the room its street exit leads into, and its water tank in litres
-  // (BUILDING TYPES' `water`), 0 for none. Read by tankOf() and Walk to….
+  // Every building, by id: { name, site, entry, tankL, tankFill } — its
+  // name, its site stop, the room its street exit leads into, its water tank
+  // in litres (BUILDING TYPES' `water`), 0 for none, and how that tank fills
+  // (tankFillOf(): "network" or "well"), null for none. Derived, never
+  // saved. Read by tankOf(), tankRefillLph(), validateWiring() and Walk to….
   const BUILDING_INFO = Object.fromEntries(buildingInstances().map(b=>{
     const type = b.layout || BUILDING_TYPES[b.type] || {};
     return [b.id, { name: b.name || type.label, site: b.site, entry: `${b.id}_${type.entry}`,
-      tankL: type.water ? type.water.tankL : 0 }];
+      tankL: type.water ? type.water.tankL : 0, tankFill: tankFillOf(type, b.site) }];
   }));
   // The runtime doors and windows (DOOR SCHEMA, WINDOW SCHEMA). Built here,
   // below WIRING, because a unit's come from its wiring template.
@@ -6527,8 +6588,10 @@ x_sn_9 m_sn_sn_sn sn p
   // empty alike. One unit fills, as far as it has room; the water is clean,
   // and mixes with what is there (mixKinds()), so tainted water already in it
   // taints it. Over FLUID_INSTANT_MAX_ML it takes time at TAP_FLOW_L_PER_MIN
-  // (transferMinutes()). After the water fails the sink gives nothing, and
-  // whatever was left in the pipes is #300's.
+  // (transferMinutes()). After the water fails the sink gives nothing: a
+  // tank's taps run while it holds water, and a sink without one on the
+  // mains, while they run (waterRunningIn()). What is left in the pipes is
+  // not modelled.
   // Off a tank, at any time, a fill draws the litres it adds and takes only
   // what the tank has left, to the millilitre: a holder fills part-way on the
   // last of it. A sink without a tank draws on the mains, and draws nothing
@@ -7413,19 +7476,34 @@ x_sn_9 m_sn_sn_sn sn p
   function atuchaHorizonVisible(roomId, m = minutesSinceCollapse()){
     return ATUCHA_HORIZON_STOPS.has(roomId) && atuchaPhase(m) === "diesels" && isDark(m);
   }
+  // The water network's up-time, the one definition mainsWaterUp() reads,
+  // derived once from the grid's: its wells run on the grid, and after an
+  // outage the network takes MAINS_REPRESSURE_FACTOR times the outage to
+  // repressurise. So each grid span [a, b) is a mains span [a +
+  // MAINS_REPRESSURE_FACTOR × the outage before it, b), dropped when empty;
+  // the first, from −Infinity, has no outage before it. Half-open, sorted
+  // and non-overlapping, as the grid's are. With today's constants the
+  // mains run until the grid fails and never again: the false recovery is
+  // too short to bring the water back.
+  const MAINS_UP_SPANS = (function(){
+    const out = [];
+    let lastEnd = null;
+    GRID_UP_SPANS.forEach(([a, b])=>{
+      const from = lastEnd === null ? a : a + MAINS_REPRESSURE_FACTOR * (a - lastEnd);
+      if(from < b) out.push([from, b]);
+      lastEnd = b;
+    });
+    return out;
+  })();
   // mainsWaterUp() is whether the town's water network runs: the mains a
-  // sink without a tank draws on, and what a house pump draws from to fill
-  // its tank (settleTanks()). The town's own pumps run on the grid, so today
-  // it is gridUp(). It is its own predicate so that #300's decision, whether
-  // the network outlives the grid, has one place to land before generators
-  // (#245) can power a house pump without the grid.
-  function mainsWaterUp(m = minutesSinceCollapse()){ return gridUp(m); }
+  // sink without a tank draws on, and what fills a tank on a paved street
+  // (tankRefillLph()).
+  function mainsWaterUp(m = minutesSinceCollapse()){ return MAINS_UP_SPANS.some(([a, b])=> m >= a && m < b); }
   // Water: a room in a building with its own tank (BUILDING_INFO's tankL)
   // runs while the tank holds water, whatever the grid; a room without one
-  // runs on the mains. The tank is refilled by its pump while that pump has
-  // power, and an unwired building's while the mains run (settleTanks()).
-  // tankOf() is the room's building's tank in litres, or 0 for none;
-  // tankLeft() what it holds now.
+  // runs on the mains. How the tank refills is its building's `tankFill`
+  // (tankRefillLph()). tankOf() is the room's building's tank in litres, or
+  // 0 for none; tankLeft() what it holds now.
   function tankOf(roomId){
     const room = world[roomId];
     return (room && room.buildingId && BUILDING_INFO[room.buildingId] && BUILDING_INFO[room.buildingId].tankL) || 0;
@@ -7450,17 +7528,24 @@ x_sn_9 m_sn_sn_sn sn p
   function refilledDrawn(drawn, flowLph, dt){
     return Math.max(0, Math.round((drawn - flowLph / 60 * dt) * 1000) / 1000);
   }
-  // What a tank refills at, in L/h, at minute `m`, or 0: only while the
-  // mains run, a tank whose pump is drawing (powerNow) at the pump's flow,
-  // and a tank in a building with no pump load (TANK_PUMPS; today shop_home),
-  // the unwired fallback with no float and no latch, at HOUSE_PUMP_FLOW_LPH
-  // whenever it is below full, until #307 wires that type (#258). It never
-  // changes between two settles: grid events and resolves are settle points.
+  // What a tank refills at, in L/h, at minute `m`, or 0, by its building's
+  // `tankFill` (BUILDING_INFO):
+  //   network  NETWORK_FILL_LPH whenever it is below full while the mains
+  //            run: a float valve, with no TANK_FLOAT_START, no latch and
+  //            no power.
+  //   well     its pump's flow while the pump is drawing (powerNow), whether
+  //            or not the mains run; or, in a building with no pump load
+  //            (TANK_PUMPS; none today), the unwired fallback, standing in
+  //            for a pump with power: HOUSE_PUMP_FLOW_LPH whenever it is
+  //            below full while the grid is up, until #307 wires it (#258).
+  // It never changes between two settles: the grid's and the mains' changes
+  // and every resolve are settle points.
   function tankRefillLph(b, m){
     const info = BUILDING_INFO[b];
-    if(!info || !(info.tankL > 0) || !mainsWaterUp(m)) return 0;
+    if(!info || !(info.tankL > 0)) return 0;
+    if(info.tankFill === "network") return mainsWaterUp(m) ? NETWORK_FILL_LPH : 0;
     const pump = TANK_PUMPS[b];
-    if(pump === undefined) return HOUSE_PUMP_FLOW_LPH;
+    if(pump === undefined) return gridUp(m) ? HOUSE_PUMP_FLOW_LPH : 0;
     return powerNow && powerRead(powerNow, "drawing", pump) ? APPLIANCES[POWER_NET.loads[pump].appliance].flowLph : 0;
   }
   // Refilling, settled (settleWorld()): every tank below full refilled for
@@ -8440,6 +8525,7 @@ x_sn_9 m_sn_sn_sn sn p
   //   lastClock  the minute since the collapse CLOCK_EVENTS have been fired
   //              up to.
   //   lastGrid   the same for the grid's changes (GRID_CHANGES).
+  //   lastMains  the same for the mains' changes (MAINS_CHANGES).
   //   batteryDeaths  the minutes devices switched on run out at.
   //   nextDue    the least of every scheduled system's next event: planned
   //              at the start of every advance, since an action may have
@@ -8448,10 +8534,14 @@ x_sn_9 m_sn_sn_sn sn p
   // stoves whose timer runs (timerStoves), each a set walked in world order
   // (roomOrder()). Every writer of heatActive or timerMinutes keeps them
   // (scheduleHeat(), scheduleTimer()).
-  let settledAt = 0, lastClock = 0, lastGrid = 0, nextDue = Infinity;
+  let settledAt = 0, lastClock = 0, lastGrid = 0, lastMains = 0, nextDue = Infinity;
   // Every minute since the collapse at which the grid fails or returns: the
   // bounds of GRID_UP_SPANS, each a scheduled event.
   const GRID_CHANGES = GRID_UP_SPANS.flat().filter(Number.isFinite).sort((a, b)=> a - b);
+  // The same for the mains (MAINS_UP_SPANS). At one the world settles, so
+  // the tanks the network fills settle to it; nothing resolves, since mains
+  // water powers nothing. One on a grid change's minute is the same settle.
+  const MAINS_CHANGES = MAINS_UP_SPANS.flat().filter(Number.isFinite).sort((a, b)=> a - b);
   const heatRooms = new Set();
   const timerStoves = new Map();
   // A room's place in world order (roomIds()), from an index built once per
@@ -8495,12 +8585,12 @@ x_sn_9 m_sn_sn_sn sn p
       if(typeof it.durability.asOf !== "number") it.durability.asOf = minutesSinceCollapse();
       scheduleBatteryDeath(it);
     }));
-    settledAt = lastClock = lastGrid = minutesSinceCollapse();
+    settledAt = lastClock = lastGrid = lastMains = minutesSinceCollapse();
     settleReachable();
     planNextDue();
   }
-  // The next due minute, from what is lit or running now: a grid change not
-  // yet made, a tank coming full (tankFullDue()), a battery running out, an
+  // The next due minute, from what is lit or running now: a grid change or
+  // a mains change not yet made, a tank coming full (tankFullDue()), a battery running out, an
   // appliance's timed stop, a running kettle's cut-out (kettleCutOutDue()), a
   // timer's end, a lit room's next event (heatRoomDue()), and every clock
   // event not yet fired.
@@ -8510,6 +8600,7 @@ x_sn_9 m_sn_sn_sn sn p
     Object.values(state.power.stops).forEach(e=>{ if(e.at !== undefined) due = Math.min(due, e.at); });
     liveKettles().forEach(k=>{ due = Math.min(due, settledAt + kettleCutOutDue(k)); });
     GRID_CHANGES.forEach(g=>{ if(g > lastGrid) due = Math.min(due, g); });
+    MAINS_CHANGES.forEach(g=>{ if(g > lastMains) due = Math.min(due, g); });
     timerStoves.forEach(({ container })=>{ due = Math.min(due, settledAt + container.timerMinutes); });
     heatRooms.forEach(id=>{ due = Math.min(due, settledAt + heatRoomDue(world[id])); });
     CLOCK_EVENTS.forEach(ev=>{ if(ev.at > lastClock) due = Math.min(due, ev.at); });
@@ -8519,7 +8610,8 @@ x_sn_9 m_sn_sn_sn sn p
   // settledAt, and does what is due there, in this order: the tanks
   // (settleTanks()), then the running kettles' heating, at the power they
   // had over the span (settleRunningKettles()), then a grid change at `m`
-  // (resolveGrid()), then a tank come full resolves its building so its pump
+  // (resolveGrid()), and a mains change at `m`, which only marks it made
+  // (the tanks have just settled to it), then a tank come full resolves its building so its pump
   // stops, then the kettles at the boil cut out (settleKettleCutOuts()), then
   // the appliances whose timed stop is due (settleApplianceStops()), then the
   // batteries out by `m` (settleBatteryDeaths()), then every running timer
@@ -8535,6 +8627,7 @@ x_sn_9 m_sn_sn_sn sn p
     settleRunningKettles(span);
     GRID_CHANGES.forEach(g=>{ if(lastGrid < g && g <= m) resolveGrid(g); });
     lastGrid = Math.max(lastGrid, m);
+    lastMains = Math.max(lastMains, m);
     filled.forEach(b=>{ if(TANK_PUMPS[b] !== undefined) resolveBuilding(b); });
     settleKettleCutOuts(m);
     settleApplianceStops(m);
@@ -8551,7 +8644,7 @@ x_sn_9 m_sn_sn_sn sn p
   // Every event due by now, each at its own minute and in time order: the
   // world settled to it, which does what is due there and logs it, then the
   // clock events up to it. At one minute the order is the kettles' heating,
-  // grid changes, tanks coming full, kettle cut-outs, appliance stops,
+  // grid and mains changes, tanks coming full, kettle cut-outs, appliance stops,
   // battery deaths, timers, cooking, fires, clock events. The cap guards
   // against an event that never clears,
   // which would otherwise hang the step: a bug, reported and cut short.
@@ -8812,9 +8905,11 @@ x_sn_9 m_sn_sn_sn sn p
     return out;
   }
   // The game's tank pumps, found once: { buildingId: loadId } for every
-  // building with a tank and a pump. A building with two keeps its first,
-  // which validateWiring() reports. A tank with no pump here is unwired, and
-  // refills by the fallback (tankRefillLph()).
+  // building with a tank and a pump, which only a well building has: a
+  // network one's are taken out at build (withoutPumps()). A building with
+  // two keeps its first, which validateWiring() reports. A well building
+  // with no pump here is unwired, and refills by the fallback
+  // (tankRefillLph()).
   const TANK_PUMPS = (function(){
     const out = {};
     const found = tankPumpsOf(POWER_NET, APPLIANCES, world);
@@ -10626,18 +10721,22 @@ x_sn_9 m_sn_sn_sn sn p
   // and a known rules value, dropping anything else, the `heat` an older
   // save carries included. A stop is kept only for a load with a timed stop
   // rule, as `{ at }` or `{ left }`; a save from before stops (0.12) has
-  // none, so nothing is running. Idempotent.
+  // none, so nothing is running. A switch is kept only for a load the
+  // network still has: a paved home's pump, which the water network took
+  // out (withoutPumps()), loses its entry, as does anything else stale.
+  // Breakers are kept as they are: no circuit is removed. Idempotent.
   function backfillPowerState(){
     const obj = (v)=> v && typeof v === "object" && !Array.isArray(v) ? v : {};
     const num = (v)=> typeof v === "number" && Number.isFinite(v);
-    const p = obj(state.power), stops = {};
+    const p = obj(state.power), stops = {}, switches = {};
+    Object.keys(obj(p.switches)).forEach(id=>{ if(Object.prototype.hasOwnProperty.call(POWER_NET.loads, id)) switches[id] = p.switches[id]; });
     Object.keys(obj(p.stops)).forEach(id=>{
       const e = obj(p.stops[id]), l = POWER_NET.loads[id], rule = l && APPLIANCES[l.appliance] && APPLIANCES[l.appliance].stops;
       if(!rule || !(rule.after || rule.dial)) return;
       if(num(e.at)) stops[id] = { at:e.at };
       else if(num(e.left)) stops[id] = { left:e.left };
     });
-    state.power = { switches:obj(p.switches), breakers:obj(p.breakers), stops };
+    state.power = { switches, breakers:obj(p.breakers), stops };
     if(!ELECTRICAL_RULES.includes(state.electricalRules)) state.electricalRules = "detailed";
   }
   // migrateCookingRelease(): brings a 0.7 save into the cooking release,
@@ -10983,9 +11082,11 @@ x_sn_9 m_sn_sn_sn sn p
   //     is checked. A cut-off switch has neither rating nor curve, so
   //     nothing is. A fuse's rating is over 0 and at most EDISON_FUSE_MAX_A,
   //     not an IEC breaker rating;
-  //   every tank has one pump (tankPumpsOf()): a wired building with a tank
-  //     (BUILDING_INFO's tankL) and no `flowLph` load, or with two, and a
-  //     `flowLph` load in a building with no tank, which never draws.
+  //   every tank has the pumps its fill gives it (tankPumpsOf(),
+  //     BUILDING_INFO's tankL and tankFill): a wired network building with
+  //     a tank and any `flowLph` load, a wired well building with a tank
+  //     and no `flowLph` load, or two, and a `flowLph` load in a building
+  //     with no tank, which never draws.
   // It also lists every room with shelter "full" that no panel's rooms
   // include. That list is a warning while buildings are being wired (#250),
   // and becomes an error in #258. Returns { problems, unwired }. Call it as
@@ -11064,7 +11165,9 @@ x_sn_9 m_sn_sn_sn sn p
     Object.keys(wiring || {}).forEach(b=>{
       if(!(tankOfBuilding(b) > 0)) return;
       const found = pumps[b] || [];
-      if(!found.length) problems.push(`building ${b}: a tank, but no pump load (flowLph) in its wiring`);
+      if(BUILDING_INFO[b].tankFill === "network"){
+        if(found.length) problems.push(`building ${b}: fills from the water network, but has pump loads (${found.join(", ")})`);
+      } else if(!found.length) problems.push(`building ${b}: a well tank, but no pump load (flowLph) in its wiring`);
       else if(found.length > 1) problems.push(`building ${b}: ${found.length} pump loads for one tank (${found.join(", ")})`);
     });
     const wired = new Set();
@@ -11419,11 +11522,10 @@ x_sn_9 m_sn_sn_sn sn p
   //                     (`flowLph`) fills, its size and the litres drawn
   //                     from it at the start (default 0, full). Its float is
   //                     read each step (tankFloat()), and it refills at the
-  //                     pump's flow while the pump draws and the mains run
-  //                     (refilledDrawn()), as the game's does. Default none:
-  //                     no float calls, so no pump draws.
-  //            mains    true / false, or a function of the minute (default
-  //                     mainsWaterUp())
+  //                     pump's flow while the pump draws (refilledDrawn()),
+  //                     as a well tank's does in the game. Default none: no
+  //                     float calls, so no pump draws. A tank the water
+  //                     network fills draws no power, and isn't modelled.
   //            plugs    { loadId: n }: how many items run through each plug
   //                     load, every step (default none)
   // Returns { problems, steps, power, tanks }: the expansion's problems, then
@@ -11443,7 +11545,6 @@ x_sn_9 m_sn_sn_sn sn p
     const seed = options.seed === undefined ? state.seed : options.seed >>> 0;
     const start = options.start || 0;
     const grid = typeof options.grid === "boolean" ? ()=> options.grid : (options.grid || ((m)=> gridUp(m)));
-    const mains = typeof options.mains === "boolean" ? ()=> options.mains : (options.mains || ((m)=> mainsWaterUp(m)));
     const given = options.power || {};
     let power = JSON.parse(JSON.stringify({ switches:given.switches || {}, breakers:given.breakers || {} }));
     const tankDefs = options.tanks || {};
@@ -11474,7 +11575,7 @@ x_sn_9 m_sn_sn_sn sn p
       prev = r.drawing;
       Object.keys(tankDefs).forEach(id=>{
         const a = net.loads[id] && appliances[net.loads[id].appliance];
-        if(r.drawing[id] && mains(m) && a) drawn[id] = refilledDrawn(drawn[id], a.flowLph, 1);
+        if(r.drawing[id] && a) drawn[id] = refilledDrawn(drawn[id], a.flowLph, 1);
       });
       const held = {};
       Object.keys(tankDefs).forEach(id=>{ held[id] = tankDefs[id].tankL - drawn[id]; });
@@ -11627,11 +11728,13 @@ x_sn_9 m_sn_sn_sn sn p
   // the home's freezer, which step 2 needs. The run starts
   // REPLAY_START_BEFORE_FAIL_MIN before the grid fails (doRestart()), so the
   // failure falls in step 6 without a day of play before it; step 6 then
-  // advances to REPLAY_DRAW_BEFORE_FAIL_MIN before it. The tank is drawn
-  // to REPLAY_TANK_MARGIN_L above its float's start level in code and then
-  // below it by a real fill, and REPLAY_PAN_FILLS more fills leave the pump
-  // refilling as the grid goes, and still called for when it comes back.
-  // Each fill is a saucepan's litre, so it stays instant (FLUID_INSTANT_MAX_ML).
+  // advances to REPLAY_DRAW_BEFORE_FAIL_MIN before it. The home's tank fills
+  // from the water network (tankFillOf()): a bottle's fill and
+  // REPLAY_PAN_FILLS more draw it down, so the network is refilling it when
+  // the grid and the mains fail, and it stays drawn down through the false
+  // recovery, which brings back the lights and not the water. Each fill is a
+  // saucepan's litre, so it stays instant (FLUID_INSTANT_MAX_ML). No step
+  // drives a well's pump.
   const REPLAY_SEED = 372;
   const REPLAY_START_BEFORE_FAIL_MIN = 6 * 60;
   const REPLAY_WALK = [HOME_STOP, "x_c117_c90b", "x_c117_c90", "x_c117_c90b", HOME_STOP];
@@ -11642,7 +11745,6 @@ x_sn_9 m_sn_sn_sn sn p
   const REPLAY_RADIO_ELSEWHERE = "home_bedroom";
   const REPLAY_RADIO_WAIT_MIN = 30;
   const REPLAY_DRAW_BEFORE_FAIL_MIN = 8;
-  const REPLAY_TANK_MARGIN_L = 0.25;
   const REPLAY_PAN_FILLS = 400;
   const REPLAY_SLEEP_ENERGY = 25;
   const REPLAY_AFTER_SLEEP_MIN = 180;
@@ -11723,13 +11825,12 @@ x_sn_9 m_sn_sn_sn sn p
       radio(world[REPLAY_RADIO_ELSEWHERE].floor, REPLAY_RADIO_MIN.elsewhere);
       advanceTime(REPLAY_RADIO_WAIT_MIN);
     } },
-    { label:"The tank drawn, the grid failing during a sleep, the siren, the recovery", run(){
+    { label:"The tank drawn, the grid and the mains failing during a sleep, the siren, the recovery", run(){
       replayMove("home_living");
       replayMove("home_kitchen");
       const wait = replayFailClock() - REPLAY_DRAW_BEFORE_FAIL_MIN - state.totalMinutes;
       if(!(wait > 0)) throw new Error("replay: the grid has failed before step 6");
       advanceTime(wait);
-      state.tankDrawn.home = BUILDING_INFO.home.tankL * (1 - TANK_FLOAT_START) - REPLAY_TANK_MARGIN_L;
       invTab = "inventory";
       const items = state.inventory.items;
       const bottle = replayPlace(items, { id:"plastic_bottle", qty:1 });
