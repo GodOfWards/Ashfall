@@ -581,6 +581,11 @@
   const START_DAYS_AFTER_COLLAPSE = 2;
   const POWER_FAILS_DAY = 21;
   const POWER_FAILS_HOUR = 22;
+  // The collapse day, day zero, in the real calendar (Tom; canon): the
+  // collapse clock's minute 0 is DAY_START_MIN on this date, local time
+  // (UTC−3, no daylight saving), so the run starts on Friday 21 February and
+  // the grid fails on Wednesday 12 March. calendarOf() reads it.
+  const DAY_ZERO_DATE = { year:2025, month:2, day:19 };
   // The night the grid fails, counted from the failure: Atucha's
   // siren sounds once SIREN_AFTER_FAIL_MIN later, and the power comes back
   // GRID_RECOVERY_AFTER_MIN later for GRID_RECOVERY_MIN, once, then fails for
@@ -7199,16 +7204,113 @@ x_sn_9 m_sn_sn_sn sn p
   // repeating the arithmetic.
   function absoluteMinute(){ return Math.round(DAY_START_MIN + state.totalMinutes); }
   function dayNumber(){ return 1 + Math.floor(absoluteMinute()/MINUTES_PER_DAY); }
-  function minutesIntoDay(){ const a = absoluteMinute(); return ((a % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY; }
-  // The single place in the game that says what part of the day a minute
-  // falls in. Invariants: entries are sorted ascending by `from`, the first
-  // is `from: 0`, and each band runs until the next one's `from`.
+  // The time of day now is the calendar's, so the clock and the calendar
+  // can't disagree.
+  function minutesIntoDay(){ return calendarOf(Math.round(minutesSinceCollapse())).minute; }
+  // THE CALENDAR. Minute `m` since the collapse as a real date and a time of
+  // day, local time: DAY_ZERO_DATE plus the whole days in m + DAY_START_MIN,
+  // counted in the real calendar, leap days included, by UTC arithmetic so
+  // the machine's own time zone never enters; and the minutes into that day.
+  // Pure: { year, month, day, minute }.
+  function calendarOf(m){
+    const local = m + DAY_START_MIN;
+    const days = Math.floor(local / MINUTES_PER_DAY);
+    const date = new Date(Date.UTC(DAY_ZERO_DATE.year, DAY_ZERO_DATE.month - 1, DAY_ZERO_DATE.day + days));
+    return { year:date.getUTCFullYear(), month:date.getUTCMonth() + 1, day:date.getUTCDate(),
+      minute: local - days * MINUTES_PER_DAY };
+  }
+  // CIVIL DAWN AND DUSK at Lima (34.0447 S, 59.1961 W, UTC−3), by calendar
+  // date: the USNO's, docs/canon/reference/Daylight.md (confirmed). January's
+  // rows are 2026's and the rest 2025's; any year differs by under a minute
+  // on the same date, so a run longer than a year reads the table by date,
+  // never by a count of 365 days. One `MM-DD dawn dusk` row a line, read
+  // once into DAYLIGHT, in minutes into the day.
+  const DAYLIGHT_TABLE = `
+01-01 05:20 20:41
+01-08 05:26 20:41
+01-15 05:33 20:39
+01-22 05:40 20:36
+02-01 05:51 20:29
+02-08 05:59 20:23
+02-15 06:06 20:15
+02-22 06:13 20:07
+03-01 06:19 19:58
+03-08 06:25 19:49
+03-15 06:31 19:39
+03-22 06:37 19:30
+04-01 06:44 19:16
+04-08 06:49 19:07
+04-15 06:55 18:58
+04-22 07:00 18:50
+05-01 07:06 18:41
+05-08 07:11 18:35
+05-15 07:16 18:30
+05-22 07:20 18:26
+06-01 07:26 18:23
+06-08 07:30 18:22
+06-15 07:33 18:22
+06-22 07:35 18:23
+07-01 07:35 18:26
+07-08 07:35 18:29
+07-15 07:33 18:33
+07-22 07:29 18:37
+08-01 07:23 18:44
+08-08 07:17 18:48
+08-15 07:10 18:53
+08-22 07:02 18:58
+09-01 06:50 19:04
+09-08 06:40 19:09
+09-15 06:31 19:14
+09-22 06:21 19:18
+10-01 06:08 19:25
+10-08 05:59 19:30
+10-15 05:49 19:36
+10-22 05:40 19:43
+11-01 05:29 19:52
+11-08 05:22 19:59
+11-15 05:17 20:06
+11-22 05:13 20:14
+12-01 05:10 20:22
+12-08 05:09 20:29
+12-15 05:11 20:34
+12-22 05:13 20:38
+`;
+  const DAYLIGHT = DAYLIGHT_TABLE.trim().split("\n").map(l=>{
+    const [md, dawn, dusk] = l.trim().split(/\s+/);
+    const [month, day] = md.split("-").map(Number);
+    const mins = (hm)=>{ const [h, mm] = hm.split(":").map(Number); return h * 60 + mm; };
+    return { month, day, dawn:mins(dawn), dusk:mins(dusk) };
+  });
+  // Civil dawn and dusk on a calendar date (calendarOf()), in minutes into
+  // the day: the table's row on or before it and the next, 12-22's next
+  // being the next year's 01-01, interpolated linearly by the real days
+  // between the two in that year, so 29 February needs no case of its own.
+  function daylightOn(cal){
+    const at = (year, row)=> Date.UTC(year, row.month - 1, row.day);
+    const t = Date.UTC(cal.year, cal.month - 1, cal.day);
+    let i = DAYLIGHT.length - 1;
+    while(at(cal.year, DAYLIGHT[i]) > t) i--;
+    const a = DAYLIGHT[i], b = DAYLIGHT[i + 1] || DAYLIGHT[0];
+    const from = at(cal.year, a), to = at(b === DAYLIGHT[0] ? cal.year + 1 : cal.year, b);
+    const f = (t - from) / (to - from);
+    return { dawn: a.dawn + f * (b.dawn - a.dawn), dusk: a.dusk + f * (b.dusk - a.dusk) };
+  }
+  // Whether minute `m` since the collapse is dark: before its date's civil
+  // dawn, or at or after its civil dusk. The game's one darkness rule,
+  // worked out when read: pure, render-safe and never stored. Day and night
+  // (#58) builds on it.
+  function isDark(m = minutesSinceCollapse()){
+    const cal = calendarOf(m), d = daylightOn(cal);
+    return cal.minute < d.dawn || cal.minute >= d.dusk;
+  }
+  // The vague clock's words: what part of the day a minute falls in, as the
+  // player without a watch puts it (getVagueClockText()), and nothing more.
+  // Darkness is never read from here: it is isDark()'s, from the daylight
+  // table. Invariants: entries are sorted ascending by `from`, the first is
+  // `from: 0`, and each band runs until the next one's `from`.
   //
   // The boundaries are a judgment call with nothing behind them yet and are
-  // retunable. They are set to be plausible as *light* boundaries, because a
-  // later light-and-darkness layer is meant to read this table rather than
-  // pick its own: two opinions about when evening starts is exactly the
-  // duplicated fact this table exists to prevent.
+  // retunable.
   const TIME_OF_DAY_BANDS = [
     { from: 0,     label:"late night" },
     { from: 5*60,  label:"dawn" },
