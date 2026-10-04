@@ -936,8 +936,81 @@ Argentine retail listings: **secondary** unless marked otherwise.
   older and higher than today's class-A figures above, and fit an older
   house's fridge.
 
+## A shop and its home on one lot (#454, 2026-10-04)
+
+A *local* at the front with the owner's home behind or above, as in the
+game's `shop_home` buildings (#307). Sources, all **primary**:
+
+- **OCEBA, Subanexo A, *Régimen tarifario y normas de aplicación del cuadro
+  tarifario***, Art. 4, *Encuadramientos*. The municipal-concession text
+  ([PDF](https://oceba.gba.gov.ar/nueva_web/PDFS/concesiones/SUBMUNICIPAL/SUBANEXO_A.pdf))
+  and the provincial one
+  ([PDF](https://oceba.gba.gov.ar/nueva_web/PDFS/concesiones/SUBPROVINCIAL/SUBANEXO_A.pdf))
+  word the clauses below identically, so which concession CEZ holds doesn't
+  matter here.
+- **OCEBA's Subanexo E** in CEZ's copy (above), Art. 1 h, *Punto de
+  suministro. Independencia de suministros*.
+- **OCEBA's Reglamento de Acometidas, Tarifa 1** (above), chapter I (single
+  connections) and chapter II (multiple connections).
+- **AEA 90364-7-770 (2017)**, its foreword, in EPAC Córdoba's copy
+  ([PDF](https://www.epac-cordoba.org.ar/wp-content/uploads/2021/05/AEA%2090364-7-770-2017.pdf)).
+- **OCEBA's tariff table for February 2024**, which still splits Tarifa 1
+  into residential (R1, R2…) and general (G1, G2, G3) users
+  ([PDF](https://www.minfra.gba.gob.ar/web/Oceba/2024/Febrero/Cuadro_Tarifario.pdf)).
+  February 2025's table wasn't read.
+
+**One supply or two: the rules allow both.** **Confirmed.**
+
+- **One supply.** The residential tariff, T1R, expressly covers a "Casa -
+  habitación en la que el titular del suministro, en una dependencia de la
+  misma posea un negocio pequeño de venta de artículos y/o servicios al
+  menudeo (kiosco, venta de pan, verduras, comestibles en general, arreglo de
+  calzado, etc.) y cuya potencia instalada sea inferior a la correspondiente
+  al área destinada a vivienda" (Subanexo A §4.1).
+- **Two supplies.** Subanexo E delivers each supply "en un solo punto", but
+  provides for "la independendización de dos o más suministros dentro de un
+  mismo predio". It asks for "destinos distintos" only when their combined
+  demand would be T2 or T3. Acometidas chapter II covers "2 suministros o mas
+  con demandas individuales menores a 10 kw (Tarifa 1)", with the meters "en
+  un solo lugar o recinto" (§4.1).
+- **Which is usual: unconfirmed.** No source says which is more common. A
+  reading of the rules, not a source: one meter fits a small almacén or
+  kiosco run by the family that lives there; a shop that is let, or draws
+  more than the home, fits a supply of its own on T1G. What would confirm
+  it: Tom first-hand, or meter boxes counted on Lima's corner stores in
+  Street View (#288).
+
+**The boards.**
+
+- **Two supplies: each meter has its own main board.** Acometidas ch. II
+  §4.9: a *tablero primario* with a bipolar (tetrapolar if three-phase)
+  breaker switching the neutral with the phases, **at most 32 A**, no more
+  than **1 m** from its meter box. Each meter and *tablero primario* is
+  labelled with the unit it feeds (§4.3). **Confirmed.**
+- **One supply: no rule found.** Neither OCEBA nor AEA 770 says whether the
+  shop is a circuit on the home's board or has a board of its own. AEA 770
+  covers only *viviendas unifamiliares*; its foreword says "Oficinas o
+  Locales" stay under AEA 90364-7-771. That suggests, without requiring it, a
+  *tablero seccional* of the shop's own fed from the shared main, as AEA 770
+  already suggests one per floor (§770.16.3.2). **Unconfirmed**; AEA 771's
+  text on this wasn't read.
+
+**The tariff, and why the main breaker doesn't change.**
+
+- A shop that doesn't meet T1R's clause is **T1G** ("Establecimientos
+  comerciales y/o de carácter fabril y/o industrial", Subanexo A §4.2).
+  **Confirmed.**
+- **The 32 A cap holds either way.** Acometidas T1 covers every supply under
+  10 kW, residential or general, and caps the main breaker at 32 A in both
+  chapters (ch. I §4.5, ch. II §4.9). **Confirmed.** A shop over 10 kW would
+  be T2, outside these rules; that a Lima corner store isn't one is
+  unconfirmed.
+
 ## Not yet researched
 
+- **A shop and its home (#454):** which arrangement is usual in Lima or
+  Zárate, one meter or two; AEA 90364-7-771's text on a *local* sharing a
+  dwelling's installation.
 - **The small appliances' gaps (#332):** a small digital microwave's
   standby draw; whether an Argentine kettle's, toaster's and water heater's
   plates print watts or amps; an electric termotanque's standing loss on its
