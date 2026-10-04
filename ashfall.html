@@ -500,7 +500,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.13.0" };
+  const GAME_CONFIG = { VERSION: "0.13.1" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -572,15 +572,28 @@
   // which is Day 20, 22:00 on the player's clock (POWER_FAILS_MIN, derived
   // beside gridUp(), since it needs DAY_START_MIN). Nothing is stored:
   // minutesSinceCollapse() derives the clock from state.totalMinutes. Running
-  // water has no day of its own: the town's pumps run on the grid, so the
-  // mains stop with it (mainsWaterUp()). A house's own tank keeps its taps
-  // running while it holds water, and its own pump refills it only while that
-  // pump has power (waterRunningIn(), settleTanks(), HOUSE_TANK_L). #149's
-  // separate water option is moot while that holds. Both are retunable; the
-  // Day N clock still counts from the start of the run.
+  // water has no day of its own: the town's wells run on the grid, so the
+  // mains stop with it, and come back only MAINS_REPRESSURE_FACTOR times as
+  // long after it returns as they were stopped (mainsWaterUp()). A house's
+  // own tank keeps its taps running while it holds water. On a paved street
+  // the network refills it while the mains run; on an unpaved one its own
+  // well's pump does, while that pump has power (waterRunningIn(),
+  // tankRefillLph(), HOUSE_TANK_L). #149's separate water option is moot
+  // while that holds. All retunable; the Day N clock still counts from the
+  // start of the run.
   const START_DAYS_AFTER_COLLAPSE = 2;
   const POWER_FAILS_DAY = 21;
   const POWER_FAILS_HOUR = 22;
+  // The collapse day, day zero, in the real calendar (Tom; canon): the
+  // collapse clock's minute 0 is DAY_START_MIN on this date, local time
+  // (UTC−3, no daylight saving), so the run starts on Friday 21 February and
+  // the grid fails on Wednesday 12 March. calendarOf() reads it.
+  const DAY_ZERO_DATE = { year:2025, month:2, day:19 };
+  // How much longer than it was stopped the water network takes to come
+  // back once its wells have power again: ENDEZA's "como mínimo, duplica el
+  // tiempo de parada" (primary; docs/canon/reference/Lima.md, Water), at
+  // least twice, taken as twice (MAINS_UP_SPANS). Retunable.
+  const MAINS_REPRESSURE_FACTOR = 2;
   // The night the grid fails, counted from the failure: Atucha's
   // siren sounds once SIREN_AFTER_FAIL_MIN later, and the power comes back
   // GRID_RECOVERY_AFTER_MIN later for GRID_RECOVERY_MIN, once, then fails for
@@ -592,6 +605,20 @@
   const GRID_RECOVERY_MIN = 5;
   const SIREN_SOURCE_STOP = "atucha_gate";
   const SIREN_NEAR_M = 1000;
+  // Atucha over the run (canon): the plant draws its cooling power from the
+  // grid while the grid is up, then runs its diesels until DIESELS_STOP_HOUR
+  // on DIESELS_STOP_DAY after the collapse, counted as POWER_FAILS_DAY is,
+  // and is dark and silent after (atuchaPhase()). Day 50 is "plausible, not
+  // exact"; the hour is a judgment call, mid-afternoon, so the first night
+  // after is the first without the lights. DIESELS_STOP_MIN is derived beside
+  // POWER_FAILS_MIN. Both retunable.
+  const DIESELS_STOP_DAY = 50;
+  const DIESELS_STOP_HOUR = 14;
+  // The town's north end, which sees the plant's lights after dark while its
+  // diesels run: the street stops at or north of this grid y, in metres, the
+  // last two rows of blocks (ATUCHA_HORIZON_STOPS). A judgment call,
+  // retunable.
+  const ATUCHA_HORIZON_MIN_Y = 1100;
   // The power network's figures (see POWER in SURVIVAL / TIME SIMULATION).
   // Electricity is a gameplay system, not a realistic one: a breaker
   // or a fuse trips at once when its running current passes its rating, with
@@ -863,7 +890,10 @@
   //                 picks the text, { kind, … }, a DESC_READERS entry
   //                 (RENDERING): "load" with its `id`, on while that load is
   //                 powered (isPowered()); "grid", on while the grid is
-  //                 up (gridUp()). Each reader returns one of its
+  //                 up (gridUp()); "atucha", Atucha's phase (atuchaPhase():
+  //                 grid, diesels, silent), with `_dark` while it is lit
+  //                 and dark (isDark()), the plant's gate's. Each reader
+  //                 returns one of its
   //                 own `states`, and `variants` holds a text for every one
   //                 (validateRoomSchema()). A later reader (weather, time of
   //                 day, damage) is one more DESC_READERS entry with its own
@@ -1866,8 +1896,9 @@
   //                      p paved, g gravel (ripio), d dirt, r the railway,
   //                      by quarter from Tom's Street View survey (Lima.md,
   //                      "Streets and surfaces"), not the imagery.
-  //                      Only `r` is read today (the map's rail); the rest
-  //                      is laid down ahead of a consumer.
+  //                      `r` draws the map's rail, and `p` is where the
+  //                      water network runs (PAVED_STOPS, tankFillOf());
+  //                      gravel and dirt are read only as not paved.
   //   LIMA_RIVER         the Paraná de las Palmas near the plant: one polyline
   //                      of `u,v` pairs per line, simplified to 25 m. Drawn
   //                      only.
@@ -3734,11 +3765,27 @@ x_sn_9 m_sn_sn_sn sn p
 -900,9273 -1004,9313 -1203,9313 -1368,9263 -1367,9232 -1648,9088 -1669,9114 -2316,8669 -2679,8572 -2724,8531 -2754,8347 -2760,8552 -2817,8534 -2847,8388 -2846,8548 -2920,8537 -2962,8388 -3005,8376 -2962,8531 -3139,8515 -3311,8550 -3473,8657 -3730,9033 -4004,9287 -4673,9202 -5371,8991 -6501,9038 -6830,9026 -7165,8945
 -842,9225 -900,9273
 `;
+  // Atucha's gate (#344): its text, true in every phase, and the line that
+  // follows it for the plant's phase and the dark (Tom's), one per
+  // DESC_READERS.atucha state. LIMA_STOP_TEXT composes them into the gate's
+  // state variants.
+  const ATUCHA_GATE_TEXT = "The road ends at the entrance to the Atucha complex, with wire fences on both sides. A guard post stands on an island between the lanes, cones in front of it, and nobody is in it. Past it, cars parked off to the left, and beyond them a grey dome over red-brick blocks.";
+  const ATUCHA_GATE_LINES = {
+    grid: "Behind you, the switchyard hums inside its fence.",
+    grid_dark: "Behind you, the switchyard hums inside its fence. Past the dome, the plant's lights are on.",
+    diesels: "The switchyard is silent. Somewhere past the dome, engines are running.",
+    diesels_dark: "The switchyard is silent. Somewhere past the dome, engines are running, and lights are on in some of the buildings.",
+    silent: "The switchyard is silent, and nothing sounds from the plant."
+  };
+  // What the town's north end sees of the plant after dark while its diesels
+  // run, after the stop's text (atuchaHorizonVisible()). Tom's.
+  const ATUCHA_HORIZON_LINE = "Far to the north, over the fields, Atucha's lights are on. There are no others.";
   // The hand-written stops' text, by stop id: the plaza, the
   // level crossings, the landmarks' and named scenery's blocks, the road
   // north, the railway and the station. Each was checked against its source
   // when written (OSM, imagery, directories, Tom first-hand); the game names
-  // none of them. The corner store's site is a designed placement.
+  // none of them. The corner store's site is a designed placement. A text is
+  // a string, or state variants (ROOM SCHEMA's `desc`): Atucha's gate's.
   const LIMA_STOP_TEXT = {
     x_av11_c10: "The corner of the plaza, where Avenida 11 meets Calle 10. Paths cut diagonally across the square under the trees.",
     m_av11_c12_c10: "Avenida 11, along the side of the plaza. Benches under the trees, a shopping bag left on one of them.",
@@ -3770,7 +3817,8 @@ x_sn_9 m_sn_sn_sn sn p
     r111_papermill: "Calle 111. The paper mill stands off to the west, down a side road.",
     r111_7180m: "Calle 111, near the river. The Camino Provincial 038-03 branches off here.",
     r111_7334m: "Calle 111. The Camino Provincial 038-09 branches off here.",
-    atucha_gate: "The road ends at the Atucha complex. The fence runs off both ways, and the gate is shut. Beyond it, the plant's domes."
+    atucha_gate: { reads:{ kind:"atucha" }, variants:Object.fromEntries(Object.keys(ATUCHA_GATE_LINES)
+      .map(st=> [st, ATUCHA_GATE_TEXT + " " + ATUCHA_GATE_LINES[st]])) }
   };
   // The text every other stop reads, by its type, a mid stop's and a
   // corner's: one variant per stop, picked by stableHash() of its id mod the
@@ -3852,6 +3900,16 @@ x_sn_9 m_sn_sn_sn sn p
     const river = lines(LIMA_RIVER).map(l=> l.split(/\s+/).map(p=> p.split(",").map(Number)));
     return { codes, stops, links, river };
   })();
+  // The town's north end (ATUCHA_HORIZON_MIN_Y), by stop id: its street
+  // stops, corners and mids, never a rural, rail or station stop, and so
+  // never a room inside a building. Built once.
+  const ATUCHA_HORIZON_STOPS = new Set(LIMA.stops
+    .filter(s=> (s.kind === "c" || s.kind === "m") && s.y >= ATUCHA_HORIZON_MIN_Y).map(s=> s.id));
+  // Every stop a paved link touches. The town's water network runs under
+  // paved streets only (Tom, first-hand), so a building sited on one of
+  // these fills its tank from it (tankFillOf()). Built once.
+  const PAVED_STOPS = new Set();
+  LIMA.links.forEach(l=>{ if(l.surface === "p"){ PAVED_STOPS.add(l.a); PAVED_STOPS.add(l.b); } });
   // A code's street name, or null.
   function streetName(code){ return LIMA.codes[code] || null; }
   // A stop's address and `room` (ROOM SCHEMA): a corner is at its streets,
@@ -4052,11 +4110,17 @@ x_sn_9 m_sn_sn_sn sn p
   //            closed (WINDOW SCHEMA).
   //   water    optional, { tankL }: the building has its own water tank of
   //            that many litres, and its sinks run while it holds water
-  //            (waterRunningIn()). It is refilled by the building's pump (a
-  //            load whose appliance has `flowLph`) while that pump has power
-  //            and its float calls, or, where the building is unwired, while
-  //            the mains run (settleTanks(), mainsWaterUp()). Absent: its
-  //            sinks run on the mains alone.
+  //            (waterRunningIn()). Its site decides how it refills
+  //            (tankFillOf(), BUILDING_INFO's `tankFill`): "network" on a
+  //            paved street, from the water network while the mains run
+  //            (mainsWaterUp()), at NETWORK_FILL_LPH through a float valve,
+  //            with no pump; "well" on a gravel or dirt one, from its own
+  //            well by its own pump (a load whose appliance has `flowLph`)
+  //            while that pump has power and its float calls, whether or not
+  //            the mains run, or, where the building is unwired, at
+  //            HOUSE_PUMP_FLOW_LPH while the grid is up (tankRefillLph()).
+  //            A network building's wiring has its pumps taken out at build
+  //            (withoutPumps()). Absent: its sinks run on the mains alone.
   //   wiring   optional, { board:{ name, role, rating, curve?, direct?,
   //            feeders? }, panels:[{ id, name, role, template | layout }] }:
   //            the building's own network, in WIRING's shape (POWER SCHEMA)
@@ -4125,18 +4189,33 @@ x_sn_9 m_sn_sn_sn sn p
     { id:"underbasin", name:"Under-basin cupboard", capacityKg:10, spawnPools:["hygiene","cleaning_supplies"] }
   ];
   const SHED_BOX = { id:"shedbox", name:"Shed box", capacityKg:15, spawnPools:["fuel_fire","tools_general"] };
-  // A home's own water tank, in litres. Many Lima homes have a tank
-  // and a pump of their own (Tom, first-hand); the figure is a guideline, at
-  // least 800 L per dwelling and about 1,000 L for a family of four at 250 L
-  // per person per day (Río Negro's water authority, secondary). The
-  // Barrio Atucha's own tanks are unconfirmed. Retunable.
+  // A home's own water tank, in litres. Many Lima homes have a tank of
+  // their own, and one off the water network, on an unpaved street, a well
+  // and a pump too (Tom, first-hand); the figure is a guideline, at least
+  // 800 L per dwelling and about 1,000 L for a family of four at 250 L per
+  // person per day (Río Negro's water authority, secondary). The Barrio
+  // Atucha's own tanks are unconfirmed. Retunable.
   const HOUSE_TANK_L = 1000;
   // A house pump's flow, in L/h: a 0.5 hp peripheral pump for a roof
   // tank moves 1,800–2,400 L/h (Czerweny's QB60-L1, 40 L/min, and Rowa's
   // RW-PR60; secondary). 2,400 is Tom's pick, which refills a 1,000 L tank
   // from empty in 25 minutes. The house_pump appliance's `flowLph`, and the
-  // rate an unwired building's tank refills at (tankRefillLph()). Retunable.
+  // rate an unwired well building's tank refills at while the grid is up
+  // (tankRefillLph()). Retunable.
   const HOUSE_PUMP_FLOW_LPH = 2400;
+  // How fast the water network's pressure fills a tank through its float
+  // valve, in L/h: Tom's 600, which fills a 1,000 L tank from empty in 100
+  // minutes (tankRefillLph()). Unconfirmed, a judgment call that #412's
+  // research will replace. Retunable.
+  const NETWORK_FILL_LPH = 600;
+  // How a building of `type` sited at stop `site` fills its tank: "network"
+  // when any link at its site is paved, one whose links differ included
+  // (Tom), "well" otherwise, and null when it has no tank (BUILDING TYPES'
+  // `water`). Derived at world build, never saved.
+  function tankFillOf(type, site){
+    if(!type || !type.water) return null;
+    return PAVED_STOPS.has(site) ? "network" : "well";
+  }
   // The tank's float switch starts its pump when the tank holds less than
   // this fraction of it, and the pump then fills it to full (powerSnapshot(),
   // tankFloat()). Tom's figure, not researched. Retunable.
@@ -4164,7 +4243,7 @@ x_sn_9 m_sn_sn_sn sn p
           desc:"A narrow kitchen, open to the living room. The cooker runs off a gas bottle in the cupboard beneath it.",
           containers:KITCHEN_CONTAINERS },
         { role:"laundry", room:"Laundry", shelter:"full", sink:true, cannotHaveFire:true, floorCap:40,
-          desc:"A washing machine, a deep sink, and the pump that fills the house's water tank. The back door opens onto the garden.",
+          desc:"A washing machine and a deep sink. The back door opens onto the garden.",
           containers:[ { id:"shelf", name:"Shelf", capacityKg:15, spawnPools:["cleaning_supplies","tools_general"] } ] },
         { role:"hallway", room:"Hallway", shelter:"full", cannotHaveFire:true, floorCap:50,
           desc:"A short hallway. A calendar still hangs on the wall by the bathroom door.",
@@ -4605,8 +4684,26 @@ x_sn_9 m_sn_sn_sn sn p
       if(!rooms[roomId(w.role)]){ problems.push(`building ${inst.id}: window in role "${w.role}", which has no room`); return; }
       windows[`${inst.id}-${w.role}-window`] = { state:"closed", rooms:[roomId(w.role)], breakTag:w.breakTag, label:w.label };
     });
-    const wiring = mergeWiring(type.wiring, ov.wiring, inst.id, problems);
+    const merged = mergeWiring(type.wiring, ov.wiring, inst.id, problems);
+    const wiring = tankFillOf(type, inst.site) === "network" ? withoutPumps(merged) : merged;
     return { rooms, doors, windows, streetExit, wiring:buildWiring(wiring, roomId, specs.map(r=> r.role)), problems };
+  }
+  // A network building's wiring (tankFillOf()), which has no pump: each
+  // panel's layout, its template's once the instance's overrides are laid,
+  // less every fixture whose appliance has `flowLph`, as an inline `layout`.
+  // Its circuits and its other fixtures, their keys and so their load ids,
+  // are the template's. A panel whose template doesn't resolve is left for
+  // expandWiring() to report.
+  function withoutPumps(w){
+    if(!w) return w;
+    const pump = (fx)=> !!APPLIANCES[fx.appliance] && APPLIANCES[fx.appliance].flowLph !== undefined;
+    return Object.assign({}, w, { panels:(w.panels || []).map(p=>{
+      const layout = p.layout || WIRING_TEMPLATES[p.template];
+      if(!layout) return p;
+      const out = Object.assign({}, p, { layout:Object.assign({}, layout, { fixtures:(layout.fixtures || []).filter(fx=> !pump(fx)) }) });
+      delete out.template;
+      return out;
+    }) });
   }
   // A type's `wiring` with an instance's `overrides.wiring` laid over it:
   // each panel it names by id takes its fields over the type's. A panel id
@@ -4924,8 +5021,10 @@ x_sn_9 m_sn_sn_sn sn p
   //                   heater nobody switches off is: 0.95 is a judgment call.
   //                   The 120-minute cycle is a judgment call too.
   //   house_pump      370 W: a 0.5 hp peripheral pump, Rowa's RW-PR60, 0.37
-  //                   kW (secondary). It fills its building's tank at
-  //                   HOUSE_PUMP_FLOW_LPH, on an automatic float switch (Tom,
+  //                   kW (secondary). It fills a well building's tank
+  //                   from its well (tankFillOf(); a building on the water
+  //                   network has none) at HOUSE_PUMP_FLOW_LPH, on an
+  //                   automatic float switch (Tom,
   //                   first-hand): it starts when the tank drops below
   //                   TANK_FLOAT_START and fills it to full, drawing only
   //                   while it fills. Starting 3,300 W: 2.7 A × about 5.5 ×
@@ -5100,7 +5199,9 @@ x_sn_9 m_sn_sn_sn sn p
   // TYPES' `row_house`), as Tom describes his own (first-hand, 2026-09-28):
   // a diferencial over every circuit, as the head device, and three
   // circuits: lights, sockets, and the water heater with the pump, both in
-  // the laundry. Every terminal circuit sits behind a ≤ 30 mA RCD, which may
+  // the laundry. A row house on the water network, as both of the barrio's
+  // are, has no pump: the build takes it out (withoutPumps()), and WATER
+  // holds the heater alone. Every terminal circuit sits behind a ≤ 30 mA RCD, which may
   // head the board (AEA 90364-7-770); AEA's worked example heads it with a
   // 30 mA, 2 × 40 A one, whose 40 A this takes. The 30 mA isn't shown.
   // LIGHTS' 10 A is AEA's example's lighting figure (at most 16 A). SOCKETS
@@ -5113,8 +5214,10 @@ x_sn_9 m_sn_sn_sn sn p
   // the row house's laid over the casa's rooms. Its figures are the row
   // house's: the 40 A diferencial, the lights' 10 A and the sockets' 20 A,
   // and the appliances, the TV in the living room among them. The water heater is in the kitchen and the pump on the
-  // patio: a Lima home heats its water with an electric tank heater, and an
-  // electric pump lifts its water to the roof tank (Tom, first-hand). The
+  // patio: a Lima home heats its water with an electric tank heater, and,
+  // off the water network, an electric pump lifts its own well's water to
+  // the roof tank (Tom, first-hand). A casa on the network has no pump: the
+  // build takes it out (withoutPumps()), whichever panel it has. The
   // meter box is at the street, since the meter is on the property line,
   // reachable from the street at any hour, with the main board within 1 m of
   // it and a bipolar main of at most 32 A on a Tarifa 1 supply (OCEBA,
@@ -5342,13 +5445,15 @@ x_sn_9 m_sn_sn_sn sn p
   // actually get a marker, and where the label sits relative to the dot.
   const BUILDINGS = Object.assign(Object.fromEntries(landmarkInstances().filter(b=> b.marker)
     .map(b=> [b.id, { name:b.name, anchor:b.id + "_f0" }])), NAMED_SCENERY);
-  // Every building, by id: { name, site, entry, tankL } — its name, its site
-  // stop, the room its street exit leads into, and its water tank in litres
-  // (BUILDING TYPES' `water`), 0 for none. Read by tankOf() and Walk to….
+  // Every building, by id: { name, site, entry, tankL, tankFill } — its
+  // name, its site stop, the room its street exit leads into, its water tank
+  // in litres (BUILDING TYPES' `water`), 0 for none, and how that tank fills
+  // (tankFillOf(): "network" or "well"), null for none. Derived, never
+  // saved. Read by tankOf(), tankRefillLph(), validateWiring() and Walk to….
   const BUILDING_INFO = Object.fromEntries(buildingInstances().map(b=>{
     const type = b.layout || BUILDING_TYPES[b.type] || {};
     return [b.id, { name: b.name || type.label, site: b.site, entry: `${b.id}_${type.entry}`,
-      tankL: type.water ? type.water.tankL : 0 }];
+      tankL: type.water ? type.water.tankL : 0, tankFill: tankFillOf(type, b.site) }];
   }));
   // The runtime doors and windows (DOOR SCHEMA, WINDOW SCHEMA). Built here,
   // below WIRING, because a unit's come from its wiring template.
@@ -6483,8 +6588,10 @@ x_sn_9 m_sn_sn_sn sn p
   // empty alike. One unit fills, as far as it has room; the water is clean,
   // and mixes with what is there (mixKinds()), so tainted water already in it
   // taints it. Over FLUID_INSTANT_MAX_ML it takes time at TAP_FLOW_L_PER_MIN
-  // (transferMinutes()). After the water fails the sink gives nothing, and
-  // whatever was left in the pipes is #300's.
+  // (transferMinutes()). After the water fails the sink gives nothing: a
+  // tank's taps run while it holds water, and a sink without one on the
+  // mains, while they run (waterRunningIn()). Nothing is left in the pipes:
+  // the town has no storage of its own (#300).
   // Off a tank, at any time, a fill draws the litres it adds and takes only
   // what the tank has left, to the millilitre: a holder fills part-way on the
   // last of it. A sink without a tank draws on the mains, and draws nothing
@@ -7199,16 +7306,113 @@ x_sn_9 m_sn_sn_sn sn p
   // repeating the arithmetic.
   function absoluteMinute(){ return Math.round(DAY_START_MIN + state.totalMinutes); }
   function dayNumber(){ return 1 + Math.floor(absoluteMinute()/MINUTES_PER_DAY); }
-  function minutesIntoDay(){ const a = absoluteMinute(); return ((a % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY; }
-  // The single place in the game that says what part of the day a minute
-  // falls in. Invariants: entries are sorted ascending by `from`, the first
-  // is `from: 0`, and each band runs until the next one's `from`.
+  // The time of day now is the calendar's, so the clock and the calendar
+  // can't disagree.
+  function minutesIntoDay(){ return calendarOf(Math.round(minutesSinceCollapse())).minute; }
+  // THE CALENDAR. Minute `m` since the collapse as a real date and a time of
+  // day, local time: DAY_ZERO_DATE plus the whole days in m + DAY_START_MIN,
+  // counted in the real calendar, leap days included, by UTC arithmetic so
+  // the machine's own time zone never enters; and the minutes into that day.
+  // Pure: { year, month, day, minute }.
+  function calendarOf(m){
+    const local = m + DAY_START_MIN;
+    const days = Math.floor(local / MINUTES_PER_DAY);
+    const date = new Date(Date.UTC(DAY_ZERO_DATE.year, DAY_ZERO_DATE.month - 1, DAY_ZERO_DATE.day + days));
+    return { year:date.getUTCFullYear(), month:date.getUTCMonth() + 1, day:date.getUTCDate(),
+      minute: local - days * MINUTES_PER_DAY };
+  }
+  // CIVIL DAWN AND DUSK at Lima (34.0447 S, 59.1961 W, UTC−3), by calendar
+  // date: the USNO's, docs/canon/reference/Daylight.md (confirmed). January's
+  // rows are 2026's and the rest 2025's; any year differs by under a minute
+  // on the same date, so a run longer than a year reads the table by date,
+  // never by a count of 365 days. One `MM-DD dawn dusk` row a line, read
+  // once into DAYLIGHT, in minutes into the day.
+  const DAYLIGHT_TABLE = `
+01-01 05:20 20:41
+01-08 05:26 20:41
+01-15 05:33 20:39
+01-22 05:40 20:36
+02-01 05:51 20:29
+02-08 05:59 20:23
+02-15 06:06 20:15
+02-22 06:13 20:07
+03-01 06:19 19:58
+03-08 06:25 19:49
+03-15 06:31 19:39
+03-22 06:37 19:30
+04-01 06:44 19:16
+04-08 06:49 19:07
+04-15 06:55 18:58
+04-22 07:00 18:50
+05-01 07:06 18:41
+05-08 07:11 18:35
+05-15 07:16 18:30
+05-22 07:20 18:26
+06-01 07:26 18:23
+06-08 07:30 18:22
+06-15 07:33 18:22
+06-22 07:35 18:23
+07-01 07:35 18:26
+07-08 07:35 18:29
+07-15 07:33 18:33
+07-22 07:29 18:37
+08-01 07:23 18:44
+08-08 07:17 18:48
+08-15 07:10 18:53
+08-22 07:02 18:58
+09-01 06:50 19:04
+09-08 06:40 19:09
+09-15 06:31 19:14
+09-22 06:21 19:18
+10-01 06:08 19:25
+10-08 05:59 19:30
+10-15 05:49 19:36
+10-22 05:40 19:43
+11-01 05:29 19:52
+11-08 05:22 19:59
+11-15 05:17 20:06
+11-22 05:13 20:14
+12-01 05:10 20:22
+12-08 05:09 20:29
+12-15 05:11 20:34
+12-22 05:13 20:38
+`;
+  const DAYLIGHT = DAYLIGHT_TABLE.trim().split("\n").map(l=>{
+    const [md, dawn, dusk] = l.trim().split(/\s+/);
+    const [month, day] = md.split("-").map(Number);
+    const mins = (hm)=>{ const [h, mm] = hm.split(":").map(Number); return h * 60 + mm; };
+    return { month, day, dawn:mins(dawn), dusk:mins(dusk) };
+  });
+  // Civil dawn and dusk on a calendar date (calendarOf()), in minutes into
+  // the day: the table's row on or before it and the next, 12-22's next
+  // being the next year's 01-01, interpolated linearly by the real days
+  // between the two in that year, so 29 February needs no case of its own.
+  function daylightOn(cal){
+    const at = (year, row)=> Date.UTC(year, row.month - 1, row.day);
+    const t = Date.UTC(cal.year, cal.month - 1, cal.day);
+    let i = DAYLIGHT.length - 1;
+    while(at(cal.year, DAYLIGHT[i]) > t) i--;
+    const a = DAYLIGHT[i], b = DAYLIGHT[i + 1] || DAYLIGHT[0];
+    const from = at(cal.year, a), to = at(b === DAYLIGHT[0] ? cal.year + 1 : cal.year, b);
+    const f = (t - from) / (to - from);
+    return { dawn: a.dawn + f * (b.dawn - a.dawn), dusk: a.dusk + f * (b.dusk - a.dusk) };
+  }
+  // Whether minute `m` since the collapse is dark: before its date's civil
+  // dawn, or at or after its civil dusk. The game's one darkness rule,
+  // worked out when read: pure, render-safe and never stored. Day and night
+  // (#58) builds on it.
+  function isDark(m = minutesSinceCollapse()){
+    const cal = calendarOf(m), d = daylightOn(cal);
+    return cal.minute < d.dawn || cal.minute >= d.dusk;
+  }
+  // The vague clock's words: what part of the day a minute falls in, as the
+  // player without a watch puts it (getVagueClockText()), and nothing more.
+  // Darkness is never read from here: it is isDark()'s, from the daylight
+  // table. Invariants: entries are sorted ascending by `from`, the first is
+  // `from: 0`, and each band runs until the next one's `from`.
   //
   // The boundaries are a judgment call with nothing behind them yet and are
-  // retunable. They are set to be plausible as *light* boundaries, because a
-  // later light-and-darkness layer is meant to read this table rather than
-  // pick its own: two opinions about when evening starts is exactly the
-  // duplicated fact this table exists to prevent.
+  // retunable.
   const TIME_OF_DAY_BANDS = [
     { from: 0,     label:"late night" },
     { from: 5*60,  label:"dawn" },
@@ -7252,19 +7456,54 @@ x_sn_9 m_sn_sn_sn sn p
   function gridUpMinutes(fromM, toM){
     return GRID_UP_SPANS.reduce((sum, [a, b])=> sum + Math.max(0, Math.min(b, toM) - Math.max(a, fromM)), 0);
   }
+  // The minute since the collapse Atucha's diesels stop at, derived as
+  // POWER_FAILS_MIN is.
+  const DIESELS_STOP_MIN = DIESELS_STOP_DAY * MINUTES_PER_DAY + (DIESELS_STOP_HOUR * 60 - DAY_START_MIN);
+  // Atucha's phase at minute `m`: "grid" while the grid is up, its false
+  // recovery included; then "diesels" until DIESELS_STOP_MIN; then
+  // "silent". Worked out when read, never stored: the diesels stopping is
+  // no event, and nothing logs it. The text simply reads differently from
+  // then on.
+  function atuchaPhase(m = minutesSinceCollapse()){
+    if(gridUp(m)) return "grid";
+    return m < DIESELS_STOP_MIN ? "diesels" : "silent";
+  }
+  // Whether the plant's lights show from room `roomId` at minute `m`: a
+  // stop at the town's north end (ATUCHA_HORIZON_STOPS), after dark, while
+  // the diesels run. Not while the grid is up: the horizon line starts with
+  // the grid's failure (Tom). Render-safe; one set lookup, and the phase and
+  // the dark only on a match.
+  function atuchaHorizonVisible(roomId, m = minutesSinceCollapse()){
+    return ATUCHA_HORIZON_STOPS.has(roomId) && atuchaPhase(m) === "diesels" && isDark(m);
+  }
+  // The water network's up-time, the one definition mainsWaterUp() reads,
+  // derived once from the grid's: its wells run on the grid, and after an
+  // outage the network takes MAINS_REPRESSURE_FACTOR times the outage to
+  // repressurise. So each grid span [a, b) is a mains span [a +
+  // MAINS_REPRESSURE_FACTOR × the outage before it, b), dropped when empty;
+  // the first, from −Infinity, has no outage before it. Half-open, sorted
+  // and non-overlapping, as the grid's are. With today's constants the
+  // mains run until the grid fails and never again: the false recovery is
+  // too short to bring the water back.
+  const MAINS_UP_SPANS = (function(){
+    const out = [];
+    let lastEnd = null;
+    GRID_UP_SPANS.forEach(([a, b])=>{
+      const from = lastEnd === null ? a : a + MAINS_REPRESSURE_FACTOR * (a - lastEnd);
+      if(from < b) out.push([from, b]);
+      lastEnd = b;
+    });
+    return out;
+  })();
   // mainsWaterUp() is whether the town's water network runs: the mains a
-  // sink without a tank draws on, and what a house pump draws from to fill
-  // its tank (settleTanks()). The town's own pumps run on the grid, so today
-  // it is gridUp(). It is its own predicate so that #300's decision, whether
-  // the network outlives the grid, has one place to land before generators
-  // (#245) can power a house pump without the grid.
-  function mainsWaterUp(m = minutesSinceCollapse()){ return gridUp(m); }
+  // sink without a tank draws on, and what fills a tank on a paved street
+  // (tankRefillLph()).
+  function mainsWaterUp(m = minutesSinceCollapse()){ return MAINS_UP_SPANS.some(([a, b])=> m >= a && m < b); }
   // Water: a room in a building with its own tank (BUILDING_INFO's tankL)
   // runs while the tank holds water, whatever the grid; a room without one
-  // runs on the mains. The tank is refilled by its pump while that pump has
-  // power, and an unwired building's while the mains run (settleTanks()).
-  // tankOf() is the room's building's tank in litres, or 0 for none;
-  // tankLeft() what it holds now.
+  // runs on the mains. How the tank refills is its building's `tankFill`
+  // (tankRefillLph()). tankOf() is the room's building's tank in litres, or
+  // 0 for none; tankLeft() what it holds now.
   function tankOf(roomId){
     const room = world[roomId];
     return (room && room.buildingId && BUILDING_INFO[room.buildingId] && BUILDING_INFO[room.buildingId].tankL) || 0;
@@ -7289,17 +7528,24 @@ x_sn_9 m_sn_sn_sn sn p
   function refilledDrawn(drawn, flowLph, dt){
     return Math.max(0, Math.round((drawn - flowLph / 60 * dt) * 1000) / 1000);
   }
-  // What a tank refills at, in L/h, at minute `m`, or 0: only while the
-  // mains run, a tank whose pump is drawing (powerNow) at the pump's flow,
-  // and a tank in a building with no pump load (TANK_PUMPS; today shop_home),
-  // the unwired fallback with no float and no latch, at HOUSE_PUMP_FLOW_LPH
-  // whenever it is below full, until #307 wires that type (#258). It never
-  // changes between two settles: grid events and resolves are settle points.
+  // What a tank refills at, in L/h, at minute `m`, or 0, by its building's
+  // `tankFill` (BUILDING_INFO):
+  //   network  NETWORK_FILL_LPH whenever it is below full while the mains
+  //            run: a float valve, with no TANK_FLOAT_START, no latch and
+  //            no power.
+  //   well     its pump's flow while the pump is drawing (powerNow), whether
+  //            or not the mains run; or, in a building with no pump load
+  //            (TANK_PUMPS; none today), the unwired fallback, standing in
+  //            for a pump with power: HOUSE_PUMP_FLOW_LPH whenever it is
+  //            below full while the grid is up, until #307 wires it (#258).
+  // It never changes between two settles: the grid's and the mains' changes
+  // and every resolve are settle points.
   function tankRefillLph(b, m){
     const info = BUILDING_INFO[b];
-    if(!info || !(info.tankL > 0) || !mainsWaterUp(m)) return 0;
+    if(!info || !(info.tankL > 0)) return 0;
+    if(info.tankFill === "network") return mainsWaterUp(m) ? NETWORK_FILL_LPH : 0;
     const pump = TANK_PUMPS[b];
-    if(pump === undefined) return HOUSE_PUMP_FLOW_LPH;
+    if(pump === undefined) return gridUp(m) ? HOUSE_PUMP_FLOW_LPH : 0;
     return powerNow && powerRead(powerNow, "drawing", pump) ? APPLIANCES[POWER_NET.loads[pump].appliance].flowLph : 0;
   }
   // Refilling, settled (settleWorld()): every tank below full refilled for
@@ -8279,6 +8525,7 @@ x_sn_9 m_sn_sn_sn sn p
   //   lastClock  the minute since the collapse CLOCK_EVENTS have been fired
   //              up to.
   //   lastGrid   the same for the grid's changes (GRID_CHANGES).
+  //   lastMains  the same for the mains' changes (MAINS_CHANGES).
   //   batteryDeaths  the minutes devices switched on run out at.
   //   nextDue    the least of every scheduled system's next event: planned
   //              at the start of every advance, since an action may have
@@ -8287,10 +8534,14 @@ x_sn_9 m_sn_sn_sn sn p
   // stoves whose timer runs (timerStoves), each a set walked in world order
   // (roomOrder()). Every writer of heatActive or timerMinutes keeps them
   // (scheduleHeat(), scheduleTimer()).
-  let settledAt = 0, lastClock = 0, lastGrid = 0, nextDue = Infinity;
+  let settledAt = 0, lastClock = 0, lastGrid = 0, lastMains = 0, nextDue = Infinity;
   // Every minute since the collapse at which the grid fails or returns: the
   // bounds of GRID_UP_SPANS, each a scheduled event.
   const GRID_CHANGES = GRID_UP_SPANS.flat().filter(Number.isFinite).sort((a, b)=> a - b);
+  // The same for the mains (MAINS_UP_SPANS). At one the world settles, so
+  // the tanks the network fills settle to it; nothing resolves, since mains
+  // water powers nothing. One on a grid change's minute is the same settle.
+  const MAINS_CHANGES = MAINS_UP_SPANS.flat().filter(Number.isFinite).sort((a, b)=> a - b);
   const heatRooms = new Set();
   const timerStoves = new Map();
   // A room's place in world order (roomIds()), from an index built once per
@@ -8334,12 +8585,12 @@ x_sn_9 m_sn_sn_sn sn p
       if(typeof it.durability.asOf !== "number") it.durability.asOf = minutesSinceCollapse();
       scheduleBatteryDeath(it);
     }));
-    settledAt = lastClock = lastGrid = minutesSinceCollapse();
+    settledAt = lastClock = lastGrid = lastMains = minutesSinceCollapse();
     settleReachable();
     planNextDue();
   }
-  // The next due minute, from what is lit or running now: a grid change not
-  // yet made, a tank coming full (tankFullDue()), a battery running out, an
+  // The next due minute, from what is lit or running now: a grid change or
+  // a mains change not yet made, a tank coming full (tankFullDue()), a battery running out, an
   // appliance's timed stop, a running kettle's cut-out (kettleCutOutDue()), a
   // timer's end, a lit room's next event (heatRoomDue()), and every clock
   // event not yet fired.
@@ -8349,6 +8600,7 @@ x_sn_9 m_sn_sn_sn sn p
     Object.values(state.power.stops).forEach(e=>{ if(e.at !== undefined) due = Math.min(due, e.at); });
     liveKettles().forEach(k=>{ due = Math.min(due, settledAt + kettleCutOutDue(k)); });
     GRID_CHANGES.forEach(g=>{ if(g > lastGrid) due = Math.min(due, g); });
+    MAINS_CHANGES.forEach(g=>{ if(g > lastMains) due = Math.min(due, g); });
     timerStoves.forEach(({ container })=>{ due = Math.min(due, settledAt + container.timerMinutes); });
     heatRooms.forEach(id=>{ due = Math.min(due, settledAt + heatRoomDue(world[id])); });
     CLOCK_EVENTS.forEach(ev=>{ if(ev.at > lastClock) due = Math.min(due, ev.at); });
@@ -8358,7 +8610,8 @@ x_sn_9 m_sn_sn_sn sn p
   // settledAt, and does what is due there, in this order: the tanks
   // (settleTanks()), then the running kettles' heating, at the power they
   // had over the span (settleRunningKettles()), then a grid change at `m`
-  // (resolveGrid()), then a tank come full resolves its building so its pump
+  // (resolveGrid()), and a mains change at `m`, which only marks it made
+  // (the tanks have just settled to it), then a tank come full resolves its building so its pump
   // stops, then the kettles at the boil cut out (settleKettleCutOuts()), then
   // the appliances whose timed stop is due (settleApplianceStops()), then the
   // batteries out by `m` (settleBatteryDeaths()), then every running timer
@@ -8374,6 +8627,7 @@ x_sn_9 m_sn_sn_sn sn p
     settleRunningKettles(span);
     GRID_CHANGES.forEach(g=>{ if(lastGrid < g && g <= m) resolveGrid(g); });
     lastGrid = Math.max(lastGrid, m);
+    lastMains = Math.max(lastMains, m);
     filled.forEach(b=>{ if(TANK_PUMPS[b] !== undefined) resolveBuilding(b); });
     settleKettleCutOuts(m);
     settleApplianceStops(m);
@@ -8390,7 +8644,7 @@ x_sn_9 m_sn_sn_sn sn p
   // Every event due by now, each at its own minute and in time order: the
   // world settled to it, which does what is due there and logs it, then the
   // clock events up to it. At one minute the order is the kettles' heating,
-  // grid changes, tanks coming full, kettle cut-outs, appliance stops,
+  // grid and mains changes, tanks coming full, kettle cut-outs, appliance stops,
   // battery deaths, timers, cooking, fires, clock events. The cap guards
   // against an event that never clears,
   // which would otherwise hang the step: a bug, reported and cut short.
@@ -8651,9 +8905,11 @@ x_sn_9 m_sn_sn_sn sn p
     return out;
   }
   // The game's tank pumps, found once: { buildingId: loadId } for every
-  // building with a tank and a pump. A building with two keeps its first,
-  // which validateWiring() reports. A tank with no pump here is unwired, and
-  // refills by the fallback (tankRefillLph()).
+  // building with a tank and a pump, which only a well building has: a
+  // network one's are taken out at build (withoutPumps()). A building with
+  // two keeps its first, which validateWiring() reports. A well building
+  // with no pump here is unwired, and refills by the fallback
+  // (tankRefillLph()).
   const TANK_PUMPS = (function(){
     const out = {};
     const found = tankPumpsOf(POWER_NET, APPLIANCES, world);
@@ -10465,18 +10721,22 @@ x_sn_9 m_sn_sn_sn sn p
   // and a known rules value, dropping anything else, the `heat` an older
   // save carries included. A stop is kept only for a load with a timed stop
   // rule, as `{ at }` or `{ left }`; a save from before stops (0.12) has
-  // none, so nothing is running. Idempotent.
+  // none, so nothing is running. A switch is kept only for a load the
+  // network still has: a paved home's pump, which the water network took
+  // out (withoutPumps()), loses its entry, as does anything else stale.
+  // Breakers are kept as they are: no circuit is removed. Idempotent.
   function backfillPowerState(){
     const obj = (v)=> v && typeof v === "object" && !Array.isArray(v) ? v : {};
     const num = (v)=> typeof v === "number" && Number.isFinite(v);
-    const p = obj(state.power), stops = {};
+    const p = obj(state.power), stops = {}, switches = {};
+    Object.keys(obj(p.switches)).forEach(id=>{ if(Object.prototype.hasOwnProperty.call(POWER_NET.loads, id)) switches[id] = p.switches[id]; });
     Object.keys(obj(p.stops)).forEach(id=>{
       const e = obj(p.stops[id]), l = POWER_NET.loads[id], rule = l && APPLIANCES[l.appliance] && APPLIANCES[l.appliance].stops;
       if(!rule || !(rule.after || rule.dial)) return;
       if(num(e.at)) stops[id] = { at:e.at };
       else if(num(e.left)) stops[id] = { left:e.left };
     });
-    state.power = { switches:obj(p.switches), breakers:obj(p.breakers), stops };
+    state.power = { switches, breakers:obj(p.breakers), stops };
     if(!ELECTRICAL_RULES.includes(state.electricalRules)) state.electricalRules = "detailed";
   }
   // migrateCookingRelease(): brings a 0.7 save into the cooking release,
@@ -10822,9 +11082,11 @@ x_sn_9 m_sn_sn_sn sn p
   //     is checked. A cut-off switch has neither rating nor curve, so
   //     nothing is. A fuse's rating is over 0 and at most EDISON_FUSE_MAX_A,
   //     not an IEC breaker rating;
-  //   every tank has one pump (tankPumpsOf()): a wired building with a tank
-  //     (BUILDING_INFO's tankL) and no `flowLph` load, or with two, and a
-  //     `flowLph` load in a building with no tank, which never draws.
+  //   every tank has the pumps its fill gives it (tankPumpsOf(),
+  //     BUILDING_INFO's tankL and tankFill): a wired network building with
+  //     a tank and any `flowLph` load, a wired well building with a tank
+  //     and no `flowLph` load, or two, and a `flowLph` load in a building
+  //     with no tank, which never draws.
   // It also lists every room with shelter "full" that no panel's rooms
   // include. That list is a warning while buildings are being wired (#250),
   // and becomes an error in #258. Returns { problems, unwired }. Call it as
@@ -10903,7 +11165,9 @@ x_sn_9 m_sn_sn_sn sn p
     Object.keys(wiring || {}).forEach(b=>{
       if(!(tankOfBuilding(b) > 0)) return;
       const found = pumps[b] || [];
-      if(!found.length) problems.push(`building ${b}: a tank, but no pump load (flowLph) in its wiring`);
+      if(BUILDING_INFO[b].tankFill === "network"){
+        if(found.length) problems.push(`building ${b}: fills from the water network, but has pump loads (${found.join(", ")})`);
+      } else if(!found.length) problems.push(`building ${b}: a well tank, but no pump load (flowLph) in its wiring`);
       else if(found.length > 1) problems.push(`building ${b}: ${found.length} pump loads for one tank (${found.join(", ")})`);
     });
     const wired = new Set();
@@ -11258,11 +11522,10 @@ x_sn_9 m_sn_sn_sn sn p
   //                     (`flowLph`) fills, its size and the litres drawn
   //                     from it at the start (default 0, full). Its float is
   //                     read each step (tankFloat()), and it refills at the
-  //                     pump's flow while the pump draws and the mains run
-  //                     (refilledDrawn()), as the game's does. Default none:
-  //                     no float calls, so no pump draws.
-  //            mains    true / false, or a function of the minute (default
-  //                     mainsWaterUp())
+  //                     pump's flow while the pump draws (refilledDrawn()),
+  //                     as a well tank's does in the game. Default none: no
+  //                     float calls, so no pump draws. A tank the water
+  //                     network fills draws no power, and isn't modelled.
   //            plugs    { loadId: n }: how many items run through each plug
   //                     load, every step (default none)
   // Returns { problems, steps, power, tanks }: the expansion's problems, then
@@ -11282,7 +11545,6 @@ x_sn_9 m_sn_sn_sn sn p
     const seed = options.seed === undefined ? state.seed : options.seed >>> 0;
     const start = options.start || 0;
     const grid = typeof options.grid === "boolean" ? ()=> options.grid : (options.grid || ((m)=> gridUp(m)));
-    const mains = typeof options.mains === "boolean" ? ()=> options.mains : (options.mains || ((m)=> mainsWaterUp(m)));
     const given = options.power || {};
     let power = JSON.parse(JSON.stringify({ switches:given.switches || {}, breakers:given.breakers || {} }));
     const tankDefs = options.tanks || {};
@@ -11313,7 +11575,7 @@ x_sn_9 m_sn_sn_sn sn p
       prev = r.drawing;
       Object.keys(tankDefs).forEach(id=>{
         const a = net.loads[id] && appliances[net.loads[id].appliance];
-        if(r.drawing[id] && mains(m) && a) drawn[id] = refilledDrawn(drawn[id], a.flowLph, 1);
+        if(r.drawing[id] && a) drawn[id] = refilledDrawn(drawn[id], a.flowLph, 1);
       });
       const held = {};
       Object.keys(tankDefs).forEach(id=>{ held[id] = tankDefs[id].tankL - drawn[id]; });
@@ -11466,11 +11728,13 @@ x_sn_9 m_sn_sn_sn sn p
   // the home's freezer, which step 2 needs. The run starts
   // REPLAY_START_BEFORE_FAIL_MIN before the grid fails (doRestart()), so the
   // failure falls in step 6 without a day of play before it; step 6 then
-  // advances to REPLAY_DRAW_BEFORE_FAIL_MIN before it. The tank is drawn
-  // to REPLAY_TANK_MARGIN_L above its float's start level in code and then
-  // below it by a real fill, and REPLAY_PAN_FILLS more fills leave the pump
-  // refilling as the grid goes, and still called for when it comes back.
-  // Each fill is a saucepan's litre, so it stays instant (FLUID_INSTANT_MAX_ML).
+  // advances to REPLAY_DRAW_BEFORE_FAIL_MIN before it. The home's tank fills
+  // from the water network (tankFillOf()): a bottle's fill and
+  // REPLAY_PAN_FILLS more draw it down, so the network is refilling it when
+  // the grid and the mains fail, and it stays drawn down through the false
+  // recovery, which brings back the lights and not the water. Each fill is a
+  // saucepan's litre, so it stays instant (FLUID_INSTANT_MAX_ML). No step
+  // drives a well's pump (#460).
   const REPLAY_SEED = 372;
   const REPLAY_START_BEFORE_FAIL_MIN = 6 * 60;
   const REPLAY_WALK = [HOME_STOP, "x_c117_c90b", "x_c117_c90", "x_c117_c90b", HOME_STOP];
@@ -11481,7 +11745,6 @@ x_sn_9 m_sn_sn_sn sn p
   const REPLAY_RADIO_ELSEWHERE = "home_bedroom";
   const REPLAY_RADIO_WAIT_MIN = 30;
   const REPLAY_DRAW_BEFORE_FAIL_MIN = 8;
-  const REPLAY_TANK_MARGIN_L = 0.25;
   const REPLAY_PAN_FILLS = 400;
   const REPLAY_SLEEP_ENERGY = 25;
   const REPLAY_AFTER_SLEEP_MIN = 180;
@@ -11562,13 +11825,12 @@ x_sn_9 m_sn_sn_sn sn p
       radio(world[REPLAY_RADIO_ELSEWHERE].floor, REPLAY_RADIO_MIN.elsewhere);
       advanceTime(REPLAY_RADIO_WAIT_MIN);
     } },
-    { label:"The tank drawn, the grid failing during a sleep, the siren, the recovery", run(){
+    { label:"The tank drawn, the grid and the mains failing during a sleep, the siren, the recovery", run(){
       replayMove("home_living");
       replayMove("home_kitchen");
       const wait = replayFailClock() - REPLAY_DRAW_BEFORE_FAIL_MIN - state.totalMinutes;
       if(!(wait > 0)) throw new Error("replay: the grid has failed before step 6");
       advanceTime(wait);
-      state.tankDrawn.home = BUILDING_INFO.home.tankL * (1 - TANK_FLOAT_START) - REPLAY_TANK_MARGIN_L;
       invTab = "inventory";
       const items = state.inventory.items;
       const bottle = replayPlace(items, { id:"plastic_bottle", qty:1 });
@@ -13855,7 +14117,11 @@ x_sn_9 m_sn_sn_sn sn p
   // simplification, retunable).
   const DESC_READERS = {
     load:     { states:["on", "off"], read:(r)=> isPowered(r.id) ? "on" : "off" },
-    grid:     { states:["on", "off"], read:()=> gridUp() ? "on" : "off" }
+    grid:     { states:["on", "off"], read:()=> gridUp() ? "on" : "off" },
+    // Atucha's phase (atuchaPhase()), and while it is lit, whether it is
+    // dark (isDark()): silent, it reads the same day and night.
+    atucha:   { states:["grid", "grid_dark", "diesels", "diesels_dark", "silent"],
+      read:()=>{ const p = atuchaPhase(); return p === "silent" || !isDark() ? p : p + "_dark"; } }
   };
   // A room's description as it reads now.
   function roomDescText(room){
@@ -13873,7 +14139,10 @@ x_sn_9 m_sn_sn_sn sn p
         ? ` A fire is burning here — roughly ${fmtDuration(room.fireMinutesLeft).replace(/[()]/g,"")} of fuel left.`
         : " A fire is burning here.";
     }
-    document.getElementById("roomDesc").textContent = roomDescText(room) + heatNote;
+    // Atucha's lights on the horizon, where and when they show
+    // (atuchaHorizonVisible()), after the stop's own text.
+    const horizon = atuchaHorizonVisible(state.currentRoom) ? " " + ATUCHA_HORIZON_LINE : "";
+    document.getElementById("roomDesc").textContent = roomDescText(room) + horizon + heatNote;
     document.getElementById("clockLabel").textContent = hasWatch() ? getClockText() : getVagueClockText();
   }
   function renderStatsPanel(){

@@ -20,6 +20,185 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 <!-- New entries go directly below this line. -->
 
+## v0.13.1 — Atucha over the run, and the water network
+
+Implements: handoffs/atucha-and-water-network.md
+
+Implements #344, #439 and #300 in full, per
+`handoffs/atucha-and-water-network.md`. No new persistent state: PATCH. The
+calendar, the dark, the plant's phase and the mains are all derived from the
+clock. An old save's switch for a pump the network removed is dropped on load.
+
+**New**
+
+- A calendar (SURVIVAL / TIME SIMULATION, beside the clock): `DAY_ZERO_DATE`,
+  19 February 2025, is the collapse day, and the collapse clock's minute 0 is
+  `DAY_START_MIN` on it. `calendarOf(m)` gives `{ year, month, day, minute }`
+  for `m + DAY_START_MIN` local minutes, by UTC `Date` arithmetic, leap days
+  included. `minutesIntoDay()` now reads it. Day 1 08:00 is Friday 21
+  February 2025, 08:00, and `POWER_FAILS_MIN` is 12 March 2025, 22:00.
+- A darkness rule: `DAYLIGHT_TABLE`, Lima's civil dawn and dusk (USNO, from
+  Daylight.md), 48 `MM-DD dawn dusk` rows parsed once into `DAYLIGHT`.
+  `daylightOn()` interpolates linearly between the row on or before a date
+  and the next (12-22's next is the next year's 01-01), by the real days
+  between them in that year. `isDark(m)` is true before dawn or at or after
+  dusk. It is pure, render-safe, never stored, and the game's one darkness
+  rule.
+- Atucha's phase: `atuchaPhase(m)`. It is `"grid"` while `gridUp(m)`, the
+  false recovery included, then `"diesels"` while `m < DIESELS_STOP_MIN`,
+  then `"silent"`. `DIESELS_STOP_MIN` = `DIESELS_STOP_DAY` (50) ×
+  `MINUTES_PER_DAY` + (`DIESELS_STOP_HOUR` (14) × 60 − `DAY_START_MIN`). The
+  diesels stopping is no event and logs nothing.
+- The horizon: `atuchaHorizonVisible(roomId, m)` holds at a stop in
+  `ATUCHA_HORIZON_STOPS`, while the phase is `"diesels"` and it is dark. The
+  stops are the corners and mids with grid y ≥ `ATUCHA_HORIZON_MIN_Y`
+  (1100): 31 stops, built once.
+- The mains lag the grid. `MAINS_UP_SPANS` is derived once from
+  `GRID_UP_SPANS`: each span `[a, b)` becomes `[a + MAINS_REPRESSURE_FACTOR
+  × outage, b)`, dropped when empty, and the first span has no outage.
+  `mainsWaterUp()` reads it. With today's constants that is `[−∞,
+  POWER_FAILS_MIN)` alone: the false recovery brings back lights, not water.
+  Its finite bounds (`MAINS_CHANGES`) are scheduled settle points, with a
+  runtime `lastMains` marker beside `lastGrid`. A mains change resolves
+  nothing.
+- How a tank fills: `tankFillOf(type, site)` is `"network"` when any link at
+  the site stop is paved (`PAVED_STOPS`), and `"well"` otherwise. It is
+  stored in `BUILDING_INFO`'s new `tankFill`, derived and never saved. 205
+  buildings are network (199 casas, the 2 mixed sites, both row houses, the
+  pharmacy, the corner store), and 226 casas are well.
+- `tankRefillLph()`:
+  - a network tank refills at `NETWORK_FILL_LPH` (600) whenever below full
+    while the mains run, through a float valve;
+  - a well tank refills at its pump's `flowLph` while the pump draws, whether
+    or not the mains run;
+  - an unwired well tank (none today) refills at `HOUSE_PUMP_FLOW_LPH` while
+    the grid is up.
+
+**New content**
+
+- Atucha's gate (#344): `ATUCHA_GATE_TEXT`, the new base text, and
+  `ATUCHA_GATE_LINES`, Tom's five lines. `LIMA_STOP_TEXT.atucha_gate` is now
+  state variants, `{ reads:{ kind:"atucha" }, variants }`, each variant the
+  base text, a space and the line. The base text is written once.
+- `ATUCHA_HORIZON_LINE`, Tom's.
+- The row house's laundry no longer names a pump: "A washing machine and a
+  deep sink. The back door opens onto the garden."
+
+**Changed / Reworked**
+
+- *Wiring.* A network building's wiring loses every fixture whose appliance
+  has `flowLph`, at build (`withoutPumps()`, called by `buildBuilding()`
+  after `mergeWiring()`). Each panel becomes an inline `layout` of its
+  template less those fixtures, whether that template is `row_house`, `casa`
+  or `casa_fuses`. Every other load id is unchanged, and the WATER circuit
+  keeps the heater. `TANK_PUMPS` now holds only well buildings.
+- *`validateWiring()`.* A network building with a tank and any `flowLph`
+  load is a problem. So is a well building with a tank and none, or two, and
+  so, as before, is a `flowLph` load with no tank.
+- *Old saves.* `backfillPowerState()` keeps a `switches` entry only for a
+  load in `POWER_NET.loads`. That drops a paved home's old pump switch. It
+  stays idempotent. `breakers` and `state.tankDrawn` are untouched: a paved
+  home's drawn tank refills from the network while the mains run.
+- *`simulatePower()`.* Its `mains` option is gone: a pump's tank refills
+  while the pump draws, as a well's does in the game.
+- *The replay.* Step 6 is now "The tank drawn, the grid and the mains
+  failing during a sleep, the siren, the recovery". It draws the home's
+  network tank with a bottle and `REPLAY_PAN_FILLS` real fills, so the
+  network is refilling it at the failure and it stays drawn through the
+  false recovery. `REPLAY_TANK_MARGIN_L` and the direct write to
+  `state.tankDrawn` are gone. Steps 6 and 7's digests change, as expected:
+  `state.tankDrawn.home` is 320.5 L, against 80.25 L on `main`. Steps 1–5
+  are identical, and no step reports a problem
+  (`replay_compare.py origin/main .`).
+
+**UI**
+
+- At the gate: the new text, then one line that follows the plant's phase
+  and the dark.
+- At the town's north end, after dark, from the grid's failure until day 50,
+  14:00: the horizon line after the stop's text (`renderLocationPanel()`).
+- In a paved home (the player's, the neighbours', about half the casas): no
+  water pump in the panel or in the Electrical view. The tank refills in 100
+  minutes from empty (it was 25) while the mains run, and never after the
+  grid fails, not even in the false recovery.
+
+**Documentation**
+
+- Comments rewritten:
+  - the collapse clock;
+  - `TIME_OF_DAY_BANDS`, which no longer claims a light layer will read it;
+  - the sinks (#300's deferral is settled: no water is left in the pipes);
+  - `mainsWaterUp()`, the tank helpers and `tankRefillLph()`;
+  - BUILDING TYPES' `water` schema, `HOUSE_TANK_L`, `HOUSE_PUMP_FLOW_LPH`
+    and the `house_pump` appliance;
+  - the `row_house` and `casa` wiring templates;
+  - `LIMA_LINKS`' surface note, `BUILDING_INFO`, `TANK_PUMPS`;
+  - ROOM SCHEMA's `desc` readers;
+  - the scheduler's runtime state and its order at one minute;
+  - `validateWiring()`, `backfillPowerState()`, `simulatePower()` and the
+    replay.
+- `docs/systems/time.md`: the calendar and the dark, Atucha's phase, the
+  mains in the scheduled systems and the order at one minute, `lastMains`,
+  the constants and the costs.
+- `docs/systems/power.md`: tanks by fill (network or well), no pump in a
+  network building, the mains' lag, `validateWiring()`'s tank rule, and the
+  constants.
+- `docs/systems/fluids.md`: checked, unchanged. A sink still runs off its
+  tank while the tank holds water, else off the mains.
+- Deferred: #460, replay coverage of a well pump.
+
+**Explicitly out of scope**
+
+- The road north's view of the plant (#458), day and night beyond the
+  darkness rule (#58), the dead along the fence (#12), showers and toilets
+  (#413), potability (#52), generators (#245), the network fill rate's
+  source (#412), the benchmark's forced GC (#380), radiation (#351), #285's
+  site map.
+
+**Sections touched**
+
+- CONFIG / CONSTANTS, WORLD DATA (LIMA's text and data, BUILDING TYPES,
+  POWER SCHEMA's comments), WORLD INTERACTION (the sinks' comment, and the
+  clock beside `DAY_START_MIN`), SURVIVAL / TIME SIMULATION (the scheduler,
+  and POWER's `TANK_PUMPS` and `validateWiring()`), PERSISTENCE
+  (`backfillPowerState()`, `simulatePower()`, the replay), UI / RENDERING
+  (`DESC_READERS`, `renderLocationPanel()`).
+
+**Open questions / decisions resolved**
+
+- `DIESELS_STOP_HOUR` is 14, as recommended.
+- The north end is a line on the map: town stops with grid y ≥
+  `ATUCHA_HORIZON_MIN_Y` (1100), as recommended (option a).
+- The horizon line is appended to the stop's text in
+  `renderLocationPanel()`, after the desc and before the fire note (option
+  a).
+- The daylight table is held as `MM-DD HH:MM HH:MM` lines, parsed once
+  (option a). It matches the handoff's rows to the minute, checked by
+  script.
+- The calendar uses UTC `Date` arithmetic from `DAY_ZERO_DATE` (option a).
+- The replay's step 6 stays at the home (option a). #460 was filed for a
+  well pump.
+- Implementation choices, named:
+  - the gate's states are `grid`, `grid_dark`, `diesels`, `diesels_dark` and
+    `silent`;
+  - `PAVED_STOPS` is a set built once;
+  - `withoutPumps()` turns a network panel's template into an inline layout;
+  - the calendar, the daylight table and `isDark()` sit beside the existing
+    clock helpers (after `DAY_START_MIN`), which the file keeps under WORLD
+    INTERACTION.
+
+**Notes / assumptions**
+
+- Retunable: `DIESELS_STOP_DAY`, `DIESELS_STOP_HOUR`, `ATUCHA_HORIZON_MIN_Y`,
+  `MAINS_REPRESSURE_FACTOR`, `NETWORK_FILL_LPH` (unconfirmed, #412).
+- Performance (`perf_check.py` against `main`): every timing is within noise.
+  Sleep +4.4%, action +5.6%, `render()` +4.2%, `serializeGame()` +0.9%, all
+  well under budget.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.13.0"` → `"0.13.1"`
+
+---
+
 ## v0.13.0 — Water temperature, kettles, appliances that switch themselves off, timed transfers, and the canteen
 
 Implements: handoffs/water-temperature-and-kettles.md
