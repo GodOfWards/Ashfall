@@ -276,6 +276,129 @@ Secondary.** OSM positions are approximate centroids.
 - **Downstream is east (OSM), so the eastern channels are most likely the
   outfalls and the western ones the intakes.** Derived, unconfirmed.
 
+## From the road north, after dark (#462; 2026-10-04)
+
+What Calle 111's rural stops could see and hear of the plant at night, for
+#458. Positions are OSM (API 0.6, read 2026-10-04) in the game's grid frame
+(`Lima.md`, "The street grid"), so **Secondary**; bearings and distances from
+them are **derived**.
+
+### Where the stops stand
+
+- **The stops' names are their distance along the road.** OSM way 410678204
+  ("111", ref 038-03, asphalt) runs 7.73 km from Lima's north edge, at
+  (57, 473), to the 038-03's last stretch before the loop, at (−2128, 7243).
+  Measured along it from its south end, 5,410 m lands on (−284, 5847), which
+  is `r111_papermill`'s recorded (−284, 5846). **That the other stops follow
+  the same rule is derived** from the match and their names.
+- **Bearings are true** (the grid's north is 14° east of true north):
+
+| Stop | Grid (u, v) | To Atucha II | To Atucha I | The road heads | To the loop |
+|---|---|---|---|---|---|
+| `r111_767m` | (66, 1240) | 7.5 km, 351° | 7.6 km, 349° | 14° | 6.4 km |
+| `r111_973m` | (64, 1446) | 7.3 km, 350° | 7.4 km, 349° | 13° | 6.2 km |
+| `r111_2752m` | (−136, 3193) | 5.6 km, 345° | 5.7 km, 343° | 11° | 4.5 km |
+| `r111_papermill` | (−284, 5847) | 3.4 km, 326° | 3.6 km, 323° | 357° | 2.3 km |
+| `r111_7180m` | (−1681, 6921) | 1.7 km, 330° | 1.8 km, 324° | 320° | 550 m |
+| `r111_7334m` | (−1806, 7011) | 1.5 km, 331° | 1.7 km, 324° | 320° | 400 m |
+
+- **So:**
+  - **From the first three stops the plant is to the north, a little
+    west:** 25–35° left of the road, which runs north-north-east there.
+  - **From the paper mill on, the road turns north-west and the plant is
+    nearly dead ahead**, 5–10° to the right of it.
+  - **From the two near stops it is north-north-west, not west-north-west**
+    (as #458 first had it), 1.5–1.8 km off.
+- **Atucha I and II stand side by side across the line of sight** from the
+  near stops: Atucha I bears about 6° left of Atucha II.
+- **The paper mill** (OSM `man_made=works`, "Celulosa Campana, Papel
+  Campanita", about 9 ha) is about 380 m west-south-west (265°) of
+  `r111_papermill`, so it doesn't stand between any stop and the plant.
+- **A communication mast** with mobile antennas (OSM node 6525642046) stands
+  about 400 m from `r111_7180m`, at (−1501, 6563).
+
+### The ground between
+
+- **The land is flat, at one level, all the way.** SRTM 30 m elevations
+  (OpenTopoData, read 2026-10-04) along the road and along each stop's line
+  to Atucha II all read **23–31 m**, the plant's own cell 37 m (its
+  buildings). SRTM measures the surface, trees and roofs included, so the
+  1–5 m bumps are most likely tree belts or buildings, not the land.
+  **Secondary.**
+- **The plant's main buildings stand on the same plateau**, at the top of
+  the Paraná's cliff, **23 m** up; only the pump house is at river level.
+  **Confirmed:** the ARN's 9th national report (2022), Annex II, answer to
+  question 118.
+- **So nothing in the lie of the land hides the plant from any stop.**
+  - With an eye at 1.6 m, the horizon over flat land is about **4.8 km**
+    off (standard refraction); the earth hides less than a metre of a
+    building 7.5 km away. **Derived.**
+  - What can hide it is trees, hedgerows and buildings. **OSM maps no
+    woods, fields or tree rows along the way**, only the plant, the paper
+    mill, DeltaDock's land and the wetland east of the site. Whether a
+    tree belt blocks the view from each stop is **unconfirmed**; Street View
+    from each stop toward the plant would settle it.
+
+### How tall it is
+
+- **Atucha II's reactor building is 60 m high**, on a base-mat 60 m across,
+  around its 56 m steel sphere. Secondary: the abstract of Uchiyama, Naito
+  and Ohno (1995), full-scale vibration tests of Atucha II
+  ([OSTI](https://www.osti.gov/etdeweb/biblio/522858)), read 2026-10-04.
+  Whether the 60 m is above ground or includes the foundation isn't stated.
+- **Atucha I's steel sphere is 50 m across** (es.wikipedia;
+  [FisicaNet](https://www.fisicanet.com.ar/energias/nuclear/en02-central-atucha.php)),
+  inside a reinforced concrete building of "low-level arrangement". Its
+  building's height isn't stated. Secondary, 2026-10-04.
+- **Each unit has a vent stack on top of its reactor auxiliary building**,
+  and Atucha II a heavy water enrichment tower too (9th national report,
+  Annex III; Confirmed). Their heights aren't stated.
+
+### What is lit while the diesels run
+
+- **On the diesels, only safety loads are fed.**
+  - **Atucha I:** "In this situation, only safety related loads are fed."
+    One of its three diesels (3 × 100 %) carries them. **Confirmed:** 9th
+    national report, Annex III.
+  - **Atucha II:** the emergency power system feeds what's needed for safe
+    shutdown, residual heat removal and keeping radioactivity in, "and
+    some loads important for plant availability". **Confirmed**, same
+    source.
+- **Neither report lists lighting among those loads.** Outdoor lighting
+  (streetlamps, floodlights, the car parks) is ordinary plant load, so **it
+  most likely goes dark with the grid**. **Derived, unconfirmed:** a
+  plant's electrical single-line or a night photo after the 2019 blackout
+  would confirm it.
+- **What most likely stays lit is inside**: emergency and battery-backed
+  lighting in the buildings that are manned or monitored. The IAEA's
+  security recommendations ask for an uninterruptible supply for the
+  **central alarm station and its alarm equipment** (NSS 13,
+  INFCIRC/225/Rev.5, §4.31; Confirmed), but say nothing on perimeter
+  lighting's power. So whether the fence lights stay on is **unconfirmed**.
+- **Aviation obstruction lights:** none found.
+  - ANAC's RAAC 77, which asks for approval of any structure over 45 m, came
+    in **in January 2026**, after the era (Aviacionline, 2026-01-26;
+    Ámbito on Res. 330/2026, 2026-05-29; Secondary). The rule in force in
+    February 2025 wasn't read.
+  - Whether the domes, stacks or the site's lattice masts carry red lights,
+    and what powers them, is **unconfirmed**. A night photo would show it.
+- **No photo or account of the plant at night was found** (searched in
+  Spanish and English, 2026-10-04).
+
+### The diesels from the road (derived)
+
+- The diesel buildings aren't mapped; they stand by the reactor buildings
+  (Atucha I's Emergency Power Supply building is in front of its switchgear
+  building; Atucha II has its own emergency power building). So the near
+  stops are about **1.5–1.8 km** from them.
+- Against `Sound.md`: an open diesel would be **faint at that range on a
+  quiet night**; **one inside its building drops out within a few hundred
+  metres**. These are inside buildings, so **from the near stops they are
+  most likely not heard**, unless through their exhausts or ventilation.
+  Their sound outdoors isn't measured. **Estimate, not a fact; retunable.**
+- **From the loop**, about 900 m south of Atucha II, they're closer, but
+  still most likely too far.
+
 ## Emergency power, and what was added after Fukushima
 
 **Primary** throughout this section: the ARN's national reports to the
@@ -809,3 +932,12 @@ From #440 (2026-10-03):
 - **Which river channels are intakes and which are outfalls**, from a site
   plan. An inference is above.
 - **The guard post's exact position** against OSM's road loop.
+
+From #462 (2026-10-04):
+- **Which lights the diesels keep on**, outside the buildings: streetlamps,
+  floodlights, the fence, and any aviation lights on the domes, stacks and
+  masts. A night photo, or one from the 2019 blackout, would settle it.
+- **Whether tree belts hide the plant** from any of Calle 111's stops
+  (Street View toward the plant from each).
+- **The heights of the vent stacks, Atucha I's building, and whether
+  Atucha II's 60 m is above ground.**
