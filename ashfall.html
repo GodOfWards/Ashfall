@@ -597,6 +597,20 @@
   const GRID_RECOVERY_MIN = 5;
   const SIREN_SOURCE_STOP = "atucha_gate";
   const SIREN_NEAR_M = 1000;
+  // Atucha over the run (canon): the plant draws its cooling power from the
+  // grid while the grid is up, then runs its diesels until DIESELS_STOP_HOUR
+  // on DIESELS_STOP_DAY after the collapse, counted as POWER_FAILS_DAY is,
+  // and is dark and silent after (atuchaPhase()). Day 50 is "plausible, not
+  // exact"; the hour is a judgment call, mid-afternoon, so the first night
+  // after is the first without the lights. DIESELS_STOP_MIN is derived beside
+  // POWER_FAILS_MIN. Both retunable.
+  const DIESELS_STOP_DAY = 50;
+  const DIESELS_STOP_HOUR = 14;
+  // The town's north end, which sees the plant's lights after dark while its
+  // diesels run: the street stops at or north of this grid y, in metres, the
+  // last two rows of blocks (ATUCHA_HORIZON_STOPS). A judgment call,
+  // retunable.
+  const ATUCHA_HORIZON_MIN_Y = 1100;
   // The power network's figures (see POWER in SURVIVAL / TIME SIMULATION).
   // Electricity is a gameplay system, not a realistic one: a breaker
   // or a fuse trips at once when its running current passes its rating, with
@@ -868,7 +882,10 @@
   //                 picks the text, { kind, … }, a DESC_READERS entry
   //                 (RENDERING): "load" with its `id`, on while that load is
   //                 powered (isPowered()); "grid", on while the grid is
-  //                 up (gridUp()). Each reader returns one of its
+  //                 up (gridUp()); "atucha", Atucha's phase (atuchaPhase():
+  //                 grid, diesels, silent), with `_dark` while it is lit
+  //                 and dark (isDark()), the plant's gate's. Each reader
+  //                 returns one of its
   //                 own `states`, and `variants` holds a text for every one
   //                 (validateRoomSchema()). A later reader (weather, time of
   //                 day, damage) is one more DESC_READERS entry with its own
@@ -3739,11 +3756,27 @@ x_sn_9 m_sn_sn_sn sn p
 -900,9273 -1004,9313 -1203,9313 -1368,9263 -1367,9232 -1648,9088 -1669,9114 -2316,8669 -2679,8572 -2724,8531 -2754,8347 -2760,8552 -2817,8534 -2847,8388 -2846,8548 -2920,8537 -2962,8388 -3005,8376 -2962,8531 -3139,8515 -3311,8550 -3473,8657 -3730,9033 -4004,9287 -4673,9202 -5371,8991 -6501,9038 -6830,9026 -7165,8945
 -842,9225 -900,9273
 `;
+  // Atucha's gate (#344): its text, true in every phase, and the line that
+  // follows it for the plant's phase and the dark (Tom's), one per
+  // DESC_READERS.atucha state. LIMA_STOP_TEXT composes them into the gate's
+  // state variants.
+  const ATUCHA_GATE_TEXT = "The road ends at the entrance to the Atucha complex, with wire fences on both sides. A guard post stands on an island between the lanes, cones in front of it, and nobody is in it. Past it, cars parked off to the left, and beyond them a grey dome over red-brick blocks.";
+  const ATUCHA_GATE_LINES = {
+    grid: "Behind you, the switchyard hums inside its fence.",
+    grid_dark: "Behind you, the switchyard hums inside its fence. Past the dome, the plant's lights are on.",
+    diesels: "The switchyard is silent. Somewhere past the dome, engines are running.",
+    diesels_dark: "The switchyard is silent. Somewhere past the dome, engines are running, and lights are on in some of the buildings.",
+    silent: "The switchyard is silent, and nothing sounds from the plant."
+  };
+  // What the town's north end sees of the plant after dark while its diesels
+  // run, after the stop's text (atuchaHorizonVisible()). Tom's.
+  const ATUCHA_HORIZON_LINE = "Far to the north, over the fields, Atucha's lights are on. There are no others.";
   // The hand-written stops' text, by stop id: the plaza, the
   // level crossings, the landmarks' and named scenery's blocks, the road
   // north, the railway and the station. Each was checked against its source
   // when written (OSM, imagery, directories, Tom first-hand); the game names
-  // none of them. The corner store's site is a designed placement.
+  // none of them. The corner store's site is a designed placement. A text is
+  // a string, or state variants (ROOM SCHEMA's `desc`): Atucha's gate's.
   const LIMA_STOP_TEXT = {
     x_av11_c10: "The corner of the plaza, where Avenida 11 meets Calle 10. Paths cut diagonally across the square under the trees.",
     m_av11_c12_c10: "Avenida 11, along the side of the plaza. Benches under the trees, a shopping bag left on one of them.",
@@ -3775,7 +3808,8 @@ x_sn_9 m_sn_sn_sn sn p
     r111_papermill: "Calle 111. The paper mill stands off to the west, down a side road.",
     r111_7180m: "Calle 111, near the river. The Camino Provincial 038-03 branches off here.",
     r111_7334m: "Calle 111. The Camino Provincial 038-09 branches off here.",
-    atucha_gate: "The road ends at the Atucha complex. The fence runs off both ways, and the gate is shut. Beyond it, the plant's domes."
+    atucha_gate: { reads:{ kind:"atucha" }, variants:Object.fromEntries(Object.keys(ATUCHA_GATE_LINES)
+      .map(st=> [st, ATUCHA_GATE_TEXT + " " + ATUCHA_GATE_LINES[st]])) }
   };
   // The text every other stop reads, by its type, a mid stop's and a
   // corner's: one variant per stop, picked by stableHash() of its id mod the
@@ -3857,6 +3891,11 @@ x_sn_9 m_sn_sn_sn sn p
     const river = lines(LIMA_RIVER).map(l=> l.split(/\s+/).map(p=> p.split(",").map(Number)));
     return { codes, stops, links, river };
   })();
+  // The town's north end (ATUCHA_HORIZON_MIN_Y), by stop id: its street
+  // stops, corners and mids, never a rural, rail or station stop, and so
+  // never a room inside a building. Built once.
+  const ATUCHA_HORIZON_STOPS = new Set(LIMA.stops
+    .filter(s=> (s.kind === "c" || s.kind === "m") && s.y >= ATUCHA_HORIZON_MIN_Y).map(s=> s.id));
   // A code's street name, or null.
   function streetName(code){ return LIMA.codes[code] || null; }
   // A stop's address and `room` (ROOM SCHEMA): a corner is at its streets,
@@ -7353,6 +7392,26 @@ x_sn_9 m_sn_sn_sn sn p
   // How many minutes of [fromM, toM) the grid was up (effectiveAge()).
   function gridUpMinutes(fromM, toM){
     return GRID_UP_SPANS.reduce((sum, [a, b])=> sum + Math.max(0, Math.min(b, toM) - Math.max(a, fromM)), 0);
+  }
+  // The minute since the collapse Atucha's diesels stop at, derived as
+  // POWER_FAILS_MIN is.
+  const DIESELS_STOP_MIN = DIESELS_STOP_DAY * MINUTES_PER_DAY + (DIESELS_STOP_HOUR * 60 - DAY_START_MIN);
+  // Atucha's phase at minute `m`: "grid" while the grid is up, its false
+  // recovery included; then "diesels" until DIESELS_STOP_MIN; then
+  // "silent". Worked out when read, never stored: the diesels stopping is
+  // no event, and nothing logs it. The text simply reads differently from
+  // then on.
+  function atuchaPhase(m = minutesSinceCollapse()){
+    if(gridUp(m)) return "grid";
+    return m < DIESELS_STOP_MIN ? "diesels" : "silent";
+  }
+  // Whether the plant's lights show from room `roomId` at minute `m`: a
+  // stop at the town's north end (ATUCHA_HORIZON_STOPS), after dark, while
+  // the diesels run. Not while the grid is up: the horizon line starts with
+  // the grid's failure (Tom). Render-safe; one set lookup, and the phase and
+  // the dark only on a match.
+  function atuchaHorizonVisible(roomId, m = minutesSinceCollapse()){
+    return ATUCHA_HORIZON_STOPS.has(roomId) && atuchaPhase(m) === "diesels" && isDark(m);
   }
   // mainsWaterUp() is whether the town's water network runs: the mains a
   // sink without a tank draws on, and what a house pump draws from to fill
@@ -13957,7 +14016,11 @@ x_sn_9 m_sn_sn_sn sn p
   // simplification, retunable).
   const DESC_READERS = {
     load:     { states:["on", "off"], read:(r)=> isPowered(r.id) ? "on" : "off" },
-    grid:     { states:["on", "off"], read:()=> gridUp() ? "on" : "off" }
+    grid:     { states:["on", "off"], read:()=> gridUp() ? "on" : "off" },
+    // Atucha's phase (atuchaPhase()), and while it is lit, whether it is
+    // dark (isDark()): silent, it reads the same day and night.
+    atucha:   { states:["grid", "grid_dark", "diesels", "diesels_dark", "silent"],
+      read:()=>{ const p = atuchaPhase(); return p === "silent" || !isDark() ? p : p + "_dark"; } }
   };
   // A room's description as it reads now.
   function roomDescText(room){
@@ -13975,7 +14038,10 @@ x_sn_9 m_sn_sn_sn sn p
         ? ` A fire is burning here — roughly ${fmtDuration(room.fireMinutesLeft).replace(/[()]/g,"")} of fuel left.`
         : " A fire is burning here.";
     }
-    document.getElementById("roomDesc").textContent = roomDescText(room) + heatNote;
+    // Atucha's lights on the horizon, where and when they show
+    // (atuchaHorizonVisible()), after the stop's own text.
+    const horizon = atuchaHorizonVisible(state.currentRoom) ? " " + ATUCHA_HORIZON_LINE : "";
+    document.getElementById("roomDesc").textContent = roomDescText(room) + horizon + heatNote;
     document.getElementById("clockLabel").textContent = hasWatch() ? getClockText() : getVagueClockText();
   }
   function renderStatsPanel(){
