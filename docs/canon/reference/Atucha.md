@@ -335,9 +335,47 @@ them are **derived**.
     building 7.5 km away. **Derived.**
   - What can hide it is trees, hedgerows and buildings. **OSM maps no
     woods, fields or tree rows along the way**, only the plant, the paper
-    mill, DeltaDock's land and the wetland east of the site. Whether a
-    tree belt blocks the view from each stop is **unconfirmed**; Street View
-    from each stop toward the plant would settle it.
+    mill, DeltaDock's land and the wetland east of the site.
+
+### Trees and buildings in the way (satellite, 2026-10-04)
+
+Read off Esri World Imagery, 0.5 m, with each stop's line to Atucha II drawn
+on it. The imagery's own metadata dates it: **12 September 2020** (WorldView-2)
+at the near stops, **27 August 2024** at the paper mill, **30 March 2025**
+(WorldView-3) at `r111_2752m` and the town end. **Secondary** for what the
+picture shows; whether a row hides the plant is **derived** from the angles
+below, not seen from the ground. **Retunable.**
+
+- **The angles that decide it.** A tree 10 m tall, 500 m off, stands 1.1°
+  above the eye. A building's top 40–60 m up (see "How tall it is") stands
+  0.3–0.5° up at 7.5 km, 0.4–0.6° at 5.6 km, about 0.7–1° at 3.4 km and
+  1.4–2° at 1.6 km. **So any tree row or house within about a kilometre of
+  a far stop, across the line, hides the domes.** Derived.
+- **The country is cut into fields by tree rows**, most of them dense and
+  continuous, casting shadows of the order of 10 m (a rough height, not
+  measured). Several stretches of Calle 111 have one along a verge.
+- **`r111_767m` and `r111_973m`, at the town's edge: hidden.** The line runs
+  across house lots with garden trees, an east–west hedgerow about 200 m
+  north, then homesteads and a row of long sheds (a poultry farm, by their
+  shape). Derived: the domes, under half a degree up, are behind all of it.
+- **`r111_2752m`: most likely hidden.** A dense row lines the road's
+  **east** side, out of the way. On the west, the line crosses a yard with a
+  shed and parked vehicles 100–200 m off, then a hamlet of weekend plots with
+  houses, pools and trees 300–500 m off. Derived: hidden from the stop
+  itself; a glimpse of the dome tops between houses can't be ruled out.
+- **`r111_papermill`: most likely hidden, though the plant is almost dead
+  ahead.** North-west of the stop is a wooded lot of scattered trees, about
+  200 × 250 m. The road's north-west stretch has a continuous tree row
+  along its **north-east** side, and the plant stands about 6° right of the
+  road's line, so behind that row. Derived: seen, if at all, through gaps in
+  the row.
+- **`r111_7180m` and `r111_7334m`: in plain view.** The road's tree row is
+  on its **south-west** side, behind the walker. On the north-east there is
+  a grass verge and then about **1.2 km of open rough field** to the plant's
+  fence, with nothing standing on the line. A second row lines the west
+  edge of DeltaDock's car park, to the right; from `r111_7180m` the line
+  passes its southern tip. **Derived from 2020 imagery**: the field could
+  have been planted or built on since, which a later image would show.
 
 ### How tall it is
 
@@ -353,6 +391,42 @@ them are **derived**.
 - **Each unit has a vent stack on top of its reactor auxiliary building**,
   and Atucha II a heavy water enrichment tower too (9th national report,
   Annex III; Confirmed). Their heights aren't stated.
+- **The domes are sunk about 20 m into the ground.** "Esa bola que se ve
+  clavada en la tierra completa su curva y su recorrido 20 metros hacia
+  abajo", of the "semiesferas de hormigón de 56 metros" (Infobae,
+  2019-07-08, a visit to the site; Secondary). The article doesn't say which
+  unit; the 56 m points to Atucha II.
+  - **So Atucha II's dome most likely tops out about 40 m above ground:**
+    the 60 m building, less 20 m below ground. **Derived, unconfirmed**; a
+    section drawing would settle it.
+- **The stacks reach about as high as their domes.** In an aerial photo of
+  11 May 2010 from over the river (Wikimedia Commons, "Central Nuclear Atucha
+  I - II.JPG", Mrcukilo, CC BY-SA 3.0), each unit's square stack rises beside
+  its dome to about the dome's top. Read off a photo in perspective, so a
+  rough **estimate**, not a measurement.
+  - **For scale only:** the ARN takes Atucha I's *effective* release height,
+    its plume's height above the release point once it has risen, as
+    **40 m** (ARN PI-3/07, Amado, §4.1; [OSTI](https://www.osti.gov/etdeweb/servlets/purl/20966800);
+    Confirmed as the ARN's modelling figure). That isn't the stack's height.
+- **The tallest thing on the site is a 100 m weather mast.** "It is
+  worthwhile mentioning the operation of a meteorological station (with a
+  100 m tower) at the site" (9th national report, Chapter 3, on Atucha II's
+  siting; **Confirmed**). The 2025 report mentions the station without the
+  height. Its position isn't mapped in OSM.
+  - **The same 2010 photo shows several tall lattice masts, banded red and
+    white**, inland of the plant, the tallest a slender guyed mast well
+    above the domes. Which of them is the weather mast isn't known.
+    **Secondary.** Red-and-white banding is daytime obstruction marking; it
+    says nothing about whether they carry lights at night.
+  - **OSM maps three communication towers south of the plant**, toward the
+    near stops: nodes 3037210492, 12995178843 and 12995178815, about
+    1.4–1.6 km, 1.0–1.2 km and 0.7–0.9 km from `r111_7180m` and
+    `r111_7334m`. No heights are tagged. **Secondary.**
+- **A 100 m mast clears the tree rows from every stop.** Its top stands
+  about 0.8° up at 7.5 km, above a 10 m tree anywhere beyond about 750 m.
+  **Derived.** If it carries a light, that light is the one thing on the
+  site a far stop could see over the trees; whether it does is
+  **unconfirmed**.
 
 ### What is lit while the diesels run
 
@@ -937,7 +1011,10 @@ From #462 (2026-10-04):
 - **Which lights the diesels keep on**, outside the buildings: streetlamps,
   floodlights, the fence, and any aviation lights on the domes, stacks and
   masts. A night photo, or one from the 2019 blackout, would settle it.
-- **Whether tree belts hide the plant** from any of Calle 111's stops
-  (Street View toward the plant from each).
-- **The heights of the vent stacks, Atucha I's building, and whether
-  Atucha II's 60 m is above ground.**
+- **Whether the 100 m weather mast and the red-and-white lattice masts carry
+  night lights**, and on what power; and where the weather mast stands.
+- **Whether the tree rows hide the plant from the far stops** as the
+  satellite reading says: Street View toward the plant from each stop. The
+  near stops' open field is read from 2020 imagery.
+- **The heights of the vent stacks and of Atucha I's building, and Atucha
+  II's dome above ground** (about 40 m, derived from a press figure).
