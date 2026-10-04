@@ -193,8 +193,7 @@ above it uses the shop's address; private homes get none (#237).
   - **restaurants and bars:** El Galpón de los Felipetti, Federicos, Saba
     Resto-bar, Bar El Abuelo, Pulpería El Rincón;
   - **fuel:** D.A.P.S.A. on Avenida 11, and another station further south.
-- **Estación Lima's goods shed:** OSM maps a `building=warehouse`, about
-  29 × 26 m, beside the two station buildings.
+- **Estación Lima's goods shed:** see Rail, below (#455).
 - **Not found in Lima:** a *ferretería* (the corralón is the nearest thing),
   a supermarket, *almacén* or *autoservicio*. Neither Street View (Tom) nor
   the listings turned one up, and web searches on 2026-09-28 found nothing
@@ -203,6 +202,9 @@ above it uses the shop's address; private homes get none (#237).
   settled it by design (2026-09-28):** no real one needs finding, because
   almacenes stand on corners every few blocks, Argentine towns not zoning
   shops out of residential streets (#325).
+  Google Maps does label one, **"Almacén Berra"**, near Calle 113 by the
+  railway (Tom's screenshot, 2026-10-04, #455). Unconfirmed: a map label
+  only.
 
 ## Homes as seen from the street (Tom, Street View, 2026-09-27)
 
@@ -626,7 +628,9 @@ Named points in the town, with the address OSM gives. Status as of February
   - Escuela de Educación Primaria 9 "Juan Bautista Alberdi" (Avenida 11 256,
     sharing the site with Escuela de Adultos 705 "Patricias Argentinas");
   - Primaria 17 "Rosario Vera Peñaloza" (Calle 52);
-  - Secundaria 1 "Fernando Feder" (Calle 2 568);
+  - Secundaria 1 "Fernando Feder" (Calle 2 568), as OSM spells it; Google
+    Maps has "Fernando Fader", the painter, which is the likely spelling.
+    Unconfirmed (#455);
   - Secundaria Técnica 5 "Doctor Oscar Melillo" and Instituto Superior de
     Formación Técnica 195 (Calle 111);
   - Escuela Especial 503 "Irma Althabe de Guelvenzu" (Calle 8);
@@ -719,8 +723,79 @@ through the OSM API (`api/0.6/map`, the box 34.070–34.025 S, 59.225–59.170 W
     common thing in the region" (Tom, from knowing the region, 2026-09-27).
     No lights and no barriers. Status: Tom's first-hand knowledge; no
     document read.
-- Secondary, 2026-09-26: OSM, as above. Whether passenger trains ran to Lima
-  in the era is unconfirmed.
+- Secondary, 2026-09-26: OSM, as above.
+- **Passenger trains did stop at Lima in the era.** Trenes de Buenos Aires
+  served it in the 2000s; it reopened to passengers on **13 October 2021**
+  on the Retiro–Rosario service of Trenes Argentinos Operaciones, without
+  stops for the Córdoba and Tucumán trains. Secondary, 2026-10-04:
+  [es.wikipedia, *Estación Lima*](https://es.wikipedia.org/wiki/Estaci%C3%B3n_Lima)
+  (read through its API). A search summary of Diario El Norte gives Lima
+  231 and 228 boardings in 2025; secondary, page not read.
+- **Who ran the line in February 2025:** Nuevo Central Argentino (NCA), the
+  Mitre's freight concession holder. Its 30-year concession expired in
+  December 2022, was extended 18 months by Resolución 960/22, then a year
+  more "en forma precaria" by Ministerio de Economía **Resolución 497/2024**
+  (June 2024), to at least June 2025. Under the law in force, "la
+  administración de vías, estaciones y circulación de trenes" should have
+  returned to the state, and hadn't. Secondary, 2026-10-04:
+  [enelSubte, 2024-06-27](https://enelsubte.com/noticias/prorrogaron-por-segunda-vez-la-concesion-vencida-de-nca/).
+  So NCA most likely still administered the track and stations, with the
+  state (ADIF, Trenes Argentinos Infraestructura) as owner. **Derived.**
+
+### Estación Lima's grounds and goods shed (#455)
+
+- **The layout** (OSM, read 2026-10-04 through the OSM API; secondary;
+  sizes measured from the nodes):
+  - the **passenger building** (way 168559865, about 383 m², irregular) on
+    the platforms, by the main line; the station node is tagged
+    `operator=Trenes Argentinos`, `railway:position=109.8`;
+  - **two buildings on the siding** (way 993195238, `service=siding`), both
+    7–8 m from it, on the south-west side of the main line:
+    - a **`building=warehouse`** (way 794595573, mapped 2020), **about
+      26 × 13 m (351 m²)**, about 80 m north-west of the passenger building,
+      at about 34.0409 S, 59.1954 W. This file earlier gave it as 29 × 26 m,
+      which matches neither building;
+    - a **`building=train_station`** (way 168559864, mapped 2012), **about
+      26.5 × 15.7 m (415 m²)**, across the siding from the passenger
+      building;
+  - a fourth building (way 794595574, about 36 × 15 m) by the yard track
+    further north-west.
+- **Which of the two on the siding is the historic goods shed is
+  unconfirmed.** A building on a siding opposite the passenger building is
+  the usual place for a *galpón de cargas*, so it could be either. What
+  would confirm it: a closer Street View of each, or a station plan.
+- **The grounds are a park.** Google Maps labels them **"Parque, Estación
+  de Trenes, Lima"**, and the strip across the track by Calle 111 "Parque
+  Urbano". Street View (Tom, captured March 2026) shows mown grass, lamp
+  posts, paved paths, a gazebo tent, two dark red container-style kiosks,
+  a brick monolith, and **two national flags** flying in front of the
+  passenger building. The fourth building is labelled **"Locos del Moño"**
+  (unidentified) and the oval beside it the **"Trompódromo de Lima"**, a
+  track for spinning cars. Status: Tom's Street View and Maps screenshots,
+  2026-10-04, interpreted; the kiosks' and the flags' meaning is
+  unconfirmed.
+- **The municipality** lists "Estación de Trenes, Camino a Baradero y 111,
+  3487-481241" among the Secretaría de Lima's dependencies. Confirmed,
+  2026-10-04:
+  [zarate.gob.ar, Dependencias Municipales](https://zarate.gob.ar/dependencias-municipales/).
+  What the listing covers (the passenger building, the park, or only a
+  phone line) is unconfirmed. No ordinance or *comodato* for the station's
+  buildings was found (zarate.gob.ar's search, SIBOM bulletins 10754 and
+  13639, web searches).
+- **The warehouse in March 2025** (Esri World Imagery, Vantor WorldView-3,
+  captured **2025-03-30**, 0.31 m): a rust-red pitched roof with its ridge
+  along the track and a pale slab or annex at the north-west end; grass up
+  to its walls, a tree against its south side, **no worn path, no
+  vehicles**. The building on the siding opposite the station has a pale
+  grey roof, also in grass. Neither shed carries a Google Maps label.
+  **Derived from imagery:** the warehouse looks disused.
+- **Not found:** any lessee, business, association or event in either shed,
+  and any electricity supply to either. The park's lamp posts mean a supply
+  reaches the grounds.
+- **How the game uses this:** the shed keeps contents (Tom, 2026-10-04,
+  #308): "an unlabelled railway shed in a park, it could have stuff in it."
+  What it holds, and whether any of its wiring is live, are design, open
+  on #308.
 
 ## The Atucha nuclear complex
 
