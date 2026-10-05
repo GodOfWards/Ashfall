@@ -33,8 +33,8 @@ keeps the minute its state was true at, and brings it forward only when it
 is asked for:
 
 - food: a perishable row's `agedAt` (`docs/systems/spoilage.md`);
-- batteries: a device's `durability.asOf` while it is on, its charge
-  `batteryCharge()`;
+- batteries: a device's `chargeAsOf` while it is on, each of its cells'
+  charge `cellChargeIn()`;
 - water temperature: a fluid's `temp`, true at its `at`, cooling read by
   `waterTempOf()` ([Fluids](fluids.md));
 - everything the scheduler owns (below): `settledAt`.
@@ -140,20 +140,35 @@ resolves need them; an entry whose kettle has gone off or left its floor is
 dropped when next read (`liveKettles()`). Appliance stops need no list: they
 are saved state, `state.power.stops`.
 
-**Batteries.** A device on batteries (durability mode "time") drains only
-while it is on. Turning it on (`switchDevice()`) makes its charge true from
-now and schedules its running out; turning it off writes the charge down.
-Fresh batteries in a device that is on do the same as turning it on. At a
-death, one walk of every item list switches off each on device whose charge
-is out by then, and says so where the player can hear it.
+**Batteries.** A device on cells (registry `takesCells`: a cell size by its
+tag, `cell-aa` or `cell-d`, and a count) holds its cells as real items, in
+its `cells`, each with its own `charge` (0–100), and they weigh what they
+weigh. A loose cell keeps its charge as it is. While the device is on, its
+cells drain together, each by its `drainRate` a minute, worked out when read
+from its `chargeAsOf` (`cellChargeIn()`). Turning it on (`switchDevice()`)
+makes their charge true from now and schedules its running out, when its
+weakest cell is flat (`weakestCellCharge()`); turning it off writes each
+cell's charge down (`writeCellCharges()`). A device holding no cells can't be
+turned on. Remove batteries switches it off first and gives back each cell
+at its own charge; Insert batteries, offered only on a device holding none,
+takes the fullest of the cells carried (`fullestCarriedCells()`). At a
+death, one walk of every item list switches off each on device whose weakest
+cell is out by then, its cells written down, and says so where the player can
+hear it.
+
+Cells stack only at an equal charge, so spent ones form their own rows in
+one group, each with a meter; no charge is ever shown as a figure but a
+voltage-test meter's Test on a loose cell (`doTestCell()`, its resting
+voltage by `CELL_RESTING_VOLTS`). A device or a row of cells a spawn pool
+rolls holds a found charge (`foundCharge()`), keyed on its loot roll;
+hand-placed ones are full.
 
 ## Invariants
 
 - **Every writer of scheduled state registers.** A writer of `heatActive`
   calls `scheduleHeat()`, a writer of `timerMinutes` calls
   `scheduleTimer()`, and a device is switched on only through
-  `switchDevice()` (or fresh batteries, which schedule their own death).
-  A missed registration is an event that never fires; the replay page's
+  `switchDevice()`. A missed registration is an event that never fires; the replay page's
   consistency check (`replayProblems()`) compares the lists against a full
   scan after every step.
 - **Between two advances, `settledAt` is now** and every reachable list is
@@ -163,7 +178,7 @@ is out by then, and says so where the player can hear it.
   minute or for now, and every completion inside a span is an event.
 - **Nothing scheduled is saved.** The saved fields are the systems' own
   (`timerMinutes`, `fireMinutesLeft`, `cookMinutes`, `boilMinutes`,
-  `tankDrawn`, `agedAt`, `asOf`, a fluid's or a dish's water's `temp`, a
+  `tankDrawn`, `agedAt`, `chargeAsOf`, a cell's `charge`, a fluid's or a dish's water's `temp`, a
   kettle's `on`, `state.power.stops`); the lists and marks are rebuilt on
   load.
 - **A clock event fires once**: `lastClock` marks how far they have fired,
@@ -182,7 +197,7 @@ is out by then, and says so where the player can hear it.
   `scheduleBatteryDeath()`: what a writer of scheduled state calls. A kettle
   is switched only through `doSwitchKettle()` and `kettleOff()`, and an
   appliance's stop through `doSwitchLoad()` and the stop rules.
-- `batteryCharge()`: a device's charge at a minute.
+- `cellChargeIn()`: a device's cell's charge at a minute.
 
 ## Constants
 
@@ -196,6 +211,10 @@ is out by then, and says so where the player can hear it.
   diesels stop.
 - `BOIL_MINUTES`: how long tainted water must be at the boil, without a
   break, to come clean.
+- `CELL_FULL_CHARGE`, `CELL_TAGS`: a cell's scale and its sizes.
+- `FOUND_DEVICE_NO_CELLS_PCT`, `FOUND_CHARGE_MIN`, `FOUND_DEVICE_CHARGE_SKEW`,
+  `FOUND_CELL_CHARGE_SKEW`: what a rolled device or row of cells holds.
+- `CELL_RESTING_VOLTS`: a loose cell's resting voltage by its charge.
 
 ## Costs
 
