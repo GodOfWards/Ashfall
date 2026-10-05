@@ -1358,6 +1358,164 @@ seen. Tom's call; every line is retunable.
   (`Lima.md`, #455). **No working light.** If it has fittings, old mercury
   vapour fits its age (inference).
 
+## Shop refrigeration and the till (#486, 2026-10-05)
+
+An almacén's drinks cooler, a pharmacy's fridge and a till, as sold or
+required in Argentina. All read 2026-10-05. Makers are named here as
+sources; game text never names them.
+
+**The almacén's drinks cooler** (*exhibidora vertical*, single glass door).
+What Argentine makers print:
+
+| Maker, model | Litres | Plate | Refrigerant |
+|---|---|---|---|
+| Inelro MT-12 | 311 | **295 W, 1.6 A**, 220 V 50 Hz | R290, 1–4 °C |
+| Inelro MT-14 | 370 | **295 W, 1.7 A** | R290, 54 g, 1–4 °C |
+| Inelro MT-17 | 470 | **380 W, 2.2 A** | R290 |
+| Teora TEV375 | 313 (retail listing) | **0.94 A** | R134a, 120 g |
+| Teora TEV500 | not given | **1.53 A** | R134a, 150 g |
+| Briket M3200 | 315 gross | **2.30 A**, 220 V 50 Hz | R134a, 0.153 kg |
+| Briket M4200 | 392 gross | **2.80 A** | R134a, 0.180 kg |
+
+- **Sources, all primary (the makers' manuals and sheets):**
+  - Inelro: the MT-12/14/17 manual and the MT-14 sheet (May 2025, REV02),
+    linked from the maker's store page
+    ([page](https://inelrostore.com/producto/mt-14/),
+    [sheet](https://drive.google.com/file/d/1YjjBLEl1dCHjwiiadwSiecwUI9NcEFph/view),
+    [manual](https://drive.google.com/file/d/1a49HY6aUrXIYlNhvTJn4of1Rj-f-L9ix/view));
+  - Teora (Ezpeleta, Buenos Aires): the TEV manual
+    ([PDF](https://www.teora.com.ar/manuales/MANUAL-8.pdf)); the TEV375's
+    313 L is from a retail listing (secondary);
+  - Briket: the vertical exhibidoras' manual, revision 13, 2015-05-06
+    ([PDF](https://www.briketweb.com.ar/productos/10/manual.pdf)).
+- **The plates print amps; Inelro also prints watts.** Teora and Briket give
+  amps only. Inelro's 295 W at 1.6 A implies a power factor of about 0.84
+  (derived).
+- **The spread is wide:** 0.94 A (Teora, 313 L) to 2.30 A (Briket, 315 L,
+  an older R134a design lit by a fluorescent tube). The current R290
+  generation sits at **1.6–1.7 A for 311–370 L**.
+- **Climate class 4** in all three: Inelro "ambientes de hasta 32°C y 65% de
+  humedad"; Briket "temperatura ambiente de 30ºC"; Teora 30 °C, 55 %.
+- **No freezer compartment.** Inelro runs 1–4 °C, its cut-out settable from
+  1 to 10 °C; none of the three lists a freezer. Inelro and Teora defrost
+  automatically.
+- **From the manuals:**
+  - Inelro: "Enchufe el equipo en una toma eléctrica exclusiva; no use
+    prolongadores ni adaptadores"; **wait 5 minutes** after unplugging; on
+    power-up the controller **delays the compressor about a minute**;
+    190–245 V, with a stabiliser outside that range;
+  - Teora: its own socket, no extensions or adapters, a stabiliser of at
+    least 1,000 W where the voltage swings;
+  - Briket: 1.5 mm² wiring to the socket, **15 A** fuses, an earthed
+    three-pin socket.
+- **The commonest size: unconfirmed.** No statistic was found. Every
+  maker's single-door range centres on **300–400 L**, and so does
+  Embraco's sizing table below.
+
+**Its start surge.** No cooler maker prints one. Embraco's catalogue names
+the compressor for an "upright glass door bottle cooler" (R290, 50 Hz,
+MBP/LST, rated at 40.5 °C ambient): **300 L, EM2X3117U; 400 L,
+EM2X3121U.** Their locked-rotor currents:
+- **EM2X3117U 15.3 A, EM2X3121U 15.6 A**: made in China, 220–240 V 50 Hz;
+- **EM2X3121U 7.80 A**: made in Brazil, 200–220 V 50 Hz / 230 V 60 Hz.
+
+**Primary** for Embraco (the Asia-Pacific catalogue cited under
+"Fridge-freezer",
+[PDF](https://www.embraco.com/download/product/embraco-catalog-apa_compressed.pdf)).
+So a 300–400 L cooler's surge is **about 8–16 A**, some 5–9 times its
+running current (derived). Which build reaches Argentina is unconfirmed.
+Brazil supplies most of Argentina's hermetic compressors (CNDC C-1349,
+under "Fridge-freezer", secondary), so **7.8 A is the likelier figure**
+(inference).
+
+**Its duty and daily energy: unconfirmed.**
+- **No Argentine sheet prints daily energy**, and Argentina's energy label
+  (IRAM 2404-3) covers household refrigerators only. No label for
+  commercial refrigeration was found (search summaries, secondary).
+- **The one figure found:** Bord's EX309-M (309 L, R600a, sold in Peru) is
+  **182 W, 1.8 kWh/24 h**, climate class 5. Secondary (a retailer's
+  listing,
+  [efe.com.pe](https://www.efe.com.pe/vitrina-exhibidora-bord-ex309-m-309-lt-blanco-ex309-m.html)).
+  That is **about 41 % duty** (derived: 1.8 kWh ÷ 24 h ÷ 182 W), at a
+  test condition the listing doesn't state.
+- **Applied to Inelro's 295 W**, 41 % would be about **2.9 kWh a day, an
+  average of 120 W** (derived).
+- **A February shop runs longer than that** (inference): it is near the
+  cooler's 30–32 °C limit, and the door opens with every sale. How much
+  longer is unconfirmed. A field measurement of a single-door bottle cooler
+  in a warm shop, or a maker's kWh/24 h with its ambient, would settle it.
+- **The on/off cycle's length:** not found.
+
+**The pharmacy's fridge.** The province's rule describes a household
+fridge-freezer.
+- **Decreto 3.521/2000** (La Plata, 2000-10-27), the *Petitorio
+  Farmacéutico* under Ley 10.606, Capítulo 2 "Aparatos y útiles para
+  farmacias", **Art. 16**: "La heladera estará destinada sólo a la
+  conservación de medicamentos, manteniendo adecuadas condiciones de
+  higiene y no menor de 270 DC (9 pies). Se efectuará un control periódico
+  de la temperatura a través de una planilla … que se ubicará en la puerta
+  de la heladera, donde se registrará diariamente la temperatura y
+  novedades al respecto y del normal funcionamiento de la heladera (cortes
+  de luz, etc.) … La heladera deberá contener sachets refrigerantes en el
+  congelador o freezer y botellas de plástico con agua en la parte inferior
+  de la misma … Asimismo, deberá colocarse un termómetro para heladera de
+  máxima y mínima, tipo varilla, adherido a una madera y colocado en el
+  centro de la heladera." **Primary**
+  ([normas.gba.gob.ar](https://normas.gba.gob.ar/documentos/Bjdz4Uy0.html)).
+  - Decreto 966/2001 amended only its Art. 5 (search summary, secondary).
+    No later change to Art. 16 was found.
+  - **It says nothing about power**: no generator, no backup. A cut is
+    written on the chart.
+- **So: at least 270 L, a freezer compartment, medicines only.** A
+  household fridge-freezer meets that. A purpose-built medical fridge,
+  which has no freezer, doesn't as written (inference). What Lima's or
+  Zárate's pharmacies actually have is unconfirmed. The rule points to **a
+  household fridge-freezer kept for medicines**, whose figures are under
+  "Fridge-freezer" above.
+- **A pharmacy that vaccinates needs more.** Resolución 67/1995 (national,
+  *centros de vacunación*, 1995-05-04): "Heladera/s, eléctricas o a gas, de
+  uso exclusivo para vacunas, en buen estado de conservación y
+  funcionamiento, con descarga a tierra. Capacidad mínima total de 9 pies
+  cúbicos, con freezer o congelador", a temperature chart every 6 hours on
+  the door, and "**Grupo electrógeno, en caso de no poseer heladeras a
+  gas.**" **Primary**
+  ([argentina.gob.ar](https://www.argentina.gob.ar/normativa/nacional/norma-18487/actualizacion)).
+  Whether Lima's pharmacy vaccinates is unconfirmed.
+- **Hospital pharmacies, for contrast** (not a community pharmacy's rule):
+  Resolución 1023/2012 wants "heladeras con congelador o freezer",
+  thermometers read at least twice a day, and the fridges "conectados
+  simultáneamente a la red eléctrica local y a una red alternativa de
+  energía (generador)". **Primary**
+  ([argentina.gob.ar](https://www.argentina.gob.ar/normativa/nacional/resoluci%C3%B3n-1023-2012-199577/texto)).
+- **The pharmacists' guidance** (Colegio de Farmacéuticos de la Provincia
+  de Buenos Aires, *Medicamentos termolábiles y cadena de frío*, March
+  2022): a "Frigorífico o Heladera … suele usarse en … farmacias
+  comunitarias", 2–8 °C; plugged into "la red general, con toma de tierra,
+  no a derivaciones"; a warning not to unplug it; water bottles that "en
+  caso de corte de electricidad pueden mantener el frío durante 6-12 horas,
+  siempre y cuando el frigorífico/heladera no se abra durante este tiempo";
+  glass doors "conveniente". **Primary** for the Colegio's guidance, which
+  is advice, not a rule
+  ([PDF](https://colfarlp.org.ar/wp-content/uploads/2023/09/Termolabiles_y_Cadena_de_Frio1.pdf)).
+  FEFARA's bulletin of October 2022 repeats it.
+- **Purpose-built pharmacy fridges are sold in Argentina.** A laboratory
+  supplier lists Midea Biomedical's MC-5L line: 2–8 °C, no freezer,
+  42–1,006 L; the 316 L **250 W, 3.0 A**, the 416 L 300 W, 3.5 A; alarms
+  and a backup battery for the display; USD 940 + IVA for some models.
+  Secondary ([onelab.com.ar](https://www.onelab.com.ar/heladera-farmaceutica-2-a-8c)).
+  Its amps are higher than watts ÷ 220 V; unexplained.
+
+**The till.** A *controlador fiscal* is a ticket printer driven by a host,
+a PC or a cash register.
+- **Hasar SMH/P-441F** (impact; Hasar is in Tigre, Buenos Aires):
+  "Alimentación: 220V - AC", "**Consumo máximo: 40W**". **Primary**
+  ([manual](http://grupohasar.com/wp-content/uploads/2018/09/SMH-P-441F-Manual-del-Usuario.pdf)).
+- **Epson TM-T900FA** (thermal, under AFIP RG 3561/2013): "100-242 VCA ;
+  50-60 Hz ; **Consumo: Aprox. 0.35 A**", about **77 W** at 220 V
+  (derived, ignoring power factor). **Primary**
+  ([manual, rev. H](https://files.support.epson.com/pdf/pos/bulk/um_tmt900fa_revh.pdf)).
+- **The host's draw** was not researched.
+
 ## Not yet researched
 
 - **A shop and its home (#454):** which arrangement is usual in Lima or
@@ -1400,3 +1558,9 @@ seen. Tom's call; every line is retunable.
   maker's figure for a magnetic fluorescent ballast's loss; the line current during a
   discharge lamp's run-up; a sourced utilisation factor for the fitting
   count; whether shed fittings carry a correcting capacitor.
+- **Shop refrigeration (#486):** a single-door cooler's daily energy or
+  duty from an Argentine source, or measured in a warm shop, and its cycle
+  length; the commonest single-door size; which Embraco build (Chinese,
+  15.6 A, or Brazilian, 7.8 A, locked-rotor) Argentine coolers carry; what
+  Lima's pharmacy actually keeps its medicines in, and whether it
+  vaccinates; a till host's draw.
