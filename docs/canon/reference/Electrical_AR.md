@@ -1179,6 +1179,132 @@ AEA 770 (dwellings) sends every specific circuit, ACU included, to it (Tabla
   makers, each has its own circuit at 10–16 A. Which a given building has is
   the installer's choice.
 
+## Lighting a galpón (#484, 2026-10-05)
+
+What sheds, workshops and works halls are lit with, and what each fitting
+draws at 220 V. All read 2026-10-05. Makers are named here as sources; game
+text never names them.
+
+**Which fitting, around February 2025.** No survey was found, so the mix is
+**unconfirmed**. What the sources show:
+- **A tall shed's fitting is a *campana*** (high-bay) with a discharge lamp:
+  **metal halide** (*mercurio halogenado*, HQI) or **sodium** (SAP), at
+  **250 or 400 W**, on a magnetic ballast and igniter. An Argentine LED
+  installer's 2022 case study replaced "campanas equipadas con lámparas de
+  mercurio halogenado de 400W" in a 200 × 50 m shed, 10 m high, with
+  **200 W LED campanas**. Secondary
+  ([Led Solution, 2022-01-14](https://www.ledsolution.com.ar/iluminacion-led-galpones--news--1-1003)).
+  Argentine retailers sell 400 W HQI lamps and ballasts as current stock
+  (search summaries, secondary).
+- **Older sheds had mercury vapour** (*mercurio*, HPMV), 250 or 400 W. **Their
+  lamps can't be made or imported since 2020-01-01**; the ban doesn't stop
+  their use. Resolución SGAyDS 75/2019, art. 1 and Anexo I, item 5:
+  "Lámparas de vapor de mercurio a alta presión (HPMV) para usos generales de
+  iluminación". **Primary**
+  ([Boletín Oficial text, FAO copy](https://faolex.fao.org/docs/pdf/arg183554.pdf)).
+  So by 2025 a mercury fitting is either still burning its last lamp or
+  relamped with metal halide or LED (inference).
+- **Fluorescent tubes stayed legal.** The same annex bans only linear tubes
+  over a mercury limit: tri-phosphor under 60 W above **5 mg**,
+  halophosphate up to 40 W above **10 mg** (item 4). A low workshop or a
+  shop's back room under a 2 × 36 W T8 *regleta* is plausible; how common:
+  unconfirmed.
+- **LED campanas, 100–200 W, are the new fitting.** Retail listings: Lumenac
+  Venus **100 W, 12,000 lm**, 220–240 V; Lumenac Saturno 140 W; Macroled
+  Highbay **200 W, 28,000 lm**, 100–240 V, IP65. Secondary
+  ([electricidadmaza](https://electricidadmaza.com.ar/producto/campana-industrial-led-venus-100w-lumenac/),
+  [electromisiones](https://www.electromisiones.com.ar/campanas/12089-campana_industrial_led_macroled_highbay_200w_28000lm_6500k_luz_fria.html)).
+  The makers' own sheets weren't reachable.
+
+**What each draws.** Line watts are the lamp plus the ballast. Wamco (an
+Argentine ballast maker) prints them for every ballast. **Primary**, Wamco's
+catalogue sheets
+([mercury 220164](https://wamco.com.ar/wp-content/uploads/2014/10/220164.pdf),
+[metal halide 220165](https://wamco.com.ar/wp-content/uploads/2014/10/220165.pdf),
+[sodium 220166](https://wamco.com.ar/wp-content/uploads/2014/10/220166.pdf),
+[electronic fluorescent 220172](https://wamco.com.ar/wp-content/uploads/2014/10/220172.pdf)).
+
+| Fitting | Lamp | Line power | Line current, corrected to λ 0.9 | Uncorrected λ |
+|---|---|---|---|---|
+| Mercury 250 W | 2.13 A | **268–270 W** | 1.35 A | 0.57 |
+| Mercury 400 W | 3.25 A | **423–425 W** | 2.15 A | 0.59–0.60 |
+| Metal halide 250 W | 2.2–3 A | **270–275 W** | 1.36–1.39 A | 0.42–0.56 |
+| Metal halide 400 W (HPI-Plus, 390 W lamp) | 3.4 A | **420 W** | 2.12 A | 0.56 |
+| Metal halide 400 W (HQI, 420 W lamp) | 4.2 A | **445–450 W** | 2.17 A | 0.52 |
+| Sodium 250 W | 3 A | **285 W** | 1.40 A | 0.42 |
+| Sodium 400 W | 4.6 A | **445 W** | 2.20 A | — |
+| Fluorescent 2 × 36 W T8, electronic ballast | — | **74 W** | 0.34 A (λ > 0.95) | — |
+
+- **Without a capacitor the current is far higher:** a 450 W metal-halide
+  fitting at λ 0.52 draws **about 3.9 A** at 220 V (derived: 450 ÷ (220 ×
+  0.52)). Wamco "recommends" a capacitor; whether a given fitting has one is
+  the installer's choice.
+- **A magnetic fluorescent ballast** loses about 7–9 W per 36 W tube. EU
+  Regulation 245/2009's ballast efficiencies for 50 Hz magnetic ballasts:
+  36 W T8 **83.4 % (B1), 79.5 % (B2)**; 58 W T8 **86.1 %, 82.2 %**. So a
+  36 W tube draws **43–45 W** with its ballast and a 58 W tube **67–71 W**
+  (derived). Secondary (Vossloh-Schwabe's restatement of the regulation's
+  table,
+  [Technical Details, 2016](https://www.vossloh-schwabe.com/fileadmin/user_upload/Service_und_Downloads/Literatur/Technische_Hinweise_-_konventionell/Technical_Details_Fluorescent_Lamps_2016_EN.pdf)).
+  An Argentine maker's figure: not found.
+- **An LED campana draws its rated watts**; retail listings give no power
+  factor for the two above. A 200 W LED is sold as the 400 W metal halide's
+  replacement (Led Solution, above).
+- **Nameplates print watts.** Wamco's sheets and labels give lamp watts, lamp
+  amps and line watts; the LED listings give watts. Primary for Wamco,
+  secondary for LED.
+
+**Start-up.**
+- **A discharge lamp draws more while it warms up**, then won't restart hot.
+  Osram's HQI technical information: "Full luminous flux is reached only a
+  few minutes after the lamp is switched on. The start-up current may be up
+  to **twice the operating current** depending on the control gear"; its
+  graphs reach full values by about **4 minutes**. "The lamps will restart
+  only after they have cooled down for **2 to 15 minutes**." **Primary**
+  ([Osram, POWERSTAR HQI Technical Information, 2007](https://www.farnell.com/datasheets/301647.pdf)).
+  Philips's MASTER HPI-T Plus 400 W gives **6 A run-up maximum against 3.4 A
+  nominal** (1.8×), ignition within 10 s. **Primary**
+  ([datasheet](https://www.licht-zubehoer.de/mediafiles/Philips%20Datenblatt/Philips%20HPI-T%20Plus%20400W%20645%20E40%20(MASTER).PDF)).
+  These are lamp currents; the line current rises in proportion only
+  roughly (unconfirmed).
+- **Fluorescent and LED: no surge worth modelling** found. An LED driver's
+  inrush lasts microseconds (unconfirmed, not researched).
+
+**How much light, and so how many fittings.**
+- **The legal floor is Decreto 351/79, Anexo IV** (Ley 19.587's regulation,
+  "Basada en norma IRAM-AADL J 20-06"), Tabla 2, *valor mínimo de servicio*
+  in lux. **Primary**
+  ([argentina.gob.ar](https://www.argentina.gob.ar/normativa/recurso/32030/dto351-1979-anexo4/htm)):
+
+  | Place | lux |
+  |---|---|
+  | Depósitos (hotels; general); Mecánica general: depósito de materiales; piezas sueltas y productos terminados | 100 |
+  | Plásticos — depósito, piezas grandes / pequeñas / expedición | 100 / 200 / 300 |
+  | Garajes y estaciones de servicio, general / gomería | 100 / 200 |
+  | Talleres de montaje: trabajo grueso / mediano (chasis de vehículos) | 200 / 400 |
+  | Máquinas, herramientas y bancos de trabajo: general; soldadura | 300 |
+  | Carpintería: general / bancos y máquinas | 100 / 300 |
+  | Aserraderos: general / corte y clasificación | 100 / 200 |
+  | Papelera: local de máquinas / corte, terminación / inspección | 100 / 300 / 500 |
+
+  Tabla 1's "Visión ocasional solamente" is **100 lux** ("depósito de
+  materiales voluminosos"). Uniformity: **E mínima ≥ E media / 2**, measured
+  0.80 m above the floor (1.3). A railway goods shed has no row of its own.
+- **AEA 90364-7-771 wasn't checked** for a lighting level or fitting count;
+  the lux floor above is the legal one.
+- **Fittings per area, derived and unconfirmed.** By the lumen method, area
+  per fitting = lumens × utilisation × maintenance ÷ lux. Taking utilisation
+  × maintenance as **0.5** (a judgment for a bare high shed, not sourced):
+
+  | Fitting | lm | 100 lux | 200 lux | 300 lux |
+  |---|---|---|---|---|
+  | 400 W metal halide (Philips HPI-T Plus, 32,000 lm, primary above) | 32,000 | 160 m² | 80 m² | 53 m² |
+  | 200 W LED (Macroled, 28,000 lm, secondary) | 28,000 | 140 m² | 70 m² | 47 m² |
+  | 100 W LED (Lumenac, 12,000 lm, secondary) | 12,000 | 60 m² | 30 m² | 20 m² |
+
+  What would confirm it: a lighting design for an Argentine shed, or a
+  maker's utilisation table.
+
 ## Not yet researched
 
 - **A shop and its home (#454):** which arrangement is usual in Lima or
@@ -1216,3 +1342,8 @@ AEA 770 (dwellings) sends every specific circuit, ACU included, to it (Tabla
   most-sold sizes in 2025; whether offices and public buildings ran on/off or
   inverter units; whether AEA 771's APM circuit may carry a split; the basis
   of an inverter's energy label.
+- **Lighting a galpón (#484):** which fitting is commonest in 2025 sheds; an
+  Argentine maker's own sheet for an LED campana (power factor, inrush) and
+  for a magnetic fluorescent ballast's loss; the line current during a
+  discharge lamp's run-up; a sourced utilisation factor for the fitting
+  count; whether shed fittings carry a correcting capacitor.
