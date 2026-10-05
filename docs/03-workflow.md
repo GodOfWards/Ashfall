@@ -33,6 +33,14 @@ issue asks for gets one filed first.
 "Design decisions to make during implementation" it left open. Works on a
 branch, never on `main`.
 
+- **The version check, before building.** The spec's recorded version (a
+  handoff's `Current shipped version:`, a `designed` issue's
+  `Checked against:`) is compared with `GAME_CONFIG.VERSION`. If they
+  differ, every premise the spec rests on is re-checked against the file,
+  not only the identifiers it names: a premise can go false without
+  anything failing. One that no longer holds stops the session: it asks
+  Tom and builds nothing. A spec with no recorded version is checked as if
+  it differed.
 - **Phases.** A handoff large enough to build in phases is committed per
   phase, each message starting `Phase N:`, and the branch is pushed after
   every phase commit, so a reclaimed session loses nothing.
@@ -41,7 +49,8 @@ branch, never on `main`.
 
 **A pass Tom asks for directly.** Tom can ask any session to make a change
 without a handoff, when the spec already exists (an issue body, say). The
-approval covers that scope and nothing past it, and the wrap is the same.
+approval covers that scope and nothing past it, and the version check and
+the wrap are the same.
 
 ## Asking and deciding
 
@@ -100,8 +109,12 @@ facts it needs are in `docs/canon/reference/` or quoted in the body, and the
 body is the spec: a handoff, or a pass from the spec, can be written from it
 without more discussion. Only implementation choices a coding session names
 are left. A planning or design session applies it when Tom confirms the design is done,
-and removes it if the scope reopens. It says nothing about whether the work
-can start: what an issue waits on is in GitHub's blocking links, and a
+and removes it if the scope reopens. A `designed` body opens with
+`Checked against: vX.Y.Z`, the `GAME_CONFIG.VERSION` its premises were last
+verified at: set when `designed` is applied, updated whenever the body is
+re-verified against the file, and compared by the coding session's version
+check (see Sessions). `designed` says nothing about whether the work can
+start: what an issue waits on is in GitHub's blocking links, and a
 `designed` issue may still be `deferred`.
 
 **Templates.** Each kind has a template in `.github/ISSUE_TEMPLATE/`, and an
@@ -179,15 +192,23 @@ A handoff is the spec a coding session implements: exact rules, thresholds,
 formulas and edge cases, leaving nothing Tom should have been asked about.
 The template is `04-handoff-template.md`.
 
+**One live at a time.** The top level of `handoffs/` holds at most one live
+handoff; sibling handoffs landed together by one planning session count as
+one. A planning session that would land a handoff while another is live
+doesn't land it: it waits, or supersedes the live one (archived and
+bannered, see Superseded), and Tom decides which.
+
 **Writing one, at the end of a planning session:**
 
-1. Every question that needs Tom has an answer in it. A narrow implementation
+1. Nothing else is live at the top level of `handoffs/` (see One live at a
+   time).
+2. Every question that needs Tom has an answer in it. A narrow implementation
    choice may be left open under "Design decisions to make during
    implementation"; a design question may not. If any "Open questions for
    Tom" remain, the handoff isn't ready, and says so.
-2. State the change type (see Versions).
-3. Fill the template, omitting sections that don't apply.
-4. Save it as `handoffs/<feature-name>.md` and land it on `main` at the wrap,
+3. State the change type (see Versions).
+4. Fill the template, omitting sections that don't apply.
+5. Save it as `handoffs/<feature-name>.md` and land it on `main` at the wrap,
    directly or by pull request. A handoff left on a branch is invisible to the
    coding session.
 
@@ -200,9 +221,11 @@ mattered, it's in the handoff. Landing the spec before the code is what lets
 version, and never renamed: the name is how the changelog cites it.
 
 **Live or not.** One test: would a coding session given this file and today's
-`ashfall.html` produce the right change? If not, it isn't live, and it moves
-to `handoffs/archive/` with `git mv` (never delete-and-recreate, which loses
-the commit date). The folder claims one thing only: everything at the top
+`ashfall.html` produce the right change? It is run twice: by the planning
+session that lands a handoff, on whatever is already live, and by the coding
+session's version check (see Sessions), on a handoff that went stale while it
+waited. If not, it isn't live, and it moves to `handoffs/archive/` with
+`git mv` (never delete-and-recreate, which loses the commit date). The folder claims one thing only: everything at the top
 level is an instruction. Nothing moves back; new work on the same ground is
 a new handoff.
 

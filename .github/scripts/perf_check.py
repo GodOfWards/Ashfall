@@ -19,6 +19,12 @@ side's loads, and the two medians compared:
 A base with no benchmark page (one without the ashfallBenchResults string)
 is not timed: the head is reported and checked against the budgets alone.
 
+Chromium is launched with gc() exposed (GC_FLAGS), and the page forces a
+full collection before every run it times (benchTiming() in ashfall.html),
+so a timing measures its own work, not the collector catching up on garbage
+the runs before it left. A base whose page doesn't call gc() is timed as it
+always was.
+
 The report is a Markdown table in the job's summary ($GITHUB_STEP_SUMMARY),
 and on stdout.
 
@@ -53,6 +59,8 @@ REGRESSION_FLOOR_MS = 2
 # Page loads per side, and how long one may take before the job fails.
 PAGE_LOADS = 3
 PAGE_TIMEOUT_S = 600
+# Exposes gc() to the page, which benchTiming() calls before each run.
+GC_FLAGS = ["--js-flags=--expose-gc"]
 
 # The compared timings, in report order, with what each times.
 TIMINGS = {
@@ -132,7 +140,8 @@ def main():
         sides = {"head": head_path} if base_path is None else {"head": head_path, "base": base_path}
         results = {side: [] for side in sides}
         with sync_playwright() as p:
-            browser = p.chromium.launch(executable_path=os.environ.get("PERF_CHROMIUM") or None)
+            browser = p.chromium.launch(executable_path=os.environ.get("PERF_CHROMIUM") or None,
+                                        args=GC_FLAGS)
             try:
                 for n in range(PAGE_LOADS):
                     for side, path in sides.items():

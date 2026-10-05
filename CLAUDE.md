@@ -35,8 +35,9 @@ writes a handoff, and has no wrap.
 - **Up front:** the open issues list. Nothing else.
 - **As the discussion needs it:** the same as a planning session.
 - **Output:** issues filed and edited as the discussion goes, and `designed`
-  applied when Tom confirms a design is done. Nothing else. A design session
-  can end mid-thread; an open question is a valid place to stop.
+  applied, with its `Checked against:` line, when Tom confirms a design is
+  done. Nothing else. A design session can end mid-thread; an open question
+  is a valid place to stop.
 
 **Research session**: looks up real-world facts, with full network access.
 Never writes game code.
@@ -54,13 +55,18 @@ Never writes game code.
   `handoffs/`, and the `docs/systems/` docs it names. Nothing else: not the
   changelog, the backlog, the canon, or `handoffs/archive/`, which is never
   implemented from.
+- **Before building:** the spec's recorded version against
+  `GAME_CONFIG.VERSION`. If they differ, its premises are re-checked against
+  the file, and one that no longer holds stops the session to ask Tom.
+  → `docs/03-workflow.md`
 - **At the wrap:** `docs/03-workflow.md` (The wrap) and
   `docs/05-changelog-guide.md`.
 - **Output:** one pull request from a branch, never a commit to `main`. Phase
   commits (`Phase N: …`) are pushed as they're made.
 
 A pass Tom asks for directly, from a spec that already exists, follows the
-coding session's wrap without a handoff (`docs/03-workflow.md`).
+coding session's version check and wrap without a handoff
+(`docs/03-workflow.md`).
 
 ## Rules that bind
 
@@ -106,8 +112,8 @@ coding session's wrap without a handoff (`docs/03-workflow.md`).
 - **Issues** carry a tier, a kind and follow their kind's template; the body
   is the current truth; closed only by `Closes #NN`. `designed` marks one
   whose design Tom has confirmed done. → `docs/03-workflow.md`
-- **Handoffs**: the top level of `handoffs/` holds only live ones; spent and
-  superseded ones move to `handoffs/archive/`, never renamed. →
+- **Handoffs**: one live at a time, at the top level of `handoffs/`; spent
+  and superseded ones move to `handoffs/archive/`, never renamed. →
   `docs/03-workflow.md`
 - **Filenames carry no version**; a doc's number is permanent.
 - If the issue tracker is unreachable, say so and continue.

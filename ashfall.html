@@ -500,7 +500,7 @@
   // ==================================================
   // CONFIG / CONSTANTS
   // ==================================================
-  const GAME_CONFIG = { VERSION: "0.13.1" };
+  const GAME_CONFIG = { VERSION: "0.13.2" };
   function versionCompat(v){ const p = v.split("."); return p[0] + "." + p[1]; }
   const STACKABLE = new Set(["Food","Medical","Materials"]);
   const SAVE_KEY = "ashfall_save_v" + versionCompat(GAME_CONFIG.VERSION);
@@ -11662,10 +11662,18 @@ x_sn_9 m_sn_sn_sn sn p
   // in milliseconds, with their median. `prepare` runs before each, untimed,
   // and what it returns is handed to `check`, which runs after each, untimed
   // too, and throws if the run was not what it should have been.
+  //   Where the page has gc() (Chromium launched with --expose-gc, as
+  // perf_check.py does), a full collection runs after `prepare` and before
+  // the clock starts, so no run pays for garbage an earlier one left: the
+  // scenario rebuilds make plenty, and the collector catching up on them
+  // was landing on whatever came next. Without gc() (an ordinary browser)
+  // the runs are timed as they come, which a check by hand against the
+  // budgets can live with.
   function benchTiming(prepare, timed, check){
     const runs = [];
     for(let i = 0; i < BENCH_WARMUP_RUNS + BENCH_RUNS; i++){
       const before = prepare ? prepare() : null;
+      if(typeof gc === "function") gc();
       const t0 = performance.now();
       timed();
       const ms = performance.now() - t0;
@@ -11689,7 +11697,8 @@ x_sn_9 m_sn_sn_sn sn p
   // window.ashfallBenchResults, once: the result's shape is perf_check.py's
   // to read. A throw sets { error } instead, and logs it. The sleep and the
   // action each get a fresh scenario per run; render() and serializeGame()
-  // share one. The lines are functional, retunable.
+  // share one. Every run starts on a collected heap where the page allows
+  // (benchTiming()). The lines are functional, retunable.
   function runBenchmark(){
     try{
       const sleep = benchTiming(()=>{ benchScenario(); return state.totalMinutes; }, doSleep, benchCheckSleep);

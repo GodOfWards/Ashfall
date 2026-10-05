@@ -20,6 +20,33 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 <!-- New entries go directly below this line. -->
 
+## v0.13.2 — The benchmark collects before it times; one live spec at a time
+
+Implements #380 and #152, bundled as one pass from their issue bodies (no handoff).
+
+**Fixed**
+- The benchmark's `serializeGame()` timing swung with the garbage the timings before it left: each `benchScenario()` rebuild's garbage was still being collected while the save was timed, so the collector's work landed on the save (20–45 ms on a save of about 50 ms). `benchTiming()` now calls `gc()` when the page has one (`typeof gc === "function"`), after `prepare` and before the clock starts, for every timing, not only the save.
+- `.github/scripts/perf_check.py` launches Chromium with `--js-flags=--expose-gc` (`GC_FLAGS`), so CI always has `gc()`. A page opened with `?bench` in an ordinary browser has none, and is timed as before.
+
+**Documentation**
+- `CLAUDE.md` and `docs/03-workflow.md` (#152): a spec's recorded version is compared with `GAME_CONFIG.VERSION` before building, and a premise that no longer holds stops the session to ask (Sessions, Coding; the pass Tom asks for directly follows it too). A `designed` issue body opens with `Checked against: vX.Y.Z` (Issues, Readiness; the Design session's output line). One live handoff at a time, siblings from one planning session counting as one, with the planning session that lands one confirming nothing else is live (Handoffs: One live at a time, Writing one, Live or not).
+- The comments on `benchTiming()` and `runBenchmark()`, and `perf_check.py`'s docstring, say why every run starts on a collected heap.
+- Nothing was deferred: the `Checked against:` backfill #152 listed is complete (#388 carries it).
+
+**Explicitly NOT changed**
+- Play: the change is on the benchmark page only. `BENCH_WARMUP_RUNS`, `BENCH_RUNS`, the budgets and the regression tolerance are as they were.
+
+**Sections touched**
+- PERSISTENCE (the benchmark: `benchTiming()`, and the comment on `runBenchmark()`).
+
+**Notes / assumptions**
+- This pull request's own Performance report times its base without the forced collection, so it shows `serializeGame()` markedly faster (measured locally against v0.13.1: 102.3 ms to 68.4 ms, −33%). That is the fix, not a speed-up of saving.
+- A spec with no recorded version is checked as if its version differed: an implementation choice, retunable.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.13.1"` → `"0.13.2"`
+
+---
+
 ## v0.13.1 — Atucha over the run, and the water network
 
 Implements: handoffs/atucha-and-water-network.md
