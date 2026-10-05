@@ -878,7 +878,9 @@ Named points in the town, with the address OSM gives. Status as of February
     water, not for the comisaría.
   - **Reading, not fact:** the masts make it a radio base, and a radio base
     would usually have batteries for its radios. That isn't a generator for
-    the building. No source was checked.
+    the building. No source was found for it (#477).
+- **Its radio:** the province's network, the masts and power are in
+  `Police_Radio_AR.md` (#477).
 - **Inside: not found.** No photograph or description of the rooms. Whether
   it holds detainees is unconfirmed: the Ministerio de Seguridad's
   Resolución 3340/2011, which closed cells and capped detention at 48 hours,
