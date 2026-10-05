@@ -35,7 +35,8 @@ Settling a row adds the age gained since its `agedAt` to every unit, sets
 floor, or in a container that is neither a fridge nor a freezer. In a fridge
 or a freezer (tagged `fridge` or `freezer`), when its load would be powered
 with the grid up, as the power state stands (`coldStoreWired()`: its switch
-on and its path closed, or no load wired to it at all), its powered rate
+on and its path closed, or no load wired to it at all, unless its building
+is deliberately unsupplied: [Power](power.md)), its powered rate
 while the grid was up over the span (`gridUpMinutes()`) and its unpowered
 rate the rest of it; otherwise its unpowered rate throughout. The rates are
 `spoilageRate()`'s.
