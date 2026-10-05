@@ -1185,8 +1185,27 @@ What sheds, workshops and works halls are lit with, and what each fitting
 draws at 220 V. All read 2026-10-05. Makers are named here as sources; game
 text never names them.
 
-**Which fitting, around February 2025.** No survey was found, so the mix is
-**unconfirmed**. What the sources show:
+**Which fitting, around February 2025.** No survey of 2025 was found; the
+one survey is of 2017. What the sources show:
+- **Big industry's lighting in 2017, by energy used:** LED **31.5 %**,
+  fluorescent tube **26.8 %**, "sodio baja presión" **10.0 %**, metal halide
+  **7.7 %**, mercury vapour **7.0 %**, *mezcladora* (blended mercury) **7.0 %**,
+  halogen **6.6 %**, compact fluorescent 1.8 %, incandescent 1.3 %, "sodio
+  alta presión" 0.3 %. All 187 GWh. **Primary**: the Secretaría de Energía's
+  *Balance de Energía Útil*, Industria, Tabla 5.1, from the EU-funded
+  "Eficiencia Energética en Argentina" project (Landaveri and Romano, GFA,
+  2021,
+  [PDF](https://eficienciaenergetica.net.ar/img_publicaciones/07291036_BEUIndustriasMuyGrandes.pdf)).
+  Its limits:
+  - **only the *Muy Grandes***, 76 validated surveys, 22 % of them, taken by
+    phone and e-mail under the 2020 lockdown; no medium or small firm was
+    surveyed;
+  - it measures **energy, not fittings**. An LED draws about half a
+    discharge lamp's watts for the same light, so LED's share of the light
+    was larger than 31.5 % (inference);
+  - **low-pressure sodium at 10 % against high-pressure at 0.3 %** is the
+    reverse of what sheds use (low-pressure is a road lamp); probably the
+    respondents' labels. Unconfirmed.
 - **A tall shed's fitting is a *campana*** (high-bay) with a discharge lamp:
   **metal halide** (*mercurio halogenado*, HQI) or **sodium** (SAP), at
   **250 or 400 W**, on a magnetic ballast and igniter. An Argentine LED
@@ -1209,12 +1228,26 @@ text never names them.
   halophosphate up to 40 W above **10 mg** (item 4). A low workshop or a
   shop's back room under a 2 × 36 W T8 *regleta* is plausible; how common:
   unconfirmed.
-- **LED campanas, 100–200 W, are the new fitting.** Retail listings: Lumenac
-  Venus **100 W, 12,000 lm**, 220–240 V; Lumenac Saturno 140 W; Macroled
-  Highbay **200 W, 28,000 lm**, 100–240 V, IP65. Secondary
+- **LED campanas, 100–200 W, are the new fitting.** Lumenac (Villa
+  Martelli, Buenos Aires) sells the Saturno for "depósitos, naves
+  industriales, pasillos con racks". Its sheet, August 2024. **Primary**
+  (the maker's sheet, a dealer's copy,
+  [PDF](https://tienda.cruzzolin.com.ar/wp-content/uploads/2024/08/SATURNO-LUMENAC.pdf)):
+
+  | Model | W | lm | Power factor | Weight |
+  |---|---|---|---|---|
+  | Saturno 100 | 100 | 12,000 | 0.9 | 3.8 kg |
+  | Saturno 140 | 140 | 17,000 | 0.9 | 3.9 kg |
+  | Saturno 165 | 165 | 20,000 | 0.9 | 5.9 kg |
+  | Saturno 200 | 200 | 24,000 | 0.9 | 5.9 kg |
+
+  100–277 V, 5000 K, IP65, 50,000 h. The driver has surge protection (4 kV
+  differential, 6 kV common) and over-temperature, short- and open-circuit
+  protection. It gives no inrush figure.
+  Retail listings add Lumenac's Venus, **100 W, 12,000 lm**, and Macroled's
+  Highbay, **200 W, 28,000 lm**, IP65. Secondary
   ([electricidadmaza](https://electricidadmaza.com.ar/producto/campana-industrial-led-venus-100w-lumenac/),
   [electromisiones](https://www.electromisiones.com.ar/campanas/12089-campana_industrial_led_macroled_highbay_200w_28000lm_6500k_luz_fria.html)).
-  The makers' own sheets weren't reachable.
 
 **What each draws.** Line watts are the lamp plus the ballast. Wamco (an
 Argentine ballast maker) prints them for every ballast. **Primary**, Wamco's
@@ -1247,8 +1280,9 @@ catalogue sheets
   table,
   [Technical Details, 2016](https://www.vossloh-schwabe.com/fileadmin/user_upload/Service_und_Downloads/Literatur/Technische_Hinweise_-_konventionell/Technical_Details_Fluorescent_Lamps_2016_EN.pdf)).
   An Argentine maker's figure: not found.
-- **An LED campana draws its rated watts**; retail listings give no power
-  factor for the two above. A 200 W LED is sold as the 400 W metal halide's
+- **An LED campana draws its rated watts** at a power factor of 0.9
+  (Lumenac, above): a 200 W Saturno takes about **1.0 A** at 220 V
+  (derived: 200 ÷ (220 × 0.9)). A 200 W LED is sold as the 400 W metal halide's
   replacement (Led Solution, above).
 - **Nameplates print watts.** Wamco's sheets and labels give lamp watts, lamp
   amps and line watts; the LED listings give watts. Primary for Wamco,
@@ -1299,11 +1333,30 @@ catalogue sheets
   | Fitting | lm | 100 lux | 200 lux | 300 lux |
   |---|---|---|---|---|
   | 400 W metal halide (Philips HPI-T Plus, 32,000 lm, primary above) | 32,000 | 160 m² | 80 m² | 53 m² |
-  | 200 W LED (Macroled, 28,000 lm, secondary) | 28,000 | 140 m² | 70 m² | 47 m² |
-  | 100 W LED (Lumenac, 12,000 lm, secondary) | 12,000 | 60 m² | 30 m² | 20 m² |
+  | 200 W LED (Lumenac Saturno 200, primary above) | 24,000 | 120 m² | 60 m² | 40 m² |
+  | 100 W LED (Lumenac Saturno 100, primary above) | 12,000 | 60 m² | 30 m² | 20 m² |
 
   What would confirm it: a lighting design for an Argentine shed, or a
   maker's utilisation table.
+
+**An estimate for #308's four buildings** (2026-10-05). **Unconfirmed**:
+reasoned from the survey, the 2020 mercury ban and what's on sale, not
+seen. Tom's call; every line is retunable.
+- **The paper-mill hall** (Celulosa Campana; see `Lima.md`). A big works,
+  the survey's own kind, with eight more years of relamping since 2017
+  and no mercury lamps imported since 2020: **LED campanas, about 200 W**,
+  perhaps with a few 400 W metal-halide fittings left. Likeliest of the
+  four.
+- **The building-materials shed** (a *corralón*): a tall, open shed that a
+  small firm lights cheaply and changes only when a lamp fails. **Either
+  250–400 W metal-halide campanas or 100 W LED ones.** Which is a coin toss.
+- **The repair shop**: a low roof, bench work. **Fluorescent *regletas*,
+  2 × 36 W on magnetic ballasts, about 90 W each** (derived above), or LED
+  tubes in the same fittings at about half that. Fluorescent is the guess
+  for a small shop that hasn't spent on it.
+- **The railway goods shed**: looks disused, and no supply to it was found
+  (`Lima.md`, #455). **No working light.** If it has fittings, old mercury
+  vapour fits its age (inference).
 
 ## Not yet researched
 
@@ -1342,8 +1395,8 @@ catalogue sheets
   most-sold sizes in 2025; whether offices and public buildings ran on/off or
   inverter units; whether AEA 771's APM circuit may carry a split; the basis
   of an inverter's energy label.
-- **Lighting a galpón (#484):** which fitting is commonest in 2025 sheds; an
-  Argentine maker's own sheet for an LED campana (power factor, inrush) and
-  for a magnetic fluorescent ballast's loss; the line current during a
+- **Lighting a galpón (#484):** a survey of small and medium firms' lighting,
+  or of any firm's after 2017; an LED campana's inrush; an Argentine
+  maker's figure for a magnetic fluorescent ballast's loss; the line current during a
   discharge lamp's run-up; a sourced utilisation factor for the fitting
   count; whether shed fittings carry a correcting capacitor.
