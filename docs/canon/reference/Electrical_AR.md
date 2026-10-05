@@ -1031,6 +1031,154 @@ read 2026-10-04). **Confirmed.**
   light, an inference.
 - These are 2008 rules. **A PH wired before them may differ: unconfirmed.**
 
+## Split air conditioners (#475, 2026-10-05)
+
+Wall-mounted splits for one room, as sold in Argentina. All read 2026-10-05.
+Makers are named here as sources; game text never names them.
+
+**Sizes are sold in *frigorías*:** kilocalories an hour of cooling, so
+**1 kW = 860 frigorías**. Surrey's 2022 table prints both (2.73 kW,
+2,348 kcal/h), primary, below. The sizes on sale are about **2,250–2,300,
+3,000, 4,500 and 5,500** frigorías. One maker put the split market at **64 %
+3,000, 16 % 2,300, 13 % 4,500 and 7 % 5,500 or more** (BGH's Brusa, in
+*Integración Empresaria*, undated; secondary,
+[article](https://integracionempresaria.com.ar/acondicionadores-de-aire-buenas-expectativas-en-todo-el-mercado/)).
+Their share in 2025 is unconfirmed.
+
+**What an on/off unit draws.** Surrey's 553VF range, manual of December
+2016, 220 V 50 Hz, class A cooling, class C heating. **Primary** (the maker's
+manual,
+[PDF](https://www.surrey.com.ar/productos/manuales/553VF(H-Q)02M.pdf)).
+Heat-pump (*frío/calor*) models:
+
+| Frigorías (derived) | Model | Cooling | Input, cooling | Current, cooling | Input, heating | Current, heating | Breaker ("Disyuntor") |
+|---|---|---|---|---|---|---|---|
+| 2,250 | 553VFQ0921F | 2.62 kW | **800 W** | **3.77 A** | 790 W | 3.65 A | 10 A |
+| 2,900 | 553VFQ1201F | 3.40 kW | **1,010 W** | **4.80 A** | 1,060 W | 4.95 A | 16 A |
+| 4,550 | 553VFQ1801F | 5.30 kW | **1,610 W** | **7.70 A** | 1,700 W | 7.98 A | 16 A |
+| 5,500 | 553VFQ2201F | 6.40 kW | **1,920 W** | **8.90 A** | 1,960 W | 9.10 A | 16 A |
+
+- **Cooling-only models** (553VFH, same sizes): 790 W / 3.64 A, 1,020 W /
+  4.75 A, 1,610 W / 7.70 A, 1,900 W / 8.81 A. Breakers as above. **Primary**,
+  the same manual.
+- **Surrey's 553GFQ range** (manual of May 2022, heat pump, R410A):
+  2,348 kcal/h: **800 W, 3.71 A** cooling, 720 W, 3.36 A heating; 2,950:
+  **980 W, 4.54 A**, 910 W, 4.27 A; 4,420: **1,510 W, 7.00 A**, 1,440 W,
+  6.71 A; 5,607: **1,910 W, 8.83 A**, 1,750 W, 8.16 A. **Primary**
+  ([PDF](https://www.surrey.com.ar/productos/manuales/MGAGSURREY_01-22.pdf)).
+  The manual doesn't say on/off; retailers sell the 553GFQ1201F as on/off
+  (search summary, secondary).
+- **BGH's Silent Air BS26WCCR** (2,300, on/off, R410A): **830 W cooling,
+  735 W heating**, 2,700 W cooling capacity. Secondary (a retailer's listing
+  through a search summary,
+  [Frávega](https://www.fravega.com/p/aire-acondicionado-split-frio-calor-bgh-2300f-2700w-bs26wccr--20669/)).
+- **To the watt: not available.** Makers print input in kW to two decimals,
+  so to 10 W. The energy label adds nothing finer: its annual consumption is
+  the input times **500 hours** (IRAM 62406's basis, secondary,
+  [IRAM via search](http://www.eficienciaenergetica.org.ar/aire.php)), and
+  Surrey's figures bear that out (395 kWh ÷ 500 h = 0.79 kW for the
+  553VFH0921F; derived).
+
+**What an inverter unit draws.** Its rated figure is one point in a range; it
+runs below it once the room is cool.
+- **Surrey's 553NIQ range** (R32, manual of **November 2025**, after the era):
+  2,356 kcal/h **780 W, 3.60 A** cooling; 3,096: **1,100 W, 5.05 A**; 4,601:
+  **1,470 W, 6.76 A**; 5,590: **1,970 W, 9.06 A**. **Primary**
+  ([PDF](https://www.surrey.com.ar/productos/manuales/Manual_Split_Inverter_R-32_MIAGSU01.pdf)).
+  Its annual figures (198 kWh cooling for the smallest) don't follow the
+  500-hour rule, so its label uses another basis: unconfirmed.
+- **BGH's Silent Air inverter** (BSI26/35/53/65WCCR): cooling 2.70, 3.43,
+  5.35, 6.70 kW at an IEE of 3.38, 3.21, 3.21, 3.21. **Primary** (the maker's
+  manual, a dealer's copy,
+  [PDF](https://maers.com.ar/uploads/products/documents/MANUAL%20SILENTAIR%20INVERTER%20BGH.pdf)).
+  That gives **800, 1,070, 1,670 and 2,090 W** (derived: capacity ÷ IEE; the
+  smallest's 400 kWh a year ÷ 500 h agrees).
+- **Its maximum is far above its rating.** Mitsubishi Electric's MSZ-LN25VG
+  (2.5 kW, UK figures): **485 W, 2.5 A** cooling, **7.1 A at most**; the
+  35: 820 W, 3.9 A, 9.9 A at most. **Primary** (the maker's table, a dealer's
+  copy,
+  [PDF](https://bhsac.co.uk/wp-content/uploads/2018/08/MSZ-LN-Technical-Specifications.pdf)).
+  Not an Argentine model; it's here for the shape of an inverter's draw.
+
+**Start-up.**
+- **On/off: yes, worth recording, as the fridge's is.** The compressor is a
+  fixed-speed rotary with a run capacitor. GMCC's catalogue lists **20–35 µF,
+  370 V** run capacitors for its fixed-speed R410A compressors of 2.5–4 kW,
+  but no locked-rotor current. **Primary** for GMCC
+  ([catalogue, a distributor's copy](https://www.hvacrcompressor.com/downloadpdf/GMCC-rotary-compressor-catalogue.pdf)).
+  Locked-rotor current of GMCC fixed-speed R410A compressors, 220–240 V
+  50 Hz:
+  - PA108M1C-4DZDE2 (2.57 kW, a 2,250 unit's size): **4.00 A running,
+    19.2 A locked, 4.8×**;
+  - PA125G1C-4FTL1 (3.5 kW, a 3,000's): **3.75 A, 21 A, 5.6×**;
+  - PA215M2AS-4KU (5.42 kW, a 4,500's): **42.4 A**;
+  - PA270G2C-4FT1 (6.72 kW, a 5,500's): **60 A**.
+
+  **Secondary** (a parts retailer's listings, through search summaries; the
+  pages return 403,
+  [frigopartners](https://frigopartners.com/rotary-compressor-gmcc-pa108m1c-4dzde2-r410a-220-240v-1f-50hz-2.57-kw-without-operating-capacitor)).
+  So about **5× running: ~20 A for the two small sizes, 40–60 A for the two
+  large.** How long the surge lasts: unconfirmed. What would confirm the
+  figures: a split's nameplate or its compressor's own datasheet.
+- **An on/off unit waits 3 minutes to restart.** "El compresor no puede volver
+  a ponerse en marcha durante 3 minutos después de haberse detenido."
+  **Primary** (Surrey 553VF, above). Surrey's 2022 manual says the same of its
+  range.
+- **Inverter: no surge.** Mitsubishi's table gives a **starting current equal
+  to the running current**: 3.0 A for the MSZ-LN25VG, 4.0 A for the 35,
+  6.8 A for the 50. **Primary** (above).
+
+**Which kind, by 2025.**
+- **Inverter was 3.2 % of the Argentine market in 2017** (BGH's Zimmerman, in
+  *iProfesional*, 2018-01-16; secondary,
+  [article](https://www.iprofesional.com/tecnologia/261820-la-tecnologia-inverter-en-los-aires-acondicionados-espera-un-empujon-del-calor-para-crecer-en-ventas)).
+- **26 % of sales in 2022** (Afarte, the Tierra del Fuego makers' chamber),
+  **about 30 % in 2023** (the makers). *La Nación*, 2023-12-19; secondary
+  ([article](https://www.lanacion.com.ar/economia/negocios/sin-ahora-12-que-pasara-con-la-venta-de-equipos-de-aire-acondicionado-en-el-verano-nid19122023/)).
+- **So on/off was the common kind**, both on sale and, more so, on walls
+  installed before then. **Offices and public buildings: no source**. That an
+  on/off unit is likelier there too is an inference. What would confirm it:
+  a procurement record, or Tom first-hand.
+
+**How it's wired: AEA 90364-7-771.** Edition 2006, still the edition the AEA
+sells (its store, read 2026-10-05). **Primary**: the standard's text, in a
+scanned copy
+([PDF](https://www.radiacionesni.com.ar/wp-content/uploads/2019/05/Aea90364.pdf)).
+AEA 770 (dwellings) sends every specific circuit, ACU included, to it (Tabla
+770.6.I: "Consultar con AEA 90364-7-771 — Responsabilidad del proyectista").
+- **No rule puts an air conditioner on its own circuit.** Two circuits fit:
+  - **TUE**, *tomacorrientes de uso especial*: unit loads **up to 20 A** on
+    20 A 2P+T sockets (IRAM 2071), **at most 12 outlets**, protected at **at
+    most 32 A** on both poles (771.7.6 b II; Tabla 771.7.I). In a large living
+    room or bedroom "En el caso que el TUE se destine a la alimentación de un
+    equipo de aire acondicionado, podrá estar ubicado en las paredes
+    exteriores" (771.8.2.3.3 a, d). **Two units may share one TUE.**
+  - **ACU**, *alimentación de carga única*: "alimentan una carga unitaria que
+    así lo requiere a partir de cualquier tipo de tablero, **sin derivación
+    alguna de la línea**. No tiene limitaciones de potencia de carga ... o de
+    valor de la protección. Es responsabilidad del proyectista" (771.7.6 c2
+    II). **One ACU feeds one unit**; two units need two.
+  - APM (small motors: "ventilación ... heladeras comerciales", **10 A** per
+    outlet, **25 A** at most) doesn't name air conditioners. Whether a split
+    may go on one is unconfirmed.
+- **Every one of these circuits has a 30 mA RCD**, instantaneous
+  (771.18.3.5).
+- **Offices need air conditioning counted:** "para el caso de edificios de
+  locales y de oficinas ... los factores de simultaneidad pueden ser cercanos
+  a la unidad, debido a cargas puntuales tales como equipos de aire
+  acondicionado" (771.9).
+- **The makers ask for more than the rule.** Surrey 553VF: "Nunca omita tener
+  un circuito de potencia individual específico para el acondicionador de
+  aire"; "Se debe utilizar un circuito independiente y un enchufe único"; the
+  breaker and RCD at **1.5×** the unit's maximum current; **2.5 mm²** cable up
+  to 16 A; an all-pole disconnect with 3 mm gaps. Its breaker column gives
+  **10 A** for the 2,250 and **16 A** for the larger three. Surrey's 2022
+  manual repeats it and adds an RCD of at most 30 mA; the outdoor board's own
+  fuse is **T20A** up to 18,000 Btu/h, T30A above. **Primary**, both manuals.
+- **So:** by the rule, two splits on one TUE, up to 32 A, is legal; by the
+  makers, each has its own circuit at 10–16 A. Which a given building has is
+  the installer's choice.
+
 ## Not yet researched
 
 - **A shop and its home (#454):** which arrangement is usual in Lima or
@@ -1063,3 +1211,8 @@ read 2026-10-04). **Confirmed.**
   the search summaries say 25 A), a blowing curve for fuse wire rather than a
   gG cartridge, and whether old homes' meters sit in a pillar or on the
   façade. See "Old installations".
+- **Split air conditioners (#475):** a split's locked-rotor current from a
+  nameplate or its compressor's maker, and how long the surge lasts; the
+  most-sold sizes in 2025; whether offices and public buildings ran on/off or
+  inverter units; whether AEA 771's APM circuit may carry a split; the basis
+  of an inverter's energy label.
