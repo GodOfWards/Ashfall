@@ -4427,8 +4427,15 @@ x_sn_9 m_sn_sn_sn sn p
       ],
       windows: [ { role:"shop", label:"barred window", breakTag:"blunt" } ] },
     // A shed or works building: its floor, and an office off it. Text and
-    // containers from the instance's overrides.
+    // containers from the instance's overrides. Wired as a house is (T1G,
+    // under 10 kW): its meter and a 32 A main in a meter box on the property
+    // line, OCEBA's Acometidas T1 cap, and a breaker panel in the office
+    // (designed, retunable), whose floor bank each instance picks by its
+    // template (WIRING_TEMPLATES' `galpon_workshop`, `galpon_yard`,
+    // `galpon_mill`). An instance can bring its own board, or none at all.
     galpon: { label:"building", entry:"floor",
+      wiring:{ board:{ name:"Meter box", role:"street", rating:32, direct:true },
+        panels:[ { id:"shed", name:"Breaker panel", role:"office", template:"galpon_workshop" } ] },
       rooms: [
         { role:"floor", room:null, shelter:"full", cannotHaveFire:true, floorCap:70, desc:"A shed.", containers:[] },
         { role:"office", room:"Office", shelter:"full", cannotHaveFire:true, floorCap:40, desc:"An office.", containers:[] }
@@ -4537,12 +4544,21 @@ x_sn_9 m_sn_sn_sn sn p
             { key:"front", between:["street", "desk"], label:"front", lock:"latch", locked:false },
             { key:"cells", between:["desk", "cells"], locked:false, lockable:false } ],
           windows:[] } },
-      // The building-materials yard, where the hardware store's stock went.
+      // The building-materials yard, where the hardware store's stock went:
+      // its shed, lit by four high-bays (`galpon_yard`), and the open yard
+      // behind it, reached only from the shed and wired to nothing. The
+      // yard's floorCap and the walk to it are judgment calls, retunable; its
+      // gate onto the road is text only.
       { id:"corralon", type:"galpon", site:"m_cbar_dg2_c107", name:"Building-materials yard", address:"Camino a Baradero", marker:true,
         enter:"Enter the building-materials yard",
-        overrides:{ rooms:{
-          floor:{ desc:"A yard of stacked bricks, bags of cement and lengths of pipe, under a corrugated roof at the back.",
-            searchLabel:"Search the yard", searchMinutes:20,
+        overrides:{ wiring:{ panels:{ shed:{ template:"galpon_yard" } } },
+          addRooms:[ { role:"yard", room:"Yard", shelter:"none", floorCap:80,
+            desc:"Bricks stacked on pallets, bags of cement under a sheet of plastic, lengths of pipe in a rack. The gate onto the road is shut.",
+            containers:[] } ],
+          links:[ { between:["floor", "yard"], label:["Go out to the yard", "Go back into the shed"], distanceM:10 } ],
+          rooms:{
+          floor:{ desc:"A corrugated shed at the back of the yard: a wall of hanging tools, bins of nails and screws, shelves of paint tins.",
+            searchLabel:"Search the shed", searchMinutes:20,
             containers:[
               { id:"toolwall", name:"Tool Wall", capacityKg:30, spawnPools:["hardware_store","tools_general","self_defense"], items:[
                 { id:"bolt_cutters", qty:1 }, { id:"crowbar", qty:1 }, { id:"hand_axe", qty:1 }, { id:"wrench", qty:1 } ] },
@@ -4571,7 +4587,8 @@ x_sn_9 m_sn_sn_sn sn p
           home:{ desc:"The family's rooms behind the shop.",
             containers:[ { id:"dresser", name:"Dresser", capacityKg:15, spawnPools:["clothing","residential_personal"], items:[
               { id:"old_photographs", qty:1 }, { id:"reading_lamp", qty:1 }, { id:"tote_bag", qty:1 } ] } ] } } } },
-      // The repair shop, where the auto workshop went.
+      // The repair shop, where the auto workshop went, lit by its type's
+      // eight fluorescent battens (`galpon_workshop`).
       { id:"mechanic", type:"galpon", site:"x_c16_c7", name:"Repair shop", address:"Calle 16", marker:true,
         enter:"Enter the repair shop",
         overrides:{ rooms:{
@@ -4585,11 +4602,13 @@ x_sn_9 m_sn_sn_sn sn p
               { id:"desk", name:"Desk", capacityKg:15, spawnPools:["office_supplies","documents_lore","electronics"] },
               { id:"filingcabinet", name:"Filing Cabinet", capacityKg:20, spawnPools:["office_supplies","documents_lore","electronics"] } ] } } } },
       // The station's goods shed, where the storage units' crates went. The
-      // third was never locked.
+      // third was never locked. It has no supply at all (`wiring: null`): no
+      // lessee, use or supply was found for the real shed, and its wall
+      // material is unconfirmed, so its text says nothing of either.
       { id:"goods_shed", type:"galpon", site:"estacion_lima", name:"Goods shed", address:"Lima station", marker:true,
         enter:"Enter the goods shed",
-        overrides:{ rooms:{
-          floor:{ desc:"The railway's goods shed. Brick walls, a high roof, a loading door onto the tracks.",
+        overrides:{ wiring:null, rooms:{
+          floor:{ desc:"A long shed beside the siding, under a rust-red roof that runs along the track. Grass has grown up to the walls, and the loading door faces the rails.",
             containers:[
               { id:"unit1", name:"Padlocked crate 1", capacityKg:30, locked:true, breakTag:"cutting", spawnPools:["outdoor_camping"], items:[
                 { id:"camping_tent", qty:1 }, { id:"sleeping_bag", qty:1 }, { id:"canteen", qty:1 } ] },
@@ -4599,11 +4618,23 @@ x_sn_9 m_sn_sn_sn sn p
                 { id:"fishing_rod", qty:1 }, { id:"tackle_box", qty:1 } ] } ] },
           office:{ desc:"A cubicle by the door where someone checked the freight in and out." } } } },
       // The paper mill, down its side road off Calle 111: where the freight
-      // warehouse's racks went.
+      // warehouse's racks went. Its two rooms stand for one hall of the works,
+      // lit by eight high-bays (`galpon_mill`). Its own main board stands in
+      // the hall, fed from the works' own transformer off a 33 kV feeder (text
+      // only: CEZ's "332 Celulosa", read from the name). 125 A is the largest
+      // rating STANDARD_BREAKER_RATINGS holds, standing in for a works'
+      // board; the feeder's 40 A and its label are judgment calls,
+      // retunable. The works gets no three-phase model: its current is
+      // computed as single-phase, which is wrong for a works, but these loads
+      // are far from any limit (Tom, 2026-10-05).
       { id:"paper_mill", type:"galpon", site:"r111_papermill", at:[-642, 5725], name:"Paper mill", address:"Calle 111", marker:true,
         enter:"Enter the paper mill",
-        overrides:{ rooms:{
-          floor:{ desc:"A hall of rollers and vats, gone quiet. The smell of pulp hangs in the air.",
+        overrides:{ wiring:{
+            board:{ name:"Main board", role:"floor", rating:125, direct:false,
+              feeders:[ { panel:"shed", label:"LIGHTING & OFFICES", rating:40 } ] },
+            panels:{ shed:{ template:"galpon_mill" } } },
+          rooms:{
+          floor:{ desc:"A hall of rollers and vats, gone quiet. The smell of pulp hangs in the air, and the main board stands against the far wall.",
             containers:[
               { id:"palletrack1", name:"Pallet Rack 1", capacityKg:35, spawnPools:["warehouse_goods"] },
               { id:"palletrack2", name:"Pallet Rack 2", capacityKg:35, spawnPools:["warehouse_goods"] } ] },
@@ -5128,6 +5159,26 @@ x_sn_9 m_sn_sn_sn sn p
   //                   running current gives for these pumps (derived from
   //                   WEG's 60 Hz motors; secondary). Found switched on, as
   //                   the fridge is: 0.99 is a judgment call.
+  //   led_highbay_200, led_highbay_100  a galpón's LED high-bays
+  //                   (campanas), one fitting each: Lumenac's Saturno 200,
+  //                   200 W and 24,000 lm, and Saturno 100, 100 W and
+  //                   12,000 lm, power factor 0.9, 100–277 V, IP65 (maker's
+  //                   sheet, August 2024, primary). The sheet gives no
+  //                   inrush, and no surge worth modelling was found for
+  //                   LED, so neither has `startWatts`. Metal halide isn't
+  //                   modelled: its minutes of warm-up are why the yard's
+  //                   and the mill's lamps are LED.
+  //   fluorescent_batten  a 2 × 36 W T8 batten on a 50 Hz magnetic ballast:
+  //                   each tube draws 43–45 W with the ballast, derived from
+  //                   EU Regulation 245/2009's ballast efficiencies, 83.4 %
+  //                   (B1) and 79.5 % (B2), as Vossloh-Schwabe restates
+  //                   them, so the 90 W is derived from a secondary source.
+  //                   No surge worth modelling was found for fluorescent.
+  //                   For all three, power factor isn't modelled: a load's
+  //                   current is its watts over its volts. Each is found
+  //                   switched on as led_light is, at 0.3, a judgment call,
+  //                   retunable. A bank of them is one load (a fixture's
+  //                   `count`), named by `plural`.
   // The kettle, the toaster, the microwave, the washing machine and the TV
   // are found switched off (leftOnChance 0). The toaster, the microwave and
   // the kettle switch themselves off (`stops`); the washing machine and the
@@ -5153,6 +5204,8 @@ x_sn_9 m_sn_sn_sn sn p
   //                   machine's watts are Longvie's own figure; how its plate
   //                   prints them is unconfirmed.
   //   house_pump      2.7 A: Rowa's RW-PR60 at 220 V (secondary).
+  //   led_highbay_200, led_highbay_100, fluorescent_batten  its own
+  //                   `watts`, one fitting's, whatever the bank's count.
   // One LED bulb's draw, for every appliance that is one: an E27 LED bulb
   // sold for 220 V draws 9–12 W (12 W gives about 840 lm, a 60 W
   // incandescent's light; secondary).
@@ -5204,7 +5257,13 @@ x_sn_9 m_sn_sn_sn sn p
       dutyCycle:WATER_HEATER_LOSS_KWH_DAY * 1000 / (WATER_HEATER_WATTS * MINUTES_PER_DAY / 60), cycleMinutes:120,
       nameplate:{ printsWatts:true }, readout:{ on:"Running", idle:"Standing by", off:"Stopped" } },
     house_pump:     { name:"Water pump",     watts:370,  startWatts:3300, volts:220, flowLph:HOUSE_PUMP_FLOW_LPH, leftOnChance:0.99,
-      nameplate:{ amps:2.7 }, readout:{ on:"Running", idle:"Standing by", off:"Stopped" } }
+      nameplate:{ amps:2.7 }, readout:{ on:"Running", idle:"Standing by", off:"Stopped" } },
+    led_highbay_200: { name:"High-bay lamp", plural:"High-bay lamps", watts:200, volts:220, leftOnChance:0.3,
+      nameplate:{ printsWatts:true }, readout:{ on:"Lit", off:"Dark" } },
+    led_highbay_100: { name:"High-bay lamp", plural:"High-bay lamps", watts:100, volts:220, leftOnChance:0.3,
+      nameplate:{ printsWatts:true }, readout:{ on:"Lit", off:"Dark" } },
+    fluorescent_batten: { name:"Fluorescent light", plural:"Fluorescent lights", watts:90, volts:220, leftOnChance:0.3,
+      nameplate:{ printsWatts:true }, readout:{ on:"Lit", off:"Dark" } }
   };
   // What an appliance's nameplate is rated at, in watts, or null when it has
   // no usable one. The one reading of `nameplate`'s three forms besides the
@@ -5336,6 +5395,22 @@ x_sn_9 m_sn_sn_sn sn p
   // one tapón's wire has burnt, and nothing records which pole. Its fixtures
   // are the casa's, with the casa's keys, so their load ids are the same as a
   // modern casa's; it is built from them below the table, never repeated.
+  //
+  // `galpon_workshop`, `galpon_yard`, `galpon_mill`: a galpón's breaker
+  // panel, in its office (BUILDING TYPES' `galpon`). A supply under 10 kW is
+  // T1G (OCEBA, Subanexo A §4.2), so its head device and circuits are
+  // borrowed from the house's (AEA 770): the 40 A diferencial, LIGHTS at
+  // 10 A over the floor and the office, SOCKETS at 20 A in the office only.
+  // The office has one light, and the floor one bank of lamps switched as a
+  // single load (a fixture's `count`), which is all the three differ by: the
+  // repair shop's eight fluorescent battens, the materials yard's four
+  // 100 W high-bays and the paper mill's eight 200 W ones. The mill's hall
+  // of about 960 m² and the yard's shed of about 240 m² are lit to 100 lux,
+  // Decreto 351/79's figure for a paper mill's machine hall and a materials
+  // store (Anexo IV, Tabla 2, primary), at 120 m² per 200 W and 60 m² per
+  // 100 W fitting (the lumen method, utilisation × maintenance taken as 0.5;
+  // derived, unconfirmed). All three counts are judgment calls, retunable.
+  // They are built from one layout below the table, never repeated.
   const WIRING_TEMPLATES = {
     apartment: {
       main: { rating:32 },
@@ -5408,6 +5483,21 @@ x_sn_9 m_sn_sn_sn sn p
     ],
     fixtures: WIRING_TEMPLATES.casa.fixtures.map(fx=> Object.assign({}, fx, { circuit:"fuses" }))
   };
+  [ ["galpon_workshop", "fluorescent_batten", 8],
+    ["galpon_yard",     "led_highbay_100",    4],
+    ["galpon_mill",     "led_highbay_200",    8] ].forEach(([id, appliance, count])=>{
+    WIRING_TEMPLATES[id] = {
+      main: { rating:40, rcd:true },
+      circuits: [
+        { key:"lights",  label:"LIGHTS",  rating:10, volts:220, roles:["floor", "office"] },
+        { key:"sockets", label:"SOCKETS", rating:20, volts:220, sockets:true, roles:["office"] }
+      ],
+      fixtures: [
+        { key:"light_office", appliance:"led_light", circuit:"lights", role:"office" },
+        { key:"light_floor",  appliance, circuit:"lights", role:"floor", count }
+      ]
+    };
+  });
   // WIRING, keyed by building id: one building's network.
   //   board    { name, room, rating, volts?, curve?, direct?, feeders:[{
   //            panel, label, rating, curve? }] }
