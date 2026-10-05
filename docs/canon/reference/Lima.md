@@ -116,8 +116,8 @@ town since 2026-09-26 (#237), replacing Henderson, Kentucky.
     courts, a blue-roofed building and a large hall;
   - windbreak rows of tall trees on the north and west sides.
 
-  Status: observed from imagery; the chalets' interiors and number of floors
-  are unconfirmed.
+  Status: observed from imagery. The chalets are one storey (Street View,
+  below); their interiors are unconfirmed.
 - **The row houses, measured** (same imagery, 2026-09-27):
   - attached single-family houses, three or four to a row, around U-shaped
     shared courtyards with paths and parking, and gardens behind;
@@ -151,6 +151,57 @@ town since 2026-09-26 (#237), replacing Henderson, Kentucky.
   A provincial police post (Google Maps: "Puesto Policía Prov. Bs As") stands
   a little to the south-west. Tom, Street View, March 2026. Property listings found for "Atucha" are quintas and
   newer houses, not these chalets.
+- **The chalets from the street** (#457; Tom, Google Street View captures of
+  March 2026, 2026-10-05; first-hand for what the photos show). Calle 111
+  near Calle 88, in the barrio's north part:
+  - **one storey**, under red-tile gabled roofs with the gable ends clad in
+    dark timber, and white rendered walls. Whether the roof space is used is
+    unconfirmed: no gable window shows;
+  - **two neighbouring chalets look alike** (roof, gables, window layout),
+    which suggests a repeated design. That it holds across the barrio is
+    unconfirmed from two houses;
+  - **open front lawns** with no front wall or fence, as on the row houses;
+    tall **wooden fences** between the houses close off the side yards.
+    Slab paths lead to the door, and a car stands on a slab pad beside the
+    house; a garage or carport is unconfirmed;
+  - **no roof tank** on either house;
+  - window bars can't be read at this resolution; one window has a
+    roller-shutter box;
+  - **paved, kerbed lanes** with brick-based street lamps.
+
+  **Unconfirmed, and not found anywhere (#457, 2026-10-04):** the chalets'
+  rooms and their layout, the back door, and window bars. No floor plan,
+  listing or description of a barrio chalet turned up: Argenprop's Lima and
+  Atucha listings (23 read) and Buscainmueble's are quintas, gated estates
+  and houses on the town grid; MercadoLibre, Zonaprop and Properati refused
+  automated readers. Tom has no first-hand knowledge of the interiors.
+- **The barrio's entrance**, at Calle 88 and Calle 111 (Tom, Street View,
+  March 2026): a low sign reading "BARRIO CENTRAL NUCLEAR ATUCHA" (partly
+  legible) and a small brick hut with a tiled roof at the kerb, probably one
+  of the old Gendarmería posts (an inference).
+- **CNEA built the barrio, and it was practically finished in 1971.**
+  "También quedaron prácticamente terminadas las obras a cargo de CNEA:
+  barrio de Lima y caminos de acceso (CNEA, 1973:9)." Javier R. Fernández,
+  *Importación de tecnologías capital-intensivas en contextos periféricos:
+  el caso de Atucha I (1964-1974)*, p. 17
+  ([PDF](https://agora.edu.es/descarga/articulo/3714922.pdf), read
+  2026-10-04). **Secondary**: an academic paper citing CNEA's 1972
+  *Memoria*.
+- **La Nación, read in full** (above, 2026-10-04), adds:
+  - the barrio's other residents were "los argentinos con cargos
+    jerárquicos en las áreas de ingeniería y administración que hoy
+    representan la totalidad": by 2015, senior Argentine engineering and
+    administrative staff only;
+  - the fence had **four stretches**, and "recién en 2008, uno de sus
+    cuatro tramos fue levantado";
+  - the Germans who finished Atucha II (completed 2014) also lived "en esos
+    chalets".
+- **A barrio of 72 homes for Atucha II**, built by Masoero Carmine S.R.L.
+  and Solener S.A., per a search summary of Petrotecnia's "Atucha II,
+  Energía nuclear" ([PDF](https://www.petrotecnia.com.ar/petro_08/AtuchaII_SP.pdf),
+  404 by 2026-10-04, never read). **Unconfirmed.** It probably means the
+  western row houses, which fits the depot signed "Barrio Atucha II", but
+  that is an inference.
 - NA-SA had about 1,400 workers at some point (El Destape, 2023, search
   summary) against about 3,000 in a later figure (above). They wore "the
   company's uniform of grayish-brown trousers and a beige shirt".
@@ -213,6 +264,52 @@ above it uses the shop's address; private homes get none (#237).
   inside.
 - Status: Tom's observation from Street View, first-hand. How far it holds
   street by street isn't surveyed.
+
+## The PH (#457, 2026-10-04)
+
+*Propiedad horizontal*: several homes on one lot, one behind or above
+another, each with its own deed. La Nación names "PH" among Lima's housing
+(above). **Lima's own PH are unconfirmed**; what follows is mostly Zárate city
+and Buenos Aires city, as a fallback.
+
+- **The legal type** (secondary, Buenos Aires city sources, search
+  summaries, not read in full): Ley 13.512 of 1948 lets one lot hold several
+  *unidades funcionales* with separate deeds, sharing common parts: "el
+  pasillo, el patio, las escaleras". It grew from the city's narrow, deep
+  lots (about 8.66 m wide, up to 40–50 m deep)
+  ([Para Ti](https://www.parati.com.ar/deco/ph-deco-que-son-y-por-que-nos-gustan-tanto-las-casas-chorizo-y-los-phs/);
+  Estudio Sassani's blog, 24 Nov 2020). The regime is now in the Código
+  Civil y Comercial (2015). Whether Lima's lots follow the pattern is
+  unconfirmed.
+- **Lima: one PH listed, and not the deep-lot kind.** Argenprop,
+  "Departamento venta 3 ambientes, Héroes Malvinas 200, Lima"
+  ([listing](https://www.argenprop.com/departamento-en-venta-en-lima-3-ambientes--11187744),
+  read 2026-10-04; secondary): 122 m², 3 *ambientes*, a semi-covered garage,
+  "pileta y quincho de uso común", "ingreso al ph camino mejorado con tosca
+  200 mts", on the road to the plant (pin 34.0338 S, 59.1890 W). A newer
+  complex round a shared pool. No PH with a *pasillo* is listed in Lima.
+- **Zárate city's PH listings** (Argenprop, 11 listings, read 2026-10-04;
+  secondary; a city, not a small town, so a fallback only):
+  - **placement on the lot:** "frente" (on the street), "interno" (behind),
+    or "primer piso por escalera" (an upper unit up a stair). One lot holds
+    "casa tipo departamentos para 4 familias, cada departamento con baño y
+    habitación"; another is a gated complex of 16 two-storey duplexes, the
+    newer kind;
+  - **floors:** one storey is most common; some have two (living,
+    kitchen-dining and toilet below, bedrooms and a bathroom above);
+  - **rooms:** a living-dining room, a kitchen (often with a *comedor
+    diario*), one to three bedrooms, one full bathroom (sometimes a toilet
+    too), a *lavadero*, and a small patio, often with a *parrilla*;
+    48–180 m²;
+  - **openings:** one lists "rejas de seguridad en las aberturas". None
+    mentions a gate on the *pasillo*.
+- **Electricity: one meter per unit**, all in one place reachable from the
+  street (`Electrical_AR.md`, "A PH: one supply per unit"). **Confirmed** for
+  installations under OCEBA's 2008 rules.
+- **Unconfirmed:** how many units to a lot as the norm; the *pasillo* and
+  its gate; whether units share a water connection or a roof tank (no
+  ENDEZA rule found); gas (not researched). Tom can't survey them
+  (2026-10-05), so they are design decisions for #299.
 
 ## Streets and surfaces, from satellite imagery (2026-09-27)
 
@@ -359,6 +456,39 @@ Status: secondary unless marked; read 2026-09-27.
 
     **The game treats Lima as having no town tank.** The summary's claim is
     set aside as unsupported, not as disproved.
+  - **The Barrio Atucha has a water tower of its own** (#457; Tom, Street
+    View, March 2026, 2026-10-05; first-hand for what the photos show), on
+    Calle 88 between Calles 113 and 115: a tall concrete shaft under a wide,
+    flat, round tank, with antennas on its rim. At its base a fenced
+    enclosure holds a red pipe rising from the ground and a red box; what
+    they are is unconfirmed. OSM has no tower there (the box above
+    covers it). It doesn't change "no town tank" for the rest of Lima.
+    - **The game treats it as the barrio's water supply, and only the
+      barrio's: a reserve fed from the town's network, lifted into the tank
+      by an electric pump that stops with the grid, with the barrio's houses
+      drawing straight off its mains** (Tom, 2026-10-05). Design decisions,
+      not sourced facts: no source was found on the tower's operator or use.
+      They fit what is seen: no roof tanks in the barrio (below), and CNEA
+      built the barrio with its own services. Lima's network had about 10 m
+      of head before 2026 (below), too little to fill a 20–25 m tower
+      without a pump; the pump is derived from that.
+    - **Who runs it** (NA-SA, which keeps the barrio, or ENDEZA): unknown.
+    - **Its size, estimated from the photos** (approved by Tom, 2026-10-05;
+      **unconfirmed**, retunable). The shaft is about 2–2.5 m wide (about as
+      wide as the roughly 2 m cage at its base is tall); the tank about 3.9
+      shaft-widths across, so **8–10 m in diameter**; its drum about 0.22 of
+      that deep, so **about 2 m**; overall height **about 20–25 m** (the base
+      is hidden by trees, so this is the roughest figure). Capacity **about
+      130 m³** (range 90–170); **the game uses 120 m³ usable**, full when the
+      grid fails.
+    - **How long it lasts** (derived, approved by Tom, 2026-10-05): about
+      100 homes (about 40 chalets plus the row houses) × 4 people × 250 L a
+      day (ARSA, below) is **about 100 m³ a day**, more in February. So a
+      full tower gives **about a day of water at normal use**, longer as
+      people ration, with pressure falling as the level drops.
+    - **About 20 m of head** on the barrio's taps while the tower is full,
+      against the town's 10 m: why the barrio's houses need no tanks. Derived
+      from the estimated height.
   - A new well for Lima was to give about 100,000 litres an hour into the
     distribution ring (Municipalidad de Zárate, search summary). Pressure is
     a chronic summer problem, with a "definitive solution" promised for 2027
@@ -391,7 +521,8 @@ Status: secondary unless marked; read 2026-09-27.
     pumps, with no town storage between them and the pipes. When the grid
     fails, the network has nothing to hold it up, and a home has only what
     is in its own tank. This is derived, not sourced, and it replaces the
-    Henderson reasoning about gravity storage. How long the pipes keep any
+    Henderson reasoning about gravity storage. **The Barrio Atucha is the
+    exception:** its water tower holds it up for about a day (above). How long the pipes keep any
     pressure is #300's to decide.
   - **The water network runs under the paved streets only** (Tom, Street
     View, March 2026; 2026-09-29, first-hand). A home's connection shows as a
@@ -403,7 +534,8 @@ Status: secondary unless marked; read 2026-09-27.
       the only source left, but it isn't observed.
   - **Roof tanks on every house outside the Barrio Atucha** (Tom, Street
     View, March 2026). None is visible in the barrio, whose streets are
-    paved and on the network.
+    paved and on the network, on the row houses or the chalets (2026-10-05).
+    The game puts the barrio on its water tower instead (above, #457).
   - **In practice, many homes aren't on the network** (Tom, 2026-09-27,
     first-hand): "it's really common to not have network water, so each
     house would have its own tank and pump". A house's own pump fills its
@@ -421,9 +553,12 @@ Status: secondary unless marked; read 2026-09-27.
     Not a Buenos Aires province rule, and not measured in Lima. **The
     Barrio Atucha's own tanks are unconfirmed**, and none is visible on the
     row houses' roofs (Tom, Street View, 2026-09-28). A tank inside the roof
-    space isn't ruled out. Where the barrio's water comes from (the town's
-    network or the plant) is unconfirmed. The game uses 1,000 L per
+    space isn't ruled out. The game uses 1,000 L per
     home, as a retunable figure (`handoffs/lima-release.md`, phase 7).
+    **Since 2026-10-05 the game puts the barrio's houses on its water tower,
+    drawing straight off its mains** (above, #457). The shipped game still
+    gives the player's row house a roof-space tank (#300); the change is
+    filed as #467.
   - **House pumps:** a typical tank-filling pump sold in Argentina is
     **½ HP (about 370 W)**, moving on the order of **33 L a minute**
     (retail listings, secondary, 2026-09-27; figures vary by model).

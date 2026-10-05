@@ -1006,6 +1006,31 @@ game's `shop_home` buildings (#307). Sources, all **primary**:
   be T2, outside these rules; that a Lima corner store isn't one is
   unconfirmed.
 
+## A PH: one supply per unit (#457, 2026-10-04)
+
+Several homes on one lot under *propiedad horizontal* (`Lima.md`, "The PH").
+Source: **OCEBA's Reglamento de Acometidas, Tarifa 1**, ch. II, *Acometidas
+múltiples* (Res. 92/2008 annex,
+[PDF](https://oceba.gba.gov.ar/nueva_web/PDFS/acometidas/Resolucion0092Anexo.pdf),
+read 2026-10-04). **Confirmed.**
+
+- It covers "2 suministros o mas con demandas individuales menores a 10 kw
+  (Tarifa 1)" (§1).
+- **The meters sit together, open to the street:** "Los medidores se
+  instalarán en un solo lugar o recinto", with "Libre Acceso ...
+  directamente ... desde la vía pública, las 24 hrs., sin recurrir a
+  terceros" (§4.1).
+- **Each meter and its main board is labelled with its unit:** "según la
+  misma designación de la unidad funcional a la cual alimenta" (§4.3). Each
+  has its own *tablero primario* within 1 m, at most 32 A (§4.9, as for a
+  shop and its home, above).
+- **The common parts have a supply of their own:** "Para los servicios
+  generales o comunes establecidos en el régimen de copropiedad serán
+  exigibles idénticas condiciones que para un suministro individual", on
+  T1G, T2 or T3 by demand (§3). In a PH that would be the *pasillo*'s
+  light, an inference.
+- These are 2008 rules. **A PH wired before them may differ: unconfirmed.**
+
 ## Not yet researched
 
 - **A shop and its home (#454):** which arrangement is usual in Lima or
