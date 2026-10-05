@@ -601,7 +601,8 @@ Status: secondary unless marked; read 2026-09-27.
 Named points in the town, with the address OSM gives. Status as of February
 2025 is unconfirmed for each.
 
-- **Comisaría Zárate 2** (police), on Calle 12.
+- **Comisaría Zárate 2** (police), on Calle 12: see its own section below
+  (#456).
 - **Hospital Intermedio Municipal "Aurelio Aleotti"**, Calle 6 560. This is
   at odds with La Nación's "no hospital" (2015); it may have opened or been
   upgraded since.
@@ -672,6 +673,87 @@ Named points in the town, with the address OSM gives. Status as of February
 - **Named neighbourhoods:** Barrio Cervecero, Citrus Lima, Villa del Pilar.
 - **Avenida 11's house numbers** run from 101 at its north end (by the
   railway) to 900 at its south end, so no. 835 is near its southern end.
+
+### Comisaría Zárate 2 (#456)
+
+- **Name and address:** "Comisaría Zárate 2° - Lima", **Calle 12 Nº 642**,
+  B2806 Lima
+  ([Waze](https://www.waze.com/live-map/directions/ar/provincia-de-buenos-aires/lima/comisaria-zarate-2%C2%B0-lima?to=place.ChIJATMhir2lu5UR61QNJyfC2Ns),
+  read 2026-10-04; secondary). Google Street View labels the camera's spot
+  in front of it "698 C. 12", so the number is unconfirmed; the block isn't.
+  Local press calls it the **"Comisaría 2da de Lima"**, with its own
+  Gabinete Táctico Operativo
+  ([Enlace Crítico, 2022](https://www.enlacecritico.com/destacados/allanamiento-y-detencion-en-lima-por-parte-del-gabinete-tactico-operativo-de-la-comisaria-2da/);
+  secondary). The municipality lists its phone, 480111, as "POLICÍA LIMA"
+  ([zarate.gob.ar](https://zarate.gob.ar/mas-servicios-para-lima-abrio-sus-puertas-el-nuevo-centro-de-licencias-de-conducir/),
+  read 2026-10-04; primary for the number).
+- **The lot:** on the south side of Calle 12, between Calles 15 (west) and
+  13 (east), a little east of mid-block. Houses stand on either side.
+  Status: Tom's Google Maps satellite view, read 2026-10-05; the imagery's
+  date isn't shown.
+- **The building from the street** (Tom, Street View captured **March
+  2026**, 13 months after the era; first-hand, read 2026-10-05):
+  - **one storey, flat roof**, rendered and painted white, with a grey-blue
+    plinth; **no upper floor**;
+  - **two blocks:** the front one on the pavement line, at the east end,
+    with the entrance, a "POLICÍA" sign, a blue panel with the provincial
+    emblem and **barred windows**; a longer wing to the west, set back
+    behind a front garden with a low railing and trees;
+  - **two split air-conditioner units** on the front wall; **three tall
+    lattice radio masts** on the lot behind; an **overhead supply** from a
+    pole in the street; a flagpole out front;
+  - **a gravel driveway** down the west side, through an opening in a brick
+    wall, to the back of the lot.
+- **From above** (the same satellite view): flat, light-grey roofs in
+  several sections, the building running **well back into the lot**, and a
+  **bare earth yard behind it with five or six vehicles parked**. Whether
+  they're patrol cars, staff cars or seized vehicles is unconfirmed.
+- **Whether it looked the same in February 2025** is unconfirmed. An earlier
+  Street View capture would show it.
+- **A standby generator: unconfirmed, and nothing shows one.** No document
+  names one, and none of these show a generator, enclosure, exhaust or fuel
+  tank: the street captures, the satellite view, Enlace Crítico's archive,
+  or the provincial tenders found. The back yard can't be seen from the
+  street, and a small set wouldn't show from above, so **one isn't ruled
+  out.** Whether the game's comisaría has one is design (#309).
+  - **No provincial rule** requiring police stations to have one was found.
+    The provincial tenders found are for central sites: a 700 kVA set for
+    the COM / Secretaría de Seguridad building and its data centre, and a
+    100 kVA set for a judicial data centre (Boletín Oficial, via search
+    summaries, 2026-10-04; secondary, not read on the bulletin).
+  - **Stations differ.** In a Buenos Aires city blackout, the Policía
+    Federal's Comisaría 19ª had a generator but couldn't start it ("estaba
+    en una oficina cerrada") and the 21ª had none
+    ([La Nación, 1999-10-04](https://www.lanacion.com.ar/sociedad/falto-luz-para-mas-de-700000-usuarios-nid155933/),
+    read 2026-10-04; secondary). A different force and city, 26 years before
+    the era: it only shows that a generator isn't a given.
+  - **The building is underfunded.** In 2015 Zárate's Secretary of
+    Government said the province's repair funds never arrived, though "esos
+    fondos tenían que ser repartidos para los trabajos tanto en la
+    dependencia local como en la de Lima"
+    ([Enlace Crítico, 2015-06-17](https://www.enlacecritico.com/destacados/la-situacion-edilicia-de-la-comisaria-1era-de-zarate-los-problemas-estan-y-no-se-puede-esperar/),
+    read 2026-10-04; secondary). **Reading, not fact:** this leans against a
+    fixed standby set.
+  - **Generators have come from Atucha when needed.** In a 2014 heat wave
+    Atucha II lent a 550 kVA set for Zárate's water supply, and "se
+    encuentra disponible otro grupo electrógeno para la localidad de Lima,
+    en caso que sea necesario"
+    ([Enlace Crítico, 2014-01-01](https://www.enlacecritico.com/zarate/atucha-ii-entrego-un-grupo-electrogeno-en-zarate/),
+    citing Nucleoeléctrica, read 2026-10-04; secondary). It was lent for
+    water, not for the comisaría.
+  - **Reading, not fact:** the masts make it a radio base, and a radio base
+    would usually have batteries for its radios. That isn't a generator for
+    the building. No source was checked.
+- **Inside: not found.** No photograph or description of the rooms. Whether
+  it holds detainees is unconfirmed: the Ministerio de Seguridad's
+  Resolución 3340/2011, which closed cells and capped detention at 48 hours,
+  lists Loma Verde, Parque Cazador, Campana and Escobar 1ª for the
+  Zárate-Campana department, **not Lima**
+  ([normas.gba.gob.ar](https://normas.gba.gob.ar/documentos/xa94k1f4.html),
+  read 2026-10-04; primary). Not being on that list says nothing either
+  way. Rooms the game adds are named as additions (#250).
+- **For future searches:** "Lima" with "Zárate" returns the Comisaría PNP
+  Zárate in Lima, Peru. La Voz de Zárate's site search answers 403.
 
 ## The street grid
 
