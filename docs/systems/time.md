@@ -83,6 +83,9 @@ settled to the present, and every reader reads current state.
 - appliance stops; event: a timed stop's minute in `state.power.stops`, the
   toaster's or the microwave's (`settleApplianceStops()`), which switches it
   off and resolves its building ([Power](power.md), stop rules);
+- overheating fuses; event: a warning, or a burn, planned at each resolve of
+  their building (`overheats`, `settleOverheats()`, [Power](power.md)), which
+  resolves it;
 - batteries; event: a device switched on running out (`batteryDeaths`,
   `settleBatteryDeaths()`);
 - stove timers (`settleTimer()`); event: a timer running down, which rings;
@@ -109,7 +112,8 @@ blackout after that step.
 
 **Order at one minute:** the running kettles' heating over the span, grid
 changes and mains changes (one on the same minute is the same settle), tanks
-coming full, kettle cut-outs, appliance stops, battery deaths,
+coming full, kettle cut-outs, appliance stops, overheating warnings and
+burns, battery deaths,
 stove timers, cooking, fires, clock events. A kettle heats over a span at the
 power it had at the span's start, since power changes only at settle points,
 so its heating settles before anything at that minute changes power. Timers
@@ -138,7 +142,9 @@ kettles (`runningKettles`) are runtime only too, rebuilt from one walk of the
 room floors by `refreshPower()`, which runs before it on all three and whose
 resolves need them; an entry whose kettle has gone off or left its floor is
 dropped when next read (`liveKettles()`). Appliance stops need no list: they
-are saved state, `state.power.stops`.
+are saved state, `state.power.stops`. The overheating plans (`overheats`)
+are runtime too, re-planned at each resolve of their building and rebuilt by
+`rebuildSchedule()` from the saved starts (`hotSince`, `rebuildOverheats()`).
 
 **Batteries.** A device on cells (registry `takesCells`: a cell size by its
 tag, `cell-aa` or `cell-d`, and a count) holds its cells as real items, in
@@ -178,7 +184,7 @@ hand-placed ones are full.
   minute or for now, and every completion inside a span is an event.
 - **Nothing scheduled is saved.** The saved fields are the systems' own
   (`timerMinutes`, `fireMinutesLeft`, `cookMinutes`, `boilMinutes`,
-  `tankDrawn`, `agedAt`, `chargeAsOf`, a cell's `charge`, a fluid's or a dish's water's `temp`, a
+  `tankDrawn`, `agedAt`, `chargeAsOf`, a cell's `charge`, a fuse's `hotSince`, a fluid's or a dish's water's `temp`, a
   kettle's `on`, `state.power.stops`); the lists and marks are rebuilt on
   load.
 - **A clock event fires once**: `lastClock` marks how far they have fired,

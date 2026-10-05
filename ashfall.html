@@ -655,9 +655,30 @@
   // Edison-thread plug fuses go up to 30 A (Rosario 3419/83 §8.2.7):
   // validateWiring() holds every fuse's rating to it.
   const EDISON_FUSE_MAX_A = 30;
-  // How long rewiring a blown fuse takes, in minutes (doRewireFuse()). A
-  // judgment call, retunable.
+  // How long rewiring a blown fuse takes, in minutes (doRewireFuse(),
+  // doBodgeFuse()). A judgment call, retunable.
   const REWIRE_FUSE_MIN = 5;
+  // The copper bodge: a blown fuse rewired with an offcut of 1.5 mm² cable's
+  // core holds until the whole core melts, at about 130 A (Preece, I =
+  // 80·d^1.5 with d ≈ 1.38 mm equivalent, for a long wire in free air;
+  // derived). Its fitted rating, which the resolve uses in place of the
+  // fuse's own (fittedRatingIn()).
+  const COPPER_BODGE_A = 130;
+  // What an old board's wiring carries, Iz, in A: 1.5 mm² PVC wire in
+  // conduit (Cobrhil, IRAM NM 247-3; primary for the maker). Whether old
+  // Lima houses are wired in 1.5 mm² is unconfirmed.
+  const OLD_WIRING_IZ_A = 15;
+  // How long a fuse's wiring takes to burn through, by its running current
+  // in multiples of OLD_WIRING_IZ_A: never under 1.45 × Iz, AEA's overload
+  // rule I2 ≤ 1.45 Iz (secondary), then each step from its multiple up
+  // (overheatStep()). Under detailed rules only. The times and the steps
+  // past the first are judgment calls, retunable.
+  const OVERHEAT_BURN_STEPS = [
+    { overIz:1.45, burnMin:240 },
+    { overIz:1.73, burnMin:60 },
+    { overIz:2,    burnMin:15 },
+    { overIz:2.5,  burnMin:5 }
+  ];
   // The share of generated casas whose kitchen has a 20 L dispenser jug
   // standing on the floor, in percent, by a stable roll of the building's id
   // (generatedHomes()). Tom's figure, retunable.
@@ -1038,7 +1059,9 @@
   //                   (doForceDoor()).
   //                   `screwdriving` is the tool a blown fuse is rewired
   //                   with, and `fuse-wire` the wire it is rewired with, of
-  //                   the fuse's own `fuseRating` (doRewireFuse()).
+  //                   the fuse's own `fuseRating` (doRewireFuse());
+  //                   `copper-bodge` what it can be bodged with in its
+  //                   place, whatever its rating (doBodgeFuse()).
   //     durability    { current, max, mode } — mode is "uses": what a tool
   //                   has left (a box of matches)
   //     restores      { hunger, thirst } — consumable effect
@@ -1287,6 +1310,10 @@
     // retunable.
     fuse_wire: { name:"Fuse wire (" + OLD_BOARD_FUSE_A + " A)", category:"Materials", unitWeight:0.01, tags:["fuse-wire"],
       fuseRating:OLD_BOARD_FUSE_A },
+    // An offcut of 1.5 mm² house cable, whose copper core can be wound into a
+    // blown tapón in place of fuse wire (doBodgeFuse()). The weight is a
+    // judgment call, unconfirmed, retunable.
+    cable_offcut: { name:"Offcut of cable (1.5 mm²)", category:"Materials", unitWeight:0.01, tags:["copper-bodge"] },
     // The meters. A Fluke 115 weighs 550 g and a Fluke 323 265 g.
     // The multimeter only tests voltage: it reads current up to 10 A, and
     // only by breaking into the circuit, so it can't safely read a household
@@ -1620,6 +1647,8 @@
   //   (`tools_general`, 0.20) and the kitchen drawer (`kitchen_tools`,
   //   0.10), so a blown fuse can usually be rewired from what the house
   //   holds. Judgment calls, not sourced figures. Retunable.
+  //   So are the cable offcut's (#365), in `tools_general` (0.15) and
+  //   `tools_workshop` (0.25, 1–2). Retunable.
   //   Replacing an item id keeps its entry's derived chance: the retired
   //   spare batteries' entry in `residential_personal` names AA cells, its
   //   quantity 2–4 (Tom's), and the retired
@@ -1746,7 +1775,8 @@
       { itemId:"rope", chance:0.456543, qtyMin:1, qtyMax:1 },
       { itemId:"wrench", chance:0.222168, qtyMin:1, qtyMax:1 },
       { itemId:"crowbar", chance:0.091797, qtyMin:1, qtyMax:1 },
-      { itemId:"screwdriver", chance:0.20, qtyMin:1, qtyMax:1 } ]},
+      { itemId:"screwdriver", chance:0.20, qtyMin:1, qtyMax:1 },
+      { itemId:"cable_offcut", chance:0.15, qtyMin:1, qtyMax:1 } ]},
     tools_workshop: { emptyChance:0.2, entries:[
       { itemId:"wrench", chance:0.242449, qtyMin:1, qtyMax:1 },
       { itemId:"metal_pipe", chance:0.204082, qtyMin:1, qtyMax:1 },
@@ -1759,7 +1789,8 @@
       { itemId:"tire_iron", chance:0.164898, qtyMin:1, qtyMax:1 },
       { itemId:"bolt_cutters", chance:0.084082, qtyMin:1, qtyMax:1 },
       { itemId:"hand_axe", chance:0.084082, qtyMin:1, qtyMax:1 },
-      { itemId:"propane_torch", chance:0.042449, qtyMin:1, qtyMax:1 } ]},
+      { itemId:"propane_torch", chance:0.042449, qtyMin:1, qtyMax:1 },
+      { itemId:"cable_offcut", chance:0.25, qtyMin:1, qtyMax:2 } ]},
     office_supplies: { emptyChance:0.25, entries:[
       { itemId:"cedula_verde", chance:0.136054, qtyMin:1, qtyMax:1 },
       { itemId:"reading_lamp", chance:0.136054, qtyMin:1, qtyMax:1 },
@@ -5542,7 +5573,12 @@ x_sn_9 m_sn_sn_sn sn p
       //   switches  { loadId: bool } — a load's own switch. Default: rolled
       //             at its appliance's leftOnChance, keyed and pure
       //             (switchOnIn()). A switchless appliance has no entry.
-      //   breakers  { breakerId: { on, tripped } }. Default: on, untripped.
+      //   breakers  { breakerId: { on, tripped, fitted?, hotSince?, burnt? } }.
+      //             Default: on, untripped, and on a fuse none of the three
+      //             (BREAKER_EXTRAS): `fitted`, the rating of what a fuse
+      //             was bodged with (COPPER_BODGE_A); `hotSince`, the minute
+      //             since the collapse its wiring began to overheat; `burnt`,
+      //             its circuit's wiring burnt through.
       //   stops     { loadId: { at } | { left } } — when an appliance with a
       //             timed stop rule (APPLIANCES' `stops`), switched on,
       //             stops: `at`, a minute since the collapse, while it runs;
@@ -8144,15 +8180,17 @@ x_sn_9 m_sn_sn_sn sn p
     changePower(POWER_INDEX.of[id], p=> resetBreakerIn(p, id));
     render();
   }
-  // Rewiring a blown fuse, from its device pop-up: offered only while
-  // it is blown, a `screwdriving` tool is carried, and so is fuse wire of its
-  // own rating (fuseWireFor()). It spends one length, takes REWIRE_FUSE_MIN,
-  // and leaves the fuse unblown (rewireFuseIn()), resolved at once: an
-  // overload still there blows the new wire straight away. The cut-off
-  // switch is neither required nor checked: rewiring live is #247's.
+  // Rewiring a fuse, from its device pop-up: offered while it is blown, or
+  // intact but bodged with copper (`fitted`), a `screwdriving` tool is
+  // carried, and so is fuse wire of its own rating (fuseWireFor()). It spends
+  // one length, takes REWIRE_FUSE_MIN, and leaves the fuse unblown at its own
+  // rating (rewireFuseIn()), resolved at once: an overload still there blows
+  // the new wire straight away. The cut-off switch is neither required nor
+  // checked: rewiring live is #247's.
   function canRewireFuse(id){
     const br = POWER_NET.breakers[id];
-    return !!br && !!br.fuse && breakerStateIn(state.power, id).tripped
+    return !!br && !!br.fuse
+      && (breakerStateIn(state.power, id).tripped || breakerExtraIn(state.power, id, "fitted") !== undefined)
       && hasTool("screwdriving") && carriesMatching(fuseWireFor(br.rating));
   }
   function doRewireFuse(id){
@@ -8161,6 +8199,25 @@ x_sn_9 m_sn_sn_sn sn p
     advanceTime(REWIRE_FUSE_MIN);
     log("You unscrew the blown plug, wind a length of fuse wire under its screws and screw it back in.");
     changePower(POWER_INDEX.of[id], p=> rewireFuseIn(p, id));
+    render();
+  }
+  // The copper bodge (#365): a blown fuse rewired with the core of a
+  // `copper-bodge` offcut, offered beside Rewire while it is blown and a
+  // `screwdriving` tool is carried. It spends one offcut, takes
+  // REWIRE_FUSE_MIN, and leaves the fuse unblown at COPPER_BODGE_A
+  // (bodgeFuseIn()), resolved at once. Its row reads as it always did: the
+  // bodge is inside a screwed-in plug. The line is Tom's.
+  function canBodgeFuse(id){
+    const br = POWER_NET.breakers[id];
+    return !!br && !!br.fuse && breakerStateIn(state.power, id).tripped
+      && hasTool("screwdriving") && carriesMatching(it=> hasTag(it, "copper-bodge"));
+  }
+  function doBodgeFuse(id){
+    if(!canBodgeFuse(id)) return;
+    consumeByTag("copper-bodge", 1);
+    advanceTime(REWIRE_FUSE_MIN);
+    log("You strip the offcut, unscrew the blown plug, wind the copper core under its screws and screw it back in.");
+    changePower(POWER_INDEX.of[id], p=> bodgeFuseIn(p, id));
     render();
   }
   function doUnlockContainer(containerId){
@@ -8677,6 +8734,8 @@ x_sn_9 m_sn_sn_sn sn p
   //   lastGrid   the same for the grid's changes (GRID_CHANGES).
   //   lastMains  the same for the mains' changes (MAINS_CHANGES).
   //   batteryDeaths  the minutes devices switched on run out at.
+  //   overheats  the overheating fuses' burns and warnings (OVERHEATING in
+  //              POWER), rebuilt from their saved starts (rebuildOverheats()).
   //   nextDue    the least of every scheduled system's next event: planned
   //              at the start of every advance, since an action may have
   //              changed anything since the last one, and after every event.
@@ -8717,7 +8776,8 @@ x_sn_9 m_sn_sn_sn sn p
     return Array.from(timerStoves.values()).sort((a, b)=> roomOrder(a.roomId) - roomOrder(b.roomId)
       || world[a.roomId].containers.indexOf(a.container) - world[b.roomId].containers.indexOf(b.container));
   }
-  // The runtime lists and the battery deaths from one walk of the world, and
+  // The runtime lists and the battery deaths from one walk of the world, the
+  // overheating plans from their saved starts (after refreshPower()), and
   // the schedule and the reachable lists settled at now: on a new game,
   // restart and load, and after the benchmark's setup.
   function rebuildSchedule(){
@@ -8736,12 +8796,13 @@ x_sn_9 m_sn_sn_sn sn p
       scheduleBatteryDeath(it);
     }));
     settledAt = lastClock = lastGrid = lastMains = minutesSinceCollapse();
+    rebuildOverheats(settledAt);
     settleReachable();
     planNextDue();
   }
   // The next due minute, from what is lit or running now: a grid change or
   // a mains change not yet made, a tank coming full (tankFullDue()), a battery running out, an
-  // appliance's timed stop, a running kettle's cut-out (kettleCutOutDue()), a
+  // appliance's timed stop, an overheating fuse's warning or burn, a running kettle's cut-out (kettleCutOutDue()), a
   // timer's end, a lit room's next event (heatRoomDue()), and every clock
   // event not yet fired.
   function planNextDue(){
@@ -8749,6 +8810,7 @@ x_sn_9 m_sn_sn_sn sn p
     batteryDeaths.forEach(t=>{ due = Math.min(due, t); });
     Object.values(state.power.stops).forEach(e=>{ if(e.at !== undefined) due = Math.min(due, e.at); });
     liveKettles().forEach(k=>{ due = Math.min(due, settledAt + kettleCutOutDue(k)); });
+    overheats.forEach(o=>{ due = Math.min(due, o.burnAt, o.warnAt === null ? Infinity : o.warnAt); });
     GRID_CHANGES.forEach(g=>{ if(g > lastGrid) due = Math.min(due, g); });
     MAINS_CHANGES.forEach(g=>{ if(g > lastMains) due = Math.min(due, g); });
     timerStoves.forEach(({ container })=>{ due = Math.min(due, settledAt + container.timerMinutes); });
@@ -8764,6 +8826,7 @@ x_sn_9 m_sn_sn_sn sn p
   // (the tanks have just settled to it), then a tank come full resolves its building so its pump
   // stops, then the kettles at the boil cut out (settleKettleCutOuts()), then
   // the appliances whose timed stop is due (settleApplianceStops()), then the
+  // overheating fuses' warnings and burns (settleOverheats()), then the
   // batteries out by `m` (settleBatteryDeaths()), then every running timer
   // in world order, then every lit room, its cooking and then its fire
   // (settleTimer(), settleHeat()). It never runs past an event
@@ -8781,6 +8844,7 @@ x_sn_9 m_sn_sn_sn sn p
     filled.forEach(b=>{ if(TANK_PUMPS[b] !== undefined) resolveBuilding(b); });
     settleKettleCutOuts(m);
     settleApplianceStops(m);
+    settleOverheats(m);
     settleBatteryDeaths(m);
     timersInOrder().forEach(({ roomId, container })=> settleTimer(roomId, container, span));
     heatRoomsInOrder().forEach(id=> settleHeat(id, span));
@@ -8795,7 +8859,7 @@ x_sn_9 m_sn_sn_sn sn p
   // world settled to it, which does what is due there and logs it, then the
   // clock events up to it. At one minute the order is the kettles' heating,
   // grid and mains changes, tanks coming full, kettle cut-outs, appliance stops,
-  // battery deaths, timers, cooking, fires, clock events. The cap guards
+  // overheating warnings and burns, battery deaths, timers, cooking, fires, clock events. The cap guards
   // against an event that never clears,
   // which would otherwise hang the step: a bug, reported and cut short.
   const SCHEDULER_MAX_EVENTS_PER_STEP = 1000;
@@ -9099,17 +9163,46 @@ x_sn_9 m_sn_sn_sn sn p
     const b = power.breakers[id];
     return { on: !(b && b.on === false), tripped: !!(b && b.tripped) };
   }
-  function setBreakerIn(power, id, on, tripped){
-    if(on && !tripped) delete power.breakers[id];
-    else power.breakers[id] = { on, tripped };
+  // What play has done to a fuse beyond its handle and its trip, kept on its
+  // entry (PLAYER STATE): the bodge's fitted rating, its wiring's overheating
+  // start, and its circuit burnt.
+  const BREAKER_EXTRAS = ["fitted", "hotSince", "burnt"];
+  function breakerExtrasOf(entry){
+    const out = {};
+    if(entry) BREAKER_EXTRAS.forEach(k=>{ if(entry[k] !== undefined) out[k] = entry[k]; });
+    return out;
   }
+  // A breaker's entry written, its extras kept: deleted only when it is on,
+  // untripped and has none.
+  function writeBreakerIn(power, id, on, tripped, extras){
+    if(on && !tripped && !Object.keys(extras).length) delete power.breakers[id];
+    else power.breakers[id] = Object.assign({ on, tripped }, extras);
+  }
+  function setBreakerIn(power, id, on, tripped){ writeBreakerIn(power, id, on, tripped, breakerExtrasOf(power.breakers[id])); }
+  // One of BREAKER_EXTRAS set, or cleared with `value` undefined.
+  function setBreakerExtraIn(power, id, key, value){
+    const st = breakerStateIn(power, id), extras = breakerExtrasOf(power.breakers[id]);
+    if(value === undefined) delete extras[key];
+    else extras[key] = value;
+    writeBreakerIn(power, id, st.on, st.tripped, extras);
+  }
+  function breakerExtraIn(power, id, key){ const b = power.breakers[id]; return b ? b[key] : undefined; }
+  // The rating a breaker trips at: what it was fitted with, else its own.
+  function fittedRatingIn(power, id, br){
+    const f = breakerExtraIn(power, id, "fitted");
+    return typeof f === "number" ? f : br.rating;
+  }
+  function burntIn(power, id){ return !!breakerExtraIn(power, id, "burnt"); }
   // What a hand on a breaker does: switching it moves the handle and leaves a
   // trip as it is; a reset pushes a tripped breaker back on. The device
   // pop-up and the dev seam's scripts both go through these.
   function switchBreakerIn(power, id, on){ setBreakerIn(power, id, on, breakerStateIn(power, id).tripped); }
   function resetBreakerIn(power, id){ setBreakerIn(power, id, true, false); }
-  // Rewiring a blown fuse leaves it unblown, as a reset leaves a breaker.
-  function rewireFuseIn(power, id){ resetBreakerIn(power, id); }
+  // Rewiring a fuse with its own wire leaves it unblown, as a reset leaves a
+  // breaker, at its own rating; bodging it with copper leaves it unblown at
+  // COPPER_BODGE_A.
+  function rewireFuseIn(power, id){ resetBreakerIn(power, id); setBreakerExtraIn(power, id, "fitted", undefined); }
+  function bodgeFuseIn(power, id){ resetBreakerIn(power, id); setBreakerExtraIn(power, id, "fitted", COPPER_BODGE_A); }
   function breakerClosedIn(power, id){
     const b = breakerStateIn(power, id);
     return b.on && !b.tripped;
@@ -9141,8 +9234,8 @@ x_sn_9 m_sn_sn_sn sn p
   //   live      board, panel and circuit ids: whether power reaches past
   //             their breaker. A board is live when the grid is and its
   //             main is closed; a panel when its board is, and its feeder
-  //             (on a direct board, none) and its main or RCD are closed; a circuit when its panel is and its
-  //             breaker is closed. Simplified rules skip feeders and
+  //             (on a direct board, none) and its main or RCD are closed; a circuit when its panel is, its
+  //             breaker is closed and its wiring isn't burnt (burntIn()). Simplified rules skip feeders and
   //             circuits, but never a fuse (circuitSkipped()).
   //   supplied  panel ids: whether power reaches its main (live but for it)
   //   powered   load ids: its switch is on (a plug load has none) and its
@@ -9180,7 +9273,7 @@ x_sn_9 m_sn_sn_sn sn p
     Object.values(net.panels).forEach(p=>{
       supplied[p.id] = !!live[p.board] && (simple || !p.feeder || closed(p.feeder));
       live[p.id] = supplied[p.id] && closed(p.main);
-      p.circuits.forEach(c=>{ live[c] = live[p.id] && (circuitSkipped(net.breakers[c], rules) || closed(c)); });
+      p.circuits.forEach(c=>{ live[c] = live[p.id] && !burntIn(power, c) && (circuitSkipped(net.breakers[c], rules) || closed(c)); });
     });
     const powered = {}, drawing = {}, starting = {};
     Object.values(net.loads).forEach(l=>{
@@ -9223,8 +9316,8 @@ x_sn_9 m_sn_sn_sn sn p
   //     trips at once (cause "instant"). One whose curve is not in
   //     BREAKER_CURVES never does (validateWiring() reports it).
   //   Overload: a closed breaker or fuse whose running current exceeds its
-  //     rating trips at once (cause "overload"). A fuse's trip is its
-  //     blowing.
+  //     rating, a bodged fuse's fitted one (fittedRatingIn()), trips at once
+  //     (cause "overload"). A fuse's trip is its blowing.
   // A breaker the rules don't consult (consultsBreaker()) is left exactly as
   // it is, and so is an RCD (`rcd`) or a cut-off switch (`cutoff`), which
   // neither check touches under either rules: neither trips on overcurrent.
@@ -9254,7 +9347,7 @@ x_sn_9 m_sn_sn_sn sn p
     BREAKER_LAYERS.forEach(layer=>{
       const snap = look();
       net.byLayer[layer].filter(tripsOnOvercurrent).forEach(id=>{
-        if(breakerClosedIn(p, id) && snap.running[id] > net.breakers[id].rating) trip(id, "overload", snap);
+        if(breakerClosedIn(p, id) && snap.running[id] > fittedRatingIn(p, id, net.breakers[id])) trip(id, "overload", snap);
       });
     });
     return Object.assign({}, look(), { power:p, trips });
@@ -9436,14 +9529,18 @@ x_sn_9 m_sn_sn_sn sn p
     if(buildingPowerChanged(b, state.power, r.power)) settleColdStores(b, m);
     state.power = r.power;
   }
-  // A resolve's result committed at minute `m` (adoptPower()), and its look
-  // made the building's in powerNow.
+  // A resolve's result committed at minute `m`: its fuses' overheating
+  // started or cancelled (withOverheat()), adopted (adoptPower()), its look
+  // made the building's in powerNow, and its burns re-planned
+  // (planOverheats()).
   function commitResolve(b, r, m){
+    withOverheat(b, r, m);
     adoptPower(b, r, m);
     const looks = new Map(powerNow.looks);
     const { power, trips, ...look } = r;
     looks.set(b, look);
     powerNow = withLooks(powerNow, powerNow.gridLive, looks);
+    planOverheats(b, m);
   }
   // The network on boot, restart and load: the running kettles found, then
   // every busy building resolved, with no resolve before it, so nothing
@@ -9455,6 +9552,7 @@ x_sn_9 m_sn_sn_sn sn p
     rebuildRunningKettles();
     busyBuildings(POWER_INDEX, state.power, state.electricalRules, state.seed, tankFloatsNow(), plugsNow()).forEach(b=>{
       const r = resolveBuildingOn(b, state.power, gridLive, null);
+      withOverheat(b, r, m);
       adoptPower(b, r, m);
       const { power, trips, ...look } = r;
       looks.set(b, look);
@@ -9467,14 +9565,16 @@ x_sn_9 m_sn_sn_sn sn p
   // happen, and are heard, with it (logTrips()), and then its stop rules
   // (applyStopRules()). With no change it is a plain resolve: a tank's float
   // moved by a draw (doFillAtSink()), or its tank come full (settleTanks()).
-  function changePower(b, change, m = minutesSinceCollapse()){
+  // `heard` is what the change itself does that is heard as a trip is, ahead
+  // of the resolve's own trips: a circuit burning (burnCircuit()).
+  function changePower(b, change, m = minutesSinceCollapse(), heard = []){
     if(!powerNow) refreshPower();
     if(b === undefined) return;
     const next = copyPower(state.power);
     if(change) change(next);
     const r = resolveBuildingOn(b, next, powerNow.gridLive, powerNow);
     commitResolve(b, r, m);
-    logTrips(r.trips);
+    logTrips(heard.concat(r.trips));
     applyStopRules([b], m);
   }
   function resolveBuilding(b){ changePower(b, null); }
@@ -9487,12 +9587,14 @@ x_sn_9 m_sn_sn_sn sn p
     const before = powerNow, gridLive = gridUp(m), looks = new Map(), trips = [];
     busyBuildings(POWER_INDEX, state.power, state.electricalRules, state.seed, tankFloatsNow(), plugsNow()).forEach(b=>{
       const r = resolveBuildingOn(b, state.power, gridLive, before);
+      withOverheat(b, r, m);
       adoptPower(b, r, m);
       const { power, trips:t, ...look } = r;
       looks.set(b, look);
       trips.push(...t);
     });
     powerNow = withLooks(before, gridLive, looks);
+    looks.forEach((look, b)=> planOverheats(b, m));
     logGridChange(m, before, powerNow);
     logTrips(trips);
     applyStopRules(Array.from(looks.keys()), m);
@@ -9539,6 +9641,90 @@ x_sn_9 m_sn_sn_sn sn p
       changePower(POWER_INDEX.of[id], p=>{ setSwitchIn(p, state.seed, id, a, false); delete p.stops[id]; }, m);
       if(l.room === state.currentRoom) log(a.stops.line);
     });
+  }
+  // OVERHEATING: docs/systems/power.md has the model. A fuse whose running
+  // current reaches the first of OVERHEAT_BURN_STEPS, under detailed rules,
+  // overheats its circuit's wiring: the resolve that first leaves it there
+  // records the minute (`hotSince`), one that leaves it under clears it, and
+  // nothing carries over. The resolve stays pure: the start and the cancel
+  // happen where a resolve is committed, which has the minute
+  // (withOverheat()), and so does the plan (planOverheats()). A plan is a burn
+  // at `hotSince` plus the current step's time, at once when that has passed,
+  // and a warning at half that, which a re-plan whose warning minute has
+  // passed gives no more: so a sudden jump in load can burn the wiring
+  // unwarned, with no saved flag (a named choice, retunable). Planned only at
+  // a resolve of the building, never per minute; rebuilt from the saved
+  // starts on new game, restart and load (rebuildOverheats()).
+  //   The step a fuse's running current `amps` is at under `rules`: the last
+  // of OVERHEAT_BURN_STEPS it reaches, or null under the first or under
+  // simplified rules.
+  function overheatStep(amps, rules){
+    if(rules !== "detailed") return null;
+    let step = null;
+    OVERHEAT_BURN_STEPS.forEach(s=>{ if(amps >= s.overIz * OLD_WIRING_IZ_A) step = s; });
+    return step;
+  }
+  //   Building `b`'s fuses' overheating starts, set or cleared in a
+  // resolve's result `r`, before it is committed at minute `m`.
+  function withOverheat(b, r, m){
+    Object.values(POWER_INDEX.sub[b].breakers).forEach(br=>{
+      if(!br.fuse) return;
+      const hot = !burntIn(r.power, br.id) && !!overheatStep(r.running[br.id], state.electricalRules);
+      const since = breakerExtraIn(r.power, br.id, "hotSince");
+      if(hot && since === undefined) setBreakerExtraIn(r.power, br.id, "hotSince", m);
+      else if(!hot && since !== undefined) setBreakerExtraIn(r.power, br.id, "hotSince", undefined);
+    });
+  }
+  //   The overheating fuses' plans, runtime only, by breaker id: { b, burnAt,
+  // warnAt }, `warnAt` null once said or passed.
+  const overheats = new Map();
+  //   Building `b`'s fuses' plans, from their saved starts and the running
+  // current powerNow holds, at minute `m`.
+  function planOverheats(b, m){
+    Object.values(POWER_INDEX.sub[b].breakers).forEach(br=>{
+      if(!br.fuse) return;
+      const since = breakerExtraIn(state.power, br.id, "hotSince");
+      const step = since !== undefined && overheatStep(powerRead(powerNow, "running", br.id), state.electricalRules);
+      if(!step){ overheats.delete(br.id); return; }
+      const warn = since + step.burnMin / 2;
+      overheats.set(br.id, { b, burnAt: Math.max(m, since + step.burnMin), warnAt: warn > m ? warn : null });
+    });
+  }
+  //   Every plan, rebuilt from the saved starts (rebuildSchedule()).
+  function rebuildOverheats(m){
+    overheats.clear();
+    const hot = new Set();
+    Object.keys(state.power.breakers).forEach(id=>{
+      if(breakerExtraIn(state.power, id, "hotSince") !== undefined && POWER_INDEX.of[id] !== undefined) hot.add(POWER_INDEX.of[id]);
+    });
+    hot.forEach(b=> planOverheats(b, m));
+  }
+  //   What the player notices of wiring overheating, in its building. Tom's.
+  const OVERHEAT_WARNING_LINE = "You catch a smell of hot plastic, from somewhere in the walls.";
+  //   Every warning and burn due by minute `m` (a scheduled event:
+  // planNextDue()): a warning is logged only if the player is in its
+  // building then; a burn burns its circuit (burnCircuit()).
+  function settleOverheats(m){
+    const burns = [];
+    overheats.forEach((o, id)=>{
+      if(o.warnAt !== null && o.warnAt <= m + TICK_EPSILON){
+        o.warnAt = null;
+        if(world[state.currentRoom].buildingId === o.b) log(OVERHEAT_WARNING_LINE, "warn");
+      }
+      if(o.burnAt <= m + TICK_EPSILON) burns.push(id);
+    });
+    burns.forEach(id=>{ const o = overheats.get(id); if(o) burnCircuit(o.b, id, m); });
+  }
+  //   Fuse `id`'s circuit in building `b` burnt at minute `m`: recorded
+  // `burnt`, its overheating start cleared, and its building resolved, so
+  // nothing on it has power under either rules (powerSnapshot()). It is
+  // heard as a trip with no board line (logTrips()). Repairing it is #179's.
+  function burnCircuit(b, id, m){
+    const running = POWER_NET.breakers[id].loads.filter(l=> powerRead(powerNow, "drawing", l));
+    changePower(b, p=>{
+      setBreakerExtraIn(p, id, "burnt", true);
+      setBreakerExtraIn(p, id, "hotSince", undefined);
+    }, m, [{ id, cause:"burn", running }]);
   }
   // KETTLES: docs/systems/power.md has the model. The electric kettle is an
   // item whose load is a plug load (POWER SCHEMA): it is plugged in while it
@@ -9647,14 +9833,15 @@ x_sn_9 m_sn_sn_sn sn p
   }
   // A trip is heard where its panel or board hangs, and noticed where
   // something it fed was running; anywhere else it passes unremarked. A fuse
-  // blowing is heard as its own line, in place of the panel's. The
-  // grid going down or coming back is logGridChange()'s. One line of each
-  // kind per resolve. Wording retunable.
+  // blowing is heard as its own line, in place of the panel's. A circuit
+  // burning (cause "burn") is heard nowhere: it is only noticed where
+  // something it fed was running. The grid going down or coming back is
+  // logGridChange()'s. One line of each kind per resolve. Wording retunable.
   function logTrips(trips){
     let atPanel = false, atFuse = false, quiet = false;
     trips.forEach(t=>{
       const br = POWER_NET.breakers[t.id];
-      if(br.room === state.currentRoom){ if(br.fuse) atFuse = true; else atPanel = true; }
+      if(t.cause !== "burn" && br.room === state.currentRoom){ if(br.fuse) atFuse = true; else atPanel = true; }
       else if(t.running.some(id=> POWER_NET.loads[id].room === state.currentRoom)) quiet = true;
     });
     if(atPanel) log("The panel on the wall snaps. A breaker has tripped.", "warn");
@@ -12084,7 +12271,8 @@ x_sn_9 m_sn_sn_sn sn p
   // unsettled; a timed stop (state.power.stops) on a load without a timed
   // rule, on one switched off, running without power or waiting with it, or
   // left past its minute; and a kettle running but not plugged in, missing
-  // from runningKettles, or not drawing through its plug.
+  // from runningKettles, or not drawing through its plug; and a fuse
+  // overheating with no burn planned, or a plan for one that isn't.
   function replayProblems(){
     const problems = [];
     const now = minutesSinceCollapse();
@@ -12112,6 +12300,12 @@ x_sn_9 m_sn_sn_sn sn p
       if(!runningKettles.some(k=> k.item === it && k.roomId === roomId)) problems.push(`${it.name} runs in ${roomId}, which runningKettles lacks`);
       if(!powerRead(powerNow, "drawing", plug)) problems.push(`${it.name} runs in ${roomId}, but its plug isn't drawing`);
     }));
+    Object.keys(state.power.breakers).forEach(id=>{
+      if(breakerExtraIn(state.power, id, "hotSince") !== undefined && !overheats.has(id)) problems.push(`${id} is overheating, but no burn is planned`);
+    });
+    overheats.forEach((o, id)=>{
+      if(breakerExtraIn(state.power, id, "hotSince") === undefined) problems.push(`a burn is planned for ${id}, which isn't overheating`);
+    });
     if(powerNow.gridLive !== gridUp()) problems.push(`powerNow has the grid ${powerNow.gridLive ? "up" : "down"}, but it is ${gridUp() ? "up" : "down"}`);
     Object.keys(state.power.stops).forEach(id=>{
       const e = state.power.stops[id], l = POWER_NET.loads[id], a = l && APPLIANCES[l.appliance];
@@ -14161,9 +14355,10 @@ x_sn_9 m_sn_sn_sn sn p
   //   An old board, one whose circuits hold a fuse, shows breaker rows
   // under either rules: under simplified rules its cut-off switch's and its
   // fuses', in place of the rating, the On/Off line and the one button. A
-  // cut-off switch's row shows no rating. A fuse's row reads Intact or Blown
-  // and has no button but Rewire, offered while it is blown and can be
-  // rewired (canRewireFuse(), doRewireFuse()), with its time.
+  // cut-off switch's row shows no rating. A fuse's row reads Intact or Blown,
+  // at its own rating whatever it was rewired with, and has no button but
+  // Rewire (canRewireFuse(), doRewireFuse()) and Rewire with copper
+  // (canBodgeFuse(), doBodgeFuse()), each while it can be done, with its time.
   function renderPowerDevicePop(device){
     const node = powerNode(device);
     const box = document.createElement("div");
@@ -14189,6 +14384,7 @@ x_sn_9 m_sn_sn_sn sn p
       buttons.className = "breaker-buttons";
       if(br.fuse){
         if(canRewireFuse(id)) buttons.appendChild(actionButton("Rewire", ()=> doRewireFuse(id), { cost:fmtDuration(REWIRE_FUSE_MIN) }));
+        if(canBodgeFuse(id)) buttons.appendChild(actionButton("Rewire with copper", ()=> doBodgeFuse(id), { cost:fmtDuration(REWIRE_FUSE_MIN) }));
       } else buttons.appendChild(st.tripped ? actionButton("Reset", ()=> doResetBreaker(id))
         : st.on ? actionButton("Switch off", ()=> doSwitchBreaker(id, false))
         : actionButton("Switch on", ()=> doSwitchBreaker(id, true)));

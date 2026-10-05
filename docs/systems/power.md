@@ -60,8 +60,8 @@ layer first, looking again after every layer's trips:
    or a cut-off switch, whose momentary current is over its curve's
    `instant` multiple of its rating (`BREAKER_CURVES`) trips.
 2. **Overload:** a closed breaker or fuse the rules consult, not an RCD or a
-   cut-off switch, whose running current is over its rating trips. A fuse's
-   trip is its blowing.
+   cut-off switch, whose running current is over its rating trips: a bodged
+   fuse's fitted rating (`fittedRatingIn()`). A fuse's trip is its blowing.
 
 It returns the look after its trips, the new power state and the trips, each
 with the loads its breaker fed that were drawing.
@@ -69,7 +69,8 @@ with the loads its breaker fed that were drawing.
 **When power resolves.** Only when something changes it:
 
 - **An action** on a building's switches or breakers (`doSwitchBreaker()`,
-  `doSwitchLoad()`, `doResetBreaker()`, `doRewireFuse()`) makes its change on
+  `doSwitchLoad()`, `doResetBreaker()`, `doRewireFuse()`, `doBodgeFuse()`)
+  makes its change on
   a copy, resolves that building on it, and commits the result
   (`changePower()`): its trips happen, and are heard, with the action.
 - **A water draw** (`doFillAtSink()`, `doDrinkAtSink()`, through
@@ -171,6 +172,38 @@ unpowered switches it off, silently, and it is off when power returns
 drunk empty, it cuts out with its line. The running kettles are a runtime
 list, rebuilt from the room floors by `refreshPower()` before its resolves.
 
+**The copper bodge** (#365). A blown fuse can be rewired with its own fuse
+wire (`doRewireFuse()`) or, with a `copper-bodge` item (the cable offcut),
+with copper (`doBodgeFuse()`): one offcut, `REWIRE_FUSE_MIN`, and the fuse
+holds a fitted rating of `COPPER_BODGE_A` on its breaker entry (`fitted`),
+which the resolve uses in place of its own. Rewire is offered on an intact
+bodged fuse too, and restores its own rating. The fuse's row doesn't change:
+the bodge is inside a screwed-in plug. A breaker's entry (`state.power`'s
+`breakers`) keeps `fitted`, `hotSince` and `burnt` (`BREAKER_EXTRAS`) through
+every switch, trip and reset (`setBreakerIn()`), and goes only when it is on,
+untripped and has none.
+
+**Overheating**, under detailed rules only. A fuse's wiring carries
+`OLD_WIRING_IZ_A`; from 1.45 × that, the first of `OVERHEAT_BURN_STEPS`, it
+overheats, and burns through after the time of the step its running current
+is at (`overheatStep()`). The resolve stays pure: where it is committed
+(`commitResolve()`, `resolveGrid()`, `refreshPower()`), the first resolve
+that leaves a fuse at or above the first step records the minute
+(`hotSince`), and one that leaves it under clears it, with nothing carried
+over (`withOverheat()`). Every resolve of the building re-plans its burn at
+that start plus the current step's time, at once when that has passed, and a
+warning at half of it, heard only in the building, which a re-plan whose
+warning minute has passed gives no more (`planOverheats()`): a sudden jump in
+load can burn it unwarned. Burns and warnings are scheduled events
+([Time](time.md)), runtime only, re-planned from the saved starts on new
+game, restart and load (`rebuildOverheats()`). A burn (`burnCircuit()`)
+records the circuit `burnt`, clears its start and resolves its building: a
+burnt circuit gives nothing downstream power, under either rules, whatever its
+fuse says (`burntIn()`). It is heard as a trip is where something it fed was
+running, and nowhere else, with no line at the board (`logTrips()`). Nothing
+else shows it: the fuse reads Intact, and a meter reads no voltage past it.
+Repairing it is #179's.
+
 ## Invariants
 
 - **Every change to `state.power` in play goes through a resolve**:
@@ -220,6 +253,8 @@ list, rebuilt from the room floors by `refreshPower()` before its resolves.
 - `PANEL_DEFAULT_VOLTS`: a panel's or board's volts when it gives none.
 - `OLD_BOARD_PCT`, `OLD_BOARD_FUSE_A`, `REWIRE_FUSE_MIN`: the old fuse
   boards.
+- `COPPER_BODGE_A`, `OLD_WIRING_IZ_A`, `OVERHEAT_BURN_STEPS`: the bodge's
+  fitted rating, the old wiring's limit, and how long it takes to burn.
 - `TANK_FLOAT_START`, `HOUSE_PUMP_FLOW_LPH`, `HOUSE_TANK_L`: tanks and pumps.
 - `NETWORK_FILL_LPH`, `MAINS_REPRESSURE_FACTOR` (`MAINS_UP_SPANS`): the water
   network's fill, and how long it takes to come back.
@@ -240,4 +275,8 @@ list, rebuilt from the room floors by `refreshPower()` before its resolves.
   (none in an untouched building) and the running kettles.
 - **Per grid change:** every busy building resolved; still buildings cost
   nothing until read.
+- **Per resolve committed:** each of its building's fuses' running current
+  set against the burn steps, and at most one burn and one warning planned
+  for each. **Per overheating event:** a warning, or a burn resolving one
+  building.
 - **Per read of a still building:** its look, kept per rules, seed and grid.
