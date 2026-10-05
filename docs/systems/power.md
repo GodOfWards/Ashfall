@@ -29,6 +29,26 @@ data, expanded once at startup into a flat table of nodes with stable ids
 breaker's handle and whether it has tripped. The rest of the game asks it
 one question, `isPowered()`.
 
+**Where a network comes from.** A building type's `wiring` (BUILDING TYPES)
+gives every instance of it a board and panels by role; an instance's
+`overrides.wiring` lays fields over the type's board (`board`, field by
+field, a `feeders` list replaced whole: the paper mill's own main board with
+one feeder) and over its panels by id (`panels`: an old board's fuse box,
+a galpón's floor bank), before the wiring is built (`mergeWiring()`).
+
+**No supply.** An instance whose `overrides.wiring` is `null` (the goods
+shed) is built with no network at all, and is deliberately unsupplied
+(`BUILDING_INFO`'s `supplied`, derived at world build, never saved;
+`unsupplied()`). A room nothing wires otherwise falls back to the grid; one
+in an unsupplied building never has power: `containerPowered()` is false,
+a container there ages unpowered throughout (`effectiveAge()`,
+`coldStoreWired()`), a well tank there never refills, and its rooms are
+left out of `validateWiring()`'s unwired list. A network tank there would
+still fill through its float valve while the mains run, which needs no
+power. Dropping the wiring drops any doors or windows its panels' layouts
+carry, so `buildBuilding()` reports one that has them. When #258 removes
+the fallback, the unwired list is the flag's only reader left.
+
 **A look** (`powerSnapshot()`) is a pure function of a network, a power
 state, the electrical rules, whether the grid is live, the previous
 resolve's drawing, the seed, each tank's float (`tankFloat()`) and how many
@@ -43,7 +63,13 @@ a fuse (`consultsBreaker()`, `circuitSkipped()`).
 draws while its tank's float calls: the tank below `TANK_FLOAT_START`, or the
 pump drawing in the previous resolve and the tank not yet full; never on a
 full tank. A plug load draws its watts times the items running through it,
-while there are any. Any other load draws its watts while it has power. A breaker's
+while there are any. Any other load draws its watts while it has power.
+A fixture with a `count` is a bank of that many fittings switched as one
+load, with one switch and one starting roll: it draws, and starts, its
+appliance's figures times the count (`loadCount()`, in `powerSnapshot()`
+and `untouchedTrippers()`). Its nameplate is one fitting's, and wherever a
+load is named (the switch's line, the Electrical view's rows) a bank takes
+its appliance's `plural` (`loadName()`): a galpón's "High-bay lamps". A breaker's
 running current is its loads' draw over its volts; its momentary current
 counts a starting load at its `startWatts`.
 
@@ -127,7 +153,8 @@ its building's fill, decided at world build from its site stop's links
   own well at its pump's `flowLph` while that pump draws, **whether or not
   the mains run**; or, in a building with no pump load (the unwired
   fallback, none today), at `HOUSE_PUMP_FLOW_LPH` whenever it is below full
-  while the grid is up (`tankRefillLph()`).
+  while the grid is up (`tankRefillLph()`); or, in an unsupplied building
+  (none with a tank today), never.
 
 The mains run while the grid does, and come back after an outage only once
 the grid has been back `MAINS_REPRESSURE_FACTOR` times as long as the outage
@@ -243,7 +270,9 @@ Repairing it is #179's.
 - `simulatePower()`: the dev seam's test network, resolved every minute.
 - `validateWiring()`: the dev seam's check of every wiring reference, and of
   each tank's pumps by its fill: none in a network building, exactly one in a
-  wired well building, and none in a building with no tank.
+  wired well building, and none in a building with no tank; and of every
+  fixture's `count` and the `plural` a bank needs.
+- `unsupplied()`: whether a room's building is deliberately unsupplied.
 
 ## Constants
 
