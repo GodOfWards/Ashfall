@@ -20,6 +20,61 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 <!-- New entries go directly below this line. -->
 
+## v0.14.1 — The galpones wired, and instance wiring overrides
+
+Implements: handoffs/galpon-wiring.md
+
+Implements #308 and #483 in full, per `handoffs/galpon-wiring.md`, built in three phases. Wiring is a definition and isn't saved, so this is a PATCH: the save key is unchanged, and a v0.14.0 save loads and gains the materials yard's new yard. Content plus the engine change it needs.
+
+**New**
+- A board override (#483; WORLD DATA, BUILDING TYPES, `mergeWiring()`): an instance's `overrides.wiring.board` lays its fields over the type's board, field by field, and a given `feeders` replaces the list whole. A board override on a type with no wiring is reported by the existing "a wiring override, but its type has no wiring".
+- No supply (#483): `overrides.wiring: null` makes `mergeWiring()` return no wiring, checked before the falsy test, and a null on a type with no wiring isn't reported. `BUILDING_INFO` gains `supplied` (false for such an instance, true for every other), derived at world build and never saved, read through `unsupplied(roomId)` by the room's `buildingId`. In an unsupplied building: `containerPowered()` is false; `effectiveAge()` counts its containers unpowered throughout; `coldStoreWired()` is false for a container no load claims; a well tank never refills (`tankRefillLph()` returns 0 before the fallback); a network tank still fills while the mains run; and `validateWiring()` leaves its rooms out of `unwired`.
+- `buildBuilding()` reports an unsupplied instance whose type's panels carry template doors or windows, since dropping the wiring would drop them silently.
+- A fixture `count` (#308; POWER SCHEMA, POWER): `expandWiring()` copies a fixture's `count` onto its load when the fixture gives one. `loadCount()` (1 when absent) multiplies the load's draw and start in `powerSnapshot()`'s per-breaker sums (`n = l.plug ? plugs[id] : loadCount(l)`) and in `untouchedTrippers()`'s `run` and `mom`. One load, one switch, one `leftOnChance` roll; the nameplate stays one fitting's.
+- An appliance's `plural`, and `loadName(l)`, the one helper that names a load: the plural for a bank of more than one, else the name. It names the load in `doSwitchLoad()`'s line ("You switch the high-bay lamps on."), `renderCircuitTab()`'s rows and its "Elsewhere on this circuit" rows.
+- `validateWiring()` reports a fixture `count` that isn't a whole number of at least 1, a bank of more than one whose appliance has no `plural`, and a `plural` that isn't a non-empty string.
+
+**New content**
+- `APPLIANCES` (POWER SCHEMA): `led_highbay_200` and `led_highbay_100`, "High-bay lamp" / "High-bay lamps", 200 W and 100 W; `fluorescent_batten`, "Fluorescent light" / "Fluorescent lights", 90 W. All 220 V, `leftOnChance` 0.3, `nameplate:{ printsWatts:true }`, readout "Lit" / "Dark", no `startWatts`, `dutyCycle` or `cycleMinutes`. Their why-comment gives the sources (the maker's Saturno sheet; EU Regulation 245/2009 via Vossloh-Schwabe, secondary, for the derived 90 W) and what isn't modelled (power factor, metal halide's warm-up).
+- `BUILDING_TYPES.galpon.wiring`: board `{ name:"Meter box", role:"street", rating:32, direct:true }`, and one panel, `shed`, "Breaker panel", in the office, on template `galpon_workshop`.
+- `WIRING_TEMPLATES` `galpon_workshop`, `galpon_yard`, `galpon_mill`, built below the table from one layout: main `{ rating:40, rcd:true }`; LIGHTS 10 A over `floor` and `office`, SOCKETS 20 A `sockets:true` in `office`; `light_office` (`led_light`) and the floor's bank, `light_floor`, of eight `fluorescent_batten`, four `led_highbay_100` or eight `led_highbay_200`.
+- `corralon`: template `galpon_yard`; floor text "A corrugated shed at the back of the yard: a wall of hanging tools, bins of nails and screws, shelves of paint tins.", `searchLabel` "Search the shed"; a new room, `corralon_yard` ("Yard", `shelter:"none"`, `floorCap` 80, no containers), linked to the floor by "Go out to the yard" / "Go back into the shed", 10 m, no door. Nothing in the yard is wired.
+- `mechanic`: the type's eight battens; text unchanged.
+- `goods_shed`: `overrides.wiring: null`; floor text "A long shed beside the siding, under a rust-red roof that runs along the track. Grass has grown up to the walls, and the loading door faces the rails." Its crates, office and items are unchanged.
+- `paper_mill`: template `galpon_mill`, and a board override `{ name:"Main board", role:"floor", rating:125, direct:false, feeders:[{ panel:"shed", label:"LIGHTING & OFFICES", rating:40 }] }`, the first non-direct board in play; floor text gains ", and the main board stands against the far wall."
+- Network ids, fixed from now: `<inst>.board`, `<inst>.board.main`, `<inst>.shed`, `<inst>.shed.main`, `<inst>.shed.lights`, `<inst>.shed.sockets`, `<inst>.shed.light_office`, `<inst>.shed.light_floor`, `<inst>.shed.plug.office` for `corralon`, `mechanic` and `paper_mill`, and `paper_mill.board.shed`.
+
+**UI**
+- The Electrical view in each wired galpón: the floor's bank as one LIGHTS row, "High-bay lamps" or "Fluorescent lights", "Lit" / "Dark", one Switch on / Switch off, and a 200 W, 100 W or 90 W nameplate; the office's "Light"; a SOCKETS tab in the office. The paper mill's floor shows "Main board", MAIN 125 A and LIGHTING & OFFICES 40 A (simplified rules: the main only). The goods shed shows "Nothing electrical to show here."
+- The materials yard: "Search the shed", and the exits "Go out to the yard" / "Go back into the shed".
+
+**Documentation**
+- `docs/systems/power.md`: where a network comes from (a type's wiring and an instance's board and panel overrides), no supply and what each fallback reader does for it, a fixture's `count` and an appliance's `plural`, the well tank's unsupplied case, and the entry points `validateWiring()` and `unsupplied()`. `docs/systems/spoilage.md`: `coldStoreWired()`'s unsupplied case.
+- Schema comments: BUILDING TYPES' type `wiring` (its "Absent" line now names the unsupplied case) and instance `overrides.wiring` (`board`, `null`); APPLIANCES' `plural`; WIRING_TEMPLATES' fixture `count` and the galpón templates' paragraph; `expandWiring()`'s load shape; the fallback notes above `containerPowered()`, `effectiveAge()`, `coldStoreWired()`, `tankRefillLph()`, WIRING and POWER_NET; `validateWiring()`'s list.
+- Nothing was deferred.
+
+**Explicitly out of scope**
+- Any three-phase model and the mill's machinery as loads; a compressor or lift in the repair shop; bank switching beyond `count`; removing the unwired-room fallback (#258); light levels as a mechanic; a street gate into the yard; `shop_home` (#307) and the comisaría (#309); #472 and #460.
+
+**Sections touched**
+- WORLD DATA (BUILDING TYPES: `galpon`, the type and instance schema comments, `landmarkInstances()`, `buildBuilding()`, `mergeWiring()`; `BUILDING_INFO` and `unsupplied()`; POWER SCHEMA: `APPLIANCES`, `WIRING_TEMPLATES`); SURVIVAL / TIME SIMULATION (`containerPowered()`, `effectiveAge()`, `coldStoreWired()`, `tankRefillLph()`; POWER: `expandWiring()`, `loadCount()`, `loadName()`, `powerSnapshot()`, `untouchedTrippers()`); WORLD INTERACTION (`doSwitchLoad()`'s line); PERSISTENCE (`validateWiring()`); RENDERING (`renderCircuitTab()`).
+
+**Open questions / decisions resolved**
+- The unsupplied flag lives on `BUILDING_INFO[b].supplied`, as recommended, read through one helper, `unsupplied()`.
+- The floor banks are three `WIRING_TEMPLATES` entries built from one layout below the table; the type names `galpon_workshop`, and the yard and the mill override `panels.shed.template`.
+- `count` sits on a load only when its fixture gives one; `loadCount()` reads 1 otherwise.
+- `coldStoreWired()` is a fourth grid-fallback reader the handoff didn't list (spoilage's span rule for a fridge or freezer no load claims), so it takes the unsupplied case too; no galpón has a cold store, so nothing in play changes by it.
+
+**Notes / assumptions**
+- The bank counts (8, 4, 8), the yard's `floorCap` 80 and its 10 m walk, the feeder's 40 A and label, the panel in the office, and the appliances' `leftOnChance` 0.3 are judgment calls, retunable; each is flagged where it is set.
+- The yard carries no `cannotHaveFire`, as specified: it is open to the sky, so a campfire can be built there.
+- The handoff's "tripping the feeder darkens the panel" was checked by switching the feeder off, which opens it as a trip does: the bank and the office light lose power, and come back on switching it on. With 7.3 A against 40 A no trip is reachable in play.
+- Validation: `validateWiring()`, `validateBuildings()`, `validateRoomSchema()` and `validateLocations()` report nothing, and no galpón room is unwired; each new check was made to fire once on a scratch copy (a count of 2.5, a missing and an empty `plural`, a board override on the pharmacy, a template door on an unsupplied galpón) and reverted. A clamp on the mill's LIGHTS with the bank and the office light on reads 7.3 A (1,610 W). A save made by v0.14.0 standing in the searched yard loads, and the new yard is reached from it. `replay_compare.py` against `main` reports no differences; the Performance check's timings are within tolerance.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.14.0"` → `"0.14.1"`
+
+---
+
 ## v0.14.0 — Battery cells, and the copper bodge
 
 Implements: handoffs/battery-cells-and-copper-bodge.md
