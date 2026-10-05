@@ -20,6 +20,69 @@ wrap-time checklist's tagging step governs versions that shipped *here*.
 
 <!-- New entries go directly below this line. -->
 
+## v0.14.0 — Battery cells, and the copper bodge
+
+Implements: handoffs/battery-cells-and-copper-bodge.md
+
+Implements #388 and #365 in full, per `handoffs/battery-cells-and-copper-bodge.md`, built in two phases. New persistent state (a cell's charge, a device's held cells, a fuse's fitted rating, overheating start and burnt circuit): MINOR, and the save key rotates. An imported 0.13 save is migrated on load.
+
+**New**
+- Battery cells (#388; INVENTORY / ITEM SYSTEM, BATTERY CELLS). A cell carries a size tag of `CELL_TAGS` (`cell-aa`, `cell-d`) and its own `charge` (0–`CELL_FULL_CHARGE`); a loose cell doesn't drain. A device's registry entry `takesCells:{ tag, count }`, and its instance holds real cell rows in `cells`, never `contents`. `itemFromRegistry()` gives a device a full set (`fullCellsFor()`, the cell found by tag, `cellItemIdFor()`). A device weighs its body plus its cells (`itemUnitWeight()`).
+- Draining (SURVIVAL / TIME SIMULATION, BATTERIES). While a device is on, every cell loses its `drainRate` a minute, worked out when read from the device's `chargeAsOf` (`cellChargeIn()`). The device dies when its weakest cell is flat: `scheduleBatteryDeath()` plans `chargeAsOf + weakestCellCharge() / drainRate`, and `settleBatteryDeaths()` writes every cell down (`writeCellCharges()`) and switches it off with its line as before. `switchDevice()` off writes each cell's charge.
+- Remove batteries switches the device off first and gives back each cell at its own charge (`giveItem()`), silently. Insert batteries replaces Replace batteries: offered only on a device holding no cells, while at least its count of its size are carried, it takes the fullest carried (`fullestCarriedCells()`: by charge, a tie in carried order), silently. A device holding none reads "No batteries installed" and offers no Turn on.
+- Stacking: `sameStackState()` merges cells only at exactly equal `charge`, so spent cells form their own rows in one group (#134). `unitLevel()` gives a cell its charge as a level with no figure: its rows draw a meter, and its pop-up draws the meter and no number.
+- Found charge (WORLD INTERACTION, `foundCharge()`, called from `rolledPoolFor()`): a pool-rolled device holds no cells at `FOUND_DEVICE_NO_CELLS_PCT` (10), else a full set at one charge `CELL_FULL_CHARGE − (CELL_FULL_CHARGE − FOUND_CHARGE_MIN) · u^FOUND_DEVICE_CHARGE_SKEW` (10, 2; median ≈ 78); a rolled row of cells shares one charge by the same formula at `FOUND_CELL_CHARGE_SKEW` (4; median ≈ 94). Keyed on the entry's loot key plus `"cells"` / `"charge"`. Hand-placed devices and cells are full.
+- Test on a loose cell (`doTestCell()`), while a `voltage-test` tool is carried: `METER_READING_MIN`, then "You put the probes across the cell. It reads ${v} V.", `v` to one decimal from `CELL_RESTING_VOLTS` (an AA alkaline at rest, 1.10 V empty to 1.59 V full by tenths) interpolated linearly at the row's charge, D cells too (`cellRestingVolts()`).
+- The copper bodge (#365; WORLD INTERACTION). Rewire with copper (`canBodgeFuse()`, `doBodgeFuse()`) on a blown fuse, with a `screwdriving` tool and a `copper-bodge` item: one offcut, `REWIRE_FUSE_MIN`, the line "You strip the offcut, unscrew the blown plug, wind the copper core under its screws and screw it back in.", and the fuse unblown at a fitted `COPPER_BODGE_A` (130) (`bodgeFuseIn()`), which the overload check uses in place of its rating (`fittedRatingIn()`). Rewire with fuse wire is offered on an intact bodged fuse too, and clears the fitted rating (`rewireFuseIn()`).
+- Breaker entries keep `BREAKER_EXTRAS` (`fitted`, `hotSince`, `burnt`) through every switch, trip and reset: `setBreakerIn()` writes through `writeBreakerIn()`, which deletes an entry only when it is on, untripped and has none; `setBreakerExtraIn()` sets one.
+- Overheating (POWER, OVERHEATING), detailed rules only. `overheatStep()`: the last of `OVERHEAT_BURN_STEPS` a fuse's running current reaches in multiples of `OLD_WIRING_IZ_A` (15): 1.45 → 240 min, 1.73 → 60, 2 → 15, 2.5 → 5. Where a resolve is committed (`commitResolve()`, `resolveGrid()`, `refreshPower()`), `withOverheat()` records `hotSince` at the first resolve that leaves a fuse at a step, and clears it at one that leaves it under. `planOverheats()` re-plans the building's burns at each resolve: the burn at `hotSince` plus the step's time (at once when that has passed), the warning at half of it unless that has passed. `rebuildOverheats()` rebuilds the plans from the saved starts in `rebuildSchedule()`. `settleOverheats()` runs in `settleWorld()` right after the appliance stops: a due warning logs "You catch a smell of hot plastic, from somewhere in the walls." if the player is in the building; a due burn (`burnCircuit()`) records the circuit `burnt`, clears its start and resolves the building through `changePower()`'s new `heard` argument.
+- A burnt circuit is never live, under either rules (`burntIn()` in `powerSnapshot()`), whatever its fuse says. It is heard as a trip of cause `"burn"` (`logTrips()`): `ROOM_GOES_QUIET` where something it fed was running, no line at the board.
+
+**New content**
+- Items: `aa_battery` "AA battery" (0.023 kg, `cell-aa`), `d_battery` "D battery" (0.139 kg, `cell-d`), `large_flashlight` "Large flashlight" (0.225 kg body, 2 × `cell-d`, 40 h, `drainRate` 100/2400), `cable_offcut` "Offcut of cable (1.5 mm²)" (0.01 kg, `copper-bodge`).
+- `flashlight` renamed "Small flashlight": 0.105 kg body, 2 × `cell-aa`, 8 h. `portable_radio`: 0.14 kg body, 2 × `cell-aa`, 50 h (`drainRate` 100/3000).
+- The home's bedside holds 2 AA in place of the spare batteries; `residential_personal`'s entry is `aa_battery`, qty 2–4, at the same chance. `cable_offcut` in `tools_general` (0.15, 1) and `tools_workshop` (0.25, 1–2).
+
+**Removed**
+- `spare_batteries` and the `battery` tag; Replace batteries; durability mode `"time"`, `hasBatteries` and an instance `drainRate`, and `batteryCharge()` (replaced by `cellChargeIn()`). `spare_batteries` left `ACTION_GRANTED_ITEM_IDS`, with nothing in its place: Remove returns only cells the world placed.
+
+**Changed / Reworked**
+- *Load*: `migrateBatteryCellsRelease()`, after `migrateWaterTemperatureRelease()`, idempotent: every `spare_batteries` row becomes two full AA cells a unit (`RETIRED_BATTERY_ROWS`); a device on cells still carrying `durability` gives its charge as it stands now to each cell of a full set, or holds none if it had `hasBatteries: false`, stays on from now if it was (unless it holds none), and loses `durability`, `hasBatteries` and `drainRate`, its `unitWeight` taken from the registry.
+- *Item walks*: `forEachItemList()` walks a device's `cells` as it walks `contents`, so every load-time pass (the backfills, the migrations, the uid resync) reaches them.
+- *Replay*: the "Three radios run down" step sets its radios' cells to `drainRateOf(r) × minutes`. `replayProblems()` checks devices by their cells, and that every overheating fuse has a plan and every plan an overheating fuse.
+
+**UI**
+- Cell rows with meters, and a cell's pop-up with a meter and no figure; Insert batteries; Test on a loose cell; Rewire with copper beside Rewire on a blown fuse, and Rewire on an intact bodged one. A fuse's row is unchanged: "Fuses · 15 A · Intact".
+
+**Documentation**
+- `docs/systems/time.md`: the battery model by cells, its constants, the overheating events in the scheduled systems, the runtime lists and the order at one minute. `docs/systems/power.md`: the copper bodge, the breaker extras, overheating and burnt circuits, constants and costs.
+- ITEM DATA SCHEMA (`takesCells`, `drainRate`, `cells`, `chargeAsOf`, `charge`, the cell and `copper-bodge` tags), PLAYER STATE (`state.power.breakers`), `powerSnapshot()`'s and `resolvePower()`'s comments, the SPAWN_POOLS chance notes.
+- Deferred: #471 (the Large flashlight's and D cells' placements, out of scope here); #472 (an old board's loads, the water heater drawn at its average, top out near 21 A, under the first burn step, so nothing burns in play today).
+
+**Explicitly out of scope**
+- The car battery (#261), fire from a burnt circuit and repairing one (#179), shock from rewiring live (#247), and new loads that could reach the burn steps (#244, #245).
+
+**Sections touched**
+- WORLD DATA (ITEM_REGISTRY, ITEM DATA SCHEMA, SPAWN_POOLS, the home's placements, the old-board constants); PLAYER STATE (`state.power` comment); INVENTORY / ITEM SYSTEM (`itemFromRegistry()`, `itemUnitWeight()`, `sameStackState()`, `unitLevel()`, BATTERY CELLS, `batteryActions()`); WORLD INTERACTION (`doTestCell()`, found charge, `doBodgeFuse()`, `canRewireFuse()`); SURVIVAL / TIME SIMULATION (BATTERIES, `rebuildSchedule()`, `planNextDue()`, `settleWorld()`; POWER: breaker state, `powerSnapshot()`, `resolvePower()`, the commit paths, OVERHEATING, `logTrips()`); PERSISTENCE (`forEachItemList()`, the migration, the replay, the reachability list); RENDERING (the item pop-up, the fuse row).
+
+**Open questions / decisions resolved**
+- A cell's charge field: a plain `charge`, compared exactly in `sameStackState()`, drawn by `levelMeter()` through `unitLevel()`.
+- The device's cells: registry `takesCells:{ tag, count }`, instance `cells:[…]` of cell rows; the instance's on-time minute is `chargeAsOf`.
+- Bodge state: on the fuse's breaker entry, `{ on, tripped, fitted?, hotSince?, burnt? }`, the entry kept while any is set.
+- Fullest-N ties: stable, carried order.
+- `drainRate` (and `takesCells`) became registry-only (`REGISTRY_ONLY_FIELDS`, read by `drainRateOf()`, `cellSpecOf()`), so the radio's new run time reaches old saves.
+
+**Notes / assumptions**
+- Insert and Remove go through `giveItem()` and `addToList()`, so a removed cell lands in the selected inventory tab, or the floor, as any given item does.
+- A burn planned "at once" by a re-plan happens at the next advance of time, as a battery death does when a flat device is switched on.
+- A re-plan drops a warning whose minute is at or before the re-plan's, so a warning is never said twice; a step that falls (a load switched off) can give a later second warning, as the spec reads.
+- The warning line is logged with the `warn` class, as the fuse box's pop is.
+- `replay_compare.py` against v0.13.2 differs from step 5 on in the digest only, as the handoff expected (the radios are cells now); every step's log is identical, and no step reports a problem.
+
+**Version**: `GAME_CONFIG.VERSION` `"0.13.2"` → `"0.14.0"`
+
+---
+
 ## v0.13.2 — The benchmark collects before it times; one live spec at a time
 
 Implements #380 and #152, bundled as one pass from their issue bodies (no handoff).
