@@ -101,8 +101,9 @@ state, and `designed` once it is. Status never goes in a title.
 | `hub` | Tracks a group of issues; its design links to `docs/systems/`, never restates it |
 | `process` | How the project works: sessions, docs, CI |
 
-State: `deferred` (decided later), `parked` (not planned; a comment says what
-would revive it).
+State: `deferred` (decided later), `parked` (not planned for now; a comment
+says what would revive it). An idea Tom drops for good is closed instead (see
+Closing).
 
 Readiness: `designed` means every design decision is Tom's and made, the
 facts it needs are in `docs/canon/reference/` or quoted in the body, and the
@@ -142,7 +143,9 @@ if no issue covers it, file one first. Don't file an issue to record what a
 session shipped.
 
 **Closing.** Only by the pull request that fulfils it (`Closes #NN`), never
-by hand.
+by hand, with one exception: an idea Tom drops for good is closed by hand as
+not planned, with a comment naming the decision, and every issue that
+depended on it is edited the same day.
 
 **Choosing a tier.** Two questions, in order:
 
