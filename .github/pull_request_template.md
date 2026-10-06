@@ -9,10 +9,11 @@
 
 Closes #
 
-<!-- One `Closes #NN` line per issue this fulfils. Never close an issue by hand.
-     A pull request that only lands a handoff fulfils nothing yet: name its
-     issues without `Closes` (e.g. "Specs #242"), or they close before the
-     work exists. The coding session's pull request closes them. -->
+<!-- One `Closes #NN` line per issue this fulfils. An issue is closed by hand
+     only when Tom drops it for good (docs/03-workflow.md, Closing). A pull
+     request that only lands a handoff fulfils nothing yet: name its issues
+     without `Closes` (e.g. "Specs #242"), or they close before the work
+     exists. The coding session's pull request closes them. -->
 
 ## Handoff
 
