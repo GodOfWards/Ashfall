@@ -25,6 +25,34 @@ the discussion stands is fine. Decisions go into issue bodies as they're
 made; what's still open stays open, written as an open question in the body.
 Never propose wrapping up, writing a handoff, or moving on to implementation.
 
+**The design loop.** Planning and design sessions decide one question at a
+time: question, then discussion or research, then decision. Answering a
+question may raise new ones; that is intended, and each is added to the
+list where it surfaced.
+
+- **The questions are listed first**, in the issue body under "Open
+  questions", before any is settled. Each names the questions that depend on
+  it, and those it unblocks go first.
+- **Each takes a route when it is picked up.** A real-world fact goes to
+  research (`docs/canon/reference/README.md`) and is never guessed. A story
+  or design choice is discussed, and Tom decides. Some need research first,
+  then discussion.
+- **A discussion ends in a one-line proposal**, "Decided: …", which Tom
+  confirms in so many words. A bare "yes" to a message that asked more than
+  one thing is asked again, not read as a decision.
+- **Before a decision is recorded, it is checked against the canon and the
+  decisions already made.** One that rests on an assumption the canon doesn't
+  support goes back to discussion.
+- **A decision is recorded the moment it is made**, in the issue body under
+  "Decided so far", with its date and a one-line reason, so no later session
+  reopens it unawares. A figure is marked as a first guess, retunable.
+- **A question can leave the list unanswered**: deferred ("decide later",
+  with what would bring it back) or moved out of scope to the issue that
+  owns it. Either is recorded in the body.
+- **The canon is written once, when the list is empty**: one pull request
+  moves the issue's decisions into `docs/canon/Ashfall_Canon.md` and closes
+  the issue with `Closes #NN`.
+
 **Research.** The only session that searches the web. It works the open
 `research` issues, following `docs/canon/reference/README.md`; a fact no
 issue asks for gets one filed first.
